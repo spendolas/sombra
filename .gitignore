@@ -4,6 +4,22 @@
 # macOS
 .DS_Store
 
+# Dependencies
+node_modules
+
+# Build output
+dist
+dist-ssr
+*.local
+
 # Environment variables
 .env
 .env.local
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+
+# Logs
+*.log
