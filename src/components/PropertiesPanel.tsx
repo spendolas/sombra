@@ -170,7 +170,7 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
               border: '1px solid var(--border-primary)'
             }}
           >
-            <definition.component nodeId={selectedNode.id} params={selectedNode.data.params || {}} />
+            <definition.component nodeId={selectedNode.id} data={selectedNode.data.params || {}} />
           </div>
         </div>
       )}

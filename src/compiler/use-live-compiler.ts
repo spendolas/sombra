@@ -27,7 +27,7 @@ export function useLiveCompiler(
   const setCompiling = useCompilerStore((state) => state.setCompiling)
   const markCompileSuccess = useCompilerStore((state) => state.markCompileSuccess)
 
-  const timeoutRef = useRef<NodeJS.Timeout>()
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   useEffect(() => {
     if (!autoCompile) return

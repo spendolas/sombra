@@ -4,7 +4,7 @@
 
 import { useCallback } from 'react'
 import { ReactFlow, Background, Controls, MiniMap, useReactFlow } from '@xyflow/react'
-import type { Node, Edge, OnNodesChange, OnEdgesChange, Connection } from '@xyflow/react'
+import type { Node, Edge, OnNodesChange, OnEdgesChange, Connection, IsValidConnection } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { areTypesCompatible } from '../nodes/type-coercion'
@@ -97,7 +97,7 @@ export function FlowCanvas({
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onConnect={onConnect}
-      isValidConnection={isValidConnection}
+      isValidConnection={isValidConnection as IsValidConnection<Edge<EdgeData>>}
       onDragOver={onDragOver}
       onDrop={onDrop}
       defaultViewport={{ x: 0, y: 0, zoom: 1 }}

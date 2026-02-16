@@ -8,13 +8,13 @@ import type { NodeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { NodeParameters } from './NodeParameters'
 
-export const ShaderNode = memo(({ id, data, selected }: NodeProps<NodeData>) => {
-  const definition = nodeRegistry.get(data.type)
+export const ShaderNode = memo(({ id, data, selected }: NodeProps) => {
+  const definition = nodeRegistry.get((data as NodeData).type)
 
   if (!definition) {
     return (
       <div className="px-4 py-2 bg-red-900 border border-red-700 rounded text-white">
-        Unknown node: {data.type}
+        Unknown node: {(data as NodeData).type}
       </div>
     )
   }
@@ -106,7 +106,7 @@ export const ShaderNode = memo(({ id, data, selected }: NodeProps<NodeData>) => 
         {/* Custom component (if provided, in addition to parameters) */}
         {definition.component && (
           <div className={hasParameters ? 'mt-2' : 'mt-2 pt-2'} style={hasParameters ? {} : { borderTop: '1px solid var(--border-secondary)' }}>
-            <definition.component nodeId={id} params={data.params || {}} />
+            <definition.component nodeId={id} data={data.params || {}} />
           </div>
         )}
       </div>

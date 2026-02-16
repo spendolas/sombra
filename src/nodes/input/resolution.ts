@@ -22,7 +22,7 @@ export const resolutionNode: NodeDefinition = {
 
   glsl: (ctx) => {
     const { outputs, uniforms } = ctx
-    uniforms.push({ name: 'u_resolution', type: 'vec2' })
+    uniforms.add('u_resolution')
     return `vec2 ${outputs.resolution} = u_resolution;`
   },
 }

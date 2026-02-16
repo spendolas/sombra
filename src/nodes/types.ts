@@ -91,7 +91,7 @@ export type CoercionRule = {
 /**
  * Runtime node instance data (stored in React Flow)
  */
-export interface NodeData {
+export interface NodeData extends Record<string, unknown> {
   type: string                      // References NodeDefinition.type
   params: Record<string, unknown>   // Current parameter values
   label?: string                    // Optional custom label
@@ -100,7 +100,7 @@ export interface NodeData {
 /**
  * Edge connection data
  */
-export interface EdgeData {
+export interface EdgeData extends Record<string, unknown> {
   sourcePort: string  // Source output port ID
   targetPort: string  // Target input port ID
 }
