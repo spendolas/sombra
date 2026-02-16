@@ -127,14 +127,16 @@ Nodes have:
 
 **Phase 0 Complete!**
 
-## Next Steps (Phase 1)
+## Next Steps (Phase 2)
 
-See `ROADMAP.md` for detailed roadmap. Phase 1 focuses on:
-- Core node library (~15 nodes: UV, Time, Noise, Math, Color, Output)
-- Graph-to-GLSL compiler
-- Live preview with hot-recompile
-- Per-node mini-previews
-- Parameter editing UI
+See `ROADMAP.md` for detailed roadmap. Phase 2 backlog:
+- Per-node mini-previews (render thumbnails)
+- Error display in UI (show compilation errors visually)
+- Save/Load graphs (JSON export/import)
+- Undo/redo system
+- More nodes (Gradients, Patterns, Advanced Math)
+- Texture input support (sampler2D)
+- Export shader code (copy GLSL to clipboard)
 
 ## Design Decisions (Why We Did It This Way)
 
@@ -173,7 +175,7 @@ Free, simple, integrates well with GitHub Actions. Custom domain can be added la
 ## Current Phase
 
 **Phase 0** - ✅ Complete
-**Phase 1** - Core Editor MVP (in progress)
+**Phase 1** - ✅ Complete
 
 ### Phase 1 Progress
 
@@ -248,29 +250,55 @@ Free, simple, integrates well with GitHub Actions. Custom domain can be added la
 - Verified complete pipeline works: Nodes → Compiler → GLSL → WebGL → Screen
 - UV gradient renders correctly (proves type coercion vec2→vec3 works)
 
-**Step 7: Expand Math Nodes** - ✅ Complete
-- Added math nodes for shader composition:
-  - Add ([src/nodes/math/add.ts](src/nodes/math/add.ts)) - Component-wise addition
-  - Multiply ([src/nodes/math/multiply.ts](src/nodes/math/multiply.ts)) - Component-wise multiplication
-  - Mix ([src/nodes/math/mix.ts](src/nodes/math/mix.ts)) - Linear interpolation with factor param
+**Step 7: Complete Node Library** - ✅ Complete
+- Math nodes: Add, Multiply, Mix, Smoothstep, Sin, Cos, Remap
+- Noise nodes: Simplex Noise (with proper GLSL function scoping)
+- Color nodes: HSV to RGB, Brightness/Contrast
+- Input nodes: UV Coords, Time, Resolution, Color Constant, Float Constant (Number)
+- Output node: Fragment Output
+- **Total: 16 nodes**
 
-**Phase 1 MVP Complete!** 🎉
+**Step 8: Node Palette & Drag-and-Drop** - ✅ Complete
+- Created NodePalette component with category organization
+- Drag-and-drop from palette to canvas
+- Nodes auto-positioned at drop location
+- Integration with FlowCanvas component
 
-Core Features Working:
-✅ Node system with type-safe definitions
-✅ Graph-to-GLSL compiler with topological sort
-✅ Type coercion between port types
-✅ Live preview with auto-recompile (debounced)
-✅ WebGL renderer integration
-✅ 7 functional nodes (UV, Color, Time, Add, Multiply, Mix, Output)
-✅ Complete reactive pipeline: Edit Graph → Compile → Render
+**Step 9: Connection System** - ✅ Complete
+- onConnect handler for creating edges
+- isValidConnection validation with type compatibility checking
+- Visual port color coding by type
+- Automatic type coercion on connection
 
-Remaining for Full Phase 1 (can be done later):
-- Node palette UI with drag-and-drop
-- Parameter controls (sliders, color pickers) in node UI
-- More nodes (Noise, Color operations)
-- Per-node mini-previews
-- Error display in UI
+**Step 10: Parameter Controls** - ✅ Complete
+- FloatSlider component with range slider + text input
+- ColorInput component for RGB colors
+- NodeParameters component integrates with graph store
+- Real-time parameter updates trigger shader recompilation
+- Parameters visible both on nodes and in properties panel
+
+**Step 11: Properties Panel** - ✅ Complete
+- PropertiesPanel component shows selected node details
+- Displays node info (category, label, description, ID)
+- Lists all inputs and outputs with types
+- Editable parameter controls
+- Custom component support
+
+**Phase 1 COMPLETE!** 🎉
+
+All Core Features Delivered:
+✅ Node system with type-safe definitions and 16 functional nodes
+✅ Graph-to-GLSL compiler with topological sort and cycle detection
+✅ Type coercion system (15+ conversion rules)
+✅ Live preview with debounced auto-recompile
+✅ WebGL2 renderer with animated uniforms (time, resolution, mouse)
+✅ Node palette with drag-and-drop
+✅ Connection validation and visual feedback
+✅ Parameter controls (sliders, text inputs, color pickers)
+✅ Properties panel for node inspection and editing
+✅ Complete reactive pipeline: Edit Graph → Validate → Compile → Render
+✅ Animated simplex noise working correctly
+✅ Dark theme with accessible color palette
 
 ## Important Layout Notes
 

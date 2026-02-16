@@ -7,12 +7,25 @@ import { registerNodes } from './registry'
 // Input nodes
 import { uvCoordsNode } from './input/uv-coords'
 import { colorConstantNode } from './input/color-constant'
+import { floatConstantNode } from './input/float-constant'
 import { timeNode } from './input/time'
+import { resolutionNode } from './input/resolution'
 
 // Math nodes
 import { addNode } from './math/add'
 import { multiplyNode } from './math/multiply'
 import { mixNode } from './math/mix'
+import { smoothstepNode } from './math/smoothstep'
+import { sinNode } from './math/sin'
+import { cosNode } from './math/cos'
+import { remapNode } from './math/remap'
+
+// Noise nodes
+import { simplexNoiseNode } from './noise/simplex-noise'
+
+// Color nodes
+import { hsvToRgbNode } from './color/hsv-to-rgb'
+import { brightnessContrastNode } from './color/brightness-contrast'
 
 // Output nodes
 import { fragmentOutputNode } from './output/fragment-output'
@@ -24,12 +37,25 @@ export const ALL_NODES = [
   // Input
   uvCoordsNode,
   colorConstantNode,
+  floatConstantNode,
   timeNode,
+  resolutionNode,
 
   // Math
   addNode,
   multiplyNode,
   mixNode,
+  smoothstepNode,
+  sinNode,
+  cosNode,
+  remapNode,
+
+  // Noise
+  simplexNoiseNode,
+
+  // Color
+  hsvToRgbNode,
+  brightnessContrastNode,
 
   // Output
   fragmentOutputNode,

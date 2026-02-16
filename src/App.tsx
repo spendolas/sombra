@@ -1,10 +1,15 @@
-import { useEffect, useRef, useCallback } from 'react'
-import { ReactFlow, Background, Controls, MiniMap } from '@xyflow/react'
+import { useEffect, useRef, useCallback, useMemo } from 'react'
+import { ReactFlowProvider } from '@xyflow/react'
+import type { Connection } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { WebGLRenderer } from './webgl/renderer'
 import { useLiveCompiler } from './compiler'
 import { useGraphStore } from './stores/graphStore'
-import { createUVTestGraph } from './utils/test-graph'
+import { createNoiseTestGraph } from './utils/test-graph'
+import { ShaderNode } from './components/ShaderNode'
+import { NodePalette } from './components/NodePalette'
+import { FlowCanvas } from './components/FlowCanvas'
+import { PropertiesPanel } from './components/PropertiesPanel'
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -15,12 +20,46 @@ function App() {
   const edges = useGraphStore((state) => state.edges)
   const onNodesChange = useGraphStore((state) => state.onNodesChange)
   const onEdgesChange = useGraphStore((state) => state.onEdgesChange)
+  const addNode = useGraphStore((state) => state.addNode)
+  const addEdge = useGraphStore((state) => state.addEdge)
   const setNodes = useGraphStore((state) => state.setNodes)
   const setEdges = useGraphStore((state) => state.setEdges)
 
+  // Handle new connections between nodes
+  const onConnect = useCallback(
+    (connection: Connection) => {
+      if (!connection.source || !connection.target) return
+      if (!connection.sourceHandle || !connection.targetHandle) return
+
+      const newEdge = {
+        id: `${connection.source}-${connection.sourceHandle}-${connection.target}-${connection.targetHandle}`,
+        source: connection.source,
+        target: connection.target,
+        sourceHandle: connection.sourceHandle,
+        targetHandle: connection.targetHandle,
+        type: 'default',
+        data: {
+          sourcePort: connection.sourceHandle,
+          targetPort: connection.targetHandle,
+        },
+      }
+
+      addEdge(newEdge)
+    },
+    [addEdge]
+  )
+
+  // Register custom node types
+  const nodeTypes = useMemo(() => ({ shaderNode: ShaderNode }), [])
+
+  // Find selected node for properties panel
+  const selectedNode = useMemo(() => {
+    return nodes.find((node) => node.selected) || null
+  }, [nodes])
+
   // Load test graph on mount (temporary for Phase 1 testing)
   useEffect(() => {
-    const testGraph = createUVTestGraph()
+    const testGraph = createNoiseTestGraph()
     setNodes(testGraph.nodes)
     setEdges(testGraph.edges)
   }, [setNodes, setEdges])
@@ -51,23 +90,48 @@ function App() {
   useLiveCompiler(handleCompile)
 
   return (
-    <div className="h-screen w-screen bg-[#0a0a12]" style={{
-      display: 'grid',
-      gridTemplateRows: '3rem 1fr',
-      gridTemplateColumns: '16rem 1fr 16rem'
-    }}>
+    <ReactFlowProvider>
+      <div
+        className="h-screen w-screen"
+        style={{
+          display: 'grid',
+          gridTemplateRows: '3rem 1fr',
+          gridTemplateColumns: '16rem 1fr 16rem',
+          backgroundColor: 'var(--bg-primary)'
+        }}
+      >
       {/* Header - spans all columns */}
-      <header className="bg-gray-900/50 border-b border-gray-800 flex items-center px-4" style={{ gridColumn: '1 / -1' }}>
-        <h1 className="text-sm font-semibold text-gray-200">Sombra</h1>
-        <span className="ml-2 text-xs text-gray-500">WebGL Shader Builder</span>
+      <header
+        className="flex items-center px-4"
+        style={{
+          gridColumn: '1 / -1',
+          backgroundColor: 'var(--bg-secondary)',
+          borderBottom: '1px solid var(--border-primary)'
+        }}
+      >
+        <h1 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+          Sombra
+        </h1>
+        <span className="ml-2 text-xs" style={{ color: 'var(--text-tertiary)' }}>
+          WebGL Shader Builder
+        </span>
       </header>
 
       {/* Left panel - Node palette */}
-      <div className="bg-gray-900/30 border-r border-gray-800 p-4 overflow-y-auto">
-        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+      <div
+        className="p-4 overflow-y-auto"
+        style={{
+          backgroundColor: 'var(--bg-secondary)',
+          borderRight: '1px solid var(--border-primary)'
+        }}
+      >
+        <h2
+          className="text-xs font-semibold uppercase tracking-wider mb-3"
+          style={{ color: 'var(--text-secondary)' }}
+        >
           Node Palette
         </h2>
-        <p className="text-xs text-gray-600">Coming soon...</p>
+        <NodePalette />
       </div>
 
       {/* Center - Canvas and Preview */}
@@ -77,30 +141,32 @@ function App() {
       }}>
         {/* Node canvas */}
         <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-          <ReactFlow
+          <FlowCanvas
             nodes={nodes}
             edges={edges}
+            nodeTypes={nodeTypes}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
-            defaultViewport={{ x: 0, y: 0, zoom: 1 }}
-            minZoom={0.1}
-            maxZoom={4}
-            style={{ width: '100%', height: '100%' }}
-            className="bg-[#0a0a12]"
-          >
-            <Background color="#1a1a2e" gap={16} />
-            <Controls />
-            <MiniMap
-              nodeColor="#6366f1"
-              maskColor="rgba(10, 10, 18, 0.8)"
-              className="bg-gray-900 border border-gray-700"
-            />
-          </ReactFlow>
+            onConnect={onConnect}
+            onAddNode={addNode}
+          />
         </div>
 
         {/* WebGL Preview */}
-        <div className="bg-black border-t border-gray-800 relative">
-          <div className="absolute top-2 left-2 z-10 text-xs text-gray-400 bg-gray-900/80 px-2 py-1 rounded">
+        <div
+          className="relative"
+          style={{
+            backgroundColor: '#000',
+            borderTop: '1px solid var(--border-primary)'
+          }}
+        >
+          <div
+            className="absolute top-2 left-2 z-10 text-xs px-2 py-1 rounded"
+            style={{
+              color: 'var(--text-secondary)',
+              backgroundColor: 'var(--bg-tertiary)'
+            }}
+          >
             Preview
           </div>
           <canvas
@@ -111,13 +177,17 @@ function App() {
       </div>
 
       {/* Right panel - Properties */}
-      <div className="bg-gray-900/30 border-l border-gray-800 p-4 overflow-y-auto">
-        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
-          Properties
-        </h2>
-        <p className="text-xs text-gray-600">Select a node to edit properties...</p>
+      <div
+        className="p-4 overflow-y-auto"
+        style={{
+          backgroundColor: 'var(--bg-secondary)',
+          borderLeft: '1px solid var(--border-primary)'
+        }}
+      >
+        <PropertiesPanel selectedNode={selectedNode} />
       </div>
     </div>
+    </ReactFlowProvider>
   )
 }
 

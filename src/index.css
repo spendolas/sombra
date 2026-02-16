@@ -6,15 +6,108 @@
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
+
+  /* Sombra color palette - improved legibility */
+  --bg-primary: #0f0f1a;
+  --bg-secondary: #1a1a2e;
+  --bg-tertiary: #252538;
+  --bg-elevated: #2d2d44;
+
+  --text-primary: #e8e8f0;
+  --text-secondary: #b8b8c8;
+  --text-tertiary: #88889a;
+  --text-muted: #5a5a6e;
+
+  --border-primary: #3a3a52;
+  --border-secondary: #2a2a3e;
+
+  --accent-primary: #6366f1;
+  --accent-hover: #818cf8;
+  --accent-active: #4f46e5;
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: #0a0a12;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 * {
   box-sizing: border-box;
+}
+
+/* React Flow custom styling for better legibility */
+.react-flow__node {
+  font-size: 13px;
+}
+
+.react-flow__edge-path {
+  stroke: var(--border-primary);
+  stroke-width: 2;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--accent-primary);
+  stroke-width: 2.5;
+}
+
+.react-flow__handle {
+  border: 2px solid var(--bg-secondary);
+}
+
+.react-flow__controls {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-primary);
+}
+
+.react-flow__controls button {
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-secondary);
+  color: var(--text-secondary);
+}
+
+.react-flow__controls button:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.react-flow__minimap {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+}
+
+.react-flow__background {
+  background-color: var(--bg-primary);
+}
+
+/* Parameter slider styling */
+input[type="range"].slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  cursor: pointer;
+  border: 2px solid var(--bg-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+input[type="range"].slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  cursor: pointer;
+  border: 2px solid var(--bg-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+input[type="range"].slider::-webkit-slider-thumb:hover {
+  background: var(--accent-hover);
+}
+
+input[type="range"].slider::-moz-range-thumb:hover {
+  background: var(--accent-hover);
 }

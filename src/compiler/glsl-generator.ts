@@ -69,8 +69,9 @@ export function compileGraph(
       edgesByTarget.get(edge.target)!.push(edge)
     })
 
-    // Track uniforms needed
+    // Track uniforms and functions needed
     const uniforms = new Set<string>()
+    const functions: string[] = []
 
     // Generate GLSL code for each node
     const glslLines: string[] = []
@@ -106,7 +107,8 @@ export function compileGraph(
                 (p) => p.id === edge.sourceHandle
               )
               if (sourcePort) {
-                const sourceVarName = `node_${edge.source}_${edge.sourceHandle}`
+                // Sanitize node ID for GLSL (replace hyphens with underscores)
+                const sourceVarName = `node_${edge.source.replace(/-/g, '_')}_${edge.sourceHandle}`
 
                 // Apply type coercion if needed
                 if (sourcePort.type !== inputPort.type) {
@@ -135,10 +137,11 @@ export function compileGraph(
         }
       })
 
-      // Build output variable names
+      // Build output variable names (sanitize node ID for GLSL)
       const outputs: Record<string, string> = {}
+      const sanitizedNodeId = nodeId.replace(/-/g, '_')
       definition.outputs.forEach((outputPort) => {
-        outputs[outputPort.id] = `node_${nodeId}_${outputPort.id}`
+        outputs[outputPort.id] = `node_${sanitizedNodeId}_${outputPort.id}`
       })
 
       // Generate GLSL for this node
@@ -148,6 +151,7 @@ export function compileGraph(
         outputs,
         params: node.data.params || {},
         uniforms,
+        functions,
       }
 
       try {
@@ -172,7 +176,11 @@ export function compileGraph(
     }
 
     // Assemble complete fragment shader
-    const fragmentShader = assembleFragmentShader(uniforms, glslLines)
+    const fragmentShader = assembleFragmentShader(uniforms, functions, glslLines)
+
+    // Debug: Log generated shader
+    console.log('[Sombra] Generated Fragment Shader:')
+    console.log(fragmentShader)
 
     return {
       success: true,
@@ -218,6 +226,7 @@ function formatDefaultValue(value: unknown, type: string): string {
  */
 function assembleFragmentShader(
   uniforms: Set<string>,
+  functions: string[],
   glslLines: string[]
 ): string {
   const uniformDeclarations: string[] = []
@@ -241,6 +250,7 @@ out vec4 fragColor;
 
 ${uniformDeclarations.join('\n')}
 
+${functions.length > 0 ? functions.join('\n\n') + '\n' : ''}
 void main() {
 ${glslLines.join('\n')}
 }

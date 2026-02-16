@@ -20,9 +20,11 @@
 
 ---
 
-## Phase 1 — Core Editor MVP
+## Phase 1 — Core Editor MVP ✅ COMPLETE
 
 **Goal:** Drag UV Coords -> Noise -> Mix -> Fragment Output, tweak parameters, see live animated noise fullscreen. This is the "it works" moment.
+
+**Status:** ✅ Delivered February 2026
 
 ### Node System Architecture
 
@@ -64,12 +66,25 @@ interface NodeDefinition {
 
 ### Live Preview
 
-- Fullscreen quad renders the compiled fragment shader
-- Hot-recompile on every graph change (debounced ~100ms)
-- Per-node mini-preview via single offscreen WebGL context (captures to `<img>`)
-- Split view (editor + preview) and fullscreen preview toggle
+- [x] Fullscreen quad renders the compiled fragment shader
+- [x] Hot-recompile on every graph change (debounced ~100ms)
+- [ ] Per-node mini-preview via single offscreen WebGL context (captures to `<img>`) — **Moved to Phase 2 backlog**
+- [ ] Split view (editor + preview) and fullscreen preview toggle — **Moved to Phase 2 backlog**
 
-**Milestone:** Wire nodes together, tweak parameters with inline controls, see live animated output.
+### Delivered Features
+
+- [x] 16-node library (Input, Math, Noise, Color, Output categories)
+- [x] Node palette with drag-and-drop
+- [x] Type-safe port connections with visual validation
+- [x] Automatic type coercion (15+ conversion rules)
+- [x] Parameter controls (sliders with text input, color pickers)
+- [x] Properties panel for node inspection
+- [x] Graph-to-GLSL compiler with error mapping
+- [x] Live animated simplex noise working correctly
+- [x] Dark theme with accessible color palette
+- [x] Complete reactive pipeline (edit → validate → compile → render)
+
+**Milestone:** ✅ Wire nodes together, tweak parameters with inline controls, see live animated output.
 
 ---
 

@@ -45,6 +45,7 @@ export interface GLSLContext {
   outputs: Record<string, string>          // Output port IDs -> variable names
   params: Record<string, unknown>          // Parameter values
   uniforms: Set<string>                    // Global uniforms to declare
+  functions: string[]                      // Global function declarations (outside main)
 }
 
 /**
