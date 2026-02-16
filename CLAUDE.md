@@ -173,7 +173,24 @@ Free, simple, integrates well with GitHub Actions. Custom domain can be added la
 ## Current Phase
 
 **Phase 0** - ✅ Complete
-**Phase 1** - Core Editor MVP (ready to start)
+**Phase 1** - Core Editor MVP (in progress)
+
+### Phase 1 Progress
+
+**Step 1: Node System Foundation** - ✅ Complete
+- Created core TypeScript interfaces ([src/nodes/types.ts](src/nodes/types.ts))
+  - `NodeDefinition`, `PortDefinition`, `NodeParameter`, `GLSLContext`
+  - Port types: float, vec2, vec3, vec4, color, sampler2D
+- Implemented type coercion system ([src/nodes/type-coercion.ts](src/nodes/type-coercion.ts))
+  - Auto-conversion between port types (e.g., float → vec3 broadcast)
+  - Compatible type checking for edge connections
+- Created node registry ([src/nodes/registry.ts](src/nodes/registry.ts))
+  - Singleton registry for all node type definitions
+  - Category-based organization
+
+**Step 2: Zustand State Management** - ⏳ Next
+**Step 3: Simple Nodes** - ⏳ Pending
+**Step 4: Compiler Basics** - ⏳ Pending
 
 ## Important Layout Notes
 
