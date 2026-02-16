@@ -102,7 +102,7 @@ export class WebGLRenderer {
     return shader
   }
 
-  updateShader(fragmentSource: string): boolean {
+  updateShader(fragmentSource: string): { success: boolean; error?: string } {
     const gl = this.gl
 
     try {
@@ -148,10 +148,11 @@ export class WebGLRenderer {
       gl.deleteShader(vertexShader)
       gl.deleteShader(fragmentShader)
 
-      return true
+      return { success: true }
     } catch (error) {
-      console.error('Failed to update shader:', error)
-      return false
+      const errorMsg = error instanceof Error ? error.message : String(error)
+      console.error('Failed to update shader:', errorMsg)
+      return { success: false, error: errorMsg }
     }
   }
 

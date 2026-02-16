@@ -227,7 +227,20 @@ Free, simple, integrates well with GitHub Actions. Custom domain can be added la
   - Error collection with node-level mapping
 - Standard vertex shader (passthrough with UV)
 
-**Step 5: Live Preview Integration** - ⏳ Next
+**Step 5: Live Preview Integration** - ✅ Complete
+- Updated WebGL renderer ([src/webgl/renderer.ts](src/webgl/renderer.ts))
+  - Changed updateShader to return result object with success/error
+- Created live compiler hook ([src/compiler/use-live-compiler.ts](src/compiler/use-live-compiler.ts))
+  - Watches graph store for node/edge changes
+  - Debounced auto-compilation (configurable delay)
+  - Updates compiler store with shader code and errors
+  - Callback support for custom handling
+- Integrated into App.tsx:
+  - Connected graph store to React Flow
+  - Live compiler hook updates WebGL renderer on graph changes
+  - Complete pipeline: Graph Edit → Compile → Update Shader → Render
+
+**Step 6: Test with Minimal Graph** - ⏳ Next
 
 ## Important Layout Notes
 

@@ -1,12 +1,21 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import { ReactFlow, Background, Controls, MiniMap } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { WebGLRenderer } from './webgl/renderer'
+import { useLiveCompiler } from './compiler'
+import { useGraphStore } from './stores/graphStore'
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rendererRef = useRef<WebGLRenderer | null>(null)
 
+  // React Flow integration
+  const nodes = useGraphStore((state) => state.nodes)
+  const edges = useGraphStore((state) => state.edges)
+  const onNodesChange = useGraphStore((state) => state.onNodesChange)
+  const onEdgesChange = useGraphStore((state) => state.onEdgesChange)
+
+  // Initialize WebGL renderer
   useEffect(() => {
     if (!canvasRef.current) return
 
@@ -18,6 +27,18 @@ function App() {
       renderer.destroy()
     }
   }, [])
+
+  // Live compiler - updates shader when graph changes
+  const handleCompile = useCallback((result: { success: boolean; fragmentShader: string }) => {
+    if (result.success && rendererRef.current) {
+      const updateResult = rendererRef.current.updateShader(result.fragmentShader)
+      if (!updateResult.success) {
+        console.error('WebGL shader update failed:', updateResult.error)
+      }
+    }
+  }, [])
+
+  useLiveCompiler(handleCompile)
 
   return (
     <div className="h-screen w-screen bg-[#0a0a12]" style={{
@@ -47,8 +68,10 @@ function App() {
         {/* Node canvas */}
         <div style={{ position: 'relative', width: '100%', height: '100%' }}>
           <ReactFlow
-            defaultNodes={[]}
-            defaultEdges={[]}
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
             defaultViewport={{ x: 0, y: 0, zoom: 1 }}
             minZoom={0.1}
             maxZoom={4}
