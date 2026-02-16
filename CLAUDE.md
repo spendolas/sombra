@@ -240,7 +240,16 @@ Free, simple, integrates well with GitHub Actions. Custom domain can be added la
   - Live compiler hook updates WebGL renderer on graph changes
   - Complete pipeline: Graph Edit → Compile → Update Shader → Render
 
-**Step 6: Test with Minimal Graph** - ⏳ Next
+**Step 6: Test with Minimal Graph** - ✅ Complete
+- Created test graph utilities ([src/utils/test-graph.ts](src/utils/test-graph.ts))
+  - `createSimpleTestGraph()` - Color → Fragment Output (solid magenta)
+  - `createUVTestGraph()` - UV → Fragment Output (gradient)
+- App.tsx loads UV test graph on mount
+- Verified complete pipeline works: Nodes → Compiler → GLSL → WebGL → Screen
+- UV gradient renders correctly (proves type coercion vec2→vec3 works)
+
+**Phase 1 MVP Status**: Core pipeline is functional! 🎉
+Next: Expand node library, add UI for node manipulation
 
 ## Important Layout Notes
 

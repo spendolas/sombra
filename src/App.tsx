@@ -4,6 +4,7 @@ import '@xyflow/react/dist/style.css'
 import { WebGLRenderer } from './webgl/renderer'
 import { useLiveCompiler } from './compiler'
 import { useGraphStore } from './stores/graphStore'
+import { createUVTestGraph } from './utils/test-graph'
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -14,6 +15,15 @@ function App() {
   const edges = useGraphStore((state) => state.edges)
   const onNodesChange = useGraphStore((state) => state.onNodesChange)
   const onEdgesChange = useGraphStore((state) => state.onEdgesChange)
+  const setNodes = useGraphStore((state) => state.setNodes)
+  const setEdges = useGraphStore((state) => state.setEdges)
+
+  // Load test graph on mount (temporary for Phase 1 testing)
+  useEffect(() => {
+    const testGraph = createUVTestGraph()
+    setNodes(testGraph.nodes)
+    setEdges(testGraph.edges)
+  }, [setNodes, setEdges])
 
   // Initialize WebGL renderer
   useEffect(() => {
