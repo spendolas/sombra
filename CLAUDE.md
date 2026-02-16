@@ -118,11 +118,14 @@ Nodes have:
 
 ✅ Scaffold complete
 ✅ React Flow canvas with dark theme
-✅ WebGL2 fullscreen quad renderer
+✅ WebGL2 fullscreen quad renderer with animated gradient
+✅ CSS Grid layout (fixed viewport sizing issues)
 ✅ Layout shell (node palette, canvas, properties panel, preview)
-🔄 Documentation (this file)
-⏳ GitHub Pages deployment
-⏳ Initial commit and push
+✅ Documentation (CLAUDE.md, ROADMAP.md)
+✅ GitHub Pages deployment (auto-deploys on push to main)
+✅ Repository set up and deployed to https://spendolas.github.io/sombra/
+
+**Phase 0 Complete!**
 
 ## Next Steps (Phase 1)
 
@@ -169,4 +172,13 @@ Free, simple, integrates well with GitHub Actions. Custom domain can be added la
 
 ## Current Phase
 
-**Phase 0** - Scaffold & Proof of Concept (in progress)
+**Phase 0** - ✅ Complete
+**Phase 1** - Core Editor MVP (ready to start)
+
+## Important Layout Notes
+
+The app uses CSS Grid instead of flexbox for the main layout to ensure React Flow gets explicit dimensions:
+- Main grid: 2 rows (header, content) × 3 columns (left panel, center, right panel)
+- Center column: nested grid with canvas area + preview (16rem height)
+- React Flow requires its parent to have explicit width/height - the grid provides this
+- See [src/App.tsx](src/App.tsx) for implementation

@@ -31,7 +31,8 @@ Builds automatically on push to `main` via GitHub Actions.
 
 ## Project Status
 
-🚧 **Phase 0** - Scaffold & Proof of Concept (in progress)
+✅ **Phase 0** - Scaffold & Proof of Concept (Complete)
+🚧 **Phase 1** - Core Editor MVP (In Progress)
 
 See [ROADMAP.md](ROADMAP.md) for detailed development plan.
 See [CLAUDE.md](CLAUDE.md) for project documentation and architecture details.
