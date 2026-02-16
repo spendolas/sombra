@@ -214,7 +214,20 @@ Free, simple, integrates well with GitHub Actions. Custom domain can be added la
   - Centralized node registration
   - Called from main.tsx on app startup
 
-**Step 4: Compiler Basics** - ⏳ Next
+**Step 4: Compiler Basics** - ✅ Complete
+- Created topological sort ([src/compiler/topological-sort.ts](src/compiler/topological-sort.ts))
+  - Orders nodes from Fragment Output backward
+  - Cycle detection to prevent infinite loops
+  - Validates single output node requirement
+- Created GLSL generator ([src/compiler/glsl-generator.ts](src/compiler/glsl-generator.ts))
+  - Compiles node graph to complete vertex + fragment shaders
+  - Handles unconnected inputs with default values
+  - Automatic type coercion between connected ports
+  - Uniform declaration (u_time, u_resolution, u_mouse)
+  - Error collection with node-level mapping
+- Standard vertex shader (passthrough with UV)
+
+**Step 5: Live Preview Integration** - ⏳ Next
 
 ## Important Layout Notes
 
