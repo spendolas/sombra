@@ -32,7 +32,14 @@ Builds automatically on push to `main` via GitHub Actions.
 ## Project Status
 
 ✅ **Phase 0** - Scaffold & Proof of Concept (Complete)
-🚧 **Phase 1** - Core Editor MVP (In Progress)
+✅ **Phase 1** - Core Editor MVP (Complete)
+
+**Current Features:**
+- Live shader compilation from node graphs
+- 7 functional shader nodes (UV, Color, Time, Math ops, Output)
+- Real-time WebGL preview
+- Auto-recompile on graph changes
+- Type coercion between node connections
 
 See [ROADMAP.md](ROADMAP.md) for detailed development plan.
 See [CLAUDE.md](CLAUDE.md) for project documentation and architecture details.

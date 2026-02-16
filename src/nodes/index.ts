@@ -9,6 +9,11 @@ import { uvCoordsNode } from './input/uv-coords'
 import { colorConstantNode } from './input/color-constant'
 import { timeNode } from './input/time'
 
+// Math nodes
+import { addNode } from './math/add'
+import { multiplyNode } from './math/multiply'
+import { mixNode } from './math/mix'
+
 // Output nodes
 import { fragmentOutputNode } from './output/fragment-output'
 
@@ -20,6 +25,11 @@ export const ALL_NODES = [
   uvCoordsNode,
   colorConstantNode,
   timeNode,
+
+  // Math
+  addNode,
+  multiplyNode,
+  mixNode,
 
   // Output
   fragmentOutputNode,

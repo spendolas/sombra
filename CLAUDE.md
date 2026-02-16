@@ -248,8 +248,29 @@ Free, simple, integrates well with GitHub Actions. Custom domain can be added la
 - Verified complete pipeline works: Nodes → Compiler → GLSL → WebGL → Screen
 - UV gradient renders correctly (proves type coercion vec2→vec3 works)
 
-**Phase 1 MVP Status**: Core pipeline is functional! 🎉
-Next: Expand node library, add UI for node manipulation
+**Step 7: Expand Math Nodes** - ✅ Complete
+- Added math nodes for shader composition:
+  - Add ([src/nodes/math/add.ts](src/nodes/math/add.ts)) - Component-wise addition
+  - Multiply ([src/nodes/math/multiply.ts](src/nodes/math/multiply.ts)) - Component-wise multiplication
+  - Mix ([src/nodes/math/mix.ts](src/nodes/math/mix.ts)) - Linear interpolation with factor param
+
+**Phase 1 MVP Complete!** 🎉
+
+Core Features Working:
+✅ Node system with type-safe definitions
+✅ Graph-to-GLSL compiler with topological sort
+✅ Type coercion between port types
+✅ Live preview with auto-recompile (debounced)
+✅ WebGL renderer integration
+✅ 7 functional nodes (UV, Color, Time, Add, Multiply, Mix, Output)
+✅ Complete reactive pipeline: Edit Graph → Compile → Render
+
+Remaining for Full Phase 1 (can be done later):
+- Node palette UI with drag-and-drop
+- Parameter controls (sliders, color pickers) in node UI
+- More nodes (Noise, Color operations)
+- Per-node mini-previews
+- Error display in UI
 
 ## Important Layout Notes
 
