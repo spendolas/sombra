@@ -44,7 +44,7 @@ function App() {
             <ReactFlow
               defaultNodes={[]}
               defaultEdges={[]}
-              fitView
+              defaultViewport={{ x: 0, y: 0, zoom: 1 }}
               className="bg-[#0a0a12]"
             >
               <Background color="#1a1a2e" gap={16} />
