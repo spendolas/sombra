@@ -188,8 +188,22 @@ Free, simple, integrates well with GitHub Actions. Custom domain can be added la
   - Singleton registry for all node type definitions
   - Category-based organization
 
-**Step 2: Zustand State Management** - ⏳ Next
-**Step 3: Simple Nodes** - ⏳ Pending
+**Step 2: Zustand State Management** - ✅ Complete
+- Created graph store ([src/stores/graphStore.ts](src/stores/graphStore.ts))
+  - Manages nodes, edges, selection
+  - Integrates with React Flow's change handlers
+  - CRUD operations for nodes and edges
+- Created compiler store ([src/stores/compilerStore.ts](src/stores/compilerStore.ts))
+  - Tracks compiled shader code (vertex + fragment)
+  - Compilation errors with node-level mapping
+  - Compilation status and timing
+- Created settings store ([src/stores/settingsStore.ts](src/stores/settingsStore.ts))
+  - UI preferences (minimap, grid, snap-to-grid)
+  - Preview panel settings
+  - Auto-compile configuration
+  - Persisted to localStorage
+
+**Step 3: Simple Nodes** - ⏳ Next
 **Step 4: Compiler Basics** - ⏳ Pending
 
 ## Important Layout Notes
