@@ -98,7 +98,7 @@ export const ShaderNode = memo(({ id, data, selected }: NodeProps) => {
             <NodeParameters
               nodeId={id}
               parameters={definition.params!}
-              currentValues={data.params || {}}
+              currentValues={(data as NodeData).params || ({} as Record<string, unknown>)}
             />
           </div>
         )}
@@ -106,7 +106,7 @@ export const ShaderNode = memo(({ id, data, selected }: NodeProps) => {
         {/* Custom component (if provided, in addition to parameters) */}
         {definition.component && (
           <div className={hasParameters ? 'mt-2' : 'mt-2 pt-2'} style={hasParameters ? {} : { borderTop: '1px solid var(--border-secondary)' }}>
-            <definition.component nodeId={id} data={data.params || {}} />
+            <definition.component nodeId={id} data={(data as NodeData).params || ({} as Record<string, unknown>)} />
           </div>
         )}
       </div>
