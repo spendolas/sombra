@@ -203,8 +203,18 @@ Free, simple, integrates well with GitHub Actions. Custom domain can be added la
   - Auto-compile configuration
   - Persisted to localStorage
 
-**Step 3: Simple Nodes** - ⏳ Next
-**Step 4: Compiler Basics** - ⏳ Pending
+**Step 3: Simple Nodes** - ✅ Complete
+- Created essential input nodes:
+  - UV Coordinates ([src/nodes/input/uv-coords.ts](src/nodes/input/uv-coords.ts)) - provides fragment UV (0-1)
+  - Color Constant ([src/nodes/input/color-constant.ts](src/nodes/input/color-constant.ts)) - constant RGB color
+  - Time ([src/nodes/input/time.ts](src/nodes/input/time.ts)) - provides u_time uniform
+- Created output node:
+  - Fragment Output ([src/nodes/output/fragment-output.ts](src/nodes/output/fragment-output.ts)) - master output node
+- Created node library initialization ([src/nodes/index.ts](src/nodes/index.ts))
+  - Centralized node registration
+  - Called from main.tsx on app startup
+
+**Step 4: Compiler Basics** - ⏳ Next
 
 ## Important Layout Notes
 
