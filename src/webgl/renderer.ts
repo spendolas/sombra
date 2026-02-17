@@ -21,17 +21,8 @@ precision highp float;
 in vec2 v_uv;
 out vec4 fragColor;
 
-uniform float u_time;
-uniform vec2 u_resolution;
-
 void main() {
-  vec2 uv = v_uv;
-  vec3 color = vec3(
-    0.5 + 0.5 * sin(u_time + uv.x * 3.0),
-    0.5 + 0.5 * sin(u_time + uv.y * 3.0 + 2.0),
-    0.5 + 0.5 * sin(u_time + (uv.x + uv.y) * 3.0 + 4.0)
-  );
-  fragColor = vec4(color, 1.0);
+  fragColor = vec4(0.0, 0.0, 0.0, 1.0);
 }
 `
 
