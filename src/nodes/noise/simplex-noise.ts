@@ -11,6 +11,7 @@ export const simplexNoiseNode: NodeDefinition = {
   label: 'Simplex Noise',
   category: 'Noise',
   description: 'Smooth 3D gradient noise for organic patterns',
+  functionKey: 'snoise3d_01',
 
   inputs: [
     { id: 'coords', label: 'Coords', type: 'vec2', default: [0.0, 0.0] },
@@ -20,6 +21,7 @@ export const simplexNoiseNode: NodeDefinition = {
 
   outputs: [
     { id: 'value', label: 'Value', type: 'float' },
+    { id: 'fn', label: 'Fn', type: 'fnref' },
   ],
 
   params: [
@@ -88,10 +90,15 @@ export const simplexNoiseNode: NodeDefinition = {
   return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
 }`)
 
+    // 0-1 normalized wrapper for fnref consumers (FBM, Domain Warp)
+    addFunction(ctx, 'snoise3d_01', `float snoise3d_01(vec3 p) {
+  return snoise3d(p) * 0.5 + 0.5;
+}`)
+
     const scaleStr = typeof scale === 'number'
       ? (Number.isInteger(scale) ? `${scale}.0` : `${scale}`)
       : scale
 
-    return `float ${outputs.value} = snoise3d(vec3(${inputs.coords} * ${scaleStr}, ${inputs.z})) * 0.5 + 0.5;`
+    return `float ${outputs.value} = snoise3d_01(vec3(${inputs.coords} * ${scaleStr}, ${inputs.z}));`
   },
 }

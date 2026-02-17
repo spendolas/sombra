@@ -27,6 +27,8 @@ function getPortColor(type: string): string {
       return '#fbbf24'
     case 'sampler2D':
       return '#f472b6'
+    case 'fnref':
+      return '#22d3ee'
     default:
       return '#9ca3af'
   }

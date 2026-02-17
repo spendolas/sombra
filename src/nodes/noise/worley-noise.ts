@@ -11,6 +11,7 @@ export const worleyNoiseNode: NodeDefinition = {
   label: 'Worley Noise',
   category: 'Noise',
   description: 'Cellular noise producing organic cell patterns',
+  functionKey: 'worley3d',
 
   inputs: [
     { id: 'coords', label: 'Coords', type: 'vec2', default: [0.0, 0.0] },
@@ -20,6 +21,7 @@ export const worleyNoiseNode: NodeDefinition = {
 
   outputs: [
     { id: 'value', label: 'Distance', type: 'float' },
+    { id: 'fn', label: 'Fn', type: 'fnref' },
   ],
 
   params: [

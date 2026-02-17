@@ -1,7 +1,7 @@
 /**
  * FBM (Fractal Brownian Motion) - Multi-octave fractal accumulator
- * Embeds all 4 noise types internally because the fractal loop must
- * re-sample at different frequencies per octave.
+ * Accepts any noise function via fnref input port.
+ * When unconnected, falls back to simplex noise (snoise3d_01).
  */
 
 import type { NodeDefinition } from '../types'
@@ -11,12 +11,13 @@ export const fbmNode: NodeDefinition = {
   type: 'fbm',
   label: 'FBM',
   category: 'Noise',
-  description: 'Multi-octave fractal noise with selectable noise type and fractal mode',
+  description: 'Multi-octave fractal noise with wirable noise function and fractal mode',
 
   inputs: [
     { id: 'coords', label: 'Coords', type: 'vec2', default: [0.0, 0.0] },
     { id: 'z', label: 'Z', type: 'float', default: 0.0 },
     { id: 'scale', label: 'Scale', type: 'float', default: 5.0 },
+    { id: 'noiseFn', label: 'Noise Fn', type: 'fnref', default: 'snoise3d_01' },
   ],
 
   outputs: [
@@ -25,15 +26,6 @@ export const fbmNode: NodeDefinition = {
 
   params: [
     { id: 'scale', label: 'Scale', type: 'float', default: 5.0, min: 0.1, max: 20.0, step: 0.1 },
-    {
-      id: 'noiseType', label: 'Noise Type', type: 'enum', default: 'simplex',
-      options: [
-        { value: 'value', label: 'Value' },
-        { value: 'simplex', label: 'Simplex' },
-        { value: 'worley', label: 'Worley' },
-        { value: 'box', label: 'Box' },
-      ],
-    },
     {
       id: 'fractalMode', label: 'Fractal Mode', type: 'enum', default: 'standard',
       options: [
@@ -50,18 +42,18 @@ export const fbmNode: NodeDefinition = {
   glsl: (ctx) => {
     const { inputs, outputs, params } = ctx
     const scale = params.scale !== undefined ? params.scale : inputs.scale
-    const noiseType = (params.noiseType as string) || 'simplex'
     const fractalMode = (params.fractalMode as string) || 'standard'
     const octaves = Math.floor(Number(params.octaves ?? 4))
     const lacunarity = params.lacunarity ?? 2.0
     const gain = params.gain ?? 0.5
+    const noiseFn = inputs.noiseFn // function name from fnref
 
-    // Register all noise primitives (shared, deduplicated)
-    registerNoiseFunctions(ctx)
+    // Register simplex fallback (idempotent — safe even when connected to another noise)
+    registerSimplexFallback(ctx)
 
-    // Register the FBM function for this noise+mode combination
-    const fbmKey = `fbm_${noiseType}_${fractalMode}_${octaves}`
-    const noiseFn = NOISE_FN_MAP[noiseType] || 'vnoise3d'
+    // Unique FBM function per node instance (avoids key collisions with different params)
+    const sanitizedId = ctx.nodeId.replace(/-/g, '_')
+    const fbmKey = `fbm_${sanitizedId}`
 
     const lacStr = formatFloat(lacunarity)
     const gainStr = formatFloat(gain)
@@ -94,13 +86,6 @@ ${loopBody}
   },
 }
 
-const NOISE_FN_MAP: Record<string, string> = {
-  value: 'vnoise3d',
-  simplex: 'snoise3d_01',
-  worley: 'worley3d',
-  box: 'boxnoise3d_default',
-}
-
 function formatFloat(v: unknown): string {
   if (typeof v === 'number') {
     return Number.isInteger(v) ? `${v}.0` : `${v}`
@@ -109,29 +94,10 @@ function formatFloat(v: unknown): string {
 }
 
 /**
- * Register all noise primitive functions needed by FBM.
- * Each is deduplicated via addFunction.
+ * Register simplex noise functions as fallback for unconnected fnref input.
+ * All calls are idempotent via addFunction.
  */
-function registerNoiseFunctions(ctx: import('../types').GLSLContext) {
-  // Value noise
-  addFunction(ctx, 'hash3', `float hash3(vec3 p) {
-  p = fract(p * 0.1031);
-  p += dot(p, p.zyx + 31.32);
-  return fract((p.x + p.y) * p.z);
-}`)
-  addFunction(ctx, 'vnoise3d', `float vnoise3d(vec3 p) {
-  vec3 i = floor(p);
-  vec3 f = fract(p);
-  f = f * f * (3.0 - 2.0 * f);
-  return mix(
-    mix(mix(hash3(i + vec3(0,0,0)), hash3(i + vec3(1,0,0)), f.x),
-        mix(hash3(i + vec3(0,1,0)), hash3(i + vec3(1,1,0)), f.x), f.y),
-    mix(mix(hash3(i + vec3(0,0,1)), hash3(i + vec3(1,0,1)), f.x),
-        mix(hash3(i + vec3(0,1,1)), hash3(i + vec3(1,1,1)), f.x), f.y),
-    f.z);
-}`)
-
-  // Simplex 3D (0-1 normalized wrapper)
+function registerSimplexFallback(ctx: import('../types').GLSLContext) {
   addFunction(ctx, 'mod289_vec3', `vec3 mod289(vec3 x) {
   return x - floor(x * (1.0 / 289.0)) * 289.0;
 }`)
@@ -186,37 +152,7 @@ function registerNoiseFunctions(ctx: import('../types').GLSLContext) {
   m = m * m;
   return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
 }`)
-  // 0-1 normalized wrapper for simplex (raw range is roughly -1..1)
   addFunction(ctx, 'snoise3d_01', `float snoise3d_01(vec3 p) {
   return snoise3d(p) * 0.5 + 0.5;
-}`)
-
-  // Worley
-  addFunction(ctx, 'hash3to3', `vec3 hash3to3(vec3 p) {
-  p = vec3(dot(p, vec3(127.1, 311.7, 74.7)),
-           dot(p, vec3(269.5, 183.3, 246.1)),
-           dot(p, vec3(113.5, 271.9, 124.6)));
-  return fract(sin(p) * 43758.5453123);
-}`)
-  addFunction(ctx, 'worley3d', `float worley3d(vec3 p) {
-  vec3 i = floor(p);
-  vec3 f = fract(p);
-  float minDist = 1.0;
-  for (int z = -1; z <= 1; z++)
-  for (int y = -1; y <= 1; y++)
-  for (int x = -1; x <= 1; x++) {
-    vec3 neighbor = vec3(float(x), float(y), float(z));
-    vec3 point = hash3to3(i + neighbor);
-    vec3 diff = neighbor + point - f;
-    float dist = dot(diff, diff);
-    minDist = min(minDist, dist);
-  }
-  return sqrt(minDist);
-}`)
-
-  // Box noise (default boxFreq = 1.0)
-  addFunction(ctx, 'boxnoise3d_default', `float boxnoise3d_default(vec3 p) {
-  vec3 q = floor(p);
-  return hash3(q);
 }`)
 }

@@ -12,6 +12,7 @@ const PORT_COLORS: Record<string, string> = {
   vec4: '#a78bfa',
   color: '#fbbf24',
   sampler2D: '#f472b6',
+  fnref: '#22d3ee',
 }
 
 export function TypedEdge({

@@ -10,6 +10,7 @@ export const boxNoiseNode: NodeDefinition = {
   label: 'Box Noise',
   category: 'Noise',
   description: 'Quantized value noise producing blocky patterns',
+  functionKey: 'boxnoise3d',
 
   inputs: [
     { id: 'coords', label: 'Coords', type: 'vec2', default: [0.0, 0.0] },
@@ -19,6 +20,7 @@ export const boxNoiseNode: NodeDefinition = {
 
   outputs: [
     { id: 'value', label: 'Value', type: 'float' },
+    { id: 'fn', label: 'Fn', type: 'fnref' },
   ],
 
   params: [
@@ -37,9 +39,9 @@ export const boxNoiseNode: NodeDefinition = {
   return fract((p.x + p.y) * p.z);
 }`)
 
-    addFunction(ctx, 'boxnoise3d', `float boxnoise3d(vec3 p, float boxFreq) {
-  vec3 q = floor(p * boxFreq) / boxFreq;
-  return hash3(q);
+    // 1-arg version for fnref (boxFreq=1.0)
+    addFunction(ctx, 'boxnoise3d', `float boxnoise3d(vec3 p) {
+  return hash3(floor(p));
 }`)
 
     const scaleStr = typeof scale === 'number'
@@ -49,6 +51,7 @@ export const boxNoiseNode: NodeDefinition = {
       ? (Number.isInteger(boxFreq) ? `${boxFreq}.0` : `${boxFreq}`)
       : boxFreq
 
-    return `float ${outputs.value} = boxnoise3d(vec3(${inputs.coords} * ${scaleStr}, ${inputs.z}), ${boxFreqStr});`
+    // Value output uses parameterized boxFreq inline
+    return `float ${outputs.value} = hash3(floor(vec3(${inputs.coords} * ${scaleStr}, ${inputs.z}) * ${boxFreqStr}) / ${boxFreqStr});`
   },
 }

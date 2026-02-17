@@ -47,7 +47,7 @@ export function LabeledHandle({
         connected={connected}
         {...handleProps}
       />
-      <label className={cn("text-foreground px-3", labelClassName)}>
+      <label className={cn("text-foreground px-3 flex-1", position === "right" && "text-right", labelClassName)}>
         {title}
       </label>
     </div>

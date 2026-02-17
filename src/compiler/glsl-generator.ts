@@ -99,34 +99,53 @@ export function compileGraph(
         const edge = incomingEdges.find((e) => e.targetHandle === inputPort.id)
 
         if (edge) {
-          // Input is connected - use source node's output variable
-          const sourceNode = nodeMap.get(edge.source)
-          if (sourceNode) {
-            const sourceDefinition = nodeRegistry.get(sourceNode.data.type)
-            if (sourceDefinition) {
-              const sourcePort = sourceDefinition.outputs.find(
-                (p) => p.id === edge.sourceHandle
-              )
-              if (sourcePort) {
-                // Sanitize node ID for GLSL (replace hyphens with underscores)
-                const sourceVarName = `node_${edge.source.replace(/-/g, '_')}_${edge.sourceHandle}`
+          if (inputPort.type === 'fnref') {
+            // fnref input: resolve to source node's functionKey
+            const sourceNode = nodeMap.get(edge.source)
+            if (sourceNode) {
+              const sourceDefinition = nodeRegistry.get(sourceNode.data.type)
+              if (sourceDefinition?.functionKey) {
+                inputs[inputPort.id] = sourceDefinition.functionKey
+              } else {
+                errors.push({
+                  message: `Source node "${sourceNode.data.type}" has no functionKey for fnref port`,
+                  nodeId: node.id,
+                })
+              }
+            }
+          } else {
+            // Value input: use source node's output variable
+            const sourceNode = nodeMap.get(edge.source)
+            if (sourceNode) {
+              const sourceDefinition = nodeRegistry.get(sourceNode.data.type)
+              if (sourceDefinition) {
+                const sourcePort = sourceDefinition.outputs.find(
+                  (p) => p.id === edge.sourceHandle
+                )
+                if (sourcePort) {
+                  // Sanitize node ID for GLSL (replace hyphens with underscores)
+                  const sourceVarName = `node_${edge.source.replace(/-/g, '_')}_${edge.sourceHandle}`
 
-                // Apply type coercion if needed
-                if (sourcePort.type !== inputPort.type) {
-                  inputs[inputPort.id] = coerceType(
-                    sourceVarName,
-                    sourcePort.type,
-                    inputPort.type
-                  )
-                } else {
-                  inputs[inputPort.id] = sourceVarName
+                  // Apply type coercion if needed
+                  if (sourcePort.type !== inputPort.type) {
+                    inputs[inputPort.id] = coerceType(
+                      sourceVarName,
+                      sourcePort.type,
+                      inputPort.type
+                    )
+                  } else {
+                    inputs[inputPort.id] = sourceVarName
+                  }
                 }
               }
             }
           }
         } else {
           // Input is not connected - use default value
-          if (inputPort.default !== undefined) {
+          if (inputPort.type === 'fnref') {
+            // fnref unconnected: default is a function name string
+            inputs[inputPort.id] = String(inputPort.default ?? '')
+          } else if (inputPort.default !== undefined) {
             const defaultValue = formatDefaultValue(inputPort.default, inputPort.type)
             inputs[inputPort.id] = defaultValue
           } else {

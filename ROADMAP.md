@@ -115,75 +115,87 @@ interface NodeDefinition {
 
 **Reference:** spectra-pixel-bg `fork` branch (4 noise types, 4 fractal modes, domain warp, 7-color palette with 3 blend modes, pixel dithering with shape SDFs).
 
-### Sprint 1 — Infrastructure + UX Polish
+### Sprint 1 — Infrastructure + UX Polish ✅ Complete
 
-#### A. Compiler Improvements
+#### A. Compiler Improvements ✅
 
-**Shared GLSL function deduplication.** Currently each node instance pushes its own copy of helper functions (e.g., `snoise_nodeId()`). Add a `functionRegistry: Map<string, string>` to `GLSLContext`. New helper `addFunction(ctx, key, code)` skips if key already registered. `assembleFragmentShader()` emits from the registry instead of raw `functions[]`.
+- [x] `functionRegistry: Map<string, string>` on `GLSLContext` with `addFunction(ctx, key, code)` helper
+- [x] Simplex noise migrated to shared functions (no more per-instance duplication)
+- [x] `'enum'` parameter type with `options` field, rendered via shadcn `<Select>`
 
-- [x] Add `functionRegistry` to `GLSLContext` (`src/nodes/types.ts`)
-- [x] Update `assembleFragmentShader()` to use registry (`src/compiler/glsl-generator.ts`)
-- [x] Migrate existing simplex noise to shared functions (template for all noise nodes)
+#### B. Connection UX Polish ✅
 
-**Enum parameter type.** Several new nodes need dropdown selectors (FBM noise type, fractal mode, Color Ramp interpolation, Pixel Grid shape). Add `'enum'` to `NodeParameter.type` with `options?: Array<{ value: string; label: string }>`. Render as shadcn `<Select>` in `NodeParameters.tsx`.
+- [x] `TypedEdge` component — edges colored by source port type (`EdgeData.sourcePortType`)
+- [x] Handle colors: `BaseHandle` takes `handleColor` + `connected` props (filled=connected, hollow=unconnected)
+- [x] `connectionRadius={20}`, reconnectable edges (`onReconnect` handlers), delete-on-drop, single-wire-per-input swap
 
-- [x] Extend `NodeParameter` interface (`src/nodes/types.ts`)
-- [x] Add enum renderer to `NodeParameters.tsx`
-
-#### B. Connection UX Polish
-
-**Connector color coding.** Edges colored by source port type using the existing color map (float→gray, vec2→emerald, vec3→blue, vec4→purple, color→amber, sampler2D→pink). Fix the existing bug where `--handle-color` is set but never visually applied to handles.
-
-- [x] Custom edge component with per-type coloring (`src/components/TypedEdge.tsx`)
-- [x] Register custom edge type in `FlowCanvas.tsx`
-- [x] Store source port type in edge data
-- [x] Fix handle color rendering in `base-handle.tsx` / `labeled-handle.tsx`
-
-**Reconnectable edges.** Enable React Flow's built-in reconnect so users can drag an existing edge endpoint to a new port.
-
-- [x] Add `edgeReconnectMode` + handlers to `FlowCanvas.tsx`
-
-**Delete edge on drop.** Dragging an edge away and dropping on empty canvas deletes it.
-
-- [x] Use `onReconnectEnd` to detect drops on empty space
-
-**Proximity connect.** Auto-snap to compatible ports when dragging a connection nearby.
-
-- [x] Add `connectionRadius` prop to ReactFlow
-
-**Single wire per input (swap behavior).** Inputs accept only one connection. New edge to an already-connected input replaces the existing one.
-
-- [x] In `onConnect`, check for existing edges to target input and remove before adding
-
-**Used/unused port distinction.** Connected handles render filled with type color; unconnected render as hollow outlines.
-
-- [x] Pass connection status to handle component
-- [x] Style connected vs unconnected handles differently
-
-### Sprint 2 — Noise Primitives (4 nodes + 1 upgrade)
+### Sprint 2 — Noise Primitives ✅ Complete
 
 All noise nodes share the same interface: `coords` (vec2) + `z` (float, for time animation) + `scale` (float) → `value` (float, 0-1).
 
-- [x] **Simplex Noise 3D** — Upgrade existing 2D to 3D. Add `z` input (`src/nodes/noise/simplex-noise.ts`)
-- [x] **Value Noise 3D** — Hash-based 3D noise with trilinear interpolation (`src/nodes/noise/value-noise.ts`)
-- [x] **Worley Noise** — Cellular/Voronoi distance field with 3x3x3 neighbor search (`src/nodes/noise/worley-noise.ts`)
-- [x] **Box Noise** — Quantized value noise with `boxFreq` parameter (`src/nodes/noise/box-noise.ts`)
+- [x] **Simplex Noise 3D** — Upgraded to 3D with `z` input (`src/nodes/noise/simplex-noise.ts`)
+- [x] **Value Noise 3D** — Hash-based 3D noise (`src/nodes/noise/value-noise.ts`)
+- [x] **Worley Noise** — Cellular/Voronoi distance field (`src/nodes/noise/worley-noise.ts`)
+- [x] **Box Noise** — Quantized value noise with `boxFreq` (`src/nodes/noise/box-noise.ts`)
 
-### Sprint 3 — Fractal & Warp Layer (4 nodes)
+### Sprint 3 — Fractal & Warp Layer ✅ Complete
 
-- [x] **FBM** — Multi-octave fractal accumulator. Embeds all 4 noise types internally (enum param) because the fractal loop must re-sample at different frequencies. Params: `noiseType` (enum: value/simplex/worley/box), `fractalMode` (enum: standard/turbulence/ridged), `octaves` (1-8), `lacunarity`, `gain` (`src/nodes/noise/fbm.ts`)
-- [x] **Turbulence** — Standalone remap: `abs(n * 2.0 - 1.0)`. Usable outside FBM for general remapping (`src/nodes/noise/turbulence.ts`)
+- [x] **FBM** — Multi-octave fractal accumulator with `noiseType` enum + `fractalMode` enum (`src/nodes/noise/fbm.ts`)
+- [x] **Turbulence** — Standalone remap: `abs(n * 2.0 - 1.0)` (`src/nodes/noise/turbulence.ts`)
 - [x] **Ridged** — Standalone remap: `(1.0 - abs(n * 2.0 - 1.0))^2` (`src/nodes/noise/ridged.ts`)
-- [x] **Domain Warp** — Distorts coordinates using value noise. Inputs: `coords` (vec2), `strength` (float). Output: `warped` (vec2) (`src/nodes/noise/domain-warp.ts`)
+- [x] **Domain Warp** — Coordinate distortion using value noise (`src/nodes/noise/domain-warp.ts`)
 
-### Sprint 4 — UV & Input Nodes (4 nodes)
+### Sprint 4 — Unified Noise Node + fnref Revisions + Cleanup
+
+**Goal:** Consolidate 4 separate noise nodes into 1 unified Noise node (Redshift-style), make FBM and Domain Warp composable via `fnref`, and move Turbulence/Ridged to Math.
+
+#### Unified Noise Node
+
+Replace `simplex-noise.ts`, `value-noise.ts`, `worley-noise.ts`, `box-noise.ts` with a single `noise.ts`. One node with a `noiseType` dropdown (simplex/value/worley/box). Changing noise type = dropdown change, no rewiring. Outputs: `value` (float) + `fn` (fnref). The `fn` output dynamically provides the selected noise type's function name.
+
+- [ ] Create `src/nodes/noise/noise.ts` — unified noise node with type enum
+- [ ] Delete 4 old files: `simplex-noise.ts`, `value-noise.ts`, `worley-noise.ts`, `box-noise.ts`
+
+#### Dynamic `functionKey`
+
+`NodeDefinition.functionKey` changes from `string` to `string | ((params) => string)`. The unified node returns the selected noise type's function name dynamically. Compiler resolves by calling the function with source node's params.
+
+- [ ] Update `functionKey` type in `src/nodes/types.ts`
+- [ ] Update fnref resolution in `src/compiler/glsl-generator.ts` to handle dynamic functionKey
+
+#### FBM — fnref input (revise)
+
+Remove `noiseType` enum param, add `noiseFn` fnref input. Keep `fractalMode` enum (standard/turbulence/ridged). When unconnected, falls back to simplex and registers its GLSL.
+
+- [ ] Revise `src/nodes/noise/fbm.ts`
+
+#### Domain Warp — fnref input (revise)
+
+Add `noiseFn` fnref input (default: value noise). When unconnected, registers fallback GLSL.
+
+- [ ] Revise `src/nodes/noise/domain-warp.ts`
+
+#### Move Turbulence & Ridged to Math
+
+These are general-purpose signal remaps (`float → float`), not noise-specific.
+
+- [ ] Move `src/nodes/noise/turbulence.ts` → `src/nodes/math/turbulence.ts`, change `category: 'Math'`
+- [ ] Move `src/nodes/noise/ridged.ts` → `src/nodes/math/ridged.ts`, change `category: 'Math'`
+
+#### Other
+
+- [ ] Update `src/nodes/index.ts` — replace 4 noise imports with 1, update turbulence/ridged paths
+- [ ] Add `fnref` color to handle/edge color map
+- [x] Right-align output port labels (`labeled-handle.tsx`) ✅ Done
+
+### Sprint 5 — UV & Input Nodes (4 nodes)
 
 - [ ] **Rotate UV** — 2D rotation around (0.5, 0.5). Input: `angle` (float, radians). Maps to spectra's `angle` param (`src/nodes/input/rotate-uv.ts`)
 - [ ] **Scale UV** — Scale from center (`src/nodes/input/scale-uv.ts`)
 - [ ] **Offset UV** — Translate coordinates. Maps to spectra's `flow` (animated offset via Time) (`src/nodes/input/offset-uv.ts`)
 - [ ] **Vec2 Constant** — Output a static vec2 value (`src/nodes/input/vec2-constant.ts`)
 
-### Sprint 5 — Color Ramp (1 node, biggest single item)
+### Sprint 6 — Color Ramp (1 node, biggest single item)
 
 General-purpose multi-stop gradient mapper: float (0-1) → color (vec3). This is the scalable replacement for spectra's fixed 7-color palette system — arbitrary number of stops, usable by any future node library.
 
@@ -192,63 +204,58 @@ General-purpose multi-stop gradient mapper: float (0-1) → color (vec3). This i
 - [ ] **6 palette presets** — Cobalt Drift, Violet Ember, Teal Afterglow, Solar Ember, Citrus Pulse, Rose Heat (from spectra-pixel-bg)
 - [ ] Stops stored as `params.stops` (serializable array), UI via `component` field — no changes to `NodeParameter` type system needed
 
-### Sprint 6 — Pixel Rendering (2 nodes)
+### Sprint 7 — Pixel Rendering (2 nodes)
 
 - [ ] **Pixel Grid** — Post-processing node: quantization + Bayer 8x8 dithering + shape SDF (circle/triangle/diamond). Inputs: `color` (vec3), `coords` (vec2). Params: `pixelSize` (2-20), `shape` (enum), `dither` (0-1) (`src/nodes/postprocess/pixel-grid.ts`)
 - [ ] **Bayer Dither** — Standalone 8x8 Bayer dither pattern. Outputs threshold float for current pixel. Enables creative dithering beyond pixel art (`src/nodes/postprocess/bayer-dither.ts`)
 
-### Node Summary
+### Node Summary (After Sprint 4)
 
-| # | Node | Category | Status |
-|---|------|----------|--------|
-| 1 | Simplex Noise 3D | Noise | Upgrade |
-| 2 | Value Noise 3D | Noise | New |
-| 3 | Worley Noise | Noise | New |
-| 4 | Box Noise | Noise | New |
-| 5 | FBM | Noise | New |
-| 6 | Turbulence | Noise | New |
-| 7 | Ridged | Noise | New |
-| 8 | Domain Warp | Noise | New |
-| 9 | Rotate UV | Input | New |
-| 10 | Scale UV | Input | New |
-| 11 | Offset UV | Input | New |
-| 12 | Vec2 Constant | Input | New |
-| 13 | Color Ramp | Color | New |
-| 14 | Pixel Grid | Post-process | New |
-| 15 | Bayer Dither | Post-process | New |
+| Node | Category | fnref | Notes |
+|------|----------|-------|-------|
+| **Noise** | Noise | outputs (dynamic) | Unified: simplex/value/worley/box via dropdown |
+| **FBM** | Noise | consumes fnref | Revised: wirable noise input |
+| **Domain Warp** | Noise | consumes fnref | Revised: wirable noise input |
+| **Turbulence** | Math | — | Moved from Noise (general signal remap) |
+| **Ridged** | Math | — | Moved from Noise (general signal remap) |
+| Rotate UV | Input | — | Sprint 5 |
+| Scale UV | Input | — | Sprint 5 |
+| Offset UV | Input | — | Sprint 5 |
+| Vec2 Constant | Input | — | Sprint 5 |
+| Color Ramp | Color | — | Sprint 6 |
+| Pixel Grid | Post-process | — | Sprint 7 |
+| Bayer Dither | Post-process | — | Sprint 7 |
 
-**Total after Phase 2: 30 nodes** (16 existing + 15 new - 1 upgrade)
+**After Sprint 4: 20 nodes** (4 separate noise → 1 unified = net -3). **After Phase 2: 27 nodes.**
 
 ### Key Files
 
-| File | Modifications |
-|------|---------------|
-| `src/nodes/types.ts` | Add `functionRegistry` to `GLSLContext`, `'enum'` to `NodeParameter` |
-| `src/compiler/glsl-generator.ts` | Function deduplication, registry initialization |
-| `src/components/NodeParameters.tsx` | Enum/select renderer |
-| `src/components/FlowCanvas.tsx` | Edge reconnect, proximity connect, connection radius, edge types |
-| `src/components/TypedEdge.tsx` | New — custom edge with port-type coloring |
-| `src/components/base-handle.tsx` | Fix handle color rendering |
-| `src/components/labeled-handle.tsx` | Connected/unconnected visual states |
-| `src/components/ShaderNode.tsx` | Pass connection status to handles |
-| `src/components/ColorRampEditor.tsx` | New — gradient editor widget |
-| `src/nodes/index.ts` | Register all new nodes |
-| `src/App.tsx` | Edge swap logic in `onConnect` |
+| File | Sprint 4 Changes |
+|------|-----------------|
+| `src/nodes/noise/noise.ts` | **New** — unified noise node (replaces 4 files) |
+| `src/nodes/types.ts` | `functionKey` becomes `string \| ((params) => string)` |
+| `src/compiler/glsl-generator.ts` | Dynamic functionKey resolution for fnref |
+| `src/nodes/noise/fbm.ts` | Replace `noiseType` enum with `noiseFn` fnref input |
+| `src/nodes/noise/domain-warp.ts` | Add `noiseFn` fnref input |
+| `src/nodes/math/turbulence.ts` | Moved from `noise/`, category → Math |
+| `src/nodes/math/ridged.ts` | Moved from `noise/`, category → Math |
+| `src/nodes/index.ts` | Replace 4 noise imports with 1, update turbulence/ridged paths |
+| `src/components/ColorRampEditor.tsx` | Sprint 6 — gradient editor widget |
 
 ### Success Criteria
 
-1. All 4 spectra noise types exist as 3D nodes with `coords` + `z` inputs
-2. FBM supports standard/turbulence/ridged modes for all 4 noise types
-3. Domain Warp distorts coordinates with adjustable strength
-4. Color Ramp maps float → color via interactive gradient editor with 6 spectra palette presets
-5. Pixel Grid renders pixel art with circle/triangle/diamond shapes + Bayer dithering
-6. UV nodes (rotate, scale, offset) enable spectra's `angle` and `flow` behaviors
-7. **Acceptance test:** manually wire graphs that visually reproduce each of the 4 spectra presets
-8. Edges color-coded by port type, reconnectable, delete-on-drop, proximity-connect, single-wire-per-input
-9. Connected/unconnected handles visually distinct
-10. No regressions to existing 16 nodes or live preview pipeline
+1. Unified Noise node with type dropdown (simplex/value/worley/box) + dual outputs (value + fn)
+2. FBM accepts wired noise via `fnref` input — wire Noise `fn` → FBM, change dropdown to switch noise type
+3. FBM supports standard/turbulence/ridged fractal modes via enum param
+4. Domain Warp accepts wired noise via `fnref` input
+5. Turbulence and Ridged nodes appear under Math category
+6. Color Ramp maps float → color via interactive gradient editor with 6 spectra palette presets
+7. Pixel Grid renders pixel art with circle/triangle/diamond shapes + Bayer dithering
+8. UV nodes (rotate, scale, offset) enable spectra's `angle` and `flow` behaviors
+9. **Acceptance test:** manually wire graphs that visually reproduce each of the 4 spectra presets
+10. No regressions to live preview pipeline
 
-**Milestone:** 30-node editor that can recreate all spectra-pixel-bg effects as composable node graphs, with polished connection UX.
+**Milestone:** Composable noise→FBM node graph system that can recreate all spectra-pixel-bg effects.
 
 ---
 

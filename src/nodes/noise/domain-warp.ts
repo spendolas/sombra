@@ -1,5 +1,6 @@
 /**
- * Domain Warp - Distorts coordinates using value noise
+ * Domain Warp - Distorts coordinates using a wirable noise function.
+ * When unconnected, falls back to value noise (vnoise3d).
  */
 
 import type { NodeDefinition } from '../types'
@@ -15,6 +16,7 @@ export const domainWarpNode: NodeDefinition = {
     { id: 'coords', label: 'Coords', type: 'vec2', default: [0.0, 0.0] },
     { id: 'strength', label: 'Strength', type: 'float', default: 0.3 },
     { id: 'z', label: 'Z', type: 'float', default: 0.0 },
+    { id: 'noiseFn', label: 'Noise Fn', type: 'fnref', default: 'vnoise3d' },
   ],
 
   outputs: [
@@ -30,15 +32,38 @@ export const domainWarpNode: NodeDefinition = {
     const { inputs, outputs, params } = ctx
     const strength = params.strength !== undefined ? params.strength : inputs.strength
     const frequency = params.frequency !== undefined ? params.frequency : 4.0
+    const noiseFn = inputs.noiseFn // function name from fnref
 
-    // Reuse hash3 from value noise
-    addFunction(ctx, 'hash3', `float hash3(vec3 p) {
+    // Register value noise fallback (idempotent — for when noiseFn input is unconnected)
+    registerValueNoiseFallback(ctx)
+
+    const strStr = typeof strength === 'number'
+      ? (Number.isInteger(strength) ? `${strength}.0` : `${strength}`)
+      : strength
+    const freqStr = typeof frequency === 'number'
+      ? (Number.isInteger(frequency) ? `${frequency}.0` : `${frequency}`)
+      : frequency
+
+    // Use unique temp variable names based on output to avoid collisions
+    const prefix = outputs.warped
+    return [
+      `float ${prefix}_x = ${noiseFn}(vec3(${inputs.coords} * ${freqStr}, ${inputs.z})) * 2.0 - 1.0;`,
+      `float ${prefix}_y = ${noiseFn}(vec3(${inputs.coords} * ${freqStr} + 100.0, ${inputs.z})) * 2.0 - 1.0;`,
+      `vec2 ${outputs.warped} = ${inputs.coords} + vec2(${prefix}_x, ${prefix}_y) * ${strStr};`,
+    ].join('\n  ')
+  },
+}
+
+/**
+ * Register value noise functions as fallback for unconnected fnref input.
+ */
+function registerValueNoiseFallback(ctx: import('../types').GLSLContext) {
+  addFunction(ctx, 'hash3', `float hash3(vec3 p) {
   p = fract(p * 0.1031);
   p += dot(p, p.zyx + 31.32);
   return fract((p.x + p.y) * p.z);
 }`)
-
-    addFunction(ctx, 'vnoise3d', `float vnoise3d(vec3 p) {
+  addFunction(ctx, 'vnoise3d', `float vnoise3d(vec3 p) {
   vec3 i = floor(p);
   vec3 f = fract(p);
   f = f * f * (3.0 - 2.0 * f);
@@ -49,18 +74,4 @@ export const domainWarpNode: NodeDefinition = {
         mix(hash3(i + vec3(0,1,1)), hash3(i + vec3(1,1,1)), f.x), f.y),
     f.z);
 }`)
-
-    const strStr = typeof strength === 'number'
-      ? (Number.isInteger(strength) ? `${strength}.0` : `${strength}`)
-      : strength
-    const freqStr = typeof frequency === 'number'
-      ? (Number.isInteger(frequency) ? `${frequency}.0` : `${frequency}`)
-      : frequency
-
-    return [
-      `float _warpX = vnoise3d(vec3(${inputs.coords} * ${freqStr}, ${inputs.z})) * 2.0 - 1.0;`,
-      `float _warpY = vnoise3d(vec3(${inputs.coords} * ${freqStr} + 100.0, ${inputs.z})) * 2.0 - 1.0;`,
-      `vec2 ${outputs.warped} = ${inputs.coords} + vec2(_warpX, _warpY) * ${strStr};`,
-    ].join('\n  ')
-  },
 }

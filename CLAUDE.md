@@ -80,10 +80,11 @@ npm run preview  # Preview production build locally
 ### Node System
 
 Nodes have:
-- **Type** (e.g., `simplex_noise`, `mix`, `uv_coords`)
-- **Inputs/Outputs** with typed ports (float, vec2, vec3, vec4, color, sampler2D)
+- **Type** (e.g., `noise`, `mix`, `uv_coords`)
+- **Inputs/Outputs** with typed ports (float, vec2, vec3, vec4, color, sampler2D, fnref)
 - **Parameters** with default values
 - **GLSL generator function** - emits GLSL code snippet given inputs/outputs/params
+- **Optional `functionKey`** - GLSL function name for fnref outputs (`string` or `(params) => string` for dynamic)
 - **Optional custom UI** - React component for node body (e.g., color picker, sliders)
 
 ### State Management
@@ -131,15 +132,17 @@ Nodes have:
 
 ✅ Complete — Scaffold, React Flow canvas, WebGL2 renderer, GitHub Pages deployment.
 
-## Next Steps (Phase 2)
+## Next Steps (Phase 2, Sprint 4)
 
-See `ROADMAP.md` for the full Phase 2 brief. Focus: Spectra Mode + UX Polish
-- Shared GLSL function deduplication + enum parameter type
-- 8 noise nodes: Value 3D, Simplex 3D, Worley, Box, FBM, Turbulence, Ridged, Domain Warp
-- 4 UV/input nodes: Rotate UV, Scale UV, Offset UV, Vec2 Constant
-- Color Ramp node with interactive gradient editor + 6 spectra palette presets
-- Pixel Grid + Bayer Dither nodes for pixel-art rendering
-- Connection UX: colored edges, reconnectable, delete-on-drop, proximity connect, single-wire swap, port status visuals
+See `ROADMAP.md` for the full Phase 2 brief. Current focus: **Unified Noise Node + fnref + Cleanup**
+- Merge 4 noise nodes (Simplex, Value, Worley, Box) → 1 unified **Noise** node with `noiseType` enum dropdown
+- Dynamic `functionKey`: type changes from `string` to `string | ((params) => string)` so fnref output adapts to selected noise type
+- Compiler update: `glsl-generator.ts` resolves dynamic functionKey by calling it with source node's params
+- Move Turbulence & Ridged from Noise → Math category (they're general-purpose signal remaps, not noise types)
+- FBM & Domain Warp: update fallback GLSL registration to use shared helpers from unified noise module
+- Right-align output labels ✅ already done in `labeled-handle.tsx`
+
+**After Sprint 4:** UV/Input nodes → Color Ramp → Pixel Rendering
 
 ## Design Decisions (Why We Did It This Way)
 
@@ -191,11 +194,28 @@ Replicate the full spectra-pixel-bg experience as composable node-graph features
 - `'enum'` parameter type with shadcn `<Select>` renderer
 - Handle colors: `BaseHandle` uses `handleColor` + `connected` props (filled/hollow)
 - `TypedEdge` component with port-type edge coloring, `sourcePortType` in `EdgeData`
-- Reconnectable edges, delete-on-drop, proximity connect (`connectionRadius=20`), single-wire-per-input swap
+- Reconnectable edges, delete-on-drop, proximity connect (`connectionRadius=20`), single-wire-per-input swap in `onConnect`
 
-**Remaining sprints:** Noise Primitives → Fractal+Warp → UV/Input → Color Ramp → Pixel Rendering
+**Sprint 2 — Noise Primitives** ✅ Complete
+- Simplex 3D (upgrade), Value 3D, Worley, Box noise — all with `coords` + `z` + `scale` → `value`
+
+**Sprint 3 — Fractal & Warp** ✅ Complete
+- FBM (with `noiseType` enum + `fractalMode` enum), Turbulence, Ridged, Domain Warp
+
+**Sprint 4 — Unified Noise Node + fnref + Cleanup** ← Next
+- Merge 4 separate noise nodes → 1 unified **Noise** node with `noiseType` dropdown (simplex/value/worley/box)
+- Dynamic `functionKey`: `string | ((params) => string)` — fnref output adapts to selected noise type
+- Compiler: `glsl-generator.ts` resolves dynamic functionKey by calling it with source node params
+- Move Turbulence & Ridged from `noise/` → `math/`, change category to 'Math'
+- FBM & Domain Warp: update fallback registration to use shared GLSL helpers from unified noise module
+- Delete old files: `simplex-noise.ts`, `value-noise.ts`, `worley-noise.ts`, `box-noise.ts`
+- Right-align output labels ✅ already done
+
+**Remaining sprints:** UV/Input → Color Ramp → Pixel Rendering
 
 **Acceptance test:** Manually wire node graphs that reproduce all 4 spectra presets (Value FBM, Simplex FBM, Worley Ridged, Box None).
+
+**Node count after Sprint 4:** 20 nodes (down from 24 — unified noise replaces 4, net -3)
 
 ## Important Layout Notes
 

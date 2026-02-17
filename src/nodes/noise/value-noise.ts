@@ -10,6 +10,7 @@ export const valueNoiseNode: NodeDefinition = {
   label: 'Value Noise',
   category: 'Noise',
   description: '3D hash-based noise with smooth trilinear interpolation',
+  functionKey: 'vnoise3d',
 
   inputs: [
     { id: 'coords', label: 'Coords', type: 'vec2', default: [0.0, 0.0] },
@@ -19,6 +20,7 @@ export const valueNoiseNode: NodeDefinition = {
 
   outputs: [
     { id: 'value', label: 'Value', type: 'float' },
+    { id: 'fn', label: 'Fn', type: 'fnref' },
   ],
 
   params: [
