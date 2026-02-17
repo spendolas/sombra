@@ -25,6 +25,10 @@ import { simplexNoiseNode } from './noise/simplex-noise'
 import { valueNoiseNode } from './noise/value-noise'
 import { worleyNoiseNode } from './noise/worley-noise'
 import { boxNoiseNode } from './noise/box-noise'
+import { fbmNode } from './noise/fbm'
+import { turbulenceNode } from './noise/turbulence'
+import { ridgedNode } from './noise/ridged'
+import { domainWarpNode } from './noise/domain-warp'
 
 // Color nodes
 import { hsvToRgbNode } from './color/hsv-to-rgb'
@@ -58,6 +62,10 @@ export const ALL_NODES = [
   valueNoiseNode,
   worleyNoiseNode,
   boxNoiseNode,
+  fbmNode,
+  turbulenceNode,
+  ridgedNode,
+  domainWarpNode,
 
   // Color
   hsvToRgbNode,

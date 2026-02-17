@@ -164,17 +164,17 @@ interface NodeDefinition {
 
 All noise nodes share the same interface: `coords` (vec2) + `z` (float, for time animation) + `scale` (float) → `value` (float, 0-1).
 
-- [ ] **Simplex Noise 3D** — Upgrade existing 2D to 3D. Add `z` input (`src/nodes/noise/simplex-noise.ts`)
-- [ ] **Value Noise 3D** — Hash-based 3D noise with trilinear interpolation (`src/nodes/noise/value-noise.ts`)
-- [ ] **Worley Noise** — Cellular/Voronoi distance field with 3x3x3 neighbor search. Outputs: `distance` + `cellId` (`src/nodes/noise/worley-noise.ts`)
-- [ ] **Box Noise** — Quantized value noise with `boxFreq` parameter (`src/nodes/noise/box-noise.ts`)
+- [x] **Simplex Noise 3D** — Upgrade existing 2D to 3D. Add `z` input (`src/nodes/noise/simplex-noise.ts`)
+- [x] **Value Noise 3D** — Hash-based 3D noise with trilinear interpolation (`src/nodes/noise/value-noise.ts`)
+- [x] **Worley Noise** — Cellular/Voronoi distance field with 3x3x3 neighbor search (`src/nodes/noise/worley-noise.ts`)
+- [x] **Box Noise** — Quantized value noise with `boxFreq` parameter (`src/nodes/noise/box-noise.ts`)
 
 ### Sprint 3 — Fractal & Warp Layer (4 nodes)
 
-- [ ] **FBM** — Multi-octave fractal accumulator. Embeds all 4 noise types internally (enum param) because the fractal loop must re-sample at different frequencies. Params: `noiseType` (enum: value/simplex/worley/box), `fractalMode` (enum: standard/turbulence/ridged), `octaves` (1-8), `lacunarity`, `gain` (`src/nodes/noise/fbm.ts`)
-- [ ] **Turbulence** — Standalone remap: `abs(n * 2.0 - 1.0)`. Usable outside FBM for general remapping (`src/nodes/noise/turbulence.ts`)
-- [ ] **Ridged** — Standalone remap: `(1.0 - abs(n * 2.0 - 1.0))^2` (`src/nodes/noise/ridged.ts`)
-- [ ] **Domain Warp** — Distorts coordinates using value noise. Inputs: `coords` (vec2), `strength` (float). Output: `warped` (vec2) (`src/nodes/noise/domain-warp.ts`)
+- [x] **FBM** — Multi-octave fractal accumulator. Embeds all 4 noise types internally (enum param) because the fractal loop must re-sample at different frequencies. Params: `noiseType` (enum: value/simplex/worley/box), `fractalMode` (enum: standard/turbulence/ridged), `octaves` (1-8), `lacunarity`, `gain` (`src/nodes/noise/fbm.ts`)
+- [x] **Turbulence** — Standalone remap: `abs(n * 2.0 - 1.0)`. Usable outside FBM for general remapping (`src/nodes/noise/turbulence.ts`)
+- [x] **Ridged** — Standalone remap: `(1.0 - abs(n * 2.0 - 1.0))^2` (`src/nodes/noise/ridged.ts`)
+- [x] **Domain Warp** — Distorts coordinates using value noise. Inputs: `coords` (vec2), `strength` (float). Output: `warped` (vec2) (`src/nodes/noise/domain-warp.ts`)
 
 ### Sprint 4 — UV & Input Nodes (4 nodes)
 
