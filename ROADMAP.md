@@ -189,38 +189,31 @@ These are general-purpose signal remaps (`float → float`), not noise-specific.
 - [x] Right-align output port labels (`labeled-handle.tsx`)
 - [x] `NodeParameter.showWhen` — conditional param visibility (boxFreq only shown when noiseType=box)
 
-### Sprint 4.5 — Connectable Parameters (UX Refactor)
+### Sprint 4.5 — Connectable Parameters (UX Refactor) ✅ Complete
 
 **Goal:** Unify the handle and slider systems so every float parameter can optionally be wired, with inline rendering and proper locked state when connected.
 
-**Problem:** Scale appears as both a standalone handle (top) and a slider (bottom), visually disconnected. Sliders remain editable when wired but the compiler ignores them. Most float params (Lacunarity, Gain, Brightness, Contrast) have no handles at all.
-
-**Solution:** `connectable?: boolean` flag on `NodeParameter`. Connectable params render as inline handle+slider rows. When wired, the slider shows a "linked" indicator and the compiler uses the wired GLSL variable. When not wired, the compiler reads the slider value from `node.data.params`.
+**Solution:** `connectable?: boolean` flag on `NodeParameter`. Connectable params render as inline handle+slider rows. When wired, the slider dims and the compiler uses the wired GLSL variable. When not wired, the compiler reads the slider value from `node.data.params`.
 
 #### Type System
-- [ ] Add `connectable?: boolean` to `NodeParameter` in `src/nodes/types.ts`
+- [x] Add `connectable?: boolean` to `NodeParameter` in `src/nodes/types.ts`
 
 #### Compiler
-- [ ] Fix unconnected-input fallback in `src/compiler/glsl-generator.ts` — use `node.data.params[id]` for connectable params instead of port default
+- [x] Fix unconnected-input fallback in `src/compiler/glsl-generator.ts` — use `node.data.params[id]` for connectable params instead of port default
+- [x] `formatDefaultValue` outputs proper GLSL float literals (integers get `.0` suffix)
 
 #### UI Components
-- [ ] Export `FloatSlider` from `src/components/NodeParameters.tsx`
-- [ ] New `ConnectableParamRow` component — handle on left, slider on right, "linked" when wired
-- [ ] Rework `src/components/ShaderNode.tsx` layout — partition inputs into pure handles vs connectable param rows
+- [x] Export `FloatSlider` from `src/components/NodeParameters.tsx`
+- [x] Connectable param rows in `ShaderNode.tsx` — `BaseHandle` + inline `FloatSlider`, dimmed when wired
+- [x] Rework `ShaderNode.tsx` layout — partition into pure inputs → connectable param rows → outputs → regular params
+- [x] `isValidConnection` in `FlowCanvas.tsx` checks connectable params as valid targets
 
 #### Node Definitions
-- [ ] `noise.ts` — `connectable: true` on scale, simplify GLSL
-- [ ] `fbm.ts` — `connectable: true` on scale/lacunarity/gain, add lacunarity+gain input ports, refactor GLSL to pass lac/gain as function args
-- [ ] `domain-warp.ts` — `connectable: true` on strength/frequency, add frequency input port, simplify GLSL
-- [ ] `mix.ts` — `connectable: true` on factor, simplify GLSL
-- [ ] `brightness-contrast.ts` — `connectable: true` on brightness/contrast, add brightness+contrast input ports, simplify GLSL
-
-#### Design Notes
-- Enums, colors: never connectable (compile-time choices)
-- `showWhen` + connectable: both handle and slider hide together
-- FBM Octaves: stays non-connectable (GLSL `for` loop requires compile-time int)
-- Float Constant node: unaffected (source node, no inputs)
-- `isValidConnection` in FlowCanvas: works automatically if new input ports are in `definition.inputs[]`
+- [x] `noise.ts` — `connectable: true` on scale, GLSL uses `inputs.scale` directly
+- [x] `fbm.ts` — `connectable: true` on scale/lacunarity/gain, GLSL passes lac/gain as function args
+- [x] `domain-warp.ts` — `connectable: true` on strength/frequency, GLSL uses `inputs.strength`/`inputs.frequency`
+- [x] `mix.ts` — `connectable: true` on factor, GLSL uses `inputs.factor`
+- [x] `brightness-contrast.ts` — `connectable: true` on brightness/contrast, GLSL uses `inputs.brightness`/`inputs.contrast`
 
 ### Sprint 5 — UV & Input Nodes (4 nodes)
 

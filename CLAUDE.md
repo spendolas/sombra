@@ -132,30 +132,12 @@ Nodes have:
 
 ✅ Complete — Scaffold, React Flow canvas, WebGL2 renderer, GitHub Pages deployment.
 
-## Next Steps (Phase 2, Sprint 4.5)
+## Next Steps (Phase 2, Sprint 5)
 
-See `ROADMAP.md` for the full Phase 2 brief. Current focus: **Connectable Parameters**
+See `ROADMAP.md` for the full Phase 2 brief. Current focus: **UV & Input Nodes**
 
-Three UX issues:
-1. Scale handle is visually separated from its slider (handle at top, slider below divider)
-2. Sliders don't lock when wired (compiler ignores slider value but it's still editable)
-3. Not all float params are wirable (only Scale/Factor/Strength have handles; Lacunarity/Gain/Brightness/Contrast are slider-only)
-
-**Solution:** `connectable?: boolean` flag on `NodeParameter`. Connectable float params render inline with their handle (handle on left, slider on right). When wired, slider shows "linked" state.
-
-Key changes:
-- `types.ts`: add `connectable` field to `NodeParameter`
-- `glsl-generator.ts`: use `node.data.params[id]` for unconnected connectable inputs (not port default)
-- `ShaderNode.tsx`: partition inputs into pure handles vs connectable param rows
-- `NodeParameters.tsx`: new `ConnectableParamRow` component (handle + slider + locked state)
-- FBM: refactor GLSL to pass lacunarity/gain as function args (not baked literals), add input ports
-- Domain Warp: add frequency input port
-- Brightness/Contrast: add brightness/contrast input ports
-- All affected nodes: simplify GLSL (`inputs.X` always correct, no more `params.X ?? inputs.X`)
-
-See plan file `.claude/plans/swift-marinating-ladybug.md` for full implementation details.
-
-**After Sprint 4.5:** UV/Input nodes → Color Ramp → Pixel Rendering
+- Rotate UV, Scale UV, Offset UV, Vec2 Constant
+- Then: Color Ramp (Sprint 6) → Pixel Rendering (Sprint 7)
 
 ## Design Decisions (Why We Did It This Way)
 
@@ -225,16 +207,18 @@ Replicate the full spectra-pixel-bg experience as composable node-graph features
 - `NodeParameter.showWhen` for conditional param visibility (boxFreq only shown for box noise)
 - fnref color (cyan `#22d3ee`) in handle/edge maps, right-aligned output labels
 
-**Sprint 4.5 — Connectable Parameters** ← Next
-- `connectable?: boolean` flag on `NodeParameter` — inline handle + slider, locks when wired
-- Compiler fix: use slider value for unconnected connectable inputs
-- `ConnectableParamRow` component, `ShaderNode.tsx` layout rework
-- FBM refactor: lacunarity/gain as function args (wirable), add input ports
-- Domain Warp: add frequency input port
-- Brightness/Contrast: add brightness/contrast input ports
-- All affected GLSL generators simplified: `inputs.X` always correct
+**Sprint 4.5 — Connectable Parameters** ✅ Complete
+- `connectable?: boolean` flag on `NodeParameter` — inline handle + slider, dims when wired
+- Compiler: connectable params resolved as inputs (wired → source var, unwired → slider value)
+- `ShaderNode.tsx` layout rework: pure inputs → connectable param rows → outputs → regular params
+- `formatDefaultValue` outputs proper GLSL float literals (5 → "5.0")
+- FBM refactor: lacunarity/gain as function args (wirable)
+- Domain Warp: strength/frequency connectable
+- Mix: factor connectable
+- Brightness/Contrast: brightness/contrast connectable
+- `isValidConnection` checks connectable params as valid connection targets
 
-**Remaining sprints:** UV/Input → Color Ramp → Pixel Rendering
+**Remaining sprints:** UV/Input (Sprint 5) → Color Ramp (Sprint 6) → Pixel Rendering (Sprint 7)
 
 **Acceptance test:** Manually wire node graphs that reproduce all 4 spectra presets (Value FBM, Simplex FBM, Worley Ridged, Box None).
 
