@@ -133,12 +133,13 @@ Nodes have:
 
 ## Next Steps (Phase 2)
 
-See `ROADMAP.md` for detailed roadmap. Phase 2 focus: Save/Load/Export
-- localStorage auto-save with schema versioning
-- JSON download/upload for sharing graph files
-- "Copy GLSL" button — export compiled fragment shader
-- Error display in UI (show compilation errors visually)
-- Per-node mini-previews (render thumbnails)
+See `ROADMAP.md` for the full Phase 2 brief. Focus: Spectra Mode + UX Polish
+- Shared GLSL function deduplication + enum parameter type
+- 8 noise nodes: Value 3D, Simplex 3D, Worley, Box, FBM, Turbulence, Ridged, Domain Warp
+- 4 UV/input nodes: Rotate UV, Scale UV, Offset UV, Vec2 Constant
+- Color Ramp node with interactive gradient editor + 6 spectra palette presets
+- Pixel Grid + Bayer Dither nodes for pixel-art rendering
+- Connection UX: colored edges, reconnectable, delete-on-drop, proximity connect, single-wire swap, port status visuals
 
 ## Design Decisions (Why We Did It This Way)
 
@@ -179,18 +180,20 @@ Free, simple, integrates well with GitHub Actions. Custom domain can be added la
 **Phase 0** - ✅ Complete
 **Phase 1** - ✅ Complete (16 nodes, compiler, live preview, full reactive pipeline)
 **Phase 1.2** - ✅ Complete (UI polish, resizable layout, frozen-ref preview)
+**Phase 2** - 🔜 Next (Spectra Mode + UX Polish)
 
-### Phase 1.2 Progress
+### Phase 2 — Spectra Mode + UX Polish
 
-- Integrated shadcn/ui component library (Button, Input, Label, Slider, ScrollArea, Separator)
-- Added React Flow UI components: BaseNode, LabeledHandle, ZoomSlider
-- Resizable three-panel layout using react-resizable-panels v4 (palette | canvas+preview | properties)
-- Removed header bar — full-height panels for maximum workspace
-- Restyled ShaderNode with BaseNode/LabeledHandle for cleaner node appearance
-- Added `u_ref_size` frozen-reference uniform for zoom-free preview
-- UV node uses `(v_uv - 0.5) * u_resolution / u_ref_size + 0.5` — resizing reveals/hides without zoom or distortion
-- Canvas fills entire preview panel (no black bars, no aspect-ratio lock)
-- Patched shadcn's `resizable.tsx` for react-resizable-panels v4 API (`direction` → `orientation`, string sizes)
+Replicate the full spectra-pixel-bg experience as composable node-graph features, plus connection UX polish. See `ROADMAP.md` for the full brief with sprint breakdown.
+
+**Key deliverables:**
+- 15 new nodes (30 total): 8 noise (Value 3D, Simplex 3D upgrade, Worley, Box, FBM, Turbulence, Ridged, Domain Warp), 4 UV/input (Rotate, Scale, Offset, Vec2 Constant), Color Ramp, Pixel Grid, Bayer Dither
+- Compiler: shared GLSL function deduplication (`functionRegistry` on `GLSLContext`), enum parameter type
+- UX: connector color coding by port type, reconnectable edges, delete-on-drop, proximity connect, single-wire-per-input swap, connected/unconnected port visual distinction
+
+**Sprint order:** Infrastructure+UX → Noise Primitives → Fractal+Warp → UV/Input → Color Ramp → Pixel Rendering
+
+**Acceptance test:** Manually wire node graphs that reproduce all 4 spectra presets (Value FBM, Simplex FBM, Worley Ridged, Box None).
 
 ## Important Layout Notes
 

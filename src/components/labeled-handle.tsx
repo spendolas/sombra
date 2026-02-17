@@ -17,12 +17,16 @@ export function LabeledHandle({
   handleClassName,
   title,
   position,
+  handleColor,
+  connected,
   ...props
 }: HandleProps &
   ComponentProps<"div"> & {
     title: string;
     handleClassName?: string;
     labelClassName?: string;
+    handleColor?: string;
+    connected?: boolean;
   }) {
   const { ref, ...handleProps } = props;
 
@@ -39,6 +43,8 @@ export function LabeledHandle({
       <BaseHandle
         position={position}
         className={handleClassName}
+        handleColor={handleColor}
+        connected={connected}
         {...handleProps}
       />
       <label className={cn("text-foreground px-3", labelClassName)}>

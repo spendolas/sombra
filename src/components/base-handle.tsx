@@ -3,20 +3,30 @@ import { Handle, type HandleProps } from "@xyflow/react";
 
 import { cn } from "@/lib/utils";
 
-export type BaseHandleProps = HandleProps;
+export type BaseHandleProps = HandleProps & {
+  handleColor?: string;
+  connected?: boolean;
+};
 
 export function BaseHandle({
   className,
   children,
+  handleColor,
+  connected,
   ...props
-}: ComponentProps<typeof Handle>) {
+}: ComponentProps<typeof Handle> & { handleColor?: string; connected?: boolean }) {
   return (
     <Handle
       {...props}
       className={cn(
-        "dark:border-secondary dark:bg-secondary h-[11px] w-[11px] rounded-full border border-slate-300 bg-slate-100 transition",
+        "h-[11px] w-[11px] rounded-full border-2 transition",
         className,
       )}
+      style={{
+        borderColor: handleColor ?? '#6b7280',
+        backgroundColor: connected ? (handleColor ?? '#6b7280') : 'var(--bg-elevated, #1a1a2e)',
+        ...props.style,
+      }}
     >
       {children}
     </Handle>

@@ -8,6 +8,13 @@ import { useGraphStore } from '../stores/graphStore'
 import { Slider } from '@/components/ui/slider'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 interface NodeParametersProps {
   nodeId: string
@@ -45,6 +52,13 @@ export function NodeParameters({ nodeId, parameters, currentValues }: NodeParame
             <ColorInput
               param={param}
               value={(currentValues[param.id] as [number, number, number]) ?? param.default}
+              onChange={(value) => handleChange(param.id, value)}
+            />
+          )}
+          {param.type === 'enum' && param.options && (
+            <EnumSelect
+              param={param}
+              value={(currentValues[param.id] as string) ?? param.default}
               onChange={(value) => handleChange(param.id, value)}
             />
           )}
@@ -97,6 +111,47 @@ interface ColorInputProps {
   param: NodeParameter
   value: [number, number, number]
   onChange: (value: [number, number, number]) => void
+}
+
+interface EnumSelectProps {
+  param: NodeParameter
+  value: string
+  onChange: (value: string) => void
+}
+
+function EnumSelect({ param, value, onChange }: EnumSelectProps) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+        {param.label}
+      </Label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger
+          size="sm"
+          className="w-full h-7 text-xs"
+          style={{
+            backgroundColor: 'var(--bg-tertiary)',
+            borderColor: 'var(--border-primary)',
+            color: 'var(--text-primary)',
+          }}
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent
+          style={{
+            backgroundColor: 'var(--bg-elevated)',
+            borderColor: 'var(--border-primary)',
+          }}
+        >
+          {param.options!.map((option) => (
+            <SelectItem key={option.value} value={option.value} className="text-xs">
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )
 }
 
 function ColorInput({ param, value, onChange }: ColorInputProps) {

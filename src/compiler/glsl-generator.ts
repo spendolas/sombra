@@ -72,6 +72,7 @@ export function compileGraph(
     // Track uniforms and functions needed
     const uniforms = new Set<string>()
     const functions: string[] = []
+    const functionRegistry = new Map<string, string>()
 
     // Generate GLSL code for each node
     const glslLines: string[] = []
@@ -152,6 +153,7 @@ export function compileGraph(
         params: node.data.params || {},
         uniforms,
         functions,
+        functionRegistry,
       }
 
       try {
@@ -176,7 +178,7 @@ export function compileGraph(
     }
 
     // Assemble complete fragment shader
-    const fragmentShader = assembleFragmentShader(uniforms, functions, glslLines)
+    const fragmentShader = assembleFragmentShader(uniforms, functions, functionRegistry, glslLines)
 
     // Debug: Log generated shader
     console.log('[Sombra] Generated Fragment Shader:')
@@ -227,6 +229,7 @@ function formatDefaultValue(value: unknown, type: string): string {
 function assembleFragmentShader(
   uniforms: Set<string>,
   functions: string[],
+  functionRegistry: Map<string, string>,
   glslLines: string[]
 ): string {
   const uniformDeclarations: string[] = []
@@ -253,7 +256,8 @@ out vec4 fragColor;
 
 ${uniformDeclarations.join('\n')}
 
-${functions.length > 0 ? functions.join('\n\n') + '\n' : ''}
+${[...functionRegistry.values(), ...functions].join('\n\n')}
+
 void main() {
 ${glslLines.join('\n')}
 }

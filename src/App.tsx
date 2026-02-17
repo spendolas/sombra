@@ -6,6 +6,7 @@ import { WebGLRenderer } from './webgl/renderer'
 import { useLiveCompiler } from './compiler'
 import { useGraphStore } from './stores/graphStore'
 import { createNoiseTestGraph } from './utils/test-graph'
+import { nodeRegistry } from './nodes/registry'
 import { ShaderNode } from './components/ShaderNode'
 import { NodePalette } from './components/NodePalette'
 import { FlowCanvas } from './components/FlowCanvas'
@@ -36,22 +37,40 @@ function App() {
       if (!connection.source || !connection.target) return
       if (!connection.sourceHandle || !connection.targetHandle) return
 
+      // Single wire per input: remove existing edge to this target handle
+      const existingEdge = edges.find(
+        (e) => e.target === connection.target && e.targetHandle === connection.targetHandle
+      )
+      if (existingEdge) {
+        onEdgesChange([{ id: existingEdge.id, type: 'remove' }])
+      }
+
+      // Resolve source port type for edge coloring
+      const sourceNode = nodes.find((n) => n.id === connection.source)
+      let sourcePortType: string | undefined
+      if (sourceNode) {
+        const def = nodeRegistry.get(sourceNode.data.type)
+        const port = def?.outputs.find((p) => p.id === connection.sourceHandle)
+        sourcePortType = port?.type
+      }
+
       const newEdge = {
         id: `${connection.source}-${connection.sourceHandle}-${connection.target}-${connection.targetHandle}`,
         source: connection.source,
         target: connection.target,
         sourceHandle: connection.sourceHandle,
         targetHandle: connection.targetHandle,
-        type: 'default',
+        type: 'typed',
         data: {
           sourcePort: connection.sourceHandle,
           targetPort: connection.targetHandle,
+          sourcePortType,
         },
       }
 
       addEdge(newEdge)
     },
-    [addEdge]
+    [nodes, edges, addEdge, onEdgesChange]
   )
 
   // Register custom node types
@@ -131,6 +150,7 @@ function App() {
                     nodeTypes={nodeTypes}
                     onNodesChange={onNodesChange}
                     onEdgesChange={onEdgesChange}
+                    setEdges={setEdges}
                     onConnect={onConnect}
                     onAddNode={addNode}
                   />

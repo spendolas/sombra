@@ -2,13 +2,14 @@
  * FlowCanvas - React Flow canvas with drag-and-drop support
  */
 
-import { useCallback } from 'react'
-import { ReactFlow, Background, MiniMap, useReactFlow } from '@xyflow/react'
-import type { Node, Edge, OnNodesChange, OnEdgesChange, Connection, IsValidConnection } from '@xyflow/react'
+import { useCallback, useRef, useMemo } from 'react'
+import { ReactFlow, Background, MiniMap, useReactFlow, reconnectEdge } from '@xyflow/react'
+import type { Node, Edge, OnNodesChange, OnEdgesChange, OnReconnect, Connection, IsValidConnection } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { areTypesCompatible } from '../nodes/type-coercion'
 import { ZoomSlider } from '@/components/zoom-slider'
+import { TypedEdge } from './TypedEdge'
 
 interface FlowCanvasProps {
   nodes: Node<NodeData>[]
@@ -16,6 +17,7 @@ interface FlowCanvasProps {
   nodeTypes: Record<string, React.ComponentType<any>>
   onNodesChange: OnNodesChange<Node<NodeData>>
   onEdgesChange: OnEdgesChange<Edge<EdgeData>>
+  setEdges: (edges: Edge<EdgeData>[]) => void
   onConnect: (connection: Connection) => void
   onAddNode: (node: Node<NodeData>) => void
 }
@@ -26,10 +28,41 @@ export function FlowCanvas({
   nodeTypes,
   onNodesChange,
   onEdgesChange,
+  setEdges,
   onConnect,
   onAddNode,
 }: FlowCanvasProps) {
   const { screenToFlowPosition } = useReactFlow()
+
+  // Register custom edge types
+  const edgeTypes = useMemo(() => ({ typed: TypedEdge }), [])
+
+  // Track whether a reconnect succeeded
+  const reconnectSuccessful = useRef(false)
+
+  // Handle edge reconnection (drag endpoint to new port)
+  const onReconnect: OnReconnect = useCallback(
+    (oldEdge, newConnection) => {
+      reconnectSuccessful.current = true
+      setEdges(reconnectEdge(oldEdge, newConnection, edges) as Edge<EdgeData>[])
+    },
+    [edges, setEdges]
+  )
+
+  // Start of reconnect attempt
+  const onReconnectStart = useCallback(() => {
+    reconnectSuccessful.current = false
+  }, [])
+
+  // Delete edge when reconnect is dropped on empty space
+  const onReconnectEnd = useCallback(
+    (_event: MouseEvent | TouchEvent, edge: Edge<EdgeData>) => {
+      if (!reconnectSuccessful.current) {
+        onEdgesChange([{ id: edge.id, type: 'remove' }])
+      }
+    },
+    [onEdgesChange]
+  )
 
   // Validate connection based on port types
   const isValidConnection = useCallback(
@@ -95,10 +128,16 @@ export function FlowCanvas({
       nodes={nodes}
       edges={edges}
       nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
+      defaultEdgeOptions={{ type: 'typed' }}
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onConnect={onConnect}
+      onReconnect={onReconnect}
+      onReconnectStart={onReconnectStart}
+      onReconnectEnd={onReconnectEnd}
       isValidConnection={isValidConnection as IsValidConnection<Edge<EdgeData>>}
+      connectionRadius={20}
       onDragOver={onDragOver}
       onDrop={onDrop}
       defaultViewport={{ x: 0, y: 0, zoom: 1 }}

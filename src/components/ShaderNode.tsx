@@ -3,7 +3,7 @@
  */
 
 import { memo } from 'react'
-import { Position, type NodeProps } from '@xyflow/react'
+import { Position, useEdges, type NodeProps } from '@xyflow/react'
 import type { NodeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { NodeParameters } from './NodeParameters'
@@ -33,6 +33,7 @@ function getPortColor(type: string): string {
 }
 
 export const ShaderNode = memo(({ id, data }: NodeProps) => {
+  const edges = useEdges()
   const definition = nodeRegistry.get((data as NodeData).type)
 
   if (!definition) {
@@ -44,6 +45,14 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   }
 
   const hasParameters = definition.params && definition.params.length > 0
+
+  // Build sets of connected port IDs for this node
+  const connectedInputs = new Set(
+    edges.filter((e) => e.target === id).map((e) => e.targetHandle)
+  )
+  const connectedOutputs = new Set(
+    edges.filter((e) => e.source === id).map((e) => e.sourceHandle)
+  )
 
   return (
     <BaseNode className="min-w-[160px]" style={{ backgroundColor: 'var(--bg-elevated)' }}>
@@ -75,9 +84,8 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
             title={input.label}
             handleClassName="!w-3 !h-3"
             labelClassName="text-xs"
-            style={{
-              '--handle-color': getPortColor(input.type),
-            } as React.CSSProperties}
+            handleColor={getPortColor(input.type)}
+            connected={connectedInputs.has(input.id)}
           />
         ))}
 
@@ -91,9 +99,8 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
             title={output.label}
             handleClassName="!w-3 !h-3"
             labelClassName="text-xs"
-            style={{
-              '--handle-color': getPortColor(output.type),
-            } as React.CSSProperties}
+            handleColor={getPortColor(output.type)}
+            connected={connectedOutputs.has(output.id)}
           />
         ))}
 

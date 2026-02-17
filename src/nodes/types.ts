@@ -29,11 +29,12 @@ export interface PortDefinition {
 export interface NodeParameter {
   id: string                    // Unique identifier (e.g., "scale", "strength")
   label: string                 // Display name
-  type: 'float' | 'vec2' | 'vec3' | 'color'
-  default: number | [number, number] | [number, number, number]
+  type: 'float' | 'vec2' | 'vec3' | 'color' | 'enum'
+  default: number | string | [number, number] | [number, number, number]
   min?: number                  // For numeric types
   max?: number                  // For numeric types
   step?: number                 // Step increment for sliders
+  options?: Array<{ value: string; label: string }>  // For enum type
 }
 
 /**
@@ -46,6 +47,17 @@ export interface GLSLContext {
   params: Record<string, unknown>          // Parameter values
   uniforms: Set<string>                    // Global uniforms to declare
   functions: string[]                      // Global function declarations (outside main)
+  functionRegistry: Map<string, string>    // Deduplicated shared functions (key -> GLSL code)
+}
+
+/**
+ * Register a shared GLSL function. Skips if key already registered.
+ * Use this instead of pushing to functions[] directly.
+ */
+export function addFunction(ctx: GLSLContext, key: string, code: string): void {
+  if (!ctx.functionRegistry.has(key)) {
+    ctx.functionRegistry.set(key, code)
+  }
 }
 
 /**
@@ -101,6 +113,7 @@ export interface NodeData extends Record<string, unknown> {
  * Edge connection data
  */
 export interface EdgeData extends Record<string, unknown> {
-  sourcePort: string  // Source output port ID
-  targetPort: string  // Target input port ID
+  sourcePort: string       // Source output port ID
+  targetPort: string       // Target input port ID
+  sourcePortType?: string  // Port type for edge coloring
 }
