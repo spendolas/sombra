@@ -22,6 +22,9 @@ import { remapNode } from './math/remap'
 
 // Noise nodes
 import { simplexNoiseNode } from './noise/simplex-noise'
+import { valueNoiseNode } from './noise/value-noise'
+import { worleyNoiseNode } from './noise/worley-noise'
+import { boxNoiseNode } from './noise/box-noise'
 
 // Color nodes
 import { hsvToRgbNode } from './color/hsv-to-rgb'
@@ -52,6 +55,9 @@ export const ALL_NODES = [
 
   // Noise
   simplexNoiseNode,
+  valueNoiseNode,
+  worleyNoiseNode,
+  boxNoiseNode,
 
   // Color
   hsvToRgbNode,

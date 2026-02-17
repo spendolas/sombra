@@ -101,8 +101,8 @@ export function createUVTestGraph(): {
 
 /**
  * Create animated noise test graph:
- * UV → Add (with Time for animation) → Simplex Noise → Fragment Output
- * This demonstrates live animated noise
+ * UV → Simplex Noise (coords), Time → Simplex Noise (z) → Fragment Output
+ * Demonstrates 3D animated noise via the z input
  */
 export function createNoiseTestGraph(): {
   nodes: Node<NodeData>[]
@@ -111,7 +111,7 @@ export function createNoiseTestGraph(): {
   const uvNode: Node<NodeData> = {
     id: 'noise-uv',
     type: 'shaderNode',
-    position: { x: 50, y: 100 },
+    position: { x: 50, y: 80 },
     data: {
       type: 'uv_coords',
       params: {},
@@ -128,20 +128,10 @@ export function createNoiseTestGraph(): {
     },
   }
 
-  const addNode: Node<NodeData> = {
-    id: 'noise-add',
-    type: 'shaderNode',
-    position: { x: 250, y: 160 },
-    data: {
-      type: 'add',
-      params: {},
-    },
-  }
-
   const noiseNode: Node<NodeData> = {
     id: 'noise-simplex',
     type: 'shaderNode',
-    position: { x: 450, y: 160 },
+    position: { x: 300, y: 120 },
     data: {
       type: 'simplex_noise',
       params: {
@@ -153,7 +143,7 @@ export function createNoiseTestGraph(): {
   const outputNode: Node<NodeData> = {
     id: 'noise-output',
     type: 'shaderNode',
-    position: { x: 650, y: 160 },
+    position: { x: 550, y: 120 },
     data: {
       type: 'fragment_output',
       params: {},
@@ -162,28 +152,22 @@ export function createNoiseTestGraph(): {
 
   const edges: Edge<EdgeData>[] = [
     {
-      id: 'edge-uv-add',
+      id: 'edge-uv-noise',
       source: 'noise-uv',
-      target: 'noise-add',
-      sourceHandle: 'uv',
-      targetHandle: 'a',
-      data: { sourcePort: 'uv', targetPort: 'a' },
-    },
-    {
-      id: 'edge-time-add',
-      source: 'noise-time',
-      target: 'noise-add',
-      sourceHandle: 'time',
-      targetHandle: 'b',
-      data: { sourcePort: 'time', targetPort: 'b' },
-    },
-    {
-      id: 'edge-add-noise',
-      source: 'noise-add',
       target: 'noise-simplex',
-      sourceHandle: 'result',
+      sourceHandle: 'uv',
       targetHandle: 'coords',
-      data: { sourcePort: 'result', targetPort: 'coords' },
+      type: 'typed',
+      data: { sourcePort: 'uv', targetPort: 'coords', sourcePortType: 'vec2' },
+    },
+    {
+      id: 'edge-time-noise',
+      source: 'noise-time',
+      target: 'noise-simplex',
+      sourceHandle: 'time',
+      targetHandle: 'z',
+      type: 'typed',
+      data: { sourcePort: 'time', targetPort: 'z', sourcePortType: 'float' },
     },
     {
       id: 'edge-noise-output',
@@ -191,12 +175,13 @@ export function createNoiseTestGraph(): {
       target: 'noise-output',
       sourceHandle: 'value',
       targetHandle: 'color',
-      data: { sourcePort: 'value', targetPort: 'color' },
+      type: 'typed',
+      data: { sourcePort: 'value', targetPort: 'color', sourcePortType: 'float' },
     },
   ]
 
   return {
-    nodes: [uvNode, timeNode, addNode, noiseNode, outputNode],
+    nodes: [uvNode, timeNode, noiseNode, outputNode],
     edges,
   }
 }
