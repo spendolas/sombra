@@ -121,44 +121,44 @@ interface NodeDefinition {
 
 **Shared GLSL function deduplication.** Currently each node instance pushes its own copy of helper functions (e.g., `snoise_nodeId()`). Add a `functionRegistry: Map<string, string>` to `GLSLContext`. New helper `addFunction(ctx, key, code)` skips if key already registered. `assembleFragmentShader()` emits from the registry instead of raw `functions[]`.
 
-- [ ] Add `functionRegistry` to `GLSLContext` (`src/nodes/types.ts`)
-- [ ] Update `assembleFragmentShader()` to use registry (`src/compiler/glsl-generator.ts`)
-- [ ] Migrate existing simplex noise to shared functions (template for all noise nodes)
+- [x] Add `functionRegistry` to `GLSLContext` (`src/nodes/types.ts`)
+- [x] Update `assembleFragmentShader()` to use registry (`src/compiler/glsl-generator.ts`)
+- [x] Migrate existing simplex noise to shared functions (template for all noise nodes)
 
 **Enum parameter type.** Several new nodes need dropdown selectors (FBM noise type, fractal mode, Color Ramp interpolation, Pixel Grid shape). Add `'enum'` to `NodeParameter.type` with `options?: Array<{ value: string; label: string }>`. Render as shadcn `<Select>` in `NodeParameters.tsx`.
 
-- [ ] Extend `NodeParameter` interface (`src/nodes/types.ts`)
-- [ ] Add enum renderer to `NodeParameters.tsx`
+- [x] Extend `NodeParameter` interface (`src/nodes/types.ts`)
+- [x] Add enum renderer to `NodeParameters.tsx`
 
 #### B. Connection UX Polish
 
 **Connector color coding.** Edges colored by source port type using the existing color map (float→gray, vec2→emerald, vec3→blue, vec4→purple, color→amber, sampler2D→pink). Fix the existing bug where `--handle-color` is set but never visually applied to handles.
 
-- [ ] Custom edge component with per-type coloring (`src/components/TypedEdge.tsx`)
-- [ ] Register custom edge type in `FlowCanvas.tsx`
-- [ ] Store source port type in edge data
-- [ ] Fix handle color rendering in `base-handle.tsx` / `labeled-handle.tsx`
+- [x] Custom edge component with per-type coloring (`src/components/TypedEdge.tsx`)
+- [x] Register custom edge type in `FlowCanvas.tsx`
+- [x] Store source port type in edge data
+- [x] Fix handle color rendering in `base-handle.tsx` / `labeled-handle.tsx`
 
 **Reconnectable edges.** Enable React Flow's built-in reconnect so users can drag an existing edge endpoint to a new port.
 
-- [ ] Add `edgeReconnectMode` + handlers to `FlowCanvas.tsx`
+- [x] Add `edgeReconnectMode` + handlers to `FlowCanvas.tsx`
 
 **Delete edge on drop.** Dragging an edge away and dropping on empty canvas deletes it.
 
-- [ ] Use `onReconnectEnd` to detect drops on empty space
+- [x] Use `onReconnectEnd` to detect drops on empty space
 
 **Proximity connect.** Auto-snap to compatible ports when dragging a connection nearby.
 
-- [ ] Add `connectionRadius` prop to ReactFlow
+- [x] Add `connectionRadius` prop to ReactFlow
 
 **Single wire per input (swap behavior).** Inputs accept only one connection. New edge to an already-connected input replaces the existing one.
 
-- [ ] In `onConnect`, check for existing edges to target input and remove before adding
+- [x] In `onConnect`, check for existing edges to target input and remove before adding
 
 **Used/unused port distinction.** Connected handles render filled with type color; unconnected render as hollow outlines.
 
-- [ ] Pass connection status to handle component
-- [ ] Style connected vs unconnected handles differently
+- [x] Pass connection status to handle component
+- [x] Style connected vs unconnected handles differently
 
 ### Sprint 2 — Noise Primitives (4 nodes + 1 upgrade)
 

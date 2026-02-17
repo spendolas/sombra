@@ -180,18 +180,20 @@ Free, simple, integrates well with GitHub Actions. Custom domain can be added la
 **Phase 0** - ✅ Complete
 **Phase 1** - ✅ Complete (16 nodes, compiler, live preview, full reactive pipeline)
 **Phase 1.2** - ✅ Complete (UI polish, resizable layout, frozen-ref preview)
-**Phase 2** - 🔜 Next (Spectra Mode + UX Polish)
+**Phase 2** - 🚧 In Progress (Spectra Mode + UX Polish)
 
 ### Phase 2 — Spectra Mode + UX Polish
 
 Replicate the full spectra-pixel-bg experience as composable node-graph features, plus connection UX polish. See `ROADMAP.md` for the full brief with sprint breakdown.
 
-**Key deliverables:**
-- 15 new nodes (30 total): 8 noise (Value 3D, Simplex 3D upgrade, Worley, Box, FBM, Turbulence, Ridged, Domain Warp), 4 UV/input (Rotate, Scale, Offset, Vec2 Constant), Color Ramp, Pixel Grid, Bayer Dither
-- Compiler: shared GLSL function deduplication (`functionRegistry` on `GLSLContext`), enum parameter type
-- UX: connector color coding by port type, reconnectable edges, delete-on-drop, proximity connect, single-wire-per-input swap, connected/unconnected port visual distinction
+**Sprint 1 — Infrastructure + UX Polish** ✅ Complete
+- Compiler: `functionRegistry` on `GLSLContext` with `addFunction()` for shared GLSL deduplication
+- `'enum'` parameter type with shadcn `<Select>` renderer
+- Handle colors: `BaseHandle` uses `handleColor` + `connected` props (filled/hollow)
+- `TypedEdge` component with port-type edge coloring, `sourcePortType` in `EdgeData`
+- Reconnectable edges, delete-on-drop, proximity connect (`connectionRadius=20`), single-wire-per-input swap
 
-**Sprint order:** Infrastructure+UX → Noise Primitives → Fractal+Warp → UV/Input → Color Ramp → Pixel Rendering
+**Remaining sprints:** Noise Primitives → Fractal+Warp → UV/Input → Color Ramp → Pixel Rendering
 
 **Acceptance test:** Manually wire node graphs that reproduce all 4 spectra presets (Value FBM, Simplex FBM, Worley Ridged, Box None).
 
