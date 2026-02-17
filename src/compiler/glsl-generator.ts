@@ -241,6 +241,9 @@ function assembleFragmentShader(
   if (uniforms.has('u_mouse')) {
     uniformDeclarations.push('uniform vec2 u_mouse;')
   }
+  if (uniforms.has('u_ref_size')) {
+    uniformDeclarations.push('uniform float u_ref_size;')
+  }
 
   return `#version 300 es
 precision highp float;

@@ -6,6 +6,8 @@ import type { Node } from '@xyflow/react'
 import type { NodeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { NodeParameters } from './NodeParameters'
+import { Separator } from '@/components/ui/separator'
+import { Label } from '@/components/ui/label'
 
 interface PropertiesPanelProps {
   selectedNode: Node<NodeData> | null
@@ -62,7 +64,7 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
         className="mb-4 p-3 rounded-lg"
         style={{
           backgroundColor: 'var(--bg-tertiary)',
-          border: '1px solid var(--border-primary)'
+          border: '1px solid var(--border-primary)',
         }}
       >
         <div className="text-[10px] uppercase tracking-wide mb-1" style={{ color: 'var(--text-tertiary)' }}>
@@ -76,19 +78,18 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
             {definition.description}
           </div>
         )}
-        <div className="mt-2 pt-2" style={{ borderTop: '1px solid var(--border-secondary)' }}>
-          <div className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
-            ID: {selectedNode.id}
-          </div>
+        <Separator className="my-2" />
+        <div className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
+          ID: {selectedNode.id}
         </div>
       </div>
 
       {/* Inputs */}
       {definition.inputs.length > 0 && (
         <div className="mb-4">
-          <div className="text-xs font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>
+          <Label className="text-xs font-semibold mb-2 block" style={{ color: 'var(--text-secondary)' }}>
             Inputs
-          </div>
+          </Label>
           <div className="space-y-1">
             {definition.inputs.map((input) => (
               <div
@@ -97,10 +98,7 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
                 style={{ backgroundColor: 'var(--bg-tertiary)' }}
               >
                 <span style={{ color: 'var(--text-secondary)' }}>{input.label}</span>
-                <span
-                  className="font-mono"
-                  style={{ color: 'var(--text-muted)' }}
-                >
+                <span className="font-mono" style={{ color: 'var(--text-muted)' }}>
                   {input.type}
                 </span>
               </div>
@@ -112,9 +110,9 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
       {/* Outputs */}
       {definition.outputs.length > 0 && (
         <div className="mb-4">
-          <div className="text-xs font-semibold mb-2" style={{ color: 'var(--text-secondary)' }}>
+          <Label className="text-xs font-semibold mb-2 block" style={{ color: 'var(--text-secondary)' }}>
             Outputs
-          </div>
+          </Label>
           <div className="space-y-1">
             {definition.outputs.map((output) => (
               <div
@@ -123,10 +121,7 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
                 style={{ backgroundColor: 'var(--bg-tertiary)' }}
               >
                 <span style={{ color: 'var(--text-secondary)' }}>{output.label}</span>
-                <span
-                  className="font-mono"
-                  style={{ color: 'var(--text-muted)' }}
-                >
+                <span className="font-mono" style={{ color: 'var(--text-muted)' }}>
                   {output.type}
                 </span>
               </div>
@@ -138,14 +133,14 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
       {/* Parameters */}
       {hasParameters && (
         <div className="mb-4">
-          <div className="text-xs font-semibold mb-3" style={{ color: 'var(--text-secondary)' }}>
+          <Label className="text-xs font-semibold mb-3 block" style={{ color: 'var(--text-secondary)' }}>
             Parameters
-          </div>
+          </Label>
           <div
             className="p-3 rounded-lg"
             style={{
               backgroundColor: 'var(--bg-tertiary)',
-              border: '1px solid var(--border-primary)'
+              border: '1px solid var(--border-primary)',
             }}
           >
             <NodeParameters
@@ -160,14 +155,14 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
       {/* Custom Component */}
       {definition.component && (
         <div className="mb-4">
-          <div className="text-xs font-semibold mb-3" style={{ color: 'var(--text-secondary)' }}>
+          <Label className="text-xs font-semibold mb-3 block" style={{ color: 'var(--text-secondary)' }}>
             Custom Controls
-          </div>
+          </Label>
           <div
             className="p-3 rounded-lg"
             style={{
               backgroundColor: 'var(--bg-tertiary)',
-              border: '1px solid var(--border-primary)'
+              border: '1px solid var(--border-primary)',
             }}
           >
             <definition.component nodeId={selectedNode.id} data={selectedNode.data.params || {}} />

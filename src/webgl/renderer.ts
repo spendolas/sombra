@@ -43,6 +43,7 @@ export class WebGLRenderer {
   private uniforms: Map<string, WebGLUniformLocation> = new Map()
   private startTime: number = Date.now()
   private animationFrameId: number | null = null
+  private refSize: number | null = null
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -181,6 +182,15 @@ export class WebGLRenderer {
     const resolutionLocation = this.uniforms.get('u_resolution')
     if (resolutionLocation) {
       gl.uniform2f(resolutionLocation, displayWidth, displayHeight)
+    }
+
+    // Freeze reference size on first valid render
+    if (this.refSize === null && displayWidth > 0 && displayHeight > 0) {
+      this.refSize = Math.min(displayWidth, displayHeight)
+    }
+    const refSizeLocation = this.uniforms.get('u_ref_size')
+    if (refSizeLocation && this.refSize !== null) {
+      gl.uniform1f(refSizeLocation, this.refSize)
     }
 
     // Draw

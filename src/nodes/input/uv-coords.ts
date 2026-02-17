@@ -21,7 +21,9 @@ export const uvCoordsNode: NodeDefinition = {
   ],
 
   glsl: (ctx) => {
-    const { outputs } = ctx
-    return `vec2 ${outputs.uv} = v_uv;`
+    const { outputs, uniforms } = ctx
+    uniforms.add('u_resolution')
+    uniforms.add('u_ref_size')
+    return `vec2 ${outputs.uv} = (v_uv - 0.5) * u_resolution / u_ref_size + 0.5;`
   },
 }

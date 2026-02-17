@@ -5,6 +5,9 @@
 import { useCallback } from 'react'
 import type { NodeParameter } from '../nodes/types'
 import { useGraphStore } from '../stores/graphStore'
+import { Slider } from '@/components/ui/slider'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 interface NodeParametersProps {
   nodeId: string
@@ -28,7 +31,7 @@ export function NodeParameters({ nodeId, parameters, currentValues }: NodeParame
   )
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {parameters.map((param) => (
         <div key={param.id}>
           {param.type === 'float' && (
@@ -62,43 +65,29 @@ function FloatSlider({ param, value, onChange }: FloatSliderProps) {
   const max = param.max ?? 1
   const step = param.step ?? 0.01
 
-  const handleTextInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = parseFloat(e.target.value)
-    if (!isNaN(newValue)) {
-      onChange(newValue)
-    }
-  }
-
   return (
-    <div className="space-y-1">
-      <div className="flex justify-between items-center text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
-        <span>{param.label}</span>
-        <input
+    <div className="space-y-1.5">
+      <div className="flex justify-between items-center">
+        <Label className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+          {param.label}
+        </Label>
+        <Input
           type="number"
           value={value}
-          onChange={handleTextInput}
-          step={step}
-          className="w-16 px-1 py-0.5 text-right text-[10px] rounded"
-          style={{
-            backgroundColor: 'var(--bg-tertiary)',
-            border: '1px solid var(--border-primary)',
-            color: 'var(--text-primary)',
+          onChange={(e) => {
+            const newValue = parseFloat(e.target.value)
+            if (!isNaN(newValue)) onChange(newValue)
           }}
+          step={step}
+          className="w-16 h-6 px-1 py-0.5 text-right text-[10px]"
         />
       </div>
-      <input
-        type="range"
+      <Slider
+        value={[value]}
         min={min}
         max={max}
         step={step}
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="w-full h-1 rounded-full appearance-none cursor-pointer slider"
-        style={{
-          background: `linear-gradient(to right, var(--accent-primary) 0%, var(--accent-primary) ${
-            ((value - min) / (max - min)) * 100
-          }%, var(--border-primary) ${((value - min) / (max - min)) * 100}%, var(--border-primary) 100%)`,
-        }}
+        onValueChange={(values) => onChange(values[0])}
       />
     </div>
   )
@@ -125,10 +114,10 @@ function ColorInput({ param, value, onChange }: ColorInputProps) {
   }
 
   return (
-    <div className="space-y-1">
-      <div className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+    <div className="space-y-1.5">
+      <Label className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
         {param.label}
-      </div>
+      </Label>
       <input
         type="color"
         value={hexColor}

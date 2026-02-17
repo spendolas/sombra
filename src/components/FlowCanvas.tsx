@@ -3,11 +3,12 @@
  */
 
 import { useCallback } from 'react'
-import { ReactFlow, Background, Controls, MiniMap, useReactFlow } from '@xyflow/react'
+import { ReactFlow, Background, MiniMap, useReactFlow } from '@xyflow/react'
 import type { Node, Edge, OnNodesChange, OnEdgesChange, Connection, IsValidConnection } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { areTypesCompatible } from '../nodes/type-coercion'
+import { ZoomSlider } from '@/components/zoom-slider'
 
 interface FlowCanvasProps {
   nodes: Node<NodeData>[]
@@ -104,6 +105,7 @@ export function FlowCanvas({
       minZoom={0.1}
       maxZoom={4}
       fitView
+      proOptions={{ hideAttribution: true }}
       style={{ width: '100%', height: '100%', backgroundColor: 'var(--bg-primary)' }}
     >
       <Background
@@ -111,10 +113,12 @@ export function FlowCanvas({
         gap={16}
         style={{ backgroundColor: 'var(--bg-primary)' }}
       />
-      <Controls />
+      <ZoomSlider position="bottom-left" />
       <MiniMap
         nodeColor="var(--accent-primary)"
         maskColor="rgba(15, 15, 26, 0.85)"
+        bgColor="var(--bg-primary)"
+        style={{ backgroundColor: 'var(--bg-secondary)' }}
       />
     </ReactFlow>
   )

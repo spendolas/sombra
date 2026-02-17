@@ -10,6 +10,11 @@ import { ShaderNode } from './components/ShaderNode'
 import { NodePalette } from './components/NodePalette'
 import { FlowCanvas } from './components/FlowCanvas'
 import { PropertiesPanel } from './components/PropertiesPanel'
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from '@/components/ui/resizable'
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -95,98 +100,85 @@ function App() {
         className="h-screen w-screen"
         style={{
           display: 'grid',
-          gridTemplateRows: '3rem 1fr',
-          gridTemplateColumns: '16rem 1fr 16rem',
-          backgroundColor: 'var(--bg-primary)'
+          gridTemplateColumns: '1fr',
+          backgroundColor: 'var(--bg-primary)',
         }}
       >
-      {/* Header - spans all columns */}
-      <header
-        className="flex items-center px-4"
-        style={{
-          gridColumn: '1 / -1',
-          backgroundColor: 'var(--bg-secondary)',
-          borderBottom: '1px solid var(--border-primary)'
-        }}
-      >
-        <h1 className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
-          Sombra
-        </h1>
-        <span className="ml-2 text-xs" style={{ color: 'var(--text-tertiary)' }}>
-          WebGL Shader Builder
-        </span>
-      </header>
+        <ResizablePanelGroup direction="horizontal">
+          {/* Left — Node Palette */}
+          <ResizablePanel id="palette" defaultSize="18%" minSize="12%" maxSize="30%">
+            <div
+              className="h-full p-4 overflow-y-auto"
+              style={{
+                backgroundColor: 'var(--bg-secondary)',
+                borderRight: '1px solid var(--border-primary)',
+                minWidth: '160px',
+              }}
+            >
+              <NodePalette />
+            </div>
+          </ResizablePanel>
+          <ResizableHandle />
 
-      {/* Left panel - Node palette */}
-      <div
-        className="p-4 overflow-y-auto"
-        style={{
-          backgroundColor: 'var(--bg-secondary)',
-          borderRight: '1px solid var(--border-primary)'
-        }}
-      >
-        <h2
-          className="text-xs font-semibold uppercase tracking-wider mb-3"
-          style={{ color: 'var(--text-secondary)' }}
-        >
-          Node Palette
-        </h2>
-        <NodePalette />
+          {/* Center — Canvas + Preview (vertical split) */}
+          <ResizablePanel id="center" defaultSize="64%">
+            <ResizablePanelGroup direction="vertical">
+              <ResizablePanel id="canvas" defaultSize="70%" minSize="30%">
+                <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                  <FlowCanvas
+                    nodes={nodes}
+                    edges={edges}
+                    nodeTypes={nodeTypes}
+                    onNodesChange={onNodesChange}
+                    onEdgesChange={onEdgesChange}
+                    onConnect={onConnect}
+                    onAddNode={addNode}
+                  />
+                </div>
+              </ResizablePanel>
+              <ResizableHandle />
+              <ResizablePanel id="preview" defaultSize="30%" minSize="10%">
+                <div
+                  className="relative w-full h-full"
+                  style={{
+                    backgroundColor: '#000',
+                    borderTop: '1px solid var(--border-primary)',
+                  }}
+                >
+                  <div
+                    className="absolute top-2 left-2 z-10 text-xs px-2 py-1 rounded"
+                    style={{
+                      color: 'var(--text-secondary)',
+                      backgroundColor: 'var(--bg-tertiary)',
+                    }}
+                  >
+                    Preview
+                  </div>
+                  <canvas
+                    ref={canvasRef}
+                    className="w-full h-full"
+                  />
+                </div>
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          </ResizablePanel>
+          <ResizableHandle />
+
+          {/* Right — Properties */}
+          <ResizablePanel id="properties" defaultSize="18%" minSize="12%" maxSize="30%">
+            <div
+              className="h-full p-4 overflow-y-auto"
+              style={{
+                backgroundColor: 'var(--bg-secondary)',
+                borderLeft: '1px solid var(--border-primary)',
+                minWidth: '160px',
+              }}
+            >
+              <PropertiesPanel selectedNode={selectedNode} />
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </div>
-
-      {/* Center - Canvas and Preview */}
-      <div style={{
-        display: 'grid',
-        gridTemplateRows: '1fr 16rem'
-      }}>
-        {/* Node canvas */}
-        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-          <FlowCanvas
-            nodes={nodes}
-            edges={edges}
-            nodeTypes={nodeTypes}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onAddNode={addNode}
-          />
-        </div>
-
-        {/* WebGL Preview */}
-        <div
-          className="relative"
-          style={{
-            backgroundColor: '#000',
-            borderTop: '1px solid var(--border-primary)'
-          }}
-        >
-          <div
-            className="absolute top-2 left-2 z-10 text-xs px-2 py-1 rounded"
-            style={{
-              color: 'var(--text-secondary)',
-              backgroundColor: 'var(--bg-tertiary)'
-            }}
-          >
-            Preview
-          </div>
-          <canvas
-            ref={canvasRef}
-            className="w-full h-full"
-          />
-        </div>
-      </div>
-
-      {/* Right panel - Properties */}
-      <div
-        className="p-4 overflow-y-auto"
-        style={{
-          backgroundColor: 'var(--bg-secondary)',
-          borderLeft: '1px solid var(--border-primary)'
-        }}
-      >
-        <PropertiesPanel selectedNode={selectedNode} />
-      </div>
-    </div>
     </ReactFlowProvider>
   )
 }

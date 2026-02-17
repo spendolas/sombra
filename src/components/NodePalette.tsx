@@ -3,6 +3,7 @@
  */
 
 import { nodeRegistry } from '../nodes/registry'
+import { Separator } from '@/components/ui/separator'
 
 export function NodePalette() {
   const categories = nodeRegistry.getCategories()
@@ -13,11 +14,12 @@ export function NodePalette() {
   }
 
   return (
-    <div className="space-y-4">
-      {categories.map((category) => {
+    <div className="space-y-3">
+      {categories.map((category, idx) => {
         const nodes = nodeRegistry.getByCategory(category)
         return (
           <div key={category}>
+            {idx > 0 && <Separator className="mb-3" />}
             <h3
               className="text-[10px] font-semibold uppercase tracking-wider mb-2"
               style={{ color: 'var(--text-tertiary)' }}
@@ -30,21 +32,11 @@ export function NodePalette() {
                   key={node.type}
                   draggable
                   onDragStart={(e) => onDragStart(e, node.type)}
-                  className="px-2 py-1.5 rounded text-xs cursor-move transition-colors"
+                  className="px-2 py-1.5 rounded text-xs cursor-move transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]"
                   style={{
                     backgroundColor: 'var(--bg-tertiary)',
                     color: 'var(--text-secondary)',
                     border: '1px solid var(--border-secondary)',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'var(--bg-elevated)'
-                    e.currentTarget.style.borderColor = 'var(--border-primary)'
-                    e.currentTarget.style.color = 'var(--text-primary)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'var(--bg-tertiary)'
-                    e.currentTarget.style.borderColor = 'var(--border-secondary)'
-                    e.currentTarget.style.color = 'var(--text-secondary)'
                   }}
                   title={node.description}
                 >
