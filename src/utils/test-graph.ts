@@ -133,9 +133,10 @@ export function createNoiseTestGraph(): {
     type: 'shaderNode',
     position: { x: 300, y: 120 },
     data: {
-      type: 'simplex_noise',
+      type: 'noise',
       params: {
         scale: 5.0,
+        noiseType: 'simplex',
       },
     },
   }

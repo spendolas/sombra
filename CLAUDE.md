@@ -132,17 +132,30 @@ Nodes have:
 
 ✅ Complete — Scaffold, React Flow canvas, WebGL2 renderer, GitHub Pages deployment.
 
-## Next Steps (Phase 2, Sprint 4)
+## Next Steps (Phase 2, Sprint 4.5)
 
-See `ROADMAP.md` for the full Phase 2 brief. Current focus: **Unified Noise Node + fnref + Cleanup**
-- Merge 4 noise nodes (Simplex, Value, Worley, Box) → 1 unified **Noise** node with `noiseType` enum dropdown
-- Dynamic `functionKey`: type changes from `string` to `string | ((params) => string)` so fnref output adapts to selected noise type
-- Compiler update: `glsl-generator.ts` resolves dynamic functionKey by calling it with source node's params
-- Move Turbulence & Ridged from Noise → Math category (they're general-purpose signal remaps, not noise types)
-- FBM & Domain Warp: update fallback GLSL registration to use shared helpers from unified noise module
-- Right-align output labels ✅ already done in `labeled-handle.tsx`
+See `ROADMAP.md` for the full Phase 2 brief. Current focus: **Connectable Parameters**
 
-**After Sprint 4:** UV/Input nodes → Color Ramp → Pixel Rendering
+Three UX issues:
+1. Scale handle is visually separated from its slider (handle at top, slider below divider)
+2. Sliders don't lock when wired (compiler ignores slider value but it's still editable)
+3. Not all float params are wirable (only Scale/Factor/Strength have handles; Lacunarity/Gain/Brightness/Contrast are slider-only)
+
+**Solution:** `connectable?: boolean` flag on `NodeParameter`. Connectable float params render inline with their handle (handle on left, slider on right). When wired, slider shows "linked" state.
+
+Key changes:
+- `types.ts`: add `connectable` field to `NodeParameter`
+- `glsl-generator.ts`: use `node.data.params[id]` for unconnected connectable inputs (not port default)
+- `ShaderNode.tsx`: partition inputs into pure handles vs connectable param rows
+- `NodeParameters.tsx`: new `ConnectableParamRow` component (handle + slider + locked state)
+- FBM: refactor GLSL to pass lacunarity/gain as function args (not baked literals), add input ports
+- Domain Warp: add frequency input port
+- Brightness/Contrast: add brightness/contrast input ports
+- All affected nodes: simplify GLSL (`inputs.X` always correct, no more `params.X ?? inputs.X`)
+
+See plan file `.claude/plans/swift-marinating-ladybug.md` for full implementation details.
+
+**After Sprint 4.5:** UV/Input nodes → Color Ramp → Pixel Rendering
 
 ## Design Decisions (Why We Did It This Way)
 
@@ -202,14 +215,24 @@ Replicate the full spectra-pixel-bg experience as composable node-graph features
 **Sprint 3 — Fractal & Warp** ✅ Complete
 - FBM (with `noiseType` enum + `fractalMode` enum), Turbulence, Ridged, Domain Warp
 
-**Sprint 4 — Unified Noise Node + fnref + Cleanup** ← Next
-- Merge 4 separate noise nodes → 1 unified **Noise** node with `noiseType` dropdown (simplex/value/worley/box)
+**Sprint 4 — Unified Noise Node + fnref + Cleanup** ✅ Complete
+- `fnref` port type: carries GLSL function names for higher-order composition
+- Unified **Noise** node (`noise.ts`) with `noiseType` dropdown (simplex/value/worley/box), dual outputs (value + fn)
 - Dynamic `functionKey`: `string | ((params) => string)` — fnref output adapts to selected noise type
 - Compiler: `glsl-generator.ts` resolves dynamic functionKey by calling it with source node params
-- Move Turbulence & Ridged from `noise/` → `math/`, change category to 'Math'
-- FBM & Domain Warp: update fallback registration to use shared GLSL helpers from unified noise module
-- Delete old files: `simplex-noise.ts`, `value-noise.ts`, `worley-noise.ts`, `box-noise.ts`
-- Right-align output labels ✅ already done
+- FBM & Domain Warp accept `noiseFn` fnref input, register fallback GLSL when unconnected
+- Turbulence & Ridged moved to Math category
+- `NodeParameter.showWhen` for conditional param visibility (boxFreq only shown for box noise)
+- fnref color (cyan `#22d3ee`) in handle/edge maps, right-aligned output labels
+
+**Sprint 4.5 — Connectable Parameters** ← Next
+- `connectable?: boolean` flag on `NodeParameter` — inline handle + slider, locks when wired
+- Compiler fix: use slider value for unconnected connectable inputs
+- `ConnectableParamRow` component, `ShaderNode.tsx` layout rework
+- FBM refactor: lacunarity/gain as function args (wirable), add input ports
+- Domain Warp: add frequency input port
+- Brightness/Contrast: add brightness/contrast input ports
+- All affected GLSL generators simplified: `inputs.X` always correct
 
 **Remaining sprints:** UV/Input → Color Ramp → Pixel Rendering
 

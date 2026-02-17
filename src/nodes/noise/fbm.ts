@@ -16,7 +16,6 @@ export const fbmNode: NodeDefinition = {
   inputs: [
     { id: 'coords', label: 'Coords', type: 'vec2', default: [0.0, 0.0] },
     { id: 'z', label: 'Z', type: 'float', default: 0.0 },
-    { id: 'scale', label: 'Scale', type: 'float', default: 5.0 },
     { id: 'noiseFn', label: 'Noise Fn', type: 'fnref', default: 'snoise3d_01' },
   ],
 
@@ -25,7 +24,7 @@ export const fbmNode: NodeDefinition = {
   ],
 
   params: [
-    { id: 'scale', label: 'Scale', type: 'float', default: 5.0, min: 0.1, max: 20.0, step: 0.1 },
+    { id: 'scale', label: 'Scale', type: 'float', default: 5.0, min: 0.1, max: 20.0, step: 0.1, connectable: true },
     {
       id: 'fractalMode', label: 'Fractal Mode', type: 'enum', default: 'standard',
       options: [
@@ -35,28 +34,22 @@ export const fbmNode: NodeDefinition = {
       ],
     },
     { id: 'octaves', label: 'Octaves', type: 'float', default: 4, min: 1, max: 8, step: 1 },
-    { id: 'lacunarity', label: 'Lacunarity', type: 'float', default: 2.0, min: 1.0, max: 4.0, step: 0.1 },
-    { id: 'gain', label: 'Gain', type: 'float', default: 0.5, min: 0.1, max: 0.9, step: 0.05 },
+    { id: 'lacunarity', label: 'Lacunarity', type: 'float', default: 2.0, min: 1.0, max: 4.0, step: 0.1, connectable: true },
+    { id: 'gain', label: 'Gain', type: 'float', default: 0.5, min: 0.1, max: 0.9, step: 0.05, connectable: true },
   ],
 
   glsl: (ctx) => {
     const { inputs, outputs, params } = ctx
-    const scale = params.scale !== undefined ? params.scale : inputs.scale
     const fractalMode = (params.fractalMode as string) || 'standard'
     const octaves = Math.floor(Number(params.octaves ?? 4))
-    const lacunarity = params.lacunarity ?? 2.0
-    const gain = params.gain ?? 0.5
     const noiseFn = inputs.noiseFn // function name from fnref
 
     // Register simplex fallback (idempotent — safe even when connected to another noise)
     registerSimplexFallback(ctx)
 
-    // Unique FBM function per node instance (avoids key collisions with different params)
+    // Unique FBM function per node instance
     const sanitizedId = ctx.nodeId.replace(/-/g, '_')
     const fbmKey = `fbm_${sanitizedId}`
-
-    const lacStr = formatFloat(lacunarity)
-    const gainStr = formatFloat(gain)
 
     let loopBody: string
     if (fractalMode === 'turbulence') {
@@ -67,30 +60,23 @@ export const fbmNode: NodeDefinition = {
       loopBody = `      total += ${noiseFn}(p) * amp;`
     }
 
-    addFunction(ctx, fbmKey, `float ${fbmKey}(vec3 p) {
+    // lacunarity and gain are function args (connectable params)
+    addFunction(ctx, fbmKey, `float ${fbmKey}(vec3 p, float lac, float g) {
   float total = 0.0;
   float amp = 0.5;
   float maxAmp = 0.0;
   for (int i = 0; i < ${octaves}; i++) {
 ${loopBody}
       maxAmp += amp;
-      p *= ${lacStr};
-      amp *= ${gainStr};
+      p *= lac;
+      amp *= g;
   }
   return total / maxAmp;
 }`)
 
-    const scaleStr = formatFloat(scale)
-
-    return `float ${outputs.value} = ${fbmKey}(vec3(${inputs.coords} * ${scaleStr}, ${inputs.z}));`
+    // inputs.scale, inputs.lacunarity, inputs.gain are always GLSL expressions (connectable params)
+    return `float ${outputs.value} = ${fbmKey}(vec3(${inputs.coords} * ${inputs.scale}, ${inputs.z}), ${inputs.lacunarity}, ${inputs.gain});`
   },
-}
-
-function formatFloat(v: unknown): string {
-  if (typeof v === 'number') {
-    return Number.isInteger(v) ? `${v}.0` : `${v}`
-  }
-  return String(v)
 }
 
 /**

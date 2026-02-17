@@ -105,7 +105,10 @@ export function compileGraph(
             if (sourceNode) {
               const sourceDefinition = nodeRegistry.get(sourceNode.data.type)
               if (sourceDefinition?.functionKey) {
-                inputs[inputPort.id] = sourceDefinition.functionKey
+                const key = typeof sourceDefinition.functionKey === 'function'
+                  ? sourceDefinition.functionKey(sourceNode.data.params || {})
+                  : sourceDefinition.functionKey
+                inputs[inputPort.id] = key
               } else {
                 errors.push({
                   message: `Source node "${sourceNode.data.type}" has no functionKey for fnref port`,
@@ -156,6 +159,44 @@ export function compileGraph(
           }
         }
       })
+
+      // Resolve connectable params as additional inputs
+      if (definition.params) {
+        for (const param of definition.params) {
+          if (!param.connectable) continue
+
+          const edge = incomingEdges.find((e) => e.targetHandle === param.id)
+
+          if (edge) {
+            // Wired: resolve to source variable
+            const sourceNode = nodeMap.get(edge.source)
+            if (sourceNode) {
+              const sourceDefinition = nodeRegistry.get(sourceNode.data.type)
+              if (sourceDefinition) {
+                const sourcePort = sourceDefinition.outputs.find(
+                  (p) => p.id === edge.sourceHandle
+                )
+                if (sourcePort) {
+                  const sourceVarName = `node_${edge.source.replace(/-/g, '_')}_${edge.sourceHandle}`
+                  if (sourcePort.type !== param.type) {
+                    inputs[param.id] = coerceType(
+                      sourceVarName,
+                      sourcePort.type,
+                      param.type as import('../nodes/types').PortType
+                    )
+                  } else {
+                    inputs[param.id] = sourceVarName
+                  }
+                }
+              }
+            }
+          } else {
+            // Not wired: use param value from node data
+            const paramValue = node.data.params?.[param.id] ?? param.default
+            inputs[param.id] = formatDefaultValue(paramValue, param.type)
+          }
+        }
+      }
 
       // Build output variable names (sanitize node ID for GLSL)
       const outputs: Record<string, string> = {}
@@ -228,7 +269,8 @@ export function compileGraph(
  */
 function formatDefaultValue(value: unknown, type: string): string {
   if (type === 'float') {
-    return `${Number(value)}`
+    const n = Number(value)
+    return Number.isInteger(n) ? `${n}.0` : `${n}`
   }
   if (type === 'vec2' && Array.isArray(value)) {
     return `vec2(${value[0]}, ${value[1]})`

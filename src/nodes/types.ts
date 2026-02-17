@@ -36,6 +36,8 @@ export interface NodeParameter {
   max?: number                  // For numeric types
   step?: number                 // Step increment for sliders
   options?: Array<{ value: string; label: string }>  // For enum type
+  showWhen?: Record<string, string>                  // Only show when other params match these values
+  connectable?: boolean                              // If true, renders as wirable handle + inline slider
 }
 
 /**
@@ -76,8 +78,9 @@ export interface NodeDefinition {
   /**
    * GLSL function name this node provides via fnref output ports.
    * Convention: all fnref noise functions share signature `float name(vec3 p)`.
+   * Can be a string or a function that returns a string based on current params.
    */
-  functionKey?: string
+  functionKey?: string | ((params: Record<string, unknown>) => string)
 
   /**
    * Generate GLSL code for this node

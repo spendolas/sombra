@@ -23,12 +23,6 @@ export const mixNode: NodeDefinition = {
       type: 'vec3',
       default: [1.0, 1.0, 1.0],
     },
-    {
-      id: 'factor',
-      label: 'Factor',
-      type: 'float',
-      default: 0.5,
-    },
   ],
 
   outputs: [
@@ -48,12 +42,13 @@ export const mixNode: NodeDefinition = {
       min: 0.0,
       max: 1.0,
       step: 0.01,
+      connectable: true,
     },
   ],
 
   glsl: (ctx) => {
-    const { inputs, outputs, params } = ctx
-    const factor = params.factor !== undefined ? params.factor : inputs.factor
-    return `vec3 ${outputs.result} = mix(${inputs.a}, ${inputs.b}, ${factor});`
+    const { inputs, outputs } = ctx
+    // inputs.factor is always a GLSL expression (connectable param)
+    return `vec3 ${outputs.result} = mix(${inputs.a}, ${inputs.b}, ${inputs.factor});`
   },
 }

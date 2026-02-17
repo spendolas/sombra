@@ -14,7 +14,6 @@ export const domainWarpNode: NodeDefinition = {
 
   inputs: [
     { id: 'coords', label: 'Coords', type: 'vec2', default: [0.0, 0.0] },
-    { id: 'strength', label: 'Strength', type: 'float', default: 0.3 },
     { id: 'z', label: 'Z', type: 'float', default: 0.0 },
     { id: 'noiseFn', label: 'Noise Fn', type: 'fnref', default: 'vnoise3d' },
   ],
@@ -24,32 +23,23 @@ export const domainWarpNode: NodeDefinition = {
   ],
 
   params: [
-    { id: 'strength', label: 'Strength', type: 'float', default: 0.3, min: 0.0, max: 2.0, step: 0.01 },
-    { id: 'frequency', label: 'Frequency', type: 'float', default: 4.0, min: 0.5, max: 20.0, step: 0.5 },
+    { id: 'strength', label: 'Strength', type: 'float', default: 0.3, min: 0.0, max: 2.0, step: 0.01, connectable: true },
+    { id: 'frequency', label: 'Frequency', type: 'float', default: 4.0, min: 0.5, max: 20.0, step: 0.5, connectable: true },
   ],
 
   glsl: (ctx) => {
-    const { inputs, outputs, params } = ctx
-    const strength = params.strength !== undefined ? params.strength : inputs.strength
-    const frequency = params.frequency !== undefined ? params.frequency : 4.0
+    const { inputs, outputs } = ctx
     const noiseFn = inputs.noiseFn // function name from fnref
 
     // Register value noise fallback (idempotent — for when noiseFn input is unconnected)
     registerValueNoiseFallback(ctx)
 
-    const strStr = typeof strength === 'number'
-      ? (Number.isInteger(strength) ? `${strength}.0` : `${strength}`)
-      : strength
-    const freqStr = typeof frequency === 'number'
-      ? (Number.isInteger(frequency) ? `${frequency}.0` : `${frequency}`)
-      : frequency
-
-    // Use unique temp variable names based on output to avoid collisions
+    // inputs.strength and inputs.frequency are always GLSL expressions (connectable params)
     const prefix = outputs.warped
     return [
-      `float ${prefix}_x = ${noiseFn}(vec3(${inputs.coords} * ${freqStr}, ${inputs.z})) * 2.0 - 1.0;`,
-      `float ${prefix}_y = ${noiseFn}(vec3(${inputs.coords} * ${freqStr} + 100.0, ${inputs.z})) * 2.0 - 1.0;`,
-      `vec2 ${outputs.warped} = ${inputs.coords} + vec2(${prefix}_x, ${prefix}_y) * ${strStr};`,
+      `float ${prefix}_x = ${noiseFn}(vec3(${inputs.coords} * ${inputs.frequency}, ${inputs.z})) * 2.0 - 1.0;`,
+      `float ${prefix}_y = ${noiseFn}(vec3(${inputs.coords} * ${inputs.frequency} + 100.0, ${inputs.z})) * 2.0 - 1.0;`,
+      `vec2 ${outputs.warped} = ${inputs.coords} + vec2(${prefix}_x, ${prefix}_y) * ${inputs.strength};`,
     ].join('\n  ')
   },
 }

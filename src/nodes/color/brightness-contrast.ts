@@ -36,6 +36,7 @@ export const brightnessContrastNode: NodeDefinition = {
       min: -1.0,
       max: 1.0,
       step: 0.01,
+      connectable: true,
     },
     {
       id: 'contrast',
@@ -45,25 +46,13 @@ export const brightnessContrastNode: NodeDefinition = {
       min: -1.0,
       max: 1.0,
       step: 0.01,
+      connectable: true,
     },
   ],
 
   glsl: (ctx) => {
-    const { inputs, outputs, params } = ctx
-    const brightness = params.brightness !== undefined ? params.brightness : 0.0
-    const contrast = params.contrast !== undefined ? params.contrast : 0.0
-
-    // Format as float literals
-    const brightnessStr = typeof brightness === 'number'
-      ? (Number.isInteger(brightness) ? `${brightness}.0` : `${brightness}`)
-      : `${brightness}`
-    const contrastStr = typeof contrast === 'number'
-      ? (Number.isInteger(contrast) ? `${contrast}.0` : `${contrast}`)
-      : `${contrast}`
-
-    // Apply brightness and contrast
-    // Brightness: add to RGB
-    // Contrast: scale around midpoint (0.5)
-    return `vec3 ${outputs.result} = (${inputs.color} - 0.5) * (1.0 + ${contrastStr}) + 0.5 + ${brightnessStr};`
+    const { inputs, outputs } = ctx
+    // inputs.brightness and inputs.contrast are always GLSL expressions (connectable params)
+    return `vec3 ${outputs.result} = (${inputs.color} - 0.5) * (1.0 + ${inputs.contrast}) + 0.5 + ${inputs.brightness};`
   },
 }

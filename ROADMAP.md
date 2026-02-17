@@ -145,7 +145,7 @@ All noise nodes share the same interface: `coords` (vec2) + `z` (float, for time
 - [x] **Ridged** — Standalone remap: `(1.0 - abs(n * 2.0 - 1.0))^2` (`src/nodes/noise/ridged.ts`)
 - [x] **Domain Warp** — Coordinate distortion using value noise (`src/nodes/noise/domain-warp.ts`)
 
-### Sprint 4 — Unified Noise Node + fnref Revisions + Cleanup
+### Sprint 4 — Unified Noise Node + fnref Revisions + Cleanup ✅ Complete
 
 **Goal:** Consolidate 4 separate noise nodes into 1 unified Noise node (Redshift-style), make FBM and Domain Warp composable via `fnref`, and move Turbulence/Ridged to Math.
 
@@ -153,40 +153,74 @@ All noise nodes share the same interface: `coords` (vec2) + `z` (float, for time
 
 Replace `simplex-noise.ts`, `value-noise.ts`, `worley-noise.ts`, `box-noise.ts` with a single `noise.ts`. One node with a `noiseType` dropdown (simplex/value/worley/box). Changing noise type = dropdown change, no rewiring. Outputs: `value` (float) + `fn` (fnref). The `fn` output dynamically provides the selected noise type's function name.
 
-- [ ] Create `src/nodes/noise/noise.ts` — unified noise node with type enum
-- [ ] Delete 4 old files: `simplex-noise.ts`, `value-noise.ts`, `worley-noise.ts`, `box-noise.ts`
+- [x] Create `src/nodes/noise/noise.ts` — unified noise node with type enum
+- [x] Delete 4 old files: `simplex-noise.ts`, `value-noise.ts`, `worley-noise.ts`, `box-noise.ts`
 
 #### Dynamic `functionKey`
 
 `NodeDefinition.functionKey` changes from `string` to `string | ((params) => string)`. The unified node returns the selected noise type's function name dynamically. Compiler resolves by calling the function with source node's params.
 
-- [ ] Update `functionKey` type in `src/nodes/types.ts`
-- [ ] Update fnref resolution in `src/compiler/glsl-generator.ts` to handle dynamic functionKey
+- [x] Update `functionKey` type in `src/nodes/types.ts`
+- [x] Update fnref resolution in `src/compiler/glsl-generator.ts` to handle dynamic functionKey
 
 #### FBM — fnref input (revise)
 
 Remove `noiseType` enum param, add `noiseFn` fnref input. Keep `fractalMode` enum (standard/turbulence/ridged). When unconnected, falls back to simplex and registers its GLSL.
 
-- [ ] Revise `src/nodes/noise/fbm.ts`
+- [x] Revise `src/nodes/noise/fbm.ts`
 
 #### Domain Warp — fnref input (revise)
 
 Add `noiseFn` fnref input (default: value noise). When unconnected, registers fallback GLSL.
 
-- [ ] Revise `src/nodes/noise/domain-warp.ts`
+- [x] Revise `src/nodes/noise/domain-warp.ts`
 
 #### Move Turbulence & Ridged to Math
 
 These are general-purpose signal remaps (`float → float`), not noise-specific.
 
-- [ ] Move `src/nodes/noise/turbulence.ts` → `src/nodes/math/turbulence.ts`, change `category: 'Math'`
-- [ ] Move `src/nodes/noise/ridged.ts` → `src/nodes/math/ridged.ts`, change `category: 'Math'`
+- [x] Move `src/nodes/noise/turbulence.ts` → `src/nodes/math/turbulence.ts`, change `category: 'Math'`
+- [x] Move `src/nodes/noise/ridged.ts` → `src/nodes/math/ridged.ts`, change `category: 'Math'`
 
 #### Other
 
-- [ ] Update `src/nodes/index.ts` — replace 4 noise imports with 1, update turbulence/ridged paths
-- [ ] Add `fnref` color to handle/edge color map
-- [x] Right-align output port labels (`labeled-handle.tsx`) ✅ Done
+- [x] Update `src/nodes/index.ts` — replace 4 noise imports with 1, update turbulence/ridged paths
+- [x] Add `fnref` color (cyan `#22d3ee`) to handle/edge color map
+- [x] Right-align output port labels (`labeled-handle.tsx`)
+- [x] `NodeParameter.showWhen` — conditional param visibility (boxFreq only shown when noiseType=box)
+
+### Sprint 4.5 — Connectable Parameters (UX Refactor)
+
+**Goal:** Unify the handle and slider systems so every float parameter can optionally be wired, with inline rendering and proper locked state when connected.
+
+**Problem:** Scale appears as both a standalone handle (top) and a slider (bottom), visually disconnected. Sliders remain editable when wired but the compiler ignores them. Most float params (Lacunarity, Gain, Brightness, Contrast) have no handles at all.
+
+**Solution:** `connectable?: boolean` flag on `NodeParameter`. Connectable params render as inline handle+slider rows. When wired, the slider shows a "linked" indicator and the compiler uses the wired GLSL variable. When not wired, the compiler reads the slider value from `node.data.params`.
+
+#### Type System
+- [ ] Add `connectable?: boolean` to `NodeParameter` in `src/nodes/types.ts`
+
+#### Compiler
+- [ ] Fix unconnected-input fallback in `src/compiler/glsl-generator.ts` — use `node.data.params[id]` for connectable params instead of port default
+
+#### UI Components
+- [ ] Export `FloatSlider` from `src/components/NodeParameters.tsx`
+- [ ] New `ConnectableParamRow` component — handle on left, slider on right, "linked" when wired
+- [ ] Rework `src/components/ShaderNode.tsx` layout — partition inputs into pure handles vs connectable param rows
+
+#### Node Definitions
+- [ ] `noise.ts` — `connectable: true` on scale, simplify GLSL
+- [ ] `fbm.ts` — `connectable: true` on scale/lacunarity/gain, add lacunarity+gain input ports, refactor GLSL to pass lac/gain as function args
+- [ ] `domain-warp.ts` — `connectable: true` on strength/frequency, add frequency input port, simplify GLSL
+- [ ] `mix.ts` — `connectable: true` on factor, simplify GLSL
+- [ ] `brightness-contrast.ts` — `connectable: true` on brightness/contrast, add brightness+contrast input ports, simplify GLSL
+
+#### Design Notes
+- Enums, colors: never connectable (compile-time choices)
+- `showWhen` + connectable: both handle and slider hide together
+- FBM Octaves: stays non-connectable (GLSL `for` loop requires compile-time int)
+- Float Constant node: unaffected (source node, no inputs)
+- `isValidConnection` in FlowCanvas: works automatically if new input ports are in `definition.inputs[]`
 
 ### Sprint 5 — UV & Input Nodes (4 nodes)
 
@@ -226,7 +260,7 @@ General-purpose multi-stop gradient mapper: float (0-1) → color (vec3). This i
 | Pixel Grid | Post-process | — | Sprint 7 |
 | Bayer Dither | Post-process | — | Sprint 7 |
 
-**After Sprint 4: 20 nodes** (4 separate noise → 1 unified = net -3). **After Phase 2: 27 nodes.**
+**After Sprint 4: 20 nodes** (4 separate noise → 1 unified = net -3). **After Sprint 4.5: still 20 nodes** (adds connectable param handles, no new nodes). **After Phase 2: 27 nodes.**
 
 ### Key Files
 

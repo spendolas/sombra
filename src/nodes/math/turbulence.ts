@@ -8,7 +8,7 @@ import type { NodeDefinition } from '../types'
 export const turbulenceNode: NodeDefinition = {
   type: 'turbulence',
   label: 'Turbulence',
-  category: 'Noise',
+  category: 'Math',
   description: 'Folds a 0-1 signal around 0.5, creating sharp ridges at extremes',
 
   inputs: [

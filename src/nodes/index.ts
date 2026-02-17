@@ -19,15 +19,12 @@ import { smoothstepNode } from './math/smoothstep'
 import { sinNode } from './math/sin'
 import { cosNode } from './math/cos'
 import { remapNode } from './math/remap'
+import { turbulenceNode } from './math/turbulence'
+import { ridgedNode } from './math/ridged'
 
 // Noise nodes
-import { simplexNoiseNode } from './noise/simplex-noise'
-import { valueNoiseNode } from './noise/value-noise'
-import { worleyNoiseNode } from './noise/worley-noise'
-import { boxNoiseNode } from './noise/box-noise'
+import { noiseNode } from './noise/noise'
 import { fbmNode } from './noise/fbm'
-import { turbulenceNode } from './noise/turbulence'
-import { ridgedNode } from './noise/ridged'
 import { domainWarpNode } from './noise/domain-warp'
 
 // Color nodes
@@ -56,15 +53,12 @@ export const ALL_NODES = [
   sinNode,
   cosNode,
   remapNode,
-
-  // Noise
-  simplexNoiseNode,
-  valueNoiseNode,
-  worleyNoiseNode,
-  boxNoiseNode,
-  fbmNode,
   turbulenceNode,
   ridgedNode,
+
+  // Noise
+  noiseNode,
+  fbmNode,
   domainWarpNode,
 
   // Color

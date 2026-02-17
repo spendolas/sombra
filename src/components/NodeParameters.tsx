@@ -68,13 +68,13 @@ export function NodeParameters({ nodeId, parameters, currentValues }: NodeParame
   )
 }
 
-interface FloatSliderProps {
+export interface FloatSliderProps {
   param: NodeParameter
   value: number
   onChange: (value: number) => void
 }
 
-function FloatSlider({ param, value, onChange }: FloatSliderProps) {
+export function FloatSlider({ param, value, onChange }: FloatSliderProps) {
   const min = param.min ?? 0
   const max = param.max ?? 1
   const step = param.step ?? 0.01
