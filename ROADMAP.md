@@ -11,10 +11,10 @@
 - [x] Dark theme base styles (`#0a0a12` background)
 - [x] **Fullscreen WebGL quad renderer** — a raw WebGL2 canvas that renders a simple passthrough fragment shader (solid color or gradient). Proves the WebGL pipeline works before connecting it to the node graph. Renders beside or behind the React Flow canvas.
 - [x] **Layout shell** — node canvas (center), placeholder for properties panel (right), placeholder for node palette (left)
-- [ ] **GitHub Pages deploy** — GitHub Actions workflow that builds and pushes `dist/` to `gh-pages` branch
+- [x] **GitHub Pages deploy** — GitHub Actions workflow that builds and pushes `dist/` to `gh-pages` branch
 - [x] Write `CLAUDE.md` (project instructions for future sessions)
 - [x] Write `ROADMAP.md` (this roadmap, standalone file in the repo)
-- [ ] Git init, initial commit, push to `spendolas/sombra`
+- [x] Git init, initial commit, push to `spendolas/sombra`
 
 **Milestone:** Pan around an empty canvas. A colored WebGL quad renders. Site is live at `spendolas.github.io/sombra`.
 
@@ -85,6 +85,34 @@ interface NodeDefinition {
 - [x] Complete reactive pipeline (edit → validate → compile → render)
 
 **Milestone:** ✅ Wire nodes together, tweak parameters with inline controls, see live animated output.
+
+---
+
+## Phase 1.2 — UI Polish & Resizable Layout ✅ COMPLETE
+
+**Goal:** Replace the rigid CSS Grid layout with a professional resizable panel UI, integrate shadcn/ui components, and fix the preview resize-zoom issue.
+
+**Status:** ✅ Delivered February 2026
+
+### Delivered Features
+
+- [x] shadcn/ui integration (Button, Input, Label, Slider, ScrollArea, Separator)
+- [x] React Flow UI components (BaseNode, LabeledHandle, ZoomSlider)
+- [x] Resizable three-panel layout (react-resizable-panels v4)
+- [x] Header removed — full-height panels for maximum workspace
+- [x] ShaderNode restyled with BaseNode/LabeledHandle
+- [x] Frozen-reference preview (`u_ref_size` uniform) — resizing reveals/hides edges without zoom or distortion
+- [x] Preview canvas fills entire panel (no black bars, no aspect-ratio lock)
+- [x] Patched shadcn resizable.tsx for react-resizable-panels v4 API
+
+### Technical Details
+
+- `u_ref_size`: freezes `min(canvas.width, canvas.height)` on first render as a float uniform
+- UV node: `(v_uv - 0.5) * u_resolution / u_ref_size + 0.5` — each axis scales independently
+- Resizing only changes visible range, center stays at UV (0.5, 0.5), circles stay circular
+- react-resizable-panels v4 uses `orientation` (not `direction`), string sizes like `"18%"` (not numbers)
+
+**Milestone:** ✅ Professional resizable layout, polished node appearance, zoom-free preview on resize.
 
 ---
 

@@ -16,6 +16,7 @@
 | UI Framework | React 19 + TypeScript | Strict mode enabled |
 | Node Canvas | @xyflow/react (React Flow v12) | Purpose-built node editor |
 | State | Zustand | Lightweight, integrates well with React Flow |
+| UI Components | shadcn/ui + react-resizable-panels | Headless components, resizable layout |
 | Styling | Tailwind CSS v4 | Utility-first, Vite plugin integration |
 | WebGL | Raw WebGL2 | No Three.js - output is fragment shaders only |
 | GLSL | GLSL ES 3.0 | Modern syntax, 97%+ browser support |
@@ -28,6 +29,11 @@
 sombra/
 ├── src/
 │   ├── components/      # React components (panels, toolbar, UI widgets)
+│   │   ├── ui/          # shadcn/ui primitives (button, slider, input, etc.)
+│   │   ├── base-node.tsx       # React Flow BaseNode wrapper
+│   │   ├── labeled-handle.tsx  # React Flow typed handle with label
+│   │   └── zoom-slider.tsx     # React Flow zoom control
+│   ├── lib/             # Utility functions (cn helper, etc.)
 │   ├── nodes/           # Node type definitions (one file per category or node)
 │   ├── compiler/        # Graph-to-GLSL compiler logic
 │   ├── stores/          # Zustand stores for app state
@@ -35,6 +41,7 @@ sombra/
 │   ├── App.tsx          # Root layout component
 │   ├── main.tsx         # Entry point
 │   └── index.css        # Tailwind imports + dark theme base styles
+├── components.json      # shadcn/ui configuration
 ├── public/              # Static assets
 ├── ROADMAP.md           # Detailed roadmap (Phases 0-5)
 ├── CLAUDE.md            # This file
@@ -66,7 +73,8 @@ npm run preview  # Preview production build locally
 
 - **Fullscreen quad**: 2 triangles covering clip space (-1 to 1), vertex shader passes through, fragment shader does all the work
 - **Shader compilation**: Graph nodes → topological sort → GLSL code generation → WebGL program compilation
-- **Uniforms**: Built-in `u_time`, `u_resolution`, `u_mouse`; user-defined uniforms from node parameters
+- **Uniforms**: Built-in `u_time`, `u_resolution`, `u_mouse`, `u_ref_size`; user-defined uniforms from node parameters
+- **Frozen reference sizing**: `u_ref_size` captures `min(width, height)` on first render and never changes. The UV node uses `(v_uv - 0.5) * u_resolution / u_ref_size + 0.5` so each axis scales independently — resizing reveals/hides edges without zoom or distortion
 - **Preview rendering**: Single offscreen WebGL context captures frames to `<img>` for per-node previews
 
 ### Node System
@@ -97,12 +105,17 @@ Nodes have:
    - Ensure topological sort handles new edge cases
    - Map shader errors back to nodes for debugging
 
-3. **Styling**:
+3. **Adding UI components**:
+   - Use `npx shadcn@latest add <component>` to add new shadcn/ui primitives
+   - Components land in `src/components/ui/`; configure via `components.json`
+   - Note: `react-resizable-panels` v4 API differs from shadcn's v3 wrapper — see `resizable.tsx` patch
+
+4. **Styling**:
    - Use Tailwind utility classes directly in JSX
    - Base dark theme colors in `src/index.css`
    - React Flow theme customization via CSS variables or inline styles
 
-4. **Testing**:
+5. **Testing**:
    - Manual testing via dev server (`npm run dev`)
    - Shader compilation errors logged to console with node IDs
    - Future: Unit tests for compiler, integration tests for rendering
@@ -116,27 +129,16 @@ Nodes have:
 
 ## Phase 0 Status
 
-✅ Scaffold complete
-✅ React Flow canvas with dark theme
-✅ WebGL2 fullscreen quad renderer with animated gradient
-✅ CSS Grid layout (fixed viewport sizing issues)
-✅ Layout shell (node palette, canvas, properties panel, preview)
-✅ Documentation (CLAUDE.md, ROADMAP.md)
-✅ GitHub Pages deployment (auto-deploys on push to main)
-✅ Repository set up and deployed to https://spendolas.github.io/sombra/
-
-**Phase 0 Complete!**
+✅ Complete — Scaffold, React Flow canvas, WebGL2 renderer, GitHub Pages deployment.
 
 ## Next Steps (Phase 2)
 
-See `ROADMAP.md` for detailed roadmap. Phase 2 backlog:
-- Per-node mini-previews (render thumbnails)
+See `ROADMAP.md` for detailed roadmap. Phase 2 focus: Save/Load/Export
+- localStorage auto-save with schema versioning
+- JSON download/upload for sharing graph files
+- "Copy GLSL" button — export compiled fragment shader
 - Error display in UI (show compilation errors visually)
-- Save/Load graphs (JSON export/import)
-- Undo/redo system
-- More nodes (Gradients, Patterns, Advanced Math)
-- Texture input support (sampler2D)
-- Export shader code (copy GLSL to clipboard)
+- Per-node mini-previews (render thumbnails)
 
 ## Design Decisions (Why We Did It This Way)
 
@@ -175,135 +177,26 @@ Free, simple, integrates well with GitHub Actions. Custom domain can be added la
 ## Current Phase
 
 **Phase 0** - ✅ Complete
-**Phase 1** - ✅ Complete
+**Phase 1** - ✅ Complete (16 nodes, compiler, live preview, full reactive pipeline)
+**Phase 1.2** - ✅ Complete (UI polish, resizable layout, frozen-ref preview)
 
-### Phase 1 Progress
+### Phase 1.2 Progress
 
-**Step 1: Node System Foundation** - ✅ Complete
-- Created core TypeScript interfaces ([src/nodes/types.ts](src/nodes/types.ts))
-  - `NodeDefinition`, `PortDefinition`, `NodeParameter`, `GLSLContext`
-  - Port types: float, vec2, vec3, vec4, color, sampler2D
-- Implemented type coercion system ([src/nodes/type-coercion.ts](src/nodes/type-coercion.ts))
-  - Auto-conversion between port types (e.g., float → vec3 broadcast)
-  - Compatible type checking for edge connections
-- Created node registry ([src/nodes/registry.ts](src/nodes/registry.ts))
-  - Singleton registry for all node type definitions
-  - Category-based organization
-
-**Step 2: Zustand State Management** - ✅ Complete
-- Created graph store ([src/stores/graphStore.ts](src/stores/graphStore.ts))
-  - Manages nodes, edges, selection
-  - Integrates with React Flow's change handlers
-  - CRUD operations for nodes and edges
-- Created compiler store ([src/stores/compilerStore.ts](src/stores/compilerStore.ts))
-  - Tracks compiled shader code (vertex + fragment)
-  - Compilation errors with node-level mapping
-  - Compilation status and timing
-- Created settings store ([src/stores/settingsStore.ts](src/stores/settingsStore.ts))
-  - UI preferences (minimap, grid, snap-to-grid)
-  - Preview panel settings
-  - Auto-compile configuration
-  - Persisted to localStorage
-
-**Step 3: Simple Nodes** - ✅ Complete
-- Created essential input nodes:
-  - UV Coordinates ([src/nodes/input/uv-coords.ts](src/nodes/input/uv-coords.ts)) - provides fragment UV (0-1)
-  - Color Constant ([src/nodes/input/color-constant.ts](src/nodes/input/color-constant.ts)) - constant RGB color
-  - Time ([src/nodes/input/time.ts](src/nodes/input/time.ts)) - provides u_time uniform
-- Created output node:
-  - Fragment Output ([src/nodes/output/fragment-output.ts](src/nodes/output/fragment-output.ts)) - master output node
-- Created node library initialization ([src/nodes/index.ts](src/nodes/index.ts))
-  - Centralized node registration
-  - Called from main.tsx on app startup
-
-**Step 4: Compiler Basics** - ✅ Complete
-- Created topological sort ([src/compiler/topological-sort.ts](src/compiler/topological-sort.ts))
-  - Orders nodes from Fragment Output backward
-  - Cycle detection to prevent infinite loops
-  - Validates single output node requirement
-- Created GLSL generator ([src/compiler/glsl-generator.ts](src/compiler/glsl-generator.ts))
-  - Compiles node graph to complete vertex + fragment shaders
-  - Handles unconnected inputs with default values
-  - Automatic type coercion between connected ports
-  - Uniform declaration (u_time, u_resolution, u_mouse)
-  - Error collection with node-level mapping
-- Standard vertex shader (passthrough with UV)
-
-**Step 5: Live Preview Integration** - ✅ Complete
-- Updated WebGL renderer ([src/webgl/renderer.ts](src/webgl/renderer.ts))
-  - Changed updateShader to return result object with success/error
-- Created live compiler hook ([src/compiler/use-live-compiler.ts](src/compiler/use-live-compiler.ts))
-  - Watches graph store for node/edge changes
-  - Debounced auto-compilation (configurable delay)
-  - Updates compiler store with shader code and errors
-  - Callback support for custom handling
-- Integrated into App.tsx:
-  - Connected graph store to React Flow
-  - Live compiler hook updates WebGL renderer on graph changes
-  - Complete pipeline: Graph Edit → Compile → Update Shader → Render
-
-**Step 6: Test with Minimal Graph** - ✅ Complete
-- Created test graph utilities ([src/utils/test-graph.ts](src/utils/test-graph.ts))
-  - `createSimpleTestGraph()` - Color → Fragment Output (solid magenta)
-  - `createUVTestGraph()` - UV → Fragment Output (gradient)
-- App.tsx loads UV test graph on mount
-- Verified complete pipeline works: Nodes → Compiler → GLSL → WebGL → Screen
-- UV gradient renders correctly (proves type coercion vec2→vec3 works)
-
-**Step 7: Complete Node Library** - ✅ Complete
-- Math nodes: Add, Multiply, Mix, Smoothstep, Sin, Cos, Remap
-- Noise nodes: Simplex Noise (with proper GLSL function scoping)
-- Color nodes: HSV to RGB, Brightness/Contrast
-- Input nodes: UV Coords, Time, Resolution, Color Constant, Float Constant (Number)
-- Output node: Fragment Output
-- **Total: 16 nodes**
-
-**Step 8: Node Palette & Drag-and-Drop** - ✅ Complete
-- Created NodePalette component with category organization
-- Drag-and-drop from palette to canvas
-- Nodes auto-positioned at drop location
-- Integration with FlowCanvas component
-
-**Step 9: Connection System** - ✅ Complete
-- onConnect handler for creating edges
-- isValidConnection validation with type compatibility checking
-- Visual port color coding by type
-- Automatic type coercion on connection
-
-**Step 10: Parameter Controls** - ✅ Complete
-- FloatSlider component with range slider + text input
-- ColorInput component for RGB colors
-- NodeParameters component integrates with graph store
-- Real-time parameter updates trigger shader recompilation
-- Parameters visible both on nodes and in properties panel
-
-**Step 11: Properties Panel** - ✅ Complete
-- PropertiesPanel component shows selected node details
-- Displays node info (category, label, description, ID)
-- Lists all inputs and outputs with types
-- Editable parameter controls
-- Custom component support
-
-**Phase 1 COMPLETE!** 🎉
-
-All Core Features Delivered:
-✅ Node system with type-safe definitions and 16 functional nodes
-✅ Graph-to-GLSL compiler with topological sort and cycle detection
-✅ Type coercion system (15+ conversion rules)
-✅ Live preview with debounced auto-recompile
-✅ WebGL2 renderer with animated uniforms (time, resolution, mouse)
-✅ Node palette with drag-and-drop
-✅ Connection validation and visual feedback
-✅ Parameter controls (sliders, text inputs, color pickers)
-✅ Properties panel for node inspection and editing
-✅ Complete reactive pipeline: Edit Graph → Validate → Compile → Render
-✅ Animated simplex noise working correctly
-✅ Dark theme with accessible color palette
+- Integrated shadcn/ui component library (Button, Input, Label, Slider, ScrollArea, Separator)
+- Added React Flow UI components: BaseNode, LabeledHandle, ZoomSlider
+- Resizable three-panel layout using react-resizable-panels v4 (palette | canvas+preview | properties)
+- Removed header bar — full-height panels for maximum workspace
+- Restyled ShaderNode with BaseNode/LabeledHandle for cleaner node appearance
+- Added `u_ref_size` frozen-reference uniform for zoom-free preview
+- UV node uses `(v_uv - 0.5) * u_resolution / u_ref_size + 0.5` — resizing reveals/hides without zoom or distortion
+- Canvas fills entire preview panel (no black bars, no aspect-ratio lock)
+- Patched shadcn's `resizable.tsx` for react-resizable-panels v4 API (`direction` → `orientation`, string sizes)
 
 ## Important Layout Notes
 
-The app uses CSS Grid instead of flexbox for the main layout to ensure React Flow gets explicit dimensions:
-- Main grid: 2 rows (header, content) × 3 columns (left panel, center, right panel)
-- Center column: nested grid with canvas area + preview (16rem height)
-- React Flow requires its parent to have explicit width/height - the grid provides this
-- See [src/App.tsx](src/App.tsx) for implementation
+The app uses react-resizable-panels for the main layout:
+- Outer horizontal group: palette (18%) | center (64%) | properties (18%)
+- Center vertical group: node canvas (70%) | shader preview (30%)
+- All panels are resizable with min/max constraints
+- React Flow requires its parent to have explicit width/height — the panel system provides this
+- See [src/App.tsx](src/App.tsx) and [src/components/ui/resizable.tsx](src/components/ui/resizable.tsx)
