@@ -42,15 +42,14 @@ export const noiseNode: NodeDefinition = {
         { value: 'box', label: 'Box' },
       ],
     },
-    { id: 'boxFreq', label: 'Box Freq', type: 'float', default: 1.0, min: 0.5, max: 8.0, step: 0.5, showWhen: { noiseType: 'box' } },
+    { id: 'boxFreq', label: 'Box Freq', type: 'float', default: 1.0, min: 0.5, max: 8.0, step: 0.5, connectable: true, showWhen: { noiseType: 'box' } },
   ],
 
   glsl: (ctx) => {
     const { inputs, outputs, params } = ctx
     const noiseType = (params.noiseType as string) || 'simplex'
-    const boxFreq = params.boxFreq !== undefined ? params.boxFreq : 1.0
 
-    // inputs.scale is always a GLSL expression (connectable param)
+    // inputs.scale and inputs.boxFreq are GLSL expressions (connectable params)
     const s = inputs.scale
 
     // Register functions based on selected noise type
@@ -69,8 +68,8 @@ export const noiseNode: NodeDefinition = {
 
       case 'box': {
         registerBoxNoise(ctx)
-        const bfStr = formatFloat(boxFreq)
-        return `float ${outputs.value} = hash3(floor(vec3(${inputs.coords} * ${s}, ${inputs.z}) * ${bfStr}) / ${bfStr});`
+        const bf = inputs.boxFreq
+        return `float ${outputs.value} = hash3(floor(vec3(${inputs.coords} * ${s}, ${inputs.z}) * ${bf}) / ${bf});`
       }
 
       default:
@@ -78,13 +77,6 @@ export const noiseNode: NodeDefinition = {
         return `float ${outputs.value} = snoise3d_01(vec3(${inputs.coords} * ${s}, ${inputs.z}));`
     }
   },
-}
-
-function formatFloat(v: unknown): string {
-  if (typeof v === 'number') {
-    return Number.isInteger(v) ? `${v}.0` : `${v}`
-  }
-  return String(v)
 }
 
 // --- Simplex ---

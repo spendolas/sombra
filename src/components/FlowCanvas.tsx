@@ -82,8 +82,11 @@ export function FlowCanvas({
 
       // Find the specific ports being connected
       const sourcePort = sourceDef.outputs.find((p) => p.id === connection.sourceHandle)
-      // Check regular inputs first, then connectable params
-      const targetPort = targetDef.inputs.find((p) => p.id === connection.targetHandle)
+      // Check dynamic inputs (if available), then static inputs, then connectable params
+      const targetInputs = targetDef.dynamicInputs
+        ? targetDef.dynamicInputs(targetNode.data.params || {})
+        : targetDef.inputs
+      const targetPort = targetInputs.find((p) => p.id === connection.targetHandle)
         ?? targetDef.params?.find((p) => p.connectable && p.id === connection.targetHandle)
       if (!sourcePort || !targetPort) return false
 

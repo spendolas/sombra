@@ -38,6 +38,7 @@ export interface NodeParameter {
   options?: Array<{ value: string; label: string }>  // For enum type
   showWhen?: Record<string, string>                  // Only show when other params match these values
   connectable?: boolean                              // If true, renders as wirable handle + inline slider
+  hidden?: boolean                                   // If true, param is not rendered in UI (internal state)
 }
 
 /**
@@ -74,6 +75,13 @@ export interface NodeDefinition {
   inputs: PortDefinition[]                 // Input ports
   outputs: PortDefinition[]                // Output ports
   params?: NodeParameter[]                 // Tweakable parameters
+
+  /**
+   * Optional function returning per-instance inputs based on current params.
+   * Used by nodes with variable port count (e.g., Arithmetic with 2-8 inputs).
+   * When present, compiler and UI use this instead of static `inputs`.
+   */
+  dynamicInputs?: (params: Record<string, unknown>) => PortDefinition[]
 
   /**
    * GLSL function name this node provides via fnref output ports.

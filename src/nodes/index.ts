@@ -12,12 +12,10 @@ import { timeNode } from './input/time'
 import { resolutionNode } from './input/resolution'
 
 // Math nodes
-import { addNode } from './math/add'
-import { multiplyNode } from './math/multiply'
+import { arithmeticNode } from './math/arithmetic'
+import { trigNode } from './math/trig'
 import { mixNode } from './math/mix'
 import { smoothstepNode } from './math/smoothstep'
-import { sinNode } from './math/sin'
-import { cosNode } from './math/cos'
 import { remapNode } from './math/remap'
 import { turbulenceNode } from './math/turbulence'
 import { ridgedNode } from './math/ridged'
@@ -46,12 +44,10 @@ export const ALL_NODES = [
   resolutionNode,
 
   // Math
-  addNode,
-  multiplyNode,
+  arithmeticNode,
+  trigNode,
   mixNode,
   smoothstepNode,
-  sinNode,
-  cosNode,
   remapNode,
   turbulenceNode,
   ridgedNode,

@@ -95,7 +95,12 @@ export function compileGraph(
       const inputs: Record<string, string> = {}
       const incomingEdges = edgesByTarget.get(nodeId) || []
 
-      definition.inputs.forEach((inputPort) => {
+      // Use dynamicInputs when available, otherwise static inputs
+      const resolvedInputs = definition.dynamicInputs
+        ? definition.dynamicInputs(node.data.params || {})
+        : definition.inputs
+
+      resolvedInputs.forEach((inputPort) => {
         const edge = incomingEdges.find((e) => e.targetHandle === inputPort.id)
 
         if (edge) {

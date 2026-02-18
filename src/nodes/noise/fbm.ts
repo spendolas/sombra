@@ -33,7 +33,7 @@ export const fbmNode: NodeDefinition = {
         { value: 'ridged', label: 'Ridged' },
       ],
     },
-    { id: 'octaves', label: 'Octaves', type: 'float', default: 4, min: 1, max: 8, step: 1 },
+    { id: 'octaves', label: 'Octaves', type: 'float', default: 4, min: 1, max: 8, step: 1, connectable: true },
     { id: 'lacunarity', label: 'Lacunarity', type: 'float', default: 2.0, min: 1.0, max: 4.0, step: 0.1, connectable: true },
     { id: 'gain', label: 'Gain', type: 'float', default: 0.5, min: 0.1, max: 0.9, step: 0.05, connectable: true },
   ],
@@ -41,7 +41,6 @@ export const fbmNode: NodeDefinition = {
   glsl: (ctx) => {
     const { inputs, outputs, params } = ctx
     const fractalMode = (params.fractalMode as string) || 'standard'
-    const octaves = Math.floor(Number(params.octaves ?? 4))
     const noiseFn = inputs.noiseFn // function name from fnref
 
     // Register simplex fallback (idempotent — safe even when connected to another noise)
@@ -60,12 +59,14 @@ export const fbmNode: NodeDefinition = {
       loopBody = `      total += ${noiseFn}(p) * amp;`
     }
 
-    // lacunarity and gain are function args (connectable params)
-    addFunction(ctx, fbmKey, `float ${fbmKey}(vec3 p, float lac, float g) {
+    // octaves, lacunarity, and gain are function args (connectable params)
+    // GLSL requires constant loop bounds — use max (8) with early break for runtime octaves
+    addFunction(ctx, fbmKey, `float ${fbmKey}(vec3 p, float oct, float lac, float g) {
   float total = 0.0;
   float amp = 0.5;
   float maxAmp = 0.0;
-  for (int i = 0; i < ${octaves}; i++) {
+  for (int i = 0; i < 8; i++) {
+      if (float(i) >= oct) break;
 ${loopBody}
       maxAmp += amp;
       p *= lac;
@@ -74,8 +75,8 @@ ${loopBody}
   return total / maxAmp;
 }`)
 
-    // inputs.scale, inputs.lacunarity, inputs.gain are always GLSL expressions (connectable params)
-    return `float ${outputs.value} = ${fbmKey}(vec3(${inputs.coords} * ${inputs.scale}, ${inputs.z}), ${inputs.lacunarity}, ${inputs.gain});`
+    // inputs.scale, inputs.octaves, inputs.lacunarity, inputs.gain are GLSL expressions (connectable params)
+    return `float ${outputs.value} = ${fbmKey}(vec3(${inputs.coords} * ${inputs.scale}, ${inputs.z}), ${inputs.octaves}, ${inputs.lacunarity}, ${inputs.gain});`
   },
 }
 

@@ -215,6 +215,31 @@ These are general-purpose signal remaps (`float → float`), not noise-specific.
 - [x] `mix.ts` — `connectable: true` on factor, GLSL uses `inputs.factor`
 - [x] `brightness-contrast.ts` — `connectable: true` on brightness/contrast, GLSL uses `inputs.brightness`/`inputs.contrast`
 
+### Sprint 4.75 — Math Node Consolidation + UX Polish ✅ Complete
+
+#### Math Nodes
+- [x] Unified **Arithmetic** node — replaces Add + Multiply, adds Subtract + Divide. Enum dropdown for operation, dynamic 2-8 inputs via +/- buttons (`src/nodes/math/arithmetic.ts`)
+- [x] Unified **Trig** node — replaces Sin + Cos, adds Tan + Abs. Enum dropdown, connectable frequency/amplitude (`src/nodes/math/trig.ts`)
+- [x] Delete `add.ts`, `multiply.ts`, `sin.ts`, `cos.ts`
+- [x] Update `src/nodes/index.ts` — replace 4 imports with 2
+
+#### Infrastructure
+- [x] `dynamicInputs?: (params) => PortDefinition[]` on `NodeDefinition` in `types.ts`
+- [x] `hidden?: boolean` on `NodeParameter` in `types.ts`
+- [x] Compiler (`glsl-generator.ts`): use `dynamicInputs(params)` when available
+- [x] `FlowCanvas.tsx`: use `dynamicInputs(params)` in `isValidConnection`
+
+#### UX Polish
+- [x] `ShaderNode.tsx`: outputs above inputs, category label removed from header
+- [x] `ShaderNode.tsx`: +/- button UI for dynamic input nodes, edge cleanup on port removal
+- [x] Source value resolution: connected params show actual source value (float_constant → slider at value) or "← SourceLabel" (dynamic sources)
+- [x] `NodeParameters.tsx`: `SourceInfo` type, `connectedSources` prop, `FloatSlider` disabled state with resolved values
+- [x] `PropertiesPanel.tsx`: read edges + nodes from store, build `connectedSources` map, pass to `NodeParameters`
+
+#### Additional Connectable Params
+- [x] `noise.ts`: `boxFreq` now connectable, GLSL uses `inputs.boxFreq`
+- [x] `fbm.ts`: `octaves` now connectable — max-bound loop (8) with `if (float(i) >= oct) break;` for runtime octaves
+
 ### Sprint 5 — UV & Input Nodes (4 nodes)
 
 - [ ] **Rotate UV** — 2D rotation around (0.5, 0.5). Input: `angle` (float, radians). Maps to spectra's `angle` param (`src/nodes/input/rotate-uv.ts`)
@@ -253,7 +278,7 @@ General-purpose multi-stop gradient mapper: float (0-1) → color (vec3). This i
 | Pixel Grid | Post-process | — | Sprint 7 |
 | Bayer Dither | Post-process | — | Sprint 7 |
 
-**After Sprint 4: 20 nodes** (4 separate noise → 1 unified = net -3). **After Sprint 4.5: still 20 nodes** (adds connectable param handles, no new nodes). **After Phase 2: 27 nodes.**
+**After Sprint 4: 20 nodes** (4 separate noise → 1 unified = net -3). **After Sprint 4.5: still 20 nodes** (adds connectable param handles, no new nodes). **After Sprint 4.75: 18 nodes** (merged 4 math → 2 unified). **After Phase 2: 25 nodes.**
 
 ### Key Files
 

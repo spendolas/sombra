@@ -137,7 +137,9 @@ Nodes have:
 See `ROADMAP.md` for the full Phase 2 brief. Current focus: **UV & Input Nodes**
 
 - Rotate UV, Scale UV, Offset UV, Vec2 Constant
-- Then: Color Ramp (Sprint 6) → Pixel Rendering (Sprint 7)
+- 4 new nodes for coordinate manipulation (spectra's `angle` and `flow` behaviors)
+
+**After Sprint 5:** Color Ramp (Sprint 6) → Pixel Rendering (Sprint 7)
 
 ## Design Decisions (Why We Did It This Way)
 
@@ -218,11 +220,24 @@ Replicate the full spectra-pixel-bg experience as composable node-graph features
 - Brightness/Contrast: brightness/contrast connectable
 - `isValidConnection` checks connectable params as valid connection targets
 
+**Sprint 4.75 — Math Consolidation + UX Polish** ✅ Complete
+- Unified **Arithmetic** node (add/sub/mul/div + dynamic 2-8 inputs via +/- buttons)
+- Unified **Trig** node (sin/cos/tan/abs + connectable freq/amp)
+- `dynamicInputs?: (params) => PortDefinition[]` on `NodeDefinition` for variable port count
+- `hidden?: boolean` on `NodeParameter` for internal params (inputCount)
+- Node layout: outputs above inputs, category removed from header
+- Source value resolution: connected params show actual source value (constants) or "← SourceLabel" (dynamic)
+- `PropertiesPanel` connection awareness: reads edges, builds `connectedSources` map with resolved values
+- Noise `boxFreq` now connectable; FBM `octaves` now connectable (max-bound loop with early break)
+- Node count: 18 (was 20 — delete add/multiply/sin/cos, add arithmetic/trig)
+
+**Sprint 5 — UV & Input Nodes** ← Next
+
 **Remaining sprints:** UV/Input (Sprint 5) → Color Ramp (Sprint 6) → Pixel Rendering (Sprint 7)
 
 **Acceptance test:** Manually wire node graphs that reproduce all 4 spectra presets (Value FBM, Simplex FBM, Worley Ridged, Box None).
 
-**Node count after Sprint 4:** 20 nodes (down from 24 — unified noise replaces 4, net -3)
+**Node count after Sprint 4.75:** 18 nodes (down from 20 — merged 4 math nodes into 2)
 
 ## Important Layout Notes
 

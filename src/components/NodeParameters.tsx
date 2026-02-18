@@ -16,13 +16,20 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
+export interface SourceInfo {
+  value: number | null
+  sourceLabel: string
+}
+
 interface NodeParametersProps {
   nodeId: string
   parameters: NodeParameter[]
   currentValues: Record<string, unknown>
+  connectedInputs?: Set<string>
+  connectedSources?: Map<string, SourceInfo>
 }
 
-export function NodeParameters({ nodeId, parameters, currentValues }: NodeParametersProps) {
+export function NodeParameters({ nodeId, parameters, currentValues, connectedInputs, connectedSources }: NodeParametersProps) {
   const updateNodeData = useGraphStore((state) => state.updateNodeData)
 
   const handleChange = useCallback(
@@ -37,33 +44,55 @@ export function NodeParameters({ nodeId, parameters, currentValues }: NodeParame
     [nodeId, currentValues, updateNodeData]
   )
 
+  // Filter out hidden params
+  const visibleParams = parameters.filter((p) => !p.hidden)
+
   return (
     <div className="space-y-3">
-      {parameters.map((param) => (
-        <div key={param.id}>
-          {param.type === 'float' && (
-            <FloatSlider
-              param={param}
-              value={(currentValues[param.id] as number) ?? param.default}
-              onChange={(value) => handleChange(param.id, value)}
-            />
-          )}
-          {param.type === 'color' && (
-            <ColorInput
-              param={param}
-              value={(currentValues[param.id] as [number, number, number]) ?? param.default}
-              onChange={(value) => handleChange(param.id, value)}
-            />
-          )}
-          {param.type === 'enum' && param.options && (
-            <EnumSelect
-              param={param}
-              value={(currentValues[param.id] as string) ?? param.default}
-              onChange={(value) => handleChange(param.id, value)}
-            />
-          )}
-        </div>
-      ))}
+      {visibleParams.map((param) => {
+        const isConnected = connectedInputs?.has(param.id) ?? false
+        const source = connectedSources?.get(param.id)
+        return (
+          <div key={param.id}>
+            {param.type === 'float' && (() => {
+              if (isConnected && source) {
+                if (source.value !== null) {
+                  return <FloatSlider param={param} value={source.value} onChange={() => {}} disabled />
+                }
+                return (
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center">
+                      <Label className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>{param.label}</Label>
+                      <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{'← ' + source.sourceLabel}</span>
+                    </div>
+                  </div>
+                )
+              }
+              return (
+                <FloatSlider
+                  param={param}
+                  value={(currentValues[param.id] as number) ?? param.default}
+                  onChange={(value) => handleChange(param.id, value)}
+                />
+              )
+            })()}
+            {param.type === 'color' && (
+              <ColorInput
+                param={param}
+                value={(currentValues[param.id] as [number, number, number]) ?? param.default}
+                onChange={(value) => handleChange(param.id, value)}
+              />
+            )}
+            {param.type === 'enum' && param.options && (
+              <EnumSelect
+                param={param}
+                value={(currentValues[param.id] as string) ?? param.default}
+                onChange={(value) => handleChange(param.id, value)}
+              />
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -72,29 +101,36 @@ export interface FloatSliderProps {
   param: NodeParameter
   value: number
   onChange: (value: number) => void
+  disabled?: boolean
 }
 
-export function FloatSlider({ param, value, onChange }: FloatSliderProps) {
+export function FloatSlider({ param, value, onChange, disabled }: FloatSliderProps) {
   const min = param.min ?? 0
   const max = param.max ?? 1
   const step = param.step ?? 0.01
 
   return (
-    <div className="space-y-1.5">
+    <div className={`space-y-1.5${disabled ? ' opacity-60 pointer-events-none' : ''}`}>
       <div className="flex justify-between items-center">
         <Label className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
           {param.label}
         </Label>
-        <Input
-          type="number"
-          value={value}
-          onChange={(e) => {
-            const newValue = parseFloat(e.target.value)
-            if (!isNaN(newValue)) onChange(newValue)
-          }}
-          step={step}
-          className="w-16 h-6 px-1 py-0.5 text-right text-[10px]"
-        />
+        {disabled ? (
+          <span className="text-[10px] tabular-nums pr-1" style={{ color: 'var(--text-muted)' }}>
+            {value}
+          </span>
+        ) : (
+          <Input
+            type="number"
+            value={value}
+            onChange={(e) => {
+              const newValue = parseFloat(e.target.value)
+              if (!isNaN(newValue)) onChange(newValue)
+            }}
+            step={step}
+            className="w-16 h-6 px-1 py-0.5 text-right text-[10px]"
+          />
+        )}
       </div>
       <Slider
         value={[value]}
@@ -102,6 +138,7 @@ export function FloatSlider({ param, value, onChange }: FloatSliderProps) {
         max={max}
         step={step}
         onValueChange={(values) => onChange(values[0])}
+        disabled={disabled}
       />
     </div>
   )
