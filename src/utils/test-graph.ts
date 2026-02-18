@@ -101,27 +101,17 @@ export function createUVTestGraph(): {
 
 /**
  * Create animated noise test graph:
- * UV → Simplex Noise (coords), Time → Simplex Noise (z) → Fragment Output
- * Demonstrates 3D animated noise via the z input
+ * Time → Simplex Noise (phase) → Fragment Output
+ * Noise uses auto_uv for coordinates when unconnected.
  */
 export function createNoiseTestGraph(): {
   nodes: Node<NodeData>[]
   edges: Edge<EdgeData>[]
 } {
-  const uvNode: Node<NodeData> = {
-    id: 'noise-uv',
-    type: 'shaderNode',
-    position: { x: 50, y: 80 },
-    data: {
-      type: 'uv_coords',
-      params: {},
-    },
-  }
-
   const timeNode: Node<NodeData> = {
     id: 'noise-time',
     type: 'shaderNode',
-    position: { x: 50, y: 220 },
+    position: { x: 50, y: 150 },
     data: {
       type: 'time',
       params: {},
@@ -153,22 +143,13 @@ export function createNoiseTestGraph(): {
 
   const edges: Edge<EdgeData>[] = [
     {
-      id: 'edge-uv-noise',
-      source: 'noise-uv',
-      target: 'noise-simplex',
-      sourceHandle: 'uv',
-      targetHandle: 'coords',
-      type: 'typed',
-      data: { sourcePort: 'uv', targetPort: 'coords', sourcePortType: 'vec2' },
-    },
-    {
       id: 'edge-time-noise',
       source: 'noise-time',
       target: 'noise-simplex',
       sourceHandle: 'time',
-      targetHandle: 'z',
+      targetHandle: 'phase',
       type: 'typed',
-      data: { sourcePort: 'time', targetPort: 'z', sourcePortType: 'float' },
+      data: { sourcePort: 'time', targetPort: 'phase', sourcePortType: 'float' },
     },
     {
       id: 'edge-noise-output',
@@ -182,7 +163,7 @@ export function createNoiseTestGraph(): {
   ]
 
   return {
-    nodes: [uvNode, timeNode, noiseNode, outputNode],
+    nodes: [timeNode, noiseNode, outputNode],
     edges,
   }
 }

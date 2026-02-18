@@ -13,8 +13,8 @@ export const domainWarpNode: NodeDefinition = {
   description: 'Distorts UV coordinates using noise for organic warping effects',
 
   inputs: [
-    { id: 'coords', label: 'Coords', type: 'vec2', default: [0.0, 0.0] },
-    { id: 'z', label: 'Z', type: 'float', default: 0.0 },
+    { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },
+    { id: 'phase', label: 'Phase', type: 'float', default: 0.0 },
     { id: 'noiseFn', label: 'Noise Fn', type: 'fnref', default: 'vnoise3d' },
   ],
 
@@ -37,8 +37,8 @@ export const domainWarpNode: NodeDefinition = {
     // inputs.strength and inputs.frequency are always GLSL expressions (connectable params)
     const prefix = outputs.warped
     return [
-      `float ${prefix}_x = ${noiseFn}(vec3(${inputs.coords} * ${inputs.frequency}, ${inputs.z})) * 2.0 - 1.0;`,
-      `float ${prefix}_y = ${noiseFn}(vec3(${inputs.coords} * ${inputs.frequency} + 100.0, ${inputs.z})) * 2.0 - 1.0;`,
+      `float ${prefix}_x = ${noiseFn}(vec3(${inputs.coords} * ${inputs.frequency}, ${inputs.phase})) * 2.0 - 1.0;`,
+      `float ${prefix}_y = ${noiseFn}(vec3(${inputs.coords} * ${inputs.frequency} + 100.0, ${inputs.phase})) * 2.0 - 1.0;`,
       `vec2 ${outputs.warped} = ${inputs.coords} + vec2(${prefix}_x, ${prefix}_y) * ${inputs.strength};`,
     ].join('\n  ')
   },

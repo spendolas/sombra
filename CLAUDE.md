@@ -132,20 +132,15 @@ Nodes have:
 
 ✅ Complete — Scaffold, React Flow canvas, WebGL2 renderer, GitHub Pages deployment.
 
-## Next Steps (Phase 2, Sprint 5.5)
+## Next Steps (Phase 2, Sprint 6)
 
-See `ROADMAP.md` for the full Phase 2 brief. Current focus: **Auto UV Default + Phase Rename**
+See `ROADMAP.md` for the full Phase 2 brief. Current focus: **Color Ramp**
 
-Two UX improvements for noise nodes — no new nodes, node count stays at 19:
+- General-purpose multi-stop gradient mapper: float (0-1) → color (vec3)
+- ColorRampEditor component with draggable stops and per-stop color pickers
+- 6 palette presets from spectra-pixel-bg
 
-1. **Compiler `auto_uv` sentinel** (`src/compiler/glsl-generator.ts`): When a `vec2` input has `default: 'auto_uv'` and is unconnected, the compiler generates frozen-ref UV coordinates inline (`(v_uv - 0.5) * u_resolution / u_ref_size + 0.5`). Noise nodes work out of the box without wiring UV Coordinates. Wire UV Coordinates to override.
-2. **Rename `z` → `phase`** on all 3 noise nodes (Noise, FBM, Domain Warp): port `id`, `label`, and GLSL references. Communicates the input's purpose (animation/evolution) instead of a meaningless axis name.
-
-Files: `glsl-generator.ts` (compiler), `noise.ts`, `fbm.ts`, `domain-warp.ts` (both changes), `test-graph.ts` (port rename).
-
-See plan file `.claude/plans/swift-marinating-ladybug.md` for full implementation details.
-
-**After Sprint 5.5:** Color Ramp (Sprint 6) → Pixel Rendering (Sprint 7)
+**After Sprint 6:** Pixel Rendering (Sprint 7)
 
 ## Design Decisions (Why We Did It This Way)
 
@@ -245,12 +240,13 @@ Replicate the full spectra-pixel-bg experience as composable node-graph features
 - Files: modified `uv-coords.ts`, created `vec2-constant.ts`, updated `index.ts`
 - Node count: 19 (was 18 — 1 new Vec2 Constant, UV Coords modified not added)
 
-**Sprint 5.5 — Auto UV Default + Phase Rename** ← Next
+**Sprint 5.5 — Auto UV Default + Phase Rename** ✅ Complete
 - **Compiler `auto_uv` sentinel**: `PortDefinition.default: 'auto_uv'` on vec2 inputs. Compiler generates frozen-ref UV inline when unconnected. Noise nodes produce visible patterns without wiring UV Coordinates.
 - **Rename `z` → `phase`**: All 3 noise nodes (Noise, FBM, Domain Warp). Port id, label, GLSL refs. Communicates animation/evolution purpose.
-- Compiler changes: move `sanitizedNodeId` earlier, add `preambleLines` array, `auto_uv` condition before `formatDefaultValue`, emit preamble before node GLSL.
-- Files: `glsl-generator.ts`, `noise.ts`, `fbm.ts`, `domain-warp.ts`, `test-graph.ts`
+- Default test graph simplified: removed UV Coordinates node (auto_uv makes it unnecessary)
 - Node count: still 19 (no new nodes)
+
+**Sprint 6 — Color Ramp** ← Next
 
 **Remaining sprints:** Color Ramp (Sprint 6) → Pixel Rendering (Sprint 7)
 

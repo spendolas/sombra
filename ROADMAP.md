@@ -248,13 +248,14 @@ Redshift-style: transform controls on the coordinate source node itself, not sep
 - [x] **Vec2 Constant** — static vec2 output with X/Y sliders (`src/nodes/input/vec2-constant.ts`)
 - [x] Updated `src/nodes/index.ts` — added Vec2 Constant import
 
-### Sprint 5.5 — Auto UV Default + Phase Rename
+### Sprint 5.5 — Auto UV Default + Phase Rename ✅ Complete
 
-Noise nodes should produce visible patterns out of the box without wiring UV Coordinates. The `z` input name is misleading — rename to `phase`.
+Noise nodes produce visible patterns out of the box without wiring UV Coordinates. The `z` input was renamed to `phase`.
 
-- [ ] **Compiler `auto_uv` sentinel** — when a `vec2` input has `default: 'auto_uv'` and is unconnected, compiler generates frozen-ref UV inline. Move `sanitizedNodeId` earlier, add `preambleLines` array, emit before node GLSL. (`src/compiler/glsl-generator.ts`)
-- [ ] **Noise node `coords` default** — change from `[0.0, 0.0]` to `'auto_uv'` on all 3 noise nodes (`noise.ts`, `fbm.ts`, `domain-warp.ts`)
-- [ ] **Rename `z` → `phase`** — port id, label, and all GLSL template references across all 3 noise nodes + test graph (`test-graph.ts`)
+- [x] **Compiler `auto_uv` sentinel** — when a `vec2` input has `default: 'auto_uv'` and is unconnected, compiler generates frozen-ref UV inline. `sanitizedNodeId` moved earlier, `preambleLines` array emitted before node GLSL. (`src/compiler/glsl-generator.ts`)
+- [x] **Noise node `coords` default** — changed from `[0.0, 0.0]` to `'auto_uv'` on all 3 noise nodes (`noise.ts`, `fbm.ts`, `domain-warp.ts`)
+- [x] **Rename `z` → `phase`** — port id, label, and all GLSL template references across all 3 noise nodes + test graph (`test-graph.ts`)
+- [x] **Default test graph simplified** — removed UV Coordinates node (auto_uv makes it unnecessary)
 
 ### Sprint 6 — Color Ramp (1 node, biggest single item)
 

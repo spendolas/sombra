@@ -94,6 +94,8 @@ export function compileGraph(
       // Build input variable names (from connected edges or defaults)
       const inputs: Record<string, string> = {}
       const incomingEdges = edgesByTarget.get(nodeId) || []
+      const sanitizedNodeId = nodeId.replace(/-/g, '_')
+      const preambleLines: string[] = []
 
       // Use dynamicInputs when available, otherwise static inputs
       const resolvedInputs = definition.dynamicInputs
@@ -153,6 +155,13 @@ export function compileGraph(
           if (inputPort.type === 'fnref') {
             // fnref unconnected: default is a function name string
             inputs[inputPort.id] = String(inputPort.default ?? '')
+          } else if (inputPort.default === 'auto_uv' && inputPort.type === 'vec2') {
+            // auto_uv sentinel: generate frozen-ref UV inline
+            const autoUvVar = `node_${sanitizedNodeId}_auto_uv`
+            preambleLines.push(`vec2 ${autoUvVar} = (v_uv - 0.5) * u_resolution / u_ref_size + 0.5;`)
+            uniforms.add('u_resolution')
+            uniforms.add('u_ref_size')
+            inputs[inputPort.id] = autoUvVar
           } else if (inputPort.default !== undefined) {
             const defaultValue = formatDefaultValue(inputPort.default, inputPort.type)
             inputs[inputPort.id] = defaultValue
@@ -203,9 +212,8 @@ export function compileGraph(
         }
       }
 
-      // Build output variable names (sanitize node ID for GLSL)
+      // Build output variable names
       const outputs: Record<string, string> = {}
-      const sanitizedNodeId = nodeId.replace(/-/g, '_')
       definition.outputs.forEach((outputPort) => {
         outputs[outputPort.id] = `node_${sanitizedNodeId}_${outputPort.id}`
       })
@@ -224,6 +232,9 @@ export function compileGraph(
       try {
         const glsl = definition.glsl(context)
         glslLines.push(`  // ${definition.label} (${node.id})`)
+        for (const line of preambleLines) {
+          glslLines.push(`  ${line}`)
+        }
         glslLines.push(`  ${glsl}`)
       } catch (error) {
         errors.push({

@@ -14,8 +14,8 @@ export const fbmNode: NodeDefinition = {
   description: 'Multi-octave fractal noise with wirable noise function and fractal mode',
 
   inputs: [
-    { id: 'coords', label: 'Coords', type: 'vec2', default: [0.0, 0.0] },
-    { id: 'z', label: 'Z', type: 'float', default: 0.0 },
+    { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },
+    { id: 'phase', label: 'Phase', type: 'float', default: 0.0 },
     { id: 'noiseFn', label: 'Noise Fn', type: 'fnref', default: 'snoise3d_01' },
   ],
 
@@ -76,7 +76,7 @@ ${loopBody}
 }`)
 
     // inputs.scale, inputs.octaves, inputs.lacunarity, inputs.gain are GLSL expressions (connectable params)
-    return `float ${outputs.value} = ${fbmKey}(vec3(${inputs.coords} * ${inputs.scale}, ${inputs.z}), ${inputs.octaves}, ${inputs.lacunarity}, ${inputs.gain});`
+    return `float ${outputs.value} = ${fbmKey}(vec3(${inputs.coords} * ${inputs.scale}, ${inputs.phase}), ${inputs.octaves}, ${inputs.lacunarity}, ${inputs.gain});`
   },
 }
 

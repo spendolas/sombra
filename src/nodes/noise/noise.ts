@@ -22,8 +22,8 @@ export const noiseNode: NodeDefinition = {
   functionKey: (params) => FUNCTION_KEY_MAP[(params.noiseType as string) || 'simplex'] || 'snoise3d_01',
 
   inputs: [
-    { id: 'coords', label: 'Coords', type: 'vec2', default: [0.0, 0.0] },
-    { id: 'z', label: 'Z', type: 'float', default: 0.0 },
+    { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },
+    { id: 'phase', label: 'Phase', type: 'float', default: 0.0 },
   ],
 
   outputs: [
@@ -56,25 +56,25 @@ export const noiseNode: NodeDefinition = {
     switch (noiseType) {
       case 'simplex':
         registerSimplex(ctx)
-        return `float ${outputs.value} = snoise3d_01(vec3(${inputs.coords} * ${s}, ${inputs.z}));`
+        return `float ${outputs.value} = snoise3d_01(vec3(${inputs.coords} * ${s}, ${inputs.phase}));`
 
       case 'value':
         registerValueNoise(ctx)
-        return `float ${outputs.value} = vnoise3d(vec3(${inputs.coords} * ${s}, ${inputs.z}));`
+        return `float ${outputs.value} = vnoise3d(vec3(${inputs.coords} * ${s}, ${inputs.phase}));`
 
       case 'worley':
         registerWorley(ctx)
-        return `float ${outputs.value} = worley3d(vec3(${inputs.coords} * ${s}, ${inputs.z}));`
+        return `float ${outputs.value} = worley3d(vec3(${inputs.coords} * ${s}, ${inputs.phase}));`
 
       case 'box': {
         registerBoxNoise(ctx)
         const bf = inputs.boxFreq
-        return `float ${outputs.value} = hash3(floor(vec3(${inputs.coords} * ${s}, ${inputs.z}) * ${bf}) / ${bf});`
+        return `float ${outputs.value} = hash3(floor(vec3(${inputs.coords} * ${s}, ${inputs.phase}) * ${bf}) / ${bf});`
       }
 
       default:
         registerSimplex(ctx)
-        return `float ${outputs.value} = snoise3d_01(vec3(${inputs.coords} * ${s}, ${inputs.z}));`
+        return `float ${outputs.value} = snoise3d_01(vec3(${inputs.coords} * ${s}, ${inputs.phase}));`
     }
   },
 }
