@@ -8,6 +8,7 @@ import { registerNodes } from './registry'
 import { uvCoordsNode } from './input/uv-coords'
 import { colorConstantNode } from './input/color-constant'
 import { floatConstantNode } from './input/float-constant'
+import { vec2ConstantNode } from './input/vec2-constant'
 import { timeNode } from './input/time'
 import { resolutionNode } from './input/resolution'
 
@@ -40,6 +41,7 @@ export const ALL_NODES = [
   uvCoordsNode,
   colorConstantNode,
   floatConstantNode,
+  vec2ConstantNode,
   timeNode,
   resolutionNode,
 

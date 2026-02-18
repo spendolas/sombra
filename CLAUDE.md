@@ -132,14 +132,20 @@ Nodes have:
 
 ✅ Complete — Scaffold, React Flow canvas, WebGL2 renderer, GitHub Pages deployment.
 
-## Next Steps (Phase 2, Sprint 5)
+## Next Steps (Phase 2, Sprint 5.5)
 
-See `ROADMAP.md` for the full Phase 2 brief. Current focus: **UV & Input Nodes**
+See `ROADMAP.md` for the full Phase 2 brief. Current focus: **Auto UV Default + Phase Rename**
 
-- Rotate UV, Scale UV, Offset UV, Vec2 Constant
-- 4 new nodes for coordinate manipulation (spectra's `angle` and `flow` behaviors)
+Two UX improvements for noise nodes — no new nodes, node count stays at 19:
 
-**After Sprint 5:** Color Ramp (Sprint 6) → Pixel Rendering (Sprint 7)
+1. **Compiler `auto_uv` sentinel** (`src/compiler/glsl-generator.ts`): When a `vec2` input has `default: 'auto_uv'` and is unconnected, the compiler generates frozen-ref UV coordinates inline (`(v_uv - 0.5) * u_resolution / u_ref_size + 0.5`). Noise nodes work out of the box without wiring UV Coordinates. Wire UV Coordinates to override.
+2. **Rename `z` → `phase`** on all 3 noise nodes (Noise, FBM, Domain Warp): port `id`, `label`, and GLSL references. Communicates the input's purpose (animation/evolution) instead of a meaningless axis name.
+
+Files: `glsl-generator.ts` (compiler), `noise.ts`, `fbm.ts`, `domain-warp.ts` (both changes), `test-graph.ts` (port rename).
+
+See plan file `.claude/plans/swift-marinating-ladybug.md` for full implementation details.
+
+**After Sprint 5.5:** Color Ramp (Sprint 6) → Pixel Rendering (Sprint 7)
 
 ## Design Decisions (Why We Did It This Way)
 
@@ -231,13 +237,28 @@ Replicate the full spectra-pixel-bg experience as composable node-graph features
 - Noise `boxFreq` now connectable; FBM `octaves` now connectable (max-bound loop with early break)
 - Node count: 18 (was 20 — delete add/multiply/sin/cos, add arithmetic/trig)
 
-**Sprint 5 — UV & Input Nodes** ← Next
+**Sprint 5 — UV Transform + Vec2 Constant** ✅ Complete
+- Extended **UV Coordinates** node with 5 connectable SRT params: scaleX, scaleY (non-uniform), rotate, offsetX, offsetY
+- GLSL: center → scale → rotate (2D matrix) → offset + re-center. Frozen-ref sizing preserved.
+- New **Vec2 Constant** node: X/Y float sliders → vec2 output
+- Follows Redshift UV Projection pattern: transform controls on the coordinate source, not separate nodes
+- Files: modified `uv-coords.ts`, created `vec2-constant.ts`, updated `index.ts`
+- Node count: 19 (was 18 — 1 new Vec2 Constant, UV Coords modified not added)
 
-**Remaining sprints:** UV/Input (Sprint 5) → Color Ramp (Sprint 6) → Pixel Rendering (Sprint 7)
+**Sprint 5.5 — Auto UV Default + Phase Rename** ← Next
+- **Compiler `auto_uv` sentinel**: `PortDefinition.default: 'auto_uv'` on vec2 inputs. Compiler generates frozen-ref UV inline when unconnected. Noise nodes produce visible patterns without wiring UV Coordinates.
+- **Rename `z` → `phase`**: All 3 noise nodes (Noise, FBM, Domain Warp). Port id, label, GLSL refs. Communicates animation/evolution purpose.
+- Compiler changes: move `sanitizedNodeId` earlier, add `preambleLines` array, `auto_uv` condition before `formatDefaultValue`, emit preamble before node GLSL.
+- Files: `glsl-generator.ts`, `noise.ts`, `fbm.ts`, `domain-warp.ts`, `test-graph.ts`
+- Node count: still 19 (no new nodes)
+
+**Remaining sprints:** Color Ramp (Sprint 6) → Pixel Rendering (Sprint 7)
 
 **Acceptance test:** Manually wire node graphs that reproduce all 4 spectra presets (Value FBM, Simplex FBM, Worley Ridged, Box None).
 
 **Node count after Sprint 4.75:** 18 nodes (down from 20 — merged 4 math nodes into 2)
+**Node count after Sprint 5:** 19 nodes (18 + Vec2 Constant; UV Coords modified, not added)
+**Node count after Sprint 5.5:** 19 nodes (no new nodes — compiler change + rename only)
 
 ## Important Layout Notes
 

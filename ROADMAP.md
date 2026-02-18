@@ -131,7 +131,7 @@ interface NodeDefinition {
 
 ### Sprint 2 — Noise Primitives ✅ Complete
 
-All noise nodes share the same interface: `coords` (vec2) + `z` (float, for time animation) + `scale` (float) → `value` (float, 0-1).
+All noise nodes share the same interface: `coords` (vec2, `auto_uv` default) + `phase` (float, for time animation — was `z`, renamed Sprint 5.5) + `scale` (float) → `value` (float, 0-1).
 
 - [x] **Simplex Noise 3D** — Upgraded to 3D with `z` input (`src/nodes/noise/simplex-noise.ts`)
 - [x] **Value Noise 3D** — Hash-based 3D noise (`src/nodes/noise/value-noise.ts`)
@@ -240,12 +240,21 @@ These are general-purpose signal remaps (`float → float`), not noise-specific.
 - [x] `noise.ts`: `boxFreq` now connectable, GLSL uses `inputs.boxFreq`
 - [x] `fbm.ts`: `octaves` now connectable — max-bound loop (8) with `if (float(i) >= oct) break;` for runtime octaves
 
-### Sprint 5 — UV & Input Nodes (4 nodes)
+### Sprint 5 — UV Transform + Vec2 Constant ✅ Complete
 
-- [ ] **Rotate UV** — 2D rotation around (0.5, 0.5). Input: `angle` (float, radians). Maps to spectra's `angle` param (`src/nodes/input/rotate-uv.ts`)
-- [ ] **Scale UV** — Scale from center (`src/nodes/input/scale-uv.ts`)
-- [ ] **Offset UV** — Translate coordinates. Maps to spectra's `flow` (animated offset via Time) (`src/nodes/input/offset-uv.ts`)
-- [ ] **Vec2 Constant** — Output a static vec2 value (`src/nodes/input/vec2-constant.ts`)
+Redshift-style: transform controls on the coordinate source node itself, not separate nodes.
+
+- [x] **UV Coordinates** — extended with 5 connectable SRT params: `scaleX`, `scaleY`, `rotate`, `offsetX`, `offsetY`. GLSL: center → scale(non-uniform) → rotate(2D matrix) → offset + re-center. Identity defaults = zero breaking change. (`src/nodes/input/uv-coords.ts`)
+- [x] **Vec2 Constant** — static vec2 output with X/Y sliders (`src/nodes/input/vec2-constant.ts`)
+- [x] Updated `src/nodes/index.ts` — added Vec2 Constant import
+
+### Sprint 5.5 — Auto UV Default + Phase Rename
+
+Noise nodes should produce visible patterns out of the box without wiring UV Coordinates. The `z` input name is misleading — rename to `phase`.
+
+- [ ] **Compiler `auto_uv` sentinel** — when a `vec2` input has `default: 'auto_uv'` and is unconnected, compiler generates frozen-ref UV inline. Move `sanitizedNodeId` earlier, add `preambleLines` array, emit before node GLSL. (`src/compiler/glsl-generator.ts`)
+- [ ] **Noise node `coords` default** — change from `[0.0, 0.0]` to `'auto_uv'` on all 3 noise nodes (`noise.ts`, `fbm.ts`, `domain-warp.ts`)
+- [ ] **Rename `z` → `phase`** — port id, label, and all GLSL template references across all 3 noise nodes + test graph (`test-graph.ts`)
 
 ### Sprint 6 — Color Ramp (1 node, biggest single item)
 
@@ -270,15 +279,13 @@ General-purpose multi-stop gradient mapper: float (0-1) → color (vec3). This i
 | **Domain Warp** | Noise | consumes fnref | Revised: wirable noise input |
 | **Turbulence** | Math | — | Moved from Noise (general signal remap) |
 | **Ridged** | Math | — | Moved from Noise (general signal remap) |
-| Rotate UV | Input | — | Sprint 5 |
-| Scale UV | Input | — | Sprint 5 |
-| Offset UV | Input | — | Sprint 5 |
+| UV Coordinates | Input | — | Sprint 5: extended with SRT transform params |
 | Vec2 Constant | Input | — | Sprint 5 |
 | Color Ramp | Color | — | Sprint 6 |
 | Pixel Grid | Post-process | — | Sprint 7 |
 | Bayer Dither | Post-process | — | Sprint 7 |
 
-**After Sprint 4: 20 nodes** (4 separate noise → 1 unified = net -3). **After Sprint 4.5: still 20 nodes** (adds connectable param handles, no new nodes). **After Sprint 4.75: 18 nodes** (merged 4 math → 2 unified). **After Phase 2: 25 nodes.**
+**After Sprint 4: 20 nodes** (4 separate noise → 1 unified = net -3). **After Sprint 4.5: still 20 nodes** (adds connectable param handles, no new nodes). **After Sprint 4.75: 18 nodes** (merged 4 math → 2 unified). **After Sprint 5: 19 nodes** (UV Coords extended, +1 Vec2 Constant). **After Sprint 5.5: 19 nodes** (compiler change + rename, no new nodes). **After Phase 2: 22 nodes.**
 
 ### Key Files
 
