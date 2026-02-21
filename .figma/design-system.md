@@ -155,6 +155,36 @@ Every sync action updates `DESIGN_SYSTEM_PROGRESS.md` with what changed and curr
 
 Light mode port colors use the **-600 Tailwind stop** of the same hue — darker for contrast on white surfaces while preserving the same color identity.
 
+## Variable Collection 3: "Spacing"
+**Modes:** Default (single mode)
+
+| Figma Variable | Value (px) | Tailwind Equivalent |
+|---|---|---|
+| `spacing/xs` | 4 | `gap-1`, `p-1` |
+| `spacing/sm` | 6 | `gap-1.5`, `p-1.5` |
+| `spacing/md` | 8 | `gap-2`, `p-2` |
+| `spacing/lg` | 12 | `gap-3`, `p-3` |
+| `spacing/xl` | 16 | `gap-4`, `p-4` |
+| `spacing/2xl` | 24 | `gap-6`, `p-6` |
+
+**Total: 6 FLOAT variables × 1 mode**
+
+Used for `itemSpacing`, `padding`, and `width` bindings on auto-layout frames. Bound to Foundations spacing bars and Composition frames (Node Palette padding/gaps, Properties Panel padding/gaps).
+
+## Variable Collection 4: "Radius"
+**Modes:** Default (single mode)
+
+| Figma Variable | Value (px) | Usage |
+|---|---|---|
+| `radius/sm` | 4 | Palette items, port rows |
+| `radius/md` | 6 | Nodes, inputs, buttons |
+| `radius/lg` | 8 | Panel sections, info cards |
+| `radius/full` | 9999 | Handles, slider thumbs |
+
+**Total: 4 FLOAT variables × 1 mode**
+
+Bound to `topLeftRadius`/`topRightRadius`/`bottomLeftRadius`/`bottomRightRadius` on Foundations radius samples and Composition node frames.
+
 ---
 
 # Code Connect Mappings
@@ -183,12 +213,12 @@ Components are built in Figma file `gq5i0l617YkXy0GzAZPtqz`. Code Connect requir
 **File:** `gq5i0l617YkXy0GzAZPtqz` — [Sombra on Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra)
 
 ```
-Page: Foundations (104 elements)
+Page: Foundations (~102 elements)
 ├── UI Color swatches (4 groups: Surface, Foreground, Edge, Indigo — variable-bound fills + hex labels)
 ├── Port Type swatches (8 types: circle handles + rectangles + SF Mono labels)
 ├── Typography specimens (10 text styles applied)
-├── Spacing scale (4/6/8/12/16/24px bars)
-└── Radius samples (4/6/8/12/full rounded rectangles)
+├── Spacing scale (6 bars: xs/sm/md/lg/xl/2xl — width bound to Spacing variables, labeled)
+└── Radius samples (4 rectangles: sm/md/lg/full — corners bound to Radius variables, labeled)
 
 Page: Primitives (7 components)
 ├── Handle — COMPONENT_SET, 16 variants: portType (8) × connected (true/false)
@@ -206,23 +236,26 @@ Page: Components (5 components)
 ├── Properties Param Box — COMPONENT, section header + param rows
 └── Zoom Bar — COMPONENT, minus/track/plus/percentage
 
-Page: Compositions (5 frames)
-├── Node Palette — all 19 nodes in 6 categories (INPUT/NOISE/TRANSFORM/MATH/COLOR/OUTPUT)
-├── Noise node — outputs (value/fn), input (coords), connectable params (Scale/Phase), enum (Noise Type)
-├── Arithmetic node — selected variant with ±buttons, A/B inputs, result output, operation enum
-├── Fragment Output — single color input
-└── Properties Panel — info card + inputs/outputs sections + parameters with enum dropdown
+Page: Compositions (5 compositions using real component instances)
+├── Node Palette (220×302) — 19 Palette Item instances in 5 categories (COLOR/INPUT/MATH/NOISE/OUTPUT), spacing-variable-bound gaps
+├── Noise node (200×250) — 8 instances: Labeled Handle ×3, Handle ×2, Float Slider ×2, Enum Select ×1
+├── Arithmetic node (200×175) — 6 instances: Labeled Handle ×3, PlusMinus Button ×2, Enum Select ×1 (selected variant, indigo border)
+├── Fragment Output (200×61) — 1 Labeled Handle instance
+└── Properties Panel (260×419) — 7 instances: Info Card ×1, Port Row ×4, Float Slider ×1, Enum Select ×1
 
-Page: App Layout (1 frame)
-└── Sombra App — 1440×900 wireframe, 3-panel layout (18%/64%/18%), dot grid canvas,
-    node cards with connection wire, shader preview gradient, zoom bar
+Page: App Layout (1 frame using real component instances)
+└── Sombra App (1440×900) — 3-panel layout (259/922/259px), 8 component instances:
+    Left: 5 Palette Item instances; Center: dot grid, 2 mini nodes, bezier wire, Zoom Bar instance;
+    Right: Info Card + Port Row instances
 
 Page: Archive — Captures (4 frames)
 └── Previous session capture frames (preserved)
 ```
 
-**Variable Collections:**
+**Variable Collections (4 total, 31 variables):**
 - UI Colors: 13 variables × 2 modes (Dark/Light) — `VariableCollectionId:17:7`
 - Port Types: 8 variables × 2 modes (Dark/Light) — `VariableCollectionId:17:21`
+- Spacing: 6 FLOAT variables × 1 mode (Default) — `VariableCollectionId:17:914`
+- Radius: 4 FLOAT variables × 1 mode (Default) — `VariableCollectionId:17:921`
 
 **Text Styles:** 10 styles (Caption/Regular, Caption/Semibold, Caption/Mono, Small/Regular, Small/Mono, XS/Regular, XS/Semibold, Body, SM/Semibold, SM/Medium)

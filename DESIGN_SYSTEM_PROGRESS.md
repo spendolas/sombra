@@ -1,7 +1,7 @@
 # Sombra Design System — Progress Tracker
 
 ## Current Phase
-**Phase 2: Figma Recreation** — ✅ Complete (Design system built via Plugin API)
+**Phase 2: Figma Recreation** — ✅ Complete (Design system built + finalized via Plugin API)
 
 ## Status Summary
 | Phase | Status |
@@ -144,6 +144,22 @@ Light mode port colors use the **-600 Tailwind stop** of the same hue — darker
 ---
 
 ## Changelog
+
+### 2026-02-21 (Session 4 — Design System Finalization)
+- Created "Spacing" variable collection: 6 FLOAT variables (xs=4, sm=6, md=8, lg=12, xl=16, 2xl=24)
+- Created "Radius" variable collection: 4 FLOAT variables (sm=4, md=6, lg=8, full=9999)
+- Updated Foundations page: spacing bars width-bound to Spacing variables, radius samples corner-bound to Radius variables, labels updated to show variable names, removed orphan 12px radius sample
+- Fixed Float Slider component: reduced track-container height from 100px to 16px for compact display
+- Fixed font style discovery: "Semi Bold" (with space) not "SemiBold" — was causing silent script failures
+- Rebuilt all 5 Compositions with real component instances (previously raw frames):
+  - Node Palette: 19 Palette Item instances in 5 categories, spacing-variable-bound gaps
+  - Noise node: 8 instances (Labeled Handle, Handle, Float Slider, Enum Select)
+  - Arithmetic node: 6 instances (Labeled Handle, PlusMinus Button, Enum Select), selected variant
+  - Fragment Output: 1 Labeled Handle instance
+  - Properties Panel: 7 instances (Info Card, Port Row, Float Slider, Enum Select)
+- Rebuilt App Layout wireframe with 8 component instances: Palette Items, Info Card, Port Row, Zoom Bar, plus dot grid, mini nodes, bezier wire, gradient preview
+- Total: 4 variable collections, 31 variables, 12 components, 10 text styles
+- Updated `.figma/design-system.md` with Spacing/Radius specs and updated library inventory
 
 ### 2026-02-21 (Session 3b — Audit & Fix)
 - Audited all pages, components, and variant sets for correctness
