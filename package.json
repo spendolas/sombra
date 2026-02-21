@@ -4,6 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "postinstall": "node -e \"require('fs').writeFileSync('node_modules/.package-lock-hash',require('crypto').createHash('sha256').update(require('fs').readFileSync('package-lock.json')).digest('hex'))\"",
+    "check-deps": "node -e \"const f=require('fs'),c=require('crypto');const want=c.createHash('sha256').update(f.readFileSync('package-lock.json')).digest('hex');let have;try{have=f.readFileSync('node_modules/.package-lock-hash','utf8')}catch{}if(want!==have){console.error('node_modules is out of sync with package-lock.json.\\nRun: rm -rf node_modules && npm install');process.exit(1)}\"",
+    "predev": "npm run check-deps",
+    "prebuild": "npm run check-deps",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
