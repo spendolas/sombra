@@ -145,6 +145,19 @@ Light mode port colors use the **-600 Tailwind stop** of the same hue — darker
 
 ## Changelog
 
+### 2026-02-21 (Session 5 — Deep Audit)
+- **Full audit** of Figma design system: 33 checks across 9 phases
+- **Results:** 27 PASS, 4 FAIL (fixed), 1 WARN (P2, noted), 1 P2 cosmetic
+- **Fixes applied via Plugin API:**
+  - Body text style: 13px → 14px (was matching React Flow base size, should match `text-sm` spec)
+  - Node Palette label: "Color Picker" → "Color" (matches `src/nodes/input/color-constant.ts`)
+  - Node Palette label: "Float Constant" → "Number" (matches `src/nodes/input/float-constant.ts`)
+  - Node Palette label: "Vec2 Constant" → "Vec2" (matches `src/nodes/input/vec2-constant.ts`)
+  - Arithmetic enum text: "simplex" → "add" (correct default operation)
+  - Foundations typography specimen label auto-updated to "Body — Inter 14px"
+- **Noted (P2, no fix):** Handle component is 12×12px (spec says 11×11px) — cosmetic only
+- **Validated:** 4 variable collections (31 vars, all hex values correct), 10 text styles, 12 components (correct types/IDs/variants), Foundations page bindings (swatches, spacing bars, radius samples, typography), 5 compositions (correct instance counts and component sources), App Layout (1440×900, 3 panels, 8 instances)
+
 ### 2026-02-21 (Session 4 — Design System Finalization)
 - Created "Spacing" variable collection: 6 FLOAT variables (xs=4, sm=6, md=8, lg=12, xl=16, 2xl=24)
 - Created "Radius" variable collection: 4 FLOAT variables (sm=4, md=6, lg=8, full=9999)
