@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sombra Design System</title>
+  <style>
+    /* ── Sombra tokens (same as src/index.css :root) ── */
+    :root {
+      --surface: #0f0f1a;
+      --surface-alt: #1a1a2e;
+      --surface-raised: #252538;
+      --surface-elevated: #2d2d44;
+      --fg: #e8e8f0;
+      --fg-dim: #b8b8c8;
+      --fg-subtle: #88889a;
+      --fg-muted: #5a5a6e;
+      --edge: #3a3a52;
+      --edge-subtle: #2a2a3e;
+      --indigo: #6366f1;
+      --indigo-hover: #818cf8;
+      --indigo-active: #4f46e5;
+
+      /* Port type colors */
+      --port-float: #d4d4d8;
+      --port-vec2: #34d399;
+      --port-vec3: #60a5fa;
+      --port-vec4: #a78bfa;
+      --port-color: #fbbf24;
+      --port-sampler2D: #f472b6;
+      --port-fnref: #22d3ee;
+      --port-default: #6b7280;
+    }
+
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 16px; }
+    body {
+      font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+      background: var(--surface);
+      color: var(--fg);
+      line-height: 1.5;
+      padding: 40px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    /* ── Layout helpers ── */
+    .section { margin-bottom: 56px; }
+    .section-title {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--fg-subtle);
+      margin-bottom: 20px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--edge-subtle);
+    }
+    .grid { display: grid; gap: 12px; }
+    .grid-2 { grid-template-columns: repeat(2, 1fr); }
+    .grid-3 { grid-template-columns: repeat(3, 1fr); }
+    .grid-4 { grid-template-columns: repeat(4, 1fr); }
+    .grid-5 { grid-template-columns: repeat(5, 1fr); }
+    .flex { display: flex; }
+    .flex-col { flex-direction: column; }
+    .gap-2 { gap: 8px; }
+    .gap-3 { gap: 12px; }
+    .gap-4 { gap: 16px; }
+
+    /* ── Color swatch ── */
+    .swatch {
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid var(--edge);
+    }
+    .swatch-color {
+      height: 48px;
+      border-bottom: 1px solid var(--edge-subtle);
+    }
+    .swatch-info {
+      padding: 8px 10px;
+      background: var(--surface-alt);
+    }
+    .swatch-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--fg);
+      margin-bottom: 2px;
+    }
+    .swatch-meta {
+      font-size: 10px;
+      font-family: monospace;
+      color: var(--fg-muted);
+      line-height: 1.6;
+    }
+
+    /* ── Port swatch (compact) ── */
+    .port-swatch {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      background: var(--surface-alt);
+      border: 1px solid var(--edge);
+    }
+    .port-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .port-label {
+      font-size: 12px;
+      font-family: monospace;
+      color: var(--fg-dim);
+    }
+    .port-hex {
+      font-size: 10px;
+      font-family: monospace;
+      color: var(--fg-muted);
+      margin-left: auto;
+    }
+
+    /* ── Typography sample ── */
+    .type-row {
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--edge-subtle);
+    }
+    .type-spec {
+      width: 120px;
+      flex-shrink: 0;
+      font-size: 10px;
+      font-family: monospace;
+      color: var(--fg-muted);
+    }
+    .type-sample { flex: 1; }
+
+    /* ── Spacing / radius box ── */
+    .spacing-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 6px 0;
+    }
+    .spacing-label {
+      width: 80px;
+      flex-shrink: 0;
+      font-size: 10px;
+      font-family: monospace;
+      color: var(--fg-muted);
+    }
+    .spacing-bar {
+      height: 16px;
+      background: var(--indigo);
+      border-radius: 2px;
+      opacity: 0.6;
+    }
+    .radius-box {
+      width: 64px;
+      height: 64px;
+      background: var(--surface-raised);
+      border: 1px solid var(--edge);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-family: monospace;
+      color: var(--fg-muted);
+    }
+
+    /* ── Component mockups ── */
+    .mockup-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--fg-dim);
+      margin-bottom: 8px;
+    }
+    .mockup-row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+
+    /* Palette item */
+    .palette-item {
+      padding: 6px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: default;
+      transition: background 0.15s, color 0.15s;
+      background: var(--surface-raised);
+      color: var(--fg-dim);
+      border: 1px solid var(--edge-subtle);
+      width: 140px;
+    }
+    .palette-item.hover {
+      background: var(--surface-elevated);
+      color: var(--fg);
+    }
+
+    /* Node card */
+    .node-card {
+      width: 200px;
+      border-radius: 6px;
+      border: 1px solid var(--edge);
+      background: var(--surface-elevated);
+      font-size: 13px;
+      overflow: visible;
+    }
+    .node-card.selected {
+      border-color: var(--indigo);
+      box-shadow: 0 0 0 2px var(--indigo);
+    }
+    .node-header {
+      padding: 6px 10px;
+      border-radius: 6px 6px 0 0;
+      background: var(--surface-raised);
+      border-bottom: 1px solid var(--edge-subtle);
+    }
+    .node-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--fg);
+    }
+    .node-body { padding: 6px 4px; }
+
+    /* Handle */
+    .handle-row {
+      display: flex;
+      align-items: center;
+      padding: 2px 4px;
+      position: relative;
+    }
+    .handle-row.output { justify-content: flex-end; }
+    .handle {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2px solid;
+      flex-shrink: 0;
+    }
+    .handle.connected { background: currentColor; }
+    .handle.hollow { background: var(--surface-elevated); }
+    .handle-label {
+      font-size: 12px;
+      color: var(--fg-dim);
+      padding: 0 6px;
+    }
+    .handle-label.output {
+      text-align: right;
+    }
+
+    /* Connectable param row */
+    .connectable-row {
+      display: flex;
+      align-items: center;
+      padding: 2px 4px;
+    }
+    .connectable-slider {
+      flex: 1;
+      padding-left: 16px;
+      padding-right: 4px;
+    }
+    .connectable-slider.dimmed { opacity: 0.6; }
+
+    /* ±buttons */
+    .pm-buttons {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 4px 0;
+    }
+    .pm-btn {
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      font-size: 12px;
+      line-height: 1;
+      border: 1px solid var(--edge);
+    }
+    .pm-btn.enabled {
+      background: var(--surface-alt);
+      color: var(--fg);
+      cursor: pointer;
+    }
+    .pm-btn.disabled {
+      background: var(--surface-raised);
+      color: var(--fg-muted);
+      cursor: default;
+    }
+    .pm-count {
+      font-size: 10px;
+      color: var(--fg-muted);
+    }
+
+    /* Param separator */
+    .param-sep {
+      margin-top: 4px;
+      padding-top: 8px;
+      border-top: 1px solid var(--edge-subtle);
+    }
+
+    /* Param controls */
+    .param-group { padding: 0 8px; }
+    .param-label {
+      font-size: 10px;
+      color: var(--fg-subtle);
+    }
+    .param-value {
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+      color: var(--fg-muted);
+    }
+    .param-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    /* Slider mock */
+    .slider-track {
+      height: 8px;
+      border-radius: 4px;
+      background: var(--surface-alt);
+      position: relative;
+      overflow: hidden;
+    }
+    .slider-fill {
+      height: 100%;
+      border-radius: 4px;
+      background: var(--fg-subtle);
+    }
+    .slider-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--fg);
+      border: 2px solid var(--surface-alt);
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+    }
+    .slider-wrap { position: relative; padding: 4px 0; }
+
+    /* Number input mock */
+    .number-input {
+      width: 64px;
+      height: 24px;
+      padding: 2px 4px;
+      text-align: right;
+      font-size: 10px;
+      border-radius: 6px;
+      border: 1px solid var(--edge);
+      background: var(--surface-raised);
+      color: var(--fg);
+      font-family: inherit;
+    }
+
+    /* Select mock */
+    .select-trigger {
+      width: 100%;
+      height: 28px;
+      padding: 0 8px;
+      font-size: 12px;
+      border-radius: 6px;
+      border: 1px solid var(--edge);
+      background: var(--surface-raised);
+      color: var(--fg);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .select-chevron {
+      font-size: 10px;
+      color: var(--fg-muted);
+    }
+
+    /* Color input mock */
+    .color-swatch-input {
+      width: 100%;
+      height: 24px;
+      border-radius: 4px;
+      border: 1px solid var(--edge);
+      cursor: pointer;
+    }
+
+    /* Properties panel mockup */
+    .props-panel {
+      width: 260px;
+      padding: 12px;
+      background: var(--surface-alt);
+      border: 1px solid var(--edge);
+      border-radius: 6px;
+    }
+    .props-heading {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--fg-dim);
+      margin-bottom: 12px;
+    }
+    .props-info-card {
+      padding: 12px;
+      border-radius: 8px;
+      background: var(--surface-raised);
+      border: 1px solid var(--edge);
+      margin-bottom: 16px;
+    }
+    .props-category {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--fg-subtle);
+      margin-bottom: 4px;
+    }
+    .props-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--fg);
+      margin-bottom: 8px;
+    }
+    .props-desc {
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--fg-dim);
+      margin-bottom: 8px;
+    }
+    .props-sep {
+      height: 1px;
+      background: var(--edge-subtle);
+      margin: 8px 0;
+    }
+    .props-id {
+      font-size: 10px;
+      font-family: monospace;
+      color: var(--fg-muted);
+    }
+    .props-section-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--fg-dim);
+      margin-bottom: 8px;
+    }
+    .props-port-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: var(--surface-raised);
+      margin-bottom: 4px;
+    }
+    .props-port-name { color: var(--fg-dim); }
+    .props-port-type { font-family: monospace; color: var(--fg-muted); }
+    .props-param-box {
+      padding: 12px;
+      border-radius: 8px;
+      background: var(--surface-raised);
+      border: 1px solid var(--edge);
+    }
+
+    /* Zoom slider mockup */
+    .zoom-bar {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px;
+      border-radius: 6px;
+      background: var(--surface-alt);
+      border: 1px solid var(--edge);
+    }
+    .zoom-btn {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      background: transparent;
+      border: none;
+      color: var(--fg-dim);
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .zoom-btn:hover { background: var(--surface-elevated); color: var(--fg); }
+    .zoom-track {
+      width: 140px;
+      height: 8px;
+      border-radius: 4px;
+      background: var(--surface-raised);
+      position: relative;
+    }
+    .zoom-fill {
+      width: 50%;
+      height: 100%;
+      border-radius: 4px;
+      background: var(--fg-subtle);
+    }
+    .zoom-pct {
+      padding: 4px 8px;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      color: var(--fg-dim);
+      min-width: 48px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <h1 style="font-size: 20px; font-weight: 600; color: var(--fg); margin-bottom: 4px;">
+    Sombra Design System
+  </h1>
+  <p style="font-size: 12px; color: var(--fg-muted); margin-bottom: 40px;">
+    Visual reference — tokens, typography, spacing, component patterns
+  </p>
+
+  <!-- ════════════════════ 1. UI COLOR TOKENS ════════════════════ -->
+  <div class="section">
+    <div class="section-title">UI Color Tokens (13)</div>
+
+    <div style="margin-bottom: 12px; font-size: 11px; color: var(--fg-dim); font-weight: 600;">Surfaces</div>
+    <div class="grid grid-4" style="margin-bottom: 20px;">
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--surface);"></div>
+        <div class="swatch-info">
+          <div class="swatch-name">surface</div>
+          <div class="swatch-meta">--surface<br>#0f0f1a<br>bg-surface</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--surface-alt);"></div>
+        <div class="swatch-info">
+          <div class="swatch-name">surface-alt</div>
+          <div class="swatch-meta">--surface-alt<br>#1a1a2e<br>bg-surface-alt</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--surface-raised);"></div>
+        <div class="swatch-info">
+          <div class="swatch-name">surface-raised</div>
+          <div class="swatch-meta">--surface-raised<br>#252538<br>bg-surface-raised</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--surface-elevated);"></div>
+        <div class="swatch-info">
+          <div class="swatch-name">surface-elevated</div>
+          <div class="swatch-meta">--surface-elevated<br>#2d2d44<br>bg-surface-elevated</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom: 12px; font-size: 11px; color: var(--fg-dim); font-weight: 600;">Foreground</div>
+    <div class="grid grid-4" style="margin-bottom: 20px;">
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--surface-raised);">
+          <div style="padding: 12px 10px; font-size: 14px; color: var(--fg);">Aa</div>
+        </div>
+        <div class="swatch-info">
+          <div class="swatch-name">fg</div>
+          <div class="swatch-meta">--fg<br>#e8e8f0<br>text-fg</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--surface-raised);">
+          <div style="padding: 12px 10px; font-size: 14px; color: var(--fg-dim);">Aa</div>
+        </div>
+        <div class="swatch-info">
+          <div class="swatch-name">fg-dim</div>
+          <div class="swatch-meta">--fg-dim<br>#b8b8c8<br>text-fg-dim</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--surface-raised);">
+          <div style="padding: 12px 10px; font-size: 14px; color: var(--fg-subtle);">Aa</div>
+        </div>
+        <div class="swatch-info">
+          <div class="swatch-name">fg-subtle</div>
+          <div class="swatch-meta">--fg-subtle<br>#88889a<br>text-fg-subtle</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--surface-raised);">
+          <div style="padding: 12px 10px; font-size: 14px; color: var(--fg-muted);">Aa</div>
+        </div>
+        <div class="swatch-info">
+          <div class="swatch-name">fg-muted</div>
+          <div class="swatch-meta">--fg-muted<br>#5a5a6e<br>text-fg-muted</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom: 12px; font-size: 11px; color: var(--fg-dim); font-weight: 600;">Edges (Borders)</div>
+    <div class="grid grid-4" style="margin-bottom: 20px;">
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--edge);"></div>
+        <div class="swatch-info">
+          <div class="swatch-name">edge</div>
+          <div class="swatch-meta">--edge<br>#3a3a52<br>border-edge</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--edge-subtle);"></div>
+        <div class="swatch-info">
+          <div class="swatch-name">edge-subtle</div>
+          <div class="swatch-meta">--edge-subtle<br>#2a2a3e<br>border-edge-subtle</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom: 12px; font-size: 11px; color: var(--fg-dim); font-weight: 600;">Indigo (Accent)</div>
+    <div class="grid grid-4" style="margin-bottom: 20px;">
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--indigo);"></div>
+        <div class="swatch-info">
+          <div class="swatch-name">indigo</div>
+          <div class="swatch-meta">--indigo<br>#6366f1<br>bg-indigo</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--indigo-hover);"></div>
+        <div class="swatch-info">
+          <div class="swatch-name">indigo-hover</div>
+          <div class="swatch-meta">--indigo-hover<br>#818cf8<br>bg-indigo-hover</div>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-color" style="background: var(--indigo-active);"></div>
+        <div class="swatch-info">
+          <div class="swatch-name">indigo-active</div>
+          <div class="swatch-meta">--indigo-active<br>#4f46e5<br>bg-indigo-active</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════ 2. PORT TYPE COLORS ════════════════════ -->
+  <div class="section">
+    <div class="section-title">Port Type Colors (8)</div>
+    <div class="grid grid-4">
+      <div class="port-swatch">
+        <div class="port-dot" style="background: var(--port-float);"></div>
+        <span class="port-label">float</span>
+        <span class="port-hex">#d4d4d8</span>
+      </div>
+      <div class="port-swatch">
+        <div class="port-dot" style="background: var(--port-vec2);"></div>
+        <span class="port-label">vec2</span>
+        <span class="port-hex">#34d399</span>
+      </div>
+      <div class="port-swatch">
+        <div class="port-dot" style="background: var(--port-vec3);"></div>
+        <span class="port-label">vec3</span>
+        <span class="port-hex">#60a5fa</span>
+      </div>
+      <div class="port-swatch">
+        <div class="port-dot" style="background: var(--port-vec4);"></div>
+        <span class="port-label">vec4</span>
+        <span class="port-hex">#a78bfa</span>
+      </div>
+      <div class="port-swatch">
+        <div class="port-dot" style="background: var(--port-color);"></div>
+        <span class="port-label">color</span>
+        <span class="port-hex">#fbbf24</span>
+      </div>
+      <div class="port-swatch">
+        <div class="port-dot" style="background: var(--port-sampler2D);"></div>
+        <span class="port-label">sampler2D</span>
+        <span class="port-hex">#f472b6</span>
+      </div>
+      <div class="port-swatch">
+        <div class="port-dot" style="background: var(--port-fnref);"></div>
+        <span class="port-label">fnref</span>
+        <span class="port-hex">#22d3ee</span>
+      </div>
+      <div class="port-swatch">
+        <div class="port-dot" style="background: var(--port-default);"></div>
+        <span class="port-label">default</span>
+        <span class="port-hex">#6b7280</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════ 3. TYPOGRAPHY ════════════════════ -->
+  <div class="section">
+    <div class="section-title">Typography</div>
+
+    <div style="margin-bottom: 20px;">
+      <div style="font-size: 11px; color: var(--fg-dim); font-weight: 600; margin-bottom: 12px;">Sans (Inter)</div>
+
+      <div class="type-row">
+        <div class="type-spec">10px / normal</div>
+        <div class="type-sample" style="font-size: 10px; color: var(--fg-subtle);">NOISE — Category header uppercase tracking-wider</div>
+      </div>
+      <div class="type-row">
+        <div class="type-spec">10px / semibold</div>
+        <div class="type-sample" style="font-size: 10px; font-weight: 600; color: var(--fg-subtle); text-transform: uppercase; letter-spacing: 0.1em;">Properties</div>
+      </div>
+      <div class="type-row">
+        <div class="type-spec">11px / normal</div>
+        <div class="type-sample" style="font-size: 11px; color: var(--fg-dim);">coords &nbsp;&nbsp; <span style="color: var(--fg-muted); font-family: monospace;">vec2</span> — Port info row</div>
+      </div>
+      <div class="type-row">
+        <div class="type-spec">12px (xs) / normal</div>
+        <div class="type-sample" style="font-size: 12px; color: var(--fg-dim);">Simplex 3D — Palette item, description, select item</div>
+      </div>
+      <div class="type-row">
+        <div class="type-spec">12px (xs) / semibold</div>
+        <div class="type-sample" style="font-size: 12px; font-weight: 600; color: var(--fg-dim);">Inputs — Section header</div>
+      </div>
+      <div class="type-row">
+        <div class="type-spec">13px / normal</div>
+        <div class="type-sample" style="font-size: 13px; color: var(--fg);">React Flow node base font size</div>
+      </div>
+      <div class="type-row">
+        <div class="type-spec">14px (sm) / semibold</div>
+        <div class="type-sample" style="font-size: 14px; font-weight: 600; color: var(--fg);">Noise — Node title</div>
+      </div>
+      <div class="type-row">
+        <div class="type-spec">14px (sm) / medium</div>
+        <div class="type-sample" style="font-size: 14px; font-weight: 500; color: var(--fg);">Simplex 3D — Property name</div>
+      </div>
+    </div>
+
+    <div>
+      <div style="font-size: 11px; color: var(--fg-dim); font-weight: 600; margin-bottom: 12px;">Mono</div>
+
+      <div class="type-row">
+        <div class="type-spec">10px / mono</div>
+        <div class="type-sample" style="font-size: 10px; font-family: monospace; color: var(--fg-muted);">ID: node_abc123</div>
+      </div>
+      <div class="type-row">
+        <div class="type-spec">11px / mono</div>
+        <div class="type-sample" style="font-size: 11px; font-family: monospace; color: var(--fg-muted);">vec3 — Port type label</div>
+      </div>
+      <div class="type-row">
+        <div class="type-spec">12px / tabular</div>
+        <div class="type-sample" style="font-size: 12px; font-variant-numeric: tabular-nums; color: var(--fg-dim);">100% — Zoom percentage</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════ 4. SPACING & RADIUS ════════════════════ -->
+  <div class="section">
+    <div class="section-title">Spacing</div>
+    <div style="margin-bottom: 32px;">
+      <div class="spacing-row">
+        <div class="spacing-label">4px (gap-1)</div>
+        <div class="spacing-bar" style="width: 16px;"></div>
+      </div>
+      <div class="spacing-row">
+        <div class="spacing-label">8px (gap-2)</div>
+        <div class="spacing-bar" style="width: 32px;"></div>
+      </div>
+      <div class="spacing-row">
+        <div class="spacing-label">12px (p-3)</div>
+        <div class="spacing-bar" style="width: 48px;"></div>
+      </div>
+      <div class="spacing-row">
+        <div class="spacing-label">16px (p-4)</div>
+        <div class="spacing-bar" style="width: 64px;"></div>
+      </div>
+      <div class="spacing-row">
+        <div class="spacing-label">24px (p-6)</div>
+        <div class="spacing-bar" style="width: 96px;"></div>
+      </div>
+    </div>
+
+    <div class="section-title" style="margin-top: 0;">Border Radius</div>
+    <div class="flex gap-4" style="flex-wrap: wrap;">
+      <div style="text-align: center;">
+        <div class="radius-box" style="border-radius: 2px;">2px</div>
+        <div style="font-size: 10px; color: var(--fg-muted); margin-top: 4px;">rounded-sm</div>
+      </div>
+      <div style="text-align: center;">
+        <div class="radius-box" style="border-radius: 4px;">4px</div>
+        <div style="font-size: 10px; color: var(--fg-muted); margin-top: 4px;">rounded</div>
+      </div>
+      <div style="text-align: center;">
+        <div class="radius-box" style="border-radius: 6px;">6px</div>
+        <div style="font-size: 10px; color: var(--fg-muted); margin-top: 4px;">rounded-md</div>
+      </div>
+      <div style="text-align: center;">
+        <div class="radius-box" style="border-radius: 8px;">8px</div>
+        <div style="font-size: 10px; color: var(--fg-muted); margin-top: 4px;">rounded-lg</div>
+      </div>
+      <div style="text-align: center;">
+        <div class="radius-box" style="border-radius: 50%;">50%</div>
+        <div style="font-size: 10px; color: var(--fg-muted); margin-top: 4px;">rounded-full</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════ 5. COMPONENT PATTERNS ════════════════════ -->
+  <div class="section">
+    <div class="section-title">Component Patterns</div>
+
+    <!-- ── Palette Items ── -->
+    <div class="mockup-label">Palette Item</div>
+    <div class="mockup-row">
+      <div class="palette-item">Simplex 3D</div>
+      <div class="palette-item hover">Simplex 3D (hover)</div>
+    </div>
+
+    <!-- ── Node Cards ── -->
+    <div class="mockup-label">Node Card</div>
+    <div class="mockup-row" style="align-items: flex-start;">
+
+      <!-- Noise node (unselected, with handles + connectable params + regular params) -->
+      <div class="node-card">
+        <div class="node-header">
+          <div class="node-title">Noise</div>
+        </div>
+        <div class="node-body">
+          <!-- Outputs -->
+          <div class="handle-row output">
+            <span class="handle-label output">value</span>
+            <div class="handle connected" style="color: var(--port-float); border-color: var(--port-float);"></div>
+          </div>
+          <div class="handle-row output">
+            <span class="handle-label output">fn</span>
+            <div class="handle hollow" style="color: var(--port-fnref); border-color: var(--port-fnref);"></div>
+          </div>
+
+          <!-- Pure inputs -->
+          <div class="handle-row">
+            <div class="handle hollow" style="color: var(--port-vec2); border-color: var(--port-vec2);"></div>
+            <span class="handle-label">coords</span>
+          </div>
+
+          <!-- Connectable params -->
+          <div class="connectable-row">
+            <div class="handle hollow" style="color: var(--port-float); border-color: var(--port-float);"></div>
+            <div class="connectable-slider">
+              <div class="param-header">
+                <span class="param-label">Scale</span>
+                <input class="number-input" value="4.0" readonly />
+              </div>
+              <div class="slider-wrap">
+                <div class="slider-track">
+                  <div class="slider-fill" style="width: 40%;"></div>
+                </div>
+                <div class="slider-thumb" style="left: 40%;"></div>
+              </div>
+            </div>
+          </div>
+          <div class="connectable-row">
+            <div class="handle hollow" style="color: var(--port-float); border-color: var(--port-float);"></div>
+            <div class="connectable-slider">
+              <div class="param-header">
+                <span class="param-label">Phase</span>
+                <input class="number-input" value="0.0" readonly />
+              </div>
+              <div class="slider-wrap">
+                <div class="slider-track">
+                  <div class="slider-fill" style="width: 0%;"></div>
+                </div>
+                <div class="slider-thumb" style="left: 0%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Regular params (enum) -->
+          <div class="param-sep">
+            <div class="param-group">
+              <div style="margin-bottom: 6px;">
+                <div class="param-label" style="margin-bottom: 6px;">Noise Type</div>
+                <div class="select-trigger">
+                  <span>Simplex</span>
+                  <span class="select-chevron">&#9660;</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Arithmetic node (selected, with dynamic inputs + ±buttons) -->
+      <div class="node-card selected">
+        <div class="node-header">
+          <div class="node-title">Arithmetic</div>
+        </div>
+        <div class="node-body">
+          <!-- Output -->
+          <div class="handle-row output">
+            <span class="handle-label output">result</span>
+            <div class="handle connected" style="color: var(--port-float); border-color: var(--port-float);"></div>
+          </div>
+
+          <!-- Dynamic inputs -->
+          <div class="handle-row">
+            <div class="handle connected" style="color: var(--port-float); border-color: var(--port-float);"></div>
+            <span class="handle-label">A</span>
+          </div>
+          <div class="handle-row">
+            <div class="handle connected" style="color: var(--port-float); border-color: var(--port-float);"></div>
+            <span class="handle-label">B</span>
+          </div>
+          <div class="handle-row">
+            <div class="handle hollow" style="color: var(--port-float); border-color: var(--port-float);"></div>
+            <span class="handle-label">C</span>
+          </div>
+
+          <!-- ±buttons -->
+          <div class="pm-buttons">
+            <div class="pm-btn enabled">-</div>
+            <span class="pm-count">3</span>
+            <div class="pm-btn enabled">+</div>
+          </div>
+
+          <!-- Enum param -->
+          <div class="param-sep">
+            <div class="param-group">
+              <div style="margin-bottom: 6px;">
+                <div class="param-label" style="margin-bottom: 6px;">Operation</div>
+                <div class="select-trigger">
+                  <span>Add</span>
+                  <span class="select-chevron">&#9660;</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Output node (minimal) -->
+      <div class="node-card">
+        <div class="node-header">
+          <div class="node-title">Output</div>
+        </div>
+        <div class="node-body">
+          <div class="handle-row">
+            <div class="handle connected" style="color: var(--port-color); border-color: var(--port-color);"></div>
+            <span class="handle-label">color</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Connectable param: connected state ── -->
+    <div class="mockup-label">Connectable Param — Connected (dimmed slider with resolved value)</div>
+    <div class="mockup-row">
+      <div style="width: 200px; padding: 6px; background: var(--surface-elevated); border-radius: 6px; border: 1px solid var(--edge);">
+        <div class="connectable-row">
+          <div class="handle connected" style="color: var(--port-float); border-color: var(--port-float);"></div>
+          <div class="connectable-slider dimmed">
+            <div class="param-header">
+              <span class="param-label">Factor</span>
+              <span class="param-value" style="padding-right: 4px;">0.5</span>
+            </div>
+            <div class="slider-wrap">
+              <div class="slider-track"><div class="slider-fill" style="width: 50%;"></div></div>
+              <div class="slider-thumb" style="left: 50%;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="width: 200px; padding: 6px; background: var(--surface-elevated); border-radius: 6px; border: 1px solid var(--edge);">
+        <div class="connectable-row">
+          <div class="handle connected" style="color: var(--port-float); border-color: var(--port-float);"></div>
+          <div class="connectable-slider">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 2px 0;">
+              <span class="param-label">Factor</span>
+              <span class="param-value">&larr; Noise</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Parameter controls ── -->
+    <div class="mockup-label">Parameter Controls</div>
+    <div class="mockup-row" style="align-items: flex-start;">
+
+      <!-- Float slider -->
+      <div style="width: 200px; padding: 12px; background: var(--surface-raised); border-radius: 8px; border: 1px solid var(--edge);">
+        <div style="font-size: 11px; color: var(--fg-dim); font-weight: 600; margin-bottom: 10px;">Float Slider</div>
+        <div class="param-header">
+          <span class="param-label">Scale</span>
+          <input class="number-input" value="4.0" readonly />
+        </div>
+        <div class="slider-wrap">
+          <div class="slider-track"><div class="slider-fill" style="width: 40%;"></div></div>
+          <div class="slider-thumb" style="left: 40%;"></div>
+        </div>
+      </div>
+
+      <!-- Enum select -->
+      <div style="width: 200px; padding: 12px; background: var(--surface-raised); border-radius: 8px; border: 1px solid var(--edge);">
+        <div style="font-size: 11px; color: var(--fg-dim); font-weight: 600; margin-bottom: 10px;">Enum Select</div>
+        <div class="param-label" style="margin-bottom: 6px;">Noise Type</div>
+        <div class="select-trigger">
+          <span>Simplex</span>
+          <span class="select-chevron">&#9660;</span>
+        </div>
+      </div>
+
+      <!-- Color input -->
+      <div style="width: 200px; padding: 12px; background: var(--surface-raised); border-radius: 8px; border: 1px solid var(--edge);">
+        <div style="font-size: 11px; color: var(--fg-dim); font-weight: 600; margin-bottom: 10px;">Color Input</div>
+        <div class="param-label" style="margin-bottom: 6px;">Color</div>
+        <div class="color-swatch-input" style="background: #6366f1;"></div>
+      </div>
+    </div>
+
+    <!-- ── Properties Panel ── -->
+    <div class="mockup-label">Properties Panel</div>
+    <div class="mockup-row" style="align-items: flex-start;">
+
+      <!-- With node selected -->
+      <div class="props-panel">
+        <div class="props-heading">Properties</div>
+
+        <div class="props-info-card">
+          <div class="props-category">Noise</div>
+          <div class="props-name">Simplex 3D</div>
+          <div class="props-desc">3D simplex noise. Smooth, gradient-based noise with no grid artifacts.</div>
+          <div class="props-sep"></div>
+          <div class="props-id">ID: node_abc123</div>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <div class="props-section-label">Inputs</div>
+          <div class="props-port-row">
+            <span class="props-port-name">coords</span>
+            <span class="props-port-type">vec2</span>
+          </div>
+          <div class="props-port-row">
+            <span class="props-port-name">phase</span>
+            <span class="props-port-type">float</span>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <div class="props-section-label">Outputs</div>
+          <div class="props-port-row">
+            <span class="props-port-name">value</span>
+            <span class="props-port-type">float</span>
+          </div>
+          <div class="props-port-row">
+            <span class="props-port-name">fn</span>
+            <span class="props-port-type">fnref</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="props-section-label">Parameters</div>
+          <div class="props-param-box">
+            <div class="param-header">
+              <span class="param-label">Scale</span>
+              <input class="number-input" value="4.0" readonly />
+            </div>
+            <div class="slider-wrap">
+              <div class="slider-track"><div class="slider-fill" style="width: 40%;"></div></div>
+              <div class="slider-thumb" style="left: 40%;"></div>
+            </div>
+            <div style="margin-top: 12px;">
+              <div class="param-label" style="margin-bottom: 6px;">Noise Type</div>
+              <div class="select-trigger">
+                <span>Simplex</span>
+                <span class="select-chevron">&#9660;</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty state -->
+      <div class="props-panel">
+        <div class="props-heading">Properties</div>
+        <div style="font-size: 12px; color: var(--fg-muted);">Select a node to edit properties...</div>
+      </div>
+    </div>
+
+    <!-- ── Zoom Slider ── -->
+    <div class="mockup-label">Zoom Slider</div>
+    <div class="mockup-row">
+      <div class="zoom-bar">
+        <button class="zoom-btn">&#8722;</button>
+        <div class="zoom-track"><div class="zoom-fill"></div></div>
+        <button class="zoom-btn">+</button>
+        <div class="zoom-pct">100%</div>
+        <button class="zoom-btn" title="Fit view">&#x26F6;</button>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
