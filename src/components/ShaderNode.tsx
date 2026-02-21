@@ -11,6 +11,7 @@ import { useGraphStore } from '../stores/graphStore'
 import { BaseNode, BaseNodeHeader, BaseNodeHeaderTitle, BaseNodeContent } from '@/components/base-node'
 import { LabeledHandle } from '@/components/labeled-handle'
 import { BaseHandle } from '@/components/base-handle'
+import { cn } from '@/lib/utils'
 
 /**
  * Get color for port type (for visual differentiation)
@@ -147,15 +148,9 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   const hasDynamicInputs = !!definition.dynamicInputs
 
   return (
-    <BaseNode className="min-w-[160px]" style={{ backgroundColor: 'var(--bg-elevated)' }}>
-      <BaseNodeHeader
-        className="rounded-t-md"
-        style={{
-          backgroundColor: 'var(--bg-tertiary)',
-          borderBottom: '1px solid var(--border-secondary)',
-        }}
-      >
-        <BaseNodeHeaderTitle className="text-sm" style={{ color: 'var(--text-primary)' }}>
+    <BaseNode className="min-w-[160px] bg-surface-elevated">
+      <BaseNodeHeader className="rounded-t-md bg-surface-raised border-b border-edge-subtle">
+        <BaseNodeHeaderTitle className="text-sm text-fg">
           {definition.label}
         </BaseNodeHeaderTitle>
       </BaseNodeHeader>
@@ -197,29 +192,27 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
             <button
               onClick={handleRemoveInput}
               disabled={inputCount <= 2}
-              className="w-5 h-5 flex items-center justify-center rounded text-xs leading-none"
-              style={{
-                backgroundColor: inputCount <= 2 ? 'var(--bg-tertiary)' : 'var(--bg-secondary)',
-                color: inputCount <= 2 ? 'var(--text-muted)' : 'var(--text-primary)',
-                border: '1px solid var(--border-primary)',
-                cursor: inputCount <= 2 ? 'default' : 'pointer',
-              }}
+              className={cn(
+                "w-5 h-5 flex items-center justify-center rounded text-xs leading-none border border-edge",
+                inputCount <= 2
+                  ? "bg-surface-raised text-fg-muted cursor-default"
+                  : "bg-surface-alt text-fg cursor-pointer"
+              )}
             >
               -
             </button>
-            <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+            <span className="text-[10px] text-fg-muted">
               {inputCount}
             </span>
             <button
               onClick={handleAddInput}
               disabled={inputCount >= 8}
-              className="w-5 h-5 flex items-center justify-center rounded text-xs leading-none"
-              style={{
-                backgroundColor: inputCount >= 8 ? 'var(--bg-tertiary)' : 'var(--bg-secondary)',
-                color: inputCount >= 8 ? 'var(--text-muted)' : 'var(--text-primary)',
-                border: '1px solid var(--border-primary)',
-                cursor: inputCount >= 8 ? 'default' : 'pointer',
-              }}
+              className={cn(
+                "w-5 h-5 flex items-center justify-center rounded text-xs leading-none border border-edge",
+                inputCount >= 8
+                  ? "bg-surface-raised text-fg-muted cursor-default"
+                  : "bg-surface-alt text-fg cursor-pointer"
+              )}
             >
               +
             </button>
@@ -263,10 +256,10 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
               <div className="flex-1 pl-4 pr-1">
                 {isConnected && !hasResolvedValue ? (
                   <div className="flex justify-between items-center py-0.5">
-                    <span className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+                    <span className="text-[10px] text-fg-subtle">
                       {param.label}
                     </span>
-                    <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>
+                    <span className="text-[10px] text-fg-muted">
                       {'← ' + sourceLabel}
                     </span>
                   </div>
@@ -285,7 +278,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
 
         {/* Non-connectable params (enums, sliders without handles) */}
         {regularParams.length > 0 && (
-          <div className="mt-1 pt-2 w-full" style={{ borderTop: '1px solid var(--border-secondary)' }}>
+          <div className="mt-1 pt-2 w-full border-t border-edge-subtle">
             <NodeParameters
               nodeId={id}
               parameters={regularParams}
@@ -296,7 +289,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
 
         {/* Custom component (if provided) */}
         {definition.component && (
-          <div className="mt-1 pt-2 w-full" style={regularParams.length === 0 ? { borderTop: '1px solid var(--border-secondary)' } : {}}>
+          <div className={cn("mt-1 pt-2 w-full", regularParams.length === 0 && "border-t border-edge-subtle")}>
             <definition.component nodeId={id} data={currentValues} />
           </div>
         )}

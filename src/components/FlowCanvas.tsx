@@ -150,19 +150,19 @@ export function FlowCanvas({
       maxZoom={4}
       fitView
       proOptions={{ hideAttribution: true }}
-      style={{ width: '100%', height: '100%', backgroundColor: 'var(--bg-primary)' }}
+      style={{ width: '100%', height: '100%', backgroundColor: 'var(--surface)' }}
     >
       <Background
-        color="var(--border-secondary)"
+        color="var(--edge-subtle)"
         gap={16}
-        style={{ backgroundColor: 'var(--bg-primary)' }}
+        style={{ backgroundColor: 'var(--surface)' }}
       />
       <ZoomSlider position="bottom-left" />
       <MiniMap
-        nodeColor="var(--accent-primary)"
+        nodeColor="var(--indigo)"
         maskColor="rgba(15, 15, 26, 0.85)"
-        bgColor="var(--bg-primary)"
-        style={{ backgroundColor: 'var(--bg-secondary)' }}
+        bgColor="var(--surface)"
+        style={{ backgroundColor: 'var(--surface-alt)' }}
       />
     </ReactFlow>
   )

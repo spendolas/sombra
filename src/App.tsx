@@ -115,25 +115,11 @@ function App() {
 
   return (
     <ReactFlowProvider>
-      <div
-        className="h-screen w-screen"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1fr',
-          backgroundColor: 'var(--bg-primary)',
-        }}
-      >
+      <div className="h-screen w-screen grid grid-cols-1 bg-surface">
         <ResizablePanelGroup direction="horizontal">
           {/* Left — Node Palette */}
           <ResizablePanel id="palette" defaultSize="18%" minSize="12%" maxSize="30%">
-            <div
-              className="h-full p-4 overflow-y-auto"
-              style={{
-                backgroundColor: 'var(--bg-secondary)',
-                borderRight: '1px solid var(--border-primary)',
-                minWidth: '160px',
-              }}
-            >
+            <div className="h-full p-4 overflow-y-auto bg-surface-alt border-r border-edge min-w-[160px]">
               <NodePalette />
             </div>
           </ResizablePanel>
@@ -143,7 +129,7 @@ function App() {
           <ResizablePanel id="center" defaultSize="64%">
             <ResizablePanelGroup direction="vertical">
               <ResizablePanel id="canvas" defaultSize="70%" minSize="30%">
-                <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                <div className="relative w-full h-full">
                   <FlowCanvas
                     nodes={nodes}
                     edges={edges}
@@ -158,20 +144,8 @@ function App() {
               </ResizablePanel>
               <ResizableHandle />
               <ResizablePanel id="preview" defaultSize="30%" minSize="10%">
-                <div
-                  className="relative w-full h-full"
-                  style={{
-                    backgroundColor: '#000',
-                    borderTop: '1px solid var(--border-primary)',
-                  }}
-                >
-                  <div
-                    className="absolute top-2 left-2 z-10 text-xs px-2 py-1 rounded"
-                    style={{
-                      color: 'var(--text-secondary)',
-                      backgroundColor: 'var(--bg-tertiary)',
-                    }}
-                  >
+                <div className="relative w-full h-full bg-black border-t border-edge">
+                  <div className="absolute top-2 left-2 z-10 text-xs px-2 py-1 rounded text-fg-dim bg-surface-raised">
                     Preview
                   </div>
                   <canvas
@@ -186,14 +160,7 @@ function App() {
 
           {/* Right — Properties */}
           <ResizablePanel id="properties" defaultSize="18%" minSize="12%" maxSize="30%">
-            <div
-              className="h-full p-4 overflow-y-auto"
-              style={{
-                backgroundColor: 'var(--bg-secondary)',
-                borderLeft: '1px solid var(--border-primary)',
-                minWidth: '160px',
-              }}
-            >
+            <div className="h-full p-4 overflow-y-auto bg-surface-alt border-l border-edge min-w-[160px]">
               <PropertiesPanel selectedNode={selectedNode} />
             </div>
           </ResizablePanel>

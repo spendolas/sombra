@@ -20,10 +20,7 @@ export function NodePalette() {
         return (
           <div key={category}>
             {idx > 0 && <Separator className="mb-3" />}
-            <h3
-              className="text-[10px] font-semibold uppercase tracking-wider mb-2"
-              style={{ color: 'var(--text-tertiary)' }}
-            >
+            <h3 className="text-[10px] font-semibold uppercase tracking-wider mb-2 text-fg-subtle">
               {category}
             </h3>
             <div className="space-y-1">
@@ -32,12 +29,7 @@ export function NodePalette() {
                   key={node.type}
                   draggable
                   onDragStart={(e) => onDragStart(e, node.type)}
-                  className="px-2 py-1.5 rounded text-xs cursor-move transition-colors hover:bg-[var(--bg-elevated)] hover:text-[var(--text-primary)]"
-                  style={{
-                    backgroundColor: 'var(--bg-tertiary)',
-                    color: 'var(--text-secondary)',
-                    border: '1px solid var(--border-secondary)',
-                  }}
+                  className="px-2 py-1.5 rounded text-xs cursor-move transition-colors bg-surface-raised text-fg-dim border border-edge-subtle hover:bg-surface-elevated hover:text-fg"
                   title={node.description}
                 >
                   {node.label}

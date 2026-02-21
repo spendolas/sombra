@@ -62,8 +62,8 @@ export function NodeParameters({ nodeId, parameters, currentValues, connectedInp
                 return (
                   <div className="space-y-1.5">
                     <div className="flex justify-between items-center">
-                      <Label className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>{param.label}</Label>
-                      <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{'← ' + source.sourceLabel}</span>
+                      <Label className="text-[10px] text-fg-subtle">{param.label}</Label>
+                      <span className="text-[10px] text-fg-muted">{'← ' + source.sourceLabel}</span>
                     </div>
                   </div>
                 )
@@ -112,11 +112,11 @@ export function FloatSlider({ param, value, onChange, disabled }: FloatSliderPro
   return (
     <div className={`space-y-1.5${disabled ? ' opacity-60 pointer-events-none' : ''}`}>
       <div className="flex justify-between items-center">
-        <Label className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+        <Label className="text-[10px] text-fg-subtle">
           {param.label}
         </Label>
         {disabled ? (
-          <span className="text-[10px] tabular-nums pr-1" style={{ color: 'var(--text-muted)' }}>
+          <span className="text-[10px] tabular-nums pr-1 text-fg-muted">
             {value}
           </span>
         ) : (
@@ -159,27 +159,17 @@ interface EnumSelectProps {
 function EnumSelect({ param, value, onChange }: EnumSelectProps) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+      <Label className="text-[10px] text-fg-subtle">
         {param.label}
       </Label>
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger
           size="sm"
-          className="w-full h-7 text-xs"
-          style={{
-            backgroundColor: 'var(--bg-tertiary)',
-            borderColor: 'var(--border-primary)',
-            color: 'var(--text-primary)',
-          }}
+          className="w-full h-7 text-xs bg-surface-raised border-edge text-fg"
         >
           <SelectValue />
         </SelectTrigger>
-        <SelectContent
-          style={{
-            backgroundColor: 'var(--bg-elevated)',
-            borderColor: 'var(--border-primary)',
-          }}
-        >
+        <SelectContent className="bg-surface-elevated border-edge">
           {param.options!.map((option) => (
             <SelectItem key={option.value} value={option.value} className="text-xs">
               {option.label}
@@ -207,18 +197,14 @@ function ColorInput({ param, value, onChange }: ColorInputProps) {
 
   return (
     <div className="space-y-1.5">
-      <Label className="text-[10px]" style={{ color: 'var(--text-tertiary)' }}>
+      <Label className="text-[10px] text-fg-subtle">
         {param.label}
       </Label>
       <input
         type="color"
         value={hexColor}
         onChange={(e) => handleColorChange(e.target.value)}
-        className="w-full h-6 rounded cursor-pointer"
-        style={{
-          border: '1px solid var(--border-primary)',
-          backgroundColor: 'var(--bg-tertiary)',
-        }}
+        className="w-full h-6 rounded cursor-pointer border border-edge bg-surface-raised"
       />
     </div>
   )

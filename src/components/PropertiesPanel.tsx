@@ -58,13 +58,10 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
   if (!selectedNode) {
     return (
       <div>
-        <h2
-          className="text-xs font-semibold uppercase tracking-wider mb-3"
-          style={{ color: 'var(--text-secondary)' }}
-        >
+        <h2 className="text-xs font-semibold uppercase tracking-wider mb-3 text-fg-dim">
           Properties
         </h2>
-        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+        <p className="text-xs text-fg-muted">
           Select a node to edit properties...
         </p>
       </div>
@@ -76,10 +73,7 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
   if (!definition) {
     return (
       <div>
-        <h2
-          className="text-xs font-semibold uppercase tracking-wider mb-3"
-          style={{ color: 'var(--text-secondary)' }}
-        >
+        <h2 className="text-xs font-semibold uppercase tracking-wider mb-3 text-fg-dim">
           Properties
         </h2>
         <p className="text-xs text-red-400">
@@ -112,34 +106,25 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
 
   return (
     <div>
-      <h2
-        className="text-xs font-semibold uppercase tracking-wider mb-3"
-        style={{ color: 'var(--text-secondary)' }}
-      >
+      <h2 className="text-xs font-semibold uppercase tracking-wider mb-3 text-fg-dim">
         Properties
       </h2>
 
       {/* Node Info */}
-      <div
-        className="mb-4 p-3 rounded-lg"
-        style={{
-          backgroundColor: 'var(--bg-tertiary)',
-          border: '1px solid var(--border-primary)',
-        }}
-      >
-        <div className="text-[10px] uppercase tracking-wide mb-1" style={{ color: 'var(--text-tertiary)' }}>
+      <div className="mb-4 p-3 rounded-lg bg-surface-raised border border-edge">
+        <div className="text-[10px] uppercase tracking-wide mb-1 text-fg-subtle">
           {definition.category}
         </div>
-        <div className="text-sm font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
+        <div className="text-sm font-medium mb-2 text-fg">
           {definition.label}
         </div>
         {definition.description && (
-          <div className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+          <div className="text-xs leading-relaxed text-fg-dim">
             {definition.description}
           </div>
         )}
         <Separator className="my-2" />
-        <div className="text-[10px] font-mono" style={{ color: 'var(--text-muted)' }}>
+        <div className="text-[10px] font-mono text-fg-muted">
           ID: {selectedNode.id}
         </div>
       </div>
@@ -147,18 +132,17 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
       {/* Inputs */}
       {resolvedInputs.length > 0 && (
         <div className="mb-4">
-          <Label className="text-xs font-semibold mb-2 block" style={{ color: 'var(--text-secondary)' }}>
+          <Label className="text-xs font-semibold mb-2 block text-fg-dim">
             Inputs
           </Label>
           <div className="space-y-1">
             {resolvedInputs.map((input) => (
               <div
                 key={input.id}
-                className="flex justify-between text-[11px] px-2 py-1 rounded"
-                style={{ backgroundColor: 'var(--bg-tertiary)' }}
+                className="flex justify-between text-[11px] px-2 py-1 rounded bg-surface-raised"
               >
-                <span style={{ color: 'var(--text-secondary)' }}>{input.label}</span>
-                <span className="font-mono" style={{ color: 'var(--text-muted)' }}>
+                <span className="text-fg-dim">{input.label}</span>
+                <span className="font-mono text-fg-muted">
                   {input.type}
                 </span>
               </div>
@@ -170,18 +154,17 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
       {/* Outputs */}
       {definition.outputs.length > 0 && (
         <div className="mb-4">
-          <Label className="text-xs font-semibold mb-2 block" style={{ color: 'var(--text-secondary)' }}>
+          <Label className="text-xs font-semibold mb-2 block text-fg-dim">
             Outputs
           </Label>
           <div className="space-y-1">
             {definition.outputs.map((output) => (
               <div
                 key={output.id}
-                className="flex justify-between text-[11px] px-2 py-1 rounded"
-                style={{ backgroundColor: 'var(--bg-tertiary)' }}
+                className="flex justify-between text-[11px] px-2 py-1 rounded bg-surface-raised"
               >
-                <span style={{ color: 'var(--text-secondary)' }}>{output.label}</span>
-                <span className="font-mono" style={{ color: 'var(--text-muted)' }}>
+                <span className="text-fg-dim">{output.label}</span>
+                <span className="font-mono text-fg-muted">
                   {output.type}
                 </span>
               </div>
@@ -193,16 +176,10 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
       {/* Parameters */}
       {hasParameters && (
         <div className="mb-4">
-          <Label className="text-xs font-semibold mb-3 block" style={{ color: 'var(--text-secondary)' }}>
+          <Label className="text-xs font-semibold mb-3 block text-fg-dim">
             Parameters
           </Label>
-          <div
-            className="p-3 rounded-lg"
-            style={{
-              backgroundColor: 'var(--bg-tertiary)',
-              border: '1px solid var(--border-primary)',
-            }}
-          >
+          <div className="p-3 rounded-lg bg-surface-raised border border-edge">
             <NodeParameters
               nodeId={selectedNode.id}
               parameters={visibleParams}
@@ -217,16 +194,10 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
       {/* Custom Component */}
       {definition.component && (
         <div className="mb-4">
-          <Label className="text-xs font-semibold mb-3 block" style={{ color: 'var(--text-secondary)' }}>
+          <Label className="text-xs font-semibold mb-3 block text-fg-dim">
             Custom Controls
           </Label>
-          <div
-            className="p-3 rounded-lg"
-            style={{
-              backgroundColor: 'var(--bg-tertiary)',
-              border: '1px solid var(--border-primary)',
-            }}
-          >
+          <div className="p-3 rounded-lg bg-surface-raised border border-edge">
             <definition.component nodeId={selectedNode.id} data={selectedNode.data.params || {}} />
           </div>
         </div>
