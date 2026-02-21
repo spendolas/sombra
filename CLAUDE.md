@@ -51,8 +51,8 @@ sombra/
 ## Key Conventions
 
 - **TypeScript strict mode** everywhere - no implicit any, strict null checks
-- **Tailwind utility classes only** - no per-component CSS files
-- **Dark theme** - base background `#0a0a12`, gray palette for UI
+- **Tailwind utility classes only** - no per-component CSS files, no inline `style={{}}` for colors
+- **Dark theme** - base background `#0f0f1a`, Sombra tokens registered in Tailwind `@theme inline`
 - **Imperative WebGL** - direct WebGL2 API, no abstraction libraries
 - **Single offscreen context** - for node previews, avoids context limit (8-16)
 - **Component naming** - PascalCase for React components, camelCase for utilities
@@ -112,9 +112,11 @@ Nodes have:
    - Note: `react-resizable-panels` v4 API differs from shadcn's v3 wrapper — see `resizable.tsx` patch
 
 4. **Styling**:
-   - Use Tailwind utility classes directly in JSX
-   - Base dark theme colors in `src/index.css`
-   - React Flow theme customization via CSS variables or inline styles
+   - Use Tailwind utility classes directly in JSX — never inline `style={{}}` for Sombra tokens
+   - Use Sombra design tokens: `bg-surface`, `text-fg-dim`, `border-edge`, etc. (see Design Tokens below)
+   - shadcn/ui components use their own oklch tokens (`--background`, `--foreground`, etc.) — don't mix
+   - React Flow components that only accept `style` props (not `className`) may use `var(--surface)` etc.
+   - Base dark theme colors defined in `src/index.css` `:root` block
 
 5. **Testing**:
    - Manual testing via dev server (`npm run dev`)
@@ -246,6 +248,13 @@ Replicate the full spectra-pixel-bg experience as composable node-graph features
 - Default test graph simplified: removed UV Coordinates node (auto_uv makes it unnecessary)
 - Node count: still 19 (no new nodes)
 
+**Sprint 5.75 — Design Token Unification** ✅ Complete
+- Renamed 13 CSS vars: `--bg-primary` → `--surface`, `--text-primary` → `--fg`, `--border-primary` → `--edge`, `--accent-primary` → `--indigo`, etc.
+- Registered all tokens in Tailwind `@theme inline` as `--color-*` entries
+- Converted 48 inline `style={{}}` to Tailwind utility classes across 8 files
+- Only justified inline styles remain: React Flow component props + dynamic runtime `handleColor`
+- shadcn oklch tokens kept separate (no visual regressions in shadcn primitives)
+
 **Sprint 6 — Color Ramp** ← Next
 
 **Remaining sprints:** Color Ramp (Sprint 6) → Pixel Rendering (Sprint 7)
@@ -255,6 +264,30 @@ Replicate the full spectra-pixel-bg experience as composable node-graph features
 **Node count after Sprint 4.75:** 18 nodes (down from 20 — merged 4 math nodes into 2)
 **Node count after Sprint 5:** 19 nodes (18 + Vec2 Constant; UV Coords modified, not added)
 **Node count after Sprint 5.5:** 19 nodes (no new nodes — compiler change + rename only)
+
+## Design Tokens
+
+Sombra uses custom CSS variables registered with Tailwind v4's `@theme inline` block in `src/index.css`. Always use the Tailwind utility classes — never inline `style={{}}` for these colors.
+
+| CSS Variable | Tailwind Class | Hex | Usage |
+|---|---|---|---|
+| `--surface` | `bg-surface` | `#0f0f1a` | App background, canvas |
+| `--surface-alt` | `bg-surface-alt` | `#1a1a2e` | Side panels, secondary bg |
+| `--surface-raised` | `bg-surface-raised` | `#252538` | Cards, node headers, inputs |
+| `--surface-elevated` | `bg-surface-elevated` | `#2d2d44` | Hover states, node body, dropdowns |
+| `--fg` | `text-fg` | `#e8e8f0` | Primary text, node titles |
+| `--fg-dim` | `text-fg-dim` | `#b8b8c8` | Secondary text, descriptions |
+| `--fg-subtle` | `text-fg-subtle` | `#88889a` | Labels, category headers |
+| `--fg-muted` | `text-fg-muted` | `#5a5a6e` | Disabled text, IDs, hints |
+| `--edge` | `border-edge` | `#3a3a52` | Primary borders, dividers |
+| `--edge-subtle` | `border-edge-subtle` | `#2a2a3e` | Subtle borders, node separators |
+| `--indigo` | `bg-indigo` / `text-indigo` | `#6366f1` | Accent, selection highlight |
+| `--indigo-hover` | `bg-indigo-hover` | `#818cf8` | Accent hover state |
+| `--indigo-active` | `bg-indigo-active` | `#4f46e5` | Accent active/pressed state |
+
+All tokens work with any Tailwind color utility prefix: `bg-`, `text-`, `border-`, `ring-`, etc.
+
+**shadcn tokens** (`--background`, `--foreground`, etc.) are separate oklch values used by shadcn/ui primitives. Don't remap Sombra tokens to shadcn tokens.
 
 ## Important Layout Notes
 
