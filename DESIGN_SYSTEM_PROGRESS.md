@@ -145,6 +145,25 @@ Light mode port colors use the **-600 Tailwind stop** of the same hue — darker
 
 ## Changelog
 
+### 2026-02-22 (Visual Parity Fix — Value FBM)
+- **Pixel Grid:** Removed `coords` input, now uses `gl_FragCoord.xy` directly for square screen-space pixels
+- **Bayer Dither:** Removed `coords` input, now uses `gl_FragCoord.xy` directly
+- **New node:** `quantize_uv` (Quantize UV) — snaps coordinates to pixel-grid cell centers via `gl_FragCoord.xy`, outputs frozen-ref UV. Connectable `pixelSize` param (2-64, default 8). Wire to noise `coords` for uniform color per cell.
+- **Node count:** 22 → 23
+- Updated spectra Value FBM test preset to wire Quantize UV → Noise.coords for per-cell sampling
+- **Figma:** Pixel Grid template needs Coords handle removed; Bayer Dither template needs Coords handle removed; new Quantize UV template needed
+
+### 2026-02-21 (Sprint 7 — Pixel Rendering)
+- **Code implementation:** Created new `Post-process` category with 2 nodes:
+  - `src/nodes/postprocess/pixel-grid.ts` — Pixel Grid node: color (vec3) + coords (vec2) inputs, result (vec3) output, connectable pixelSize/dither params, shape enum (circle/diamond/triangle), shared Bayer 8×8 dithering + shape SDF functions via `addFunction()`
+  - `src/nodes/postprocess/bayer-dither.ts` — Bayer Dither node: coords (vec2) input, threshold (float) output, scale param, shared `bayer8x8` function via `addFunction()`
+- Registered both in `src/nodes/index.ts` — new Post-process section in `ALL_NODES`
+- **Node count:** 20 → 22
+- Updated `NODE_AUTHORING_GUIDE.md` Node Inventory table and file organization
+- **Figma templates:** Created Pixel Grid (`72:627`) and Bayer Dither (`72:668`) on Templates page in new POST-PROCESS column
+- **Node Palette:** Added POST-PROCESS category group (`72:695`) with 2 Palette Item instances (Pixel Grid `72:698`, Bayer Dither `72:700`), between NOISE and OUTPUT
+- **Updated `.figma/design-system.md`:** Templates 22→24, Palette 20→22 items, 5→6 categories
+
 ### 2026-02-21 (Sprint 6 — Color Ramp Node)
 - **Created Gradient Editor molecule** (`50:4208`) on Molecules page — vertical auto-layout component with:
   - Gradient Bar (FILL × 24px, radius/md, edge/default stroke, linear gradient placeholder)

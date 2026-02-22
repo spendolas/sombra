@@ -20,9 +20,22 @@ export const timeNode: NodeDefinition = {
     },
   ],
 
+  params: [
+    {
+      id: 'speed',
+      label: 'Speed',
+      type: 'float',
+      default: 1.0,
+      min: 0,
+      max: 2,
+      step: 0.001,
+      connectable: true,
+    },
+  ],
+
   glsl: (ctx) => {
-    const { outputs, uniforms } = ctx
+    const { inputs, outputs, uniforms } = ctx
     uniforms.add('u_time')
-    return `float ${outputs.time} = u_time;`
+    return `float ${outputs.time} = u_time * ${inputs.speed};`
   },
 }

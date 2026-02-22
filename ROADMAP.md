@@ -109,9 +109,11 @@ interface NodeDefinition {
 
 ---
 
-## Phase 2 — Spectra Mode + UX Polish
+## Phase 2 — Spectra Mode + UX Polish ✅ COMPLETE
 
 **Goal:** Replicate the full spectra-pixel-bg noise/color/pixel experience as composable node-graph features, and polish the connection UX. When complete, all four spectra presets (Value FBM, Simplex FBM, Worley Ridged, Box None) can be recreated as node graphs, plus novel combinations that spectra-pixel-bg could never express.
+
+**Status:** ✅ Delivered February 2026 — 22 nodes across 6 categories (Input, Math, Noise, Color, Post-process, Output)
 
 **Reference:** spectra-pixel-bg `fork` branch (4 noise types, 4 fractal modes, domain warp, 7-color palette with 3 blend modes, pixel dithering with shape SDFs).
 
@@ -257,19 +259,19 @@ Noise nodes produce visible patterns out of the box without wiring UV Coordinate
 - [x] **Rename `z` → `phase`** — port id, label, and all GLSL template references across all 3 noise nodes + test graph (`test-graph.ts`)
 - [x] **Default test graph simplified** — removed UV Coordinates node (auto_uv makes it unnecessary)
 
-### Sprint 6 — Color Ramp (1 node, biggest single item)
+### Sprint 6 — Color Ramp (1 node, biggest single item) ✅ Complete
 
 General-purpose multi-stop gradient mapper: float (0-1) → color (vec3). This is the scalable replacement for spectra's fixed 7-color palette system — arbitrary number of stops, usable by any future node library.
 
-- [ ] **Color Ramp node** — GLSL: chain of `mix()` + `smoothstep()` for linear/smooth, `step()` for constant interpolation (`src/nodes/color/color-ramp.ts`)
-- [ ] **ColorRampEditor component** — interactive gradient bar with draggable stops, per-stop color pickers, interpolation mode dropdown (`src/components/ColorRampEditor.tsx`)
-- [ ] **6 palette presets** — Cobalt Drift, Violet Ember, Teal Afterglow, Solar Ember, Citrus Pulse, Rose Heat (from spectra-pixel-bg)
-- [ ] Stops stored as `params.stops` (serializable array), UI via `component` field — no changes to `NodeParameter` type system needed
+- [x] **Color Ramp node** — GLSL: chain of `mix()` + `smoothstep()` for linear/smooth, `step()` for constant interpolation (`src/nodes/color/color-ramp.ts`)
+- [x] **ColorRampEditor component** — interactive gradient bar with draggable stops, per-stop color pickers, interpolation mode dropdown (`src/components/ColorRampEditor.tsx`)
+- [x] **6 palette presets** — Cobalt Drift, Violet Ember, Teal Afterglow, Solar Ember, Citrus Pulse, Rose Heat (from spectra-pixel-bg)
+- [x] Stops stored as `params.stops` (serializable array), UI via `component` field — no changes to `NodeParameter` type system needed
 
-### Sprint 7 — Pixel Rendering (2 nodes)
+### Sprint 7 — Pixel Rendering (2 nodes) ✅ Complete
 
-- [ ] **Pixel Grid** — Post-processing node: quantization + Bayer 8x8 dithering + shape SDF (circle/triangle/diamond). Inputs: `color` (vec3), `coords` (vec2). Params: `pixelSize` (2-20), `shape` (enum), `dither` (0-1) (`src/nodes/postprocess/pixel-grid.ts`)
-- [ ] **Bayer Dither** — Standalone 8x8 Bayer dither pattern. Outputs threshold float for current pixel. Enables creative dithering beyond pixel art (`src/nodes/postprocess/bayer-dither.ts`)
+- [x] **Pixel Grid** — Post-processing node: quantization + Bayer 8x8 dithering + shape SDF (circle/triangle/diamond). Inputs: `color` (vec3), `coords` (vec2). Params: `pixelSize` (2-20), `shape` (enum), `dither` (0-1) (`src/nodes/postprocess/pixel-grid.ts`)
+- [x] **Bayer Dither** — Standalone 8x8 Bayer dither pattern. Outputs threshold float for current pixel. Enables creative dithering beyond pixel art (`src/nodes/postprocess/bayer-dither.ts`)
 
 ### Node Summary (After Sprint 4)
 
@@ -286,7 +288,7 @@ General-purpose multi-stop gradient mapper: float (0-1) → color (vec3). This i
 | Pixel Grid | Post-process | — | Sprint 7 |
 | Bayer Dither | Post-process | — | Sprint 7 |
 
-**After Sprint 4: 20 nodes** (4 separate noise → 1 unified = net -3). **After Sprint 4.5: still 20 nodes** (adds connectable param handles, no new nodes). **After Sprint 4.75: 18 nodes** (merged 4 math → 2 unified). **After Sprint 5: 19 nodes** (UV Coords extended, +1 Vec2 Constant). **After Sprint 5.5: 19 nodes** (compiler change + rename, no new nodes). **After Phase 2: 22 nodes.**
+**After Sprint 4: 20 nodes** (4 separate noise → 1 unified = net -3). **After Sprint 4.5: still 20 nodes** (adds connectable param handles, no new nodes). **After Sprint 4.75: 18 nodes** (merged 4 math → 2 unified). **After Sprint 5: 19 nodes** (UV Coords extended, +1 Vec2 Constant). **After Sprint 5.5: 19 nodes** (compiler change + rename, no new nodes). **After Sprint 6: 20 nodes** (+1 Color Ramp). **After Sprint 7: 22 nodes** (+2 Pixel Grid, Bayer Dither). **Phase 2 complete: 22 nodes.**
 
 ### Key Files
 

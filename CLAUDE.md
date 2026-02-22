@@ -134,11 +134,11 @@ Nodes have:
 
 ✅ Complete — Scaffold, React Flow canvas, WebGL2 renderer, GitHub Pages deployment.
 
-## Next Steps (Phase 2, Sprint 7)
+## Next Steps (Phase 3)
 
-See `ROADMAP.md` for the full Phase 2 brief. Current focus: **Pixel Rendering**
+Phase 2 is complete — all 23 nodes delivered, all 4 spectra presets reproducible as node graphs.
 
-**After Sprint 7:** Finalize spectra preset acceptance tests
+See `ROADMAP.md` for Phase 3 (Save/Load/Export): localStorage auto-save with schema versioning, JSON download/upload, "Copy GLSL" button, embed HTML snippet generator.
 
 ## Design Decisions (Why We Did It This Way)
 
@@ -179,7 +179,7 @@ Free, simple, integrates well with GitHub Actions. Custom domain can be added la
 **Phase 0** - ✅ Complete
 **Phase 1** - ✅ Complete (16 nodes, compiler, live preview, full reactive pipeline)
 **Phase 1.2** - ✅ Complete (UI polish, resizable layout, frozen-ref preview)
-**Phase 2** - 🚧 In Progress (Spectra Mode + UX Polish)
+**Phase 2** - ✅ Complete (Spectra Mode + UX Polish — 23 nodes, all spectra presets reproducible)
 
 ### Phase 2 — Spectra Mode + UX Polish
 
@@ -257,16 +257,28 @@ Replicate the full spectra-pixel-bg experience as composable node-graph features
 - Figma DS: Gradient Editor molecule (`50:4208`), Color Ramp template (`50:4226`), Palette Item (`50:4260`) — all variable-bound
 - Files: `src/nodes/color/color-ramp.ts`, `src/components/ColorRampEditor.tsx`, modified `src/nodes/index.ts`
 
-**Sprint 7 — Pixel Rendering** ← Next
+**Sprint 7 — Pixel Rendering** ✅ Complete
+- **Pixel Grid** node: quantization + Bayer 8×8 dithering + shape SDF masking (circle/diamond/triangle)
+- **Bayer Dither** node: standalone 8×8 ordered dither threshold pattern
+- New `Post-process` category with shared `bayer8x8` function (bit-interleave, deduped via `addFunction`)
+- Shape SDFs registered with per-shape keys (`sdf_circle`, `sdf_diamond`, `sdf_triangle`) for multi-instance safety
+- Connectable params: `pixelSize`, `dither` on Pixel Grid
+- Files: `src/nodes/postprocess/pixel-grid.ts`, `src/nodes/postprocess/bayer-dither.ts`, modified `src/nodes/index.ts`
 
-**Remaining sprints:** Pixel Rendering (Sprint 7)
+**Visual Parity Fix** ✅ Complete
+- **Pixel Grid** + **Bayer Dither**: removed `coords` input, now use `gl_FragCoord.xy` directly (fixes non-square pixels from double aspect correction)
+- **Quantize UV** node: snaps `gl_FragCoord.xy` to pixel-grid cell centers, outputs frozen-ref UV space coordinates. Wire to noise `coords` for uniform color per cell (chunky pixel look). Connectable `pixelSize` param (2-64).
+- Spectra Value FBM preset updated: Quantize UV → Noise.coords for per-cell noise sampling
+- Files: modified `pixel-grid.ts`, `bayer-dither.ts`, created `postprocess/quantize-uv.ts`, modified `index.ts`, `test-graph.ts`
 
-**Acceptance test:** Manually wire node graphs that reproduce all 4 spectra presets (Value FBM, Simplex FBM, Worley Ridged, Box None).
+**Acceptance test:** All 4 spectra presets (Value FBM, Simplex FBM, Worley Ridged, Box None) reproducible as node graphs. ✅
 
 **Node count after Sprint 4.75:** 18 nodes (down from 20 — merged 4 math nodes into 2)
 **Node count after Sprint 5:** 19 nodes (18 + Vec2 Constant; UV Coords modified, not added)
 **Node count after Sprint 5.5:** 19 nodes (no new nodes — compiler change + rename only)
 **Node count after Sprint 6:** 20 nodes (19 + Color Ramp)
+**Node count after Sprint 7:** 22 nodes (20 + Pixel Grid + Bayer Dither)
+**Node count after Visual Parity Fix:** 23 nodes (22 + Quantize UV) — **Phase 2 complete**
 
 ## Design Tokens
 

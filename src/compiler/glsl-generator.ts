@@ -324,6 +324,9 @@ function assembleFragmentShader(
   if (uniforms.has('u_ref_size')) {
     uniformDeclarations.push('uniform float u_ref_size;')
   }
+  if (uniforms.has('u_dpr')) {
+    uniformDeclarations.push('uniform float u_dpr;')
+  }
 
   return `#version 300 es
 precision highp float;

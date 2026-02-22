@@ -113,13 +113,24 @@ export function FlowCanvas({
         y: event.clientY,
       })
 
+      // Build default params from node definition
+      const def = nodeRegistry.get(nodeType)
+      const defaultParams: Record<string, unknown> = {}
+      if (def?.params) {
+        for (const p of def.params) {
+          if (p.default !== undefined) {
+            defaultParams[p.id] = p.default
+          }
+        }
+      }
+
       const newNode: Node<NodeData> = {
         id: `${nodeType}-${Date.now()}`,
         type: 'shaderNode',
         position,
         data: {
           type: nodeType,
-          params: {},
+          params: defaultParams,
         },
       }
 

@@ -31,6 +31,11 @@ import { hsvToRgbNode } from './color/hsv-to-rgb'
 import { brightnessContrastNode } from './color/brightness-contrast'
 import { colorRampNode } from './color/color-ramp'
 
+// Post-process nodes
+import { pixelGridNode } from './postprocess/pixel-grid'
+import { bayerDitherNode } from './postprocess/bayer-dither'
+import { quantizeUvNode } from './postprocess/quantize-uv'
+
 // Output nodes
 import { fragmentOutputNode } from './output/fragment-output'
 
@@ -64,6 +69,11 @@ export const ALL_NODES = [
   hsvToRgbNode,
   brightnessContrastNode,
   colorRampNode,
+
+  // Post-process
+  pixelGridNode,
+  bayerDitherNode,
+  quantizeUvNode,
 
   // Output
   fragmentOutputNode,

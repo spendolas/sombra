@@ -307,17 +307,18 @@ Page: Organisms (3 components — combine molecule/atom instances into UI sectio
 │   └── Default: all ON (kitchen sink). Templates toggle OFF unused slots.
 │   └── Nests: Labeled Handle ×7, Connectable Param Row ×5, Dynamic Input Controls ×1,
 │       Enum Select ×2, Float Slider ×2, Color Input ×1, Separator ×2
-├── Node Palette (39:289) — COMPONENT, 200px wide, 5 category groups with 20 palette items
-│   └── Nests: Category Header ×5, Palette Item ×20, Separator ×4
+├── Node Palette (39:289) — COMPONENT, 200px wide, 6 category groups with 22 palette items
+│   └── Nests: Category Header ×6, Palette Item ×22, Separator ×5
 └── Properties Panel (39:393) — COMPONENT_SET, 2 variants: state (empty/selected)
     └── Nests: Category Header ×4, Info Card ×1, Port Row ×4, Float Slider ×1, Enum Select ×1
 
-Page: Templates (22 items — 20 node templates + 2 scene templates)
-├── Node Templates (5-column grid by category):
+Page: Templates (24 items — 22 node templates + 2 scene templates)
+├── Node Templates (6-column grid by category):
 │   ├── INPUT: Number, Color, Vec2, UV Coordinates, Time, Resolution
 │   ├── MATH: Arithmetic, Trig, Mix, Smoothstep, Remap, Turbulence, Ridged
 │   ├── NOISE: Noise, FBM, Domain Warp
 │   ├── COLOR: HSV to RGB, Brightness/Contrast, Color Ramp
+│   ├── POST-PROCESS: Pixel Grid (72:627), Bayer Dither (72:668)
 │   └── OUTPUT: Fragment Output
 ├── Default Graph — Time → Noise → Fragment Output (3 Node Card + 2 Typed Edge instances)
 └── Sombra App (1440×900) — 3-panel layout (259/922/259px):
@@ -334,10 +335,10 @@ Atoms/Handle (change vec2 color)
   → Molecules/Labeled Handle (nested Handle instance updates)
     → Molecules/Connectable Param Row (nested Handle instance updates)
       → Organisms/Node Card (nested molecule instances update)
-        → Templates/all 19 node templates, Default Graph, Sombra App
+        → Templates/all 22 node templates, Default Graph, Sombra App
 ```
 
-**Component Totals:** 23 components (8 atoms + 12 molecules + 3 organisms) + 22 template items
+**Component Totals:** 23 components (8 atoms + 12 molecules + 3 organisms) + 24 template items
 
 **Variable Collections (4 total, 31 variables):**
 - UI Colors: 13 variables × 2 modes (Dark/Light) — `VariableCollectionId:17:7`

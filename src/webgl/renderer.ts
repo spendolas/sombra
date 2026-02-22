@@ -152,9 +152,10 @@ export class WebGLRenderer {
     const gl = this.gl
     if (!this.program || !this.vao) return
 
-    // Update canvas size
-    const displayWidth = this.canvas.clientWidth
-    const displayHeight = this.canvas.clientHeight
+    // Update canvas size (account for device pixel ratio for crisp rendering)
+    const dpr = window.devicePixelRatio || 1
+    const displayWidth = Math.floor(this.canvas.clientWidth * dpr)
+    const displayHeight = Math.floor(this.canvas.clientHeight * dpr)
     if (this.canvas.width !== displayWidth || this.canvas.height !== displayHeight) {
       this.canvas.width = displayWidth
       this.canvas.height = displayHeight
@@ -173,6 +174,11 @@ export class WebGLRenderer {
     const resolutionLocation = this.uniforms.get('u_resolution')
     if (resolutionLocation) {
       gl.uniform2f(resolutionLocation, displayWidth, displayHeight)
+    }
+
+    const dprLocation = this.uniforms.get('u_dpr')
+    if (dprLocation) {
+      gl.uniform1f(dprLocation, dpr)
     }
 
     // Freeze reference size on first valid render

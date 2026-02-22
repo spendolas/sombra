@@ -466,6 +466,9 @@ Key variable collections (full IDs in Claude memory file `figma-ds.md`):
 | `hsv_to_rgb` | HSV to RGB | Color | `color/hsv-to-rgb.ts` | GLSL helper function |
 | `brightness_contrast` | Brightness/Contrast | Color | `color/brightness-contrast.ts` | connectable |
 | `color_ramp` | Color Ramp | Color | `color/color-ramp.ts` | enum, hidden param, custom component (ColorRampEditor), presets |
+| `pixel_grid` | Pixel Grid | Post-process | `postprocess/pixel-grid.ts` | connectable (2), enum, addFunction (bayer + SDF), gl_FragCoord |
+| `bayer_dither` | Bayer Dither | Post-process | `postprocess/bayer-dither.ts` | addFunction (bayer), gl_FragCoord |
+| `quantize_uv` | Quantize UV | Post-process | `postprocess/quantize-uv.ts` | connectable, gl_FragCoord, frozen-ref UV output |
 | `fragment_output` | Fragment Output | Output | `output/fragment-output.ts` | master output (one per graph) |
 
 All files are under `src/nodes/`. Use the closest match as a starting template for new nodes.
@@ -484,6 +487,7 @@ src/nodes/
 ├── math/               # Arithmetic, trig, mix, smoothstep, remap, turbulence, ridged
 ├── noise/              # Noise, FBM, domain warp
 ├── color/              # HSV to RGB, brightness/contrast, color ramp
+├── postprocess/        # Pixel grid, bayer dither
 └── output/             # Fragment output
 ```
 
