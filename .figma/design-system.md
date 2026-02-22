@@ -8,6 +8,32 @@
 - **State:** Zustand
 - **Node Canvas:** @xyflow/react (React Flow v12)
 
+## Figma Tooling
+
+All Figma work is done through the **Claude-in-Chrome MCP extension** on web Figma (`figma.com`). This gives direct access to the Figma Plugin API for both reading and modifying the design file.
+
+**Tools:**
+- `mcp__claude-in-chrome__javascript_tool` — Execute Plugin API code in the active Figma tab
+- `mcp__claude-in-chrome__read_page` — Read current page structure
+- `mcp__claude-in-chrome__navigate` — Open Figma URLs
+
+**Plugin API pattern:** All modifications use an async IIFE:
+```js
+(async () => {
+  const node = await figma.getNodeByIdAsync('17:161');
+  // ... modify node properties
+  return { success: true };
+})()
+```
+
+**Key gotchas:**
+- `setBoundVariableForPaint` is a static method on `figma.variables`, not on the node
+- Instance vector paths cannot be modified — detach or recreate as plain vectors
+- Set `layoutSizingHorizontal = 'FILL'` AFTER appending to auto-layout parent
+- Swap Handle component variants for connected state — never force colors manually
+- Use `await figma.getNodeByIdAsync(id)` (not `figma.getNodeById`) for reliable access
+- The MCP Figma tools (`get_design_context`, `get_variable_defs`, etc.) are read-only — use the Chrome extension Plugin API for writes
+
 ## Token Structure
 
 ### CSS Custom Properties (`src/index.css`)
