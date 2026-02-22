@@ -217,6 +217,137 @@ export function createSpectraValueFBM(): {
 }
 
 /**
+ * Spectra preset: Simplex FBM
+ * Pipeline: Quantize UV(344) → FBM(simplex) → Color Ramp → Pixel Grid(43) → Output
+ * - Simplex noise via FBM (1 octave), quantized to 344px cells (8×8 dots per cell)
+ * - Large 43px visible pixels, square shape, Bayer dithered
+ * - Cobalt Drift palette
+ */
+export function createSpectraSimplexFBM(): {
+  nodes: Node<NodeData>[]
+  edges: Edge<EdgeData>[]
+} {
+  const nodes: Node<NodeData>[] = [
+    // Noise cell quantization: 344px cells (8 dots per cell row at pixelSize=43)
+    {
+      id: 'sp2-quv',
+      type: 'shaderNode',
+      position: { x: 0, y: 0 },
+      data: {
+        type: 'quantize_uv',
+        params: { pixelSize: 344 },
+      },
+    },
+    // Simplex noise fnref source
+    {
+      id: 'sp2-noise-ref',
+      type: 'shaderNode',
+      position: { x: 0, y: 220 },
+      data: {
+        type: 'noise',
+        params: { scale: 1.0, noiseType: 'simplex' },
+      },
+    },
+    {
+      id: 'sp2-time',
+      type: 'shaderNode',
+      position: { x: 0, y: 440 },
+      data: { type: 'time', params: { speed: 0.25 } },
+    },
+    // FBM: 1 octave = single noise pass (coords from Quantize UV)
+    {
+      id: 'sp2-fbm',
+      type: 'shaderNode',
+      position: { x: 300, y: 0 },
+      data: {
+        type: 'fbm',
+        params: { scale: 1.0, fractalMode: 'standard', octaves: 1, lacunarity: 2.0, gain: 0.5 },
+      },
+    },
+    // Muted Cobalt Drift ramp — spectra uses only dark-to-mid blue range
+    {
+      id: 'sp2-ramp',
+      type: 'shaderNode',
+      position: { x: 600, y: 0 },
+      data: {
+        type: 'color_ramp',
+        params: {
+          interpolation: 'smooth',
+          stops: [
+            { position: 0.0, color: [0.137, 0.231, 0.416] },
+            { position: 0.5, color: [0.186, 0.333, 0.710] },
+            { position: 1.0, color: [0.300, 0.500, 1.000] },
+          ],
+        },
+      },
+    },
+    // Pixel Grid: 43px visible pixels, square, binary threshold
+    {
+      id: 'sp2-pixel',
+      type: 'shaderNode',
+      position: { x: 900, y: 0 },
+      data: {
+        type: 'pixel_grid',
+        params: { pixelSize: 43, shape: 'square', threshold: 1.0 },
+      },
+    },
+    {
+      id: 'sp2-output',
+      type: 'shaderNode',
+      position: { x: 1200, y: 60 },
+      data: { type: 'fragment_output', params: {} },
+    },
+  ]
+
+  const edges: Edge<EdgeData>[] = [
+    // Quantize UV → FBM coords (344px noise cells)
+    {
+      id: 'sp2-e0', source: 'sp2-quv', target: 'sp2-fbm',
+      sourceHandle: 'uv', targetHandle: 'coords', type: 'typed',
+      data: { sourcePort: 'uv', targetPort: 'coords', sourcePortType: 'vec2' },
+    },
+    // Noise(simplex).fn → FBM.noiseFn (fnref)
+    {
+      id: 'sp2-e1', source: 'sp2-noise-ref', target: 'sp2-fbm',
+      sourceHandle: 'fn', targetHandle: 'noiseFn', type: 'typed',
+      data: { sourcePort: 'fn', targetPort: 'noiseFn', sourcePortType: 'fnref' },
+    },
+    // Time → FBM.phase
+    {
+      id: 'sp2-e2', source: 'sp2-time', target: 'sp2-fbm',
+      sourceHandle: 'time', targetHandle: 'phase', type: 'typed',
+      data: { sourcePort: 'time', targetPort: 'phase', sourcePortType: 'float' },
+    },
+    // FBM.value → Color Ramp.t
+    {
+      id: 'sp2-e3', source: 'sp2-fbm', target: 'sp2-ramp',
+      sourceHandle: 'value', targetHandle: 't', type: 'typed',
+      data: { sourcePort: 'value', targetPort: 't', sourcePortType: 'float' },
+    },
+    // FBM.value → Pixel Grid.threshold
+    {
+      id: 'sp2-e4', source: 'sp2-fbm', target: 'sp2-pixel',
+      sourceHandle: 'value', targetHandle: 'threshold', type: 'typed',
+      data: { sourcePort: 'value', targetPort: 'threshold', sourcePortType: 'float' },
+    },
+    // Color Ramp → Pixel Grid.color
+    {
+      id: 'sp2-e5', source: 'sp2-ramp', target: 'sp2-pixel',
+      sourceHandle: 'color', targetHandle: 'color', type: 'typed',
+      data: { sourcePort: 'color', targetPort: 'color', sourcePortType: 'vec3' },
+    },
+    // Pixel Grid → Fragment Output
+    {
+      id: 'sp2-e6', source: 'sp2-pixel', target: 'sp2-output',
+      sourceHandle: 'result', targetHandle: 'color', type: 'typed',
+      data: { sourcePort: 'result', targetPort: 'color', sourcePortType: 'vec3' },
+    },
+  ]
+
+  return { nodes, edges }
+}
+
+/**
  * Create animated noise test graph:
  * Time → Simplex Noise (phase) → Fragment Output
  * Noise uses auto_uv for coordinates when unconnected.
