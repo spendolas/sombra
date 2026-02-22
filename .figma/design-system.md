@@ -191,26 +191,42 @@ Bound to `topLeftRadius`/`topRightRadius`/`bottomLeftRadius`/`bottomRightRadius`
 
 Components are built in Figma file `gq5i0l617YkXy0GzAZPtqz`. Code Connect requires published components (team library). When the file is moved to a team project, activate mappings with `add_code_connect_map` using the node IDs below.
 
+### Atoms
 | Figma Component | Node ID | Code File | React Component | Key Props |
 |---|---|---|---|---|
 | Handle | `17:161` | `src/components/base-handle.tsx` | `BaseHandle` | `handleColor`, `connected`, `type` |
-| Labeled Handle | `17:211` | `src/components/labeled-handle.tsx` | `LabeledHandle` | `title`, `type`, `position`, `handleColor`, `connected` |
+| Palette Item | `17:248` | `src/components/NodePalette.tsx` | (inline) | `label`, `category` |
+| PlusMinus Button | `17:258` | `src/components/ShaderNode.tsx` | (inline) | `onClick` |
+| Category Header | `37:96` | `src/components/NodePalette.tsx` | (inline `<h3>`) | `text` |
+| Port Type Badge | `37:131` | `src/components/PropertiesPanel.tsx` | (inline `<span>`) | `portType` |
+| Separator | `37:132` | `src/components/ui/separator.tsx` | `Separator` | — |
+
+### Molecules
+| Figma Component | Node ID | Code File | React Component | Key Props |
+|---|---|---|---|---|
+| Labeled Handle | `37:181` | `src/components/labeled-handle.tsx` | `LabeledHandle` | `title`, `type`, `position`, `handleColor`, `connected` |
 | Float Slider | `17:234` | `src/components/NodeParameters.tsx` | `FloatSlider` | `param`, `value`, `disabled` |
 | Enum Select | `17:235` | `src/components/NodeParameters.tsx` | `EnumSelect` | `param`, `value` |
 | Color Input | `17:240` | `src/components/NodeParameters.tsx` | `ColorInput` | `param`, `value` |
-| Palette Item | `17:248` | `src/components/NodePalette.tsx` | (inline) | `label`, `category` |
-| PlusMinus Button | `17:258` | `src/components/ShaderNode.tsx` | (inline) | `onClick` |
-| Node Card | `17:302` | `src/components/ShaderNode.tsx` | `ShaderNode` | `type`, `params`, `selected` |
-| Properties Info Card | `17:303` | `src/components/PropertiesPanel.tsx` | `PropertiesPanel` | `selectedNode` |
-| Properties Port Row | `17:306` | `src/components/PropertiesPanel.tsx` | (inline) | `port`, `type` |
-| Properties Param Box | `17:309` | `src/components/PropertiesPanel.tsx` | (inline) | `params` |
 | Zoom Bar | `17:314` | `src/components/zoom-slider.tsx` | `ZoomSlider` | `position` |
+| Connectable Param Row | `37:200` | `src/components/ShaderNode.tsx` | (inline) | `param`, `connected` |
+| Properties Info Card | `37:201` | `src/components/PropertiesPanel.tsx` | `PropertiesPanel` | `selectedNode` |
+| Properties Port Row | `37:206` | `src/components/PropertiesPanel.tsx` | (inline) | `port`, `type` |
+
+### Organisms
+| Figma Component | Node ID | Code File | React Component | Key Props |
+|---|---|---|---|---|
+| Node Card | `40:649` | `src/components/ShaderNode.tsx` | `ShaderNode` | `type`, `params`, `selected` + 19 boolean + 1 text property |
+| Node Palette | `39:289` | `src/components/NodePalette.tsx` | `NodePalette` | — |
+| Properties Panel | `39:393` | `src/components/PropertiesPanel.tsx` | `PropertiesPanel` | `selectedNode` |
 
 ---
 
-# Figma Library Structure (Built)
+# Figma Library Structure (Atomic Hierarchy)
 
 **File:** `gq5i0l617YkXy0GzAZPtqz` — [Sombra on Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra)
+
+**Architecture:** Atomic design — Atoms → Molecules → Organisms → Templates. Every component at level N is composed of **instances** of level N-1 components. Changes cascade automatically.
 
 ```
 Page: Foundations (~102 elements)
@@ -220,37 +236,76 @@ Page: Foundations (~102 elements)
 ├── Spacing scale (6 bars: xs/sm/md/lg/xl/2xl — width bound to Spacing variables, labeled)
 └── Radius samples (4 rectangles: sm/md/lg/full — corners bound to Radius variables, labeled)
 
-Page: Primitives (7 components)
-├── Handle — COMPONENT_SET, 16 variants: portType (8) × connected (true/false)
-├── Labeled Handle — COMPONENT_SET, 16 variants: position (left/right) × portType (8)
-├── Float Slider — COMPONENT_SET, 3 variants: state (default/disabled/connected)
-├── Enum Select — COMPONENT, label + trigger frame
-├── Color Input — COMPONENT, label + color swatch
-├── Palette Item — COMPONENT_SET, 2 variants: state (default/hover)
-└── PlusMinus Button — COMPONENT_SET, 4 variants: type (plus/minus) × state (enabled/disabled)
+Page: Atoms (8 components — indivisible building blocks, no nested Sombra instances)
+├── Category Header (37:96) — COMPONENT, uppercase section label (fg/subtle, Caption/Semibold)
+├── Port Type Badge (37:131) — COMPONENT_SET, 8 variants: portType — mono text colored by port type
+├── Separator (37:132) — COMPONENT, 1px horizontal divider (edge/subtle fill)
+├── Handle (17:161) — COMPONENT_SET, 16 variants: portType (8) × connected (true/false)
+├── Palette Item (17:248) — COMPONENT_SET, 2 variants: state (default/hover)
+├── PlusMinus Button (17:258) — COMPONENT_SET, 4 variants: type (plus/minus) × state (enabled/disabled)
+├── Preview Badge (40:390) — COMPONENT, "PREVIEW" label (surface/raised bg, fg/dim text, radius/sm)
+└── Grid Dot (40:392) — COMPONENT, 4px circle (edge/subtle fill, radius/full)
 
-Page: Components (5 components)
-├── Node Card — COMPONENT_SET, 2 variants: selected (true/false), header + outputs + inputs + params
-├── Properties Info Card — COMPONENT, title + type/id subtitle
-├── Properties Port Row — COMPONENT, port name + type label + color dot
-├── Properties Param Box — COMPONENT, section header + param rows
-└── Zoom Bar — COMPONENT, minus/track/plus/percentage
+Page: Molecules (11 components — combine atom instances)
+├── Labeled Handle (37:181) — COMPONENT_SET, 16 variants: position (left/right) × portType (8)
+│   └── Nests: 1× Atoms/Handle instance (connected overridable)
+│   └── Label: layoutSizingHorizontal=FILL, textAlignHorizontal=RIGHT for right-position
+├── Float Slider (17:234) — COMPONENT_SET, 3 variants: state (default/disabled/connected)
+├── Enum Select (17:235) — COMPONENT, label + trigger frame
+├── Color Input (17:240) — COMPONENT, label + color swatch
+├── Zoom Bar (17:314) — COMPONENT, minus/track/plus/percentage
+├── Connectable Param Row (37:200) — COMPONENT_SET, 2 variants: state (unwired/wired)
+│   └── Nests: 1× Atoms/Handle + 1× Molecules/Float Slider instances
+├── Properties Info Card (37:201) — COMPONENT, node info card
+│   └── Nests: 1× Atoms/Category Header instance
+├── Properties Port Row (37:206) — COMPONENT, port name + type badge
+│   └── Nests: 1× Atoms/Port Type Badge instance
+├── Dynamic Input Controls (40:393) — COMPONENT, minus/count/plus row
+│   └── Nests: 2× Atoms/PlusMinus Button instances
+├── Typed Edge (40:432) — COMPONENT_SET, 8 variants: portType — colored bezier wire
+│   └── Stroke bound to Port Types variables
+└── MiniMap (40:433) — COMPONENT, semi-transparent overlay with node indicators
+    └── Fills: surface/alt (85% opacity), indigo/default node rectangles
 
-Page: Compositions (5 compositions using real component instances)
-├── Node Palette (220×302) — 19 Palette Item instances in 5 categories (COLOR/INPUT/MATH/NOISE/OUTPUT), spacing-variable-bound gaps
-├── Noise node (200×250) — 8 instances: Labeled Handle ×3, Handle ×2, Float Slider ×2, Enum Select ×1
-├── Arithmetic node (200×175) — 6 instances: Labeled Handle ×3, PlusMinus Button ×2, Enum Select ×1 (selected variant, indigo border)
-├── Fragment Output (200×61) — 1 Labeled Handle instance
-└── Properties Panel (260×419) — 7 instances: Info Card ×1, Port Row ×4, Float Slider ×1, Enum Select ×1
+Page: Organisms (3 components — combine molecule/atom instances into UI sections)
+├── Node Card (40:649) — COMPONENT_SET, 2 variants: selected (true/false)
+│   └── 19 boolean properties + 1 text property (Title)
+│   └── Boolean slots: Output 1-2, Input 1-5, Dynamic Buttons, Connectable 1-5,
+│       Param Separator, Enum 1-2, Slider 1-2, Color Picker
+│   └── Default: all ON (kitchen sink). Templates toggle OFF unused slots.
+│   └── Nests: Labeled Handle ×7, Connectable Param Row ×5, Dynamic Input Controls ×1,
+│       Enum Select ×2, Float Slider ×2, Color Input ×1, Separator ×2
+├── Node Palette (39:289) — COMPONENT, 200px wide, 5 category groups with 19 palette items
+│   └── Nests: Category Header ×5, Palette Item ×19, Separator ×4
+└── Properties Panel (39:393) — COMPONENT_SET, 2 variants: state (empty/selected)
+    └── Nests: Category Header ×4, Info Card ×1, Port Row ×4, Float Slider ×1, Enum Select ×1
 
-Page: App Layout (1 frame using real component instances)
-└── Sombra App (1440×900) — 3-panel layout (259/922/259px), 8 component instances:
-    Left: 5 Palette Item instances; Center: dot grid, 2 mini nodes, bezier wire, Zoom Bar instance;
-    Right: Info Card + Port Row instances
+Page: Templates (21 items — 19 node templates + 2 scene templates)
+├── Node Templates (5-column grid by category):
+│   ├── INPUT: Number, Color, Vec2, UV Coordinates, Time, Resolution
+│   ├── MATH: Arithmetic, Trig, Mix, Smoothstep, Remap, Turbulence, Ridged
+│   ├── NOISE: Noise, FBM, Domain Warp
+│   ├── COLOR: HSV to RGB, Brightness/Contrast
+│   └── OUTPUT: Fragment Output
+├── Default Graph — Time → Noise → Fragment Output (3 Node Card + 2 Typed Edge instances)
+└── Sombra App (1440×900) — 3-panel layout (259/922/259px):
+    Left: Node Palette instance; Center: Canvas (Grid Dots, Zoom Bar, MiniMap);
+    Preview (Preview Badge); Right: Properties Panel instance
 
 Page: Archive — Captures (4 frames)
 └── Previous session capture frames (preserved)
 ```
+
+**Cascade Chain (core benefit):**
+```
+Atoms/Handle (change vec2 color)
+  → Molecules/Labeled Handle (nested Handle instance updates)
+    → Molecules/Connectable Param Row (nested Handle instance updates)
+      → Organisms/Node Card (nested molecule instances update)
+        → Templates/all 19 node templates, Default Graph, Sombra App
+```
+
+**Component Totals:** 22 components (8 atoms + 11 molecules + 3 organisms) + 21 template items
 
 **Variable Collections (4 total, 31 variables):**
 - UI Colors: 13 variables × 2 modes (Dark/Light) — `VariableCollectionId:17:7`

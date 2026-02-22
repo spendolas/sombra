@@ -1,7 +1,7 @@
 # Sombra Design System — Progress Tracker
 
 ## Current Phase
-**Phase 2: Figma Recreation** — ✅ Complete (Design system built + finalized via Plugin API)
+**Phase 2: Figma Recreation** — ✅ Complete (Design system built + finalized + expanded via Plugin API)
 
 ## Status Summary
 | Phase | Status |
@@ -37,7 +37,7 @@
 - [x] **Phase 2:** Build Composite components (Node Card 2 variants, Properties Info Card, Properties Port Row, Properties Param Box, Zoom Bar)
 - [x] **Phase 2:** Build Compositions page (Node Palette with all 19 nodes, Noise/Arithmetic/Fragment Output example nodes, Properties Panel)
 - [x] **Phase 2:** Build App Layout wireframe (1440×900, 3-panel layout with dot grid canvas, wire, shader preview)
-- [x] **Phase 2:** Set up page structure (Archive — Captures, Foundations, Primitives, Components, Compositions, App Layout)
+- [x] **Phase 2:** Set up page structure (Archive — Captures, Foundations, Atoms, Molecules, Organisms, Templates)
 - [ ] **Phase 3:** Publish components to team library (requires moving file from Drafts to team project)
 - [ ] **Phase 3:** Map Figma components to code files via Code Connect (node IDs documented in `.figma/design-system.md`)
 - [ ] **Phase 3:** Document prop mappings
@@ -144,6 +144,61 @@ Light mode port colors use the **-600 Tailwind stop** of the same hue — darker
 ---
 
 ## Changelog
+
+### 2026-02-21 (Session 8 — Fidelity Fix Pass)
+- **Fixed Node Card header** (`40:649`): Added `bg-surface-raised` fill, `border-b border-edge-subtle` bottom stroke, `rounded-t-md` top corners (6px), `gap-2` itemSpacing (was 0). Applied to both selected/unselected variants.
+- **Fixed Node Card content** spacing: `itemSpacing: 0` → `8` (matches code `gap-y-2`). Applied to both variants.
+- **Fixed PlusMinus Button** (`17:258`): Height 17px → 20px (matches code `h-5`). All 4 variants now 20×20.
+- **Applied text overrides to all 19 node templates** (95 total text overrides):
+  - Replaced all generic "Label" text on Labeled Handle instances with actual port names (Value, Coords, Phase, Fn, A, B, C, etc.)
+  - Replaced all generic "Scale" text on Connectable Param Rows with actual param names (Scale, Octaves, Lacunarity, Gain, Frequency, Amplitude, Factor, Brightness, Contrast, etc.)
+  - Replaced all generic "Noise Type"/"simplex" on Enum Selects with correct enum labels (Operation/add, Function/sin, Fractal Mode/standard, etc.)
+  - Replaced all generic slider labels/values with correct defaults (Value/1.00, X/0.00, Y/0.00, etc.)
+- **Fixed Default Graph scene template** (`40:17910`): Time, Noise, Fragment Output nodes now show correct port/param labels.
+- **Verified all atom/molecule sizes** against codebase: Handle 12×12 ✓, Float Slider itemSpacing 6 + fontSize 10 ✓, Enum Select trigger h=28 ✓, Color Input swatch h=24 ✓, Dynamic Input Controls gap=8 ✓.
+
+### 2026-02-21 (Session 7 — DS Cleanup & Expansion)
+- **Fixed Node Palette width** (`39:289`): 77px → 200px (counterAxisSizingMode=FIXED, minWidth=200). All text now visible.
+- **Fixed Labeled Handle alignment** (`37:181`): Label `layoutSizingHorizontal` set to FILL on all 16 variants. Right-position labels push text rightward; left-position labels fill available space.
+- **Fixed Connectable Param Row slider labels**: "Phase" slider was showing "Scale" — corrected in both Node Card variants.
+- **Fixed category headers** in Node Palette: 5 headers changed from HUG to FILL sizing.
+- **Created 2 new atoms:** Preview Badge (`40:390`), Grid Dot (`40:392`) — both variable-bound.
+- **Created 3 new molecules:** Dynamic Input Controls (`40:393`, nests 2× PlusMinus Button), Typed Edge (`40:432`, 8 variants bound to Port Types vars), MiniMap (`40:433`, surface/alt 85% + indigo indicators).
+- **Rebuilt Node Card** (`40:649`, was `39:288`): Flexible COMPONENT_SET with **19 boolean + 1 text + 1 variant** properties. Boolean slots control visibility of Output 1-2, Input 1-5, Dynamic Buttons, Connectable 1-5, Param Separator, Enum 1-2, Slider 1-2, Color Picker. Default: all ON. Min-width: 160px (matches code).
+- **Created all 19 node templates** on Templates page (5-column grid by category):
+  - INPUT (6): Number, Color, Vec2, UV Coordinates, Time, Resolution
+  - MATH (7): Arithmetic, Trig, Mix, Smoothstep, Remap, Turbulence, Ridged
+  - NOISE (3): Noise, FBM, Domain Warp
+  - COLOR (2): HSV to RGB, Brightness/Contrast
+  - OUTPUT (1): Fragment Output
+- **Created Default Graph scene template**: Time → Noise → Fragment Output with Typed Edge wires.
+- **Created Sombra App scene template** (1440×900): 3-panel layout with Node Palette, Canvas (Grid Dots + Zoom Bar + MiniMap), Preview (Preview Badge), Properties Panel.
+- **Page layout cleanup**: All pages re-arranged with section labels (SIMPLE ATOMS / VARIANT SETS, HANDLE MOLECULES / PARAMETER CONTROLS / PANEL MOLECULES / CANVAS ELEMENTS, NODE CARD / NODE PALETTE / PROPERTIES PANEL). Proper spacing accounting for variant set dimensions.
+- **Removed orphans/duplicates**: Duplicate Preview Badge, orphaned portType components, stray build artifacts.
+- **Cross-referenced sizes** against codebase: Node Card min-width=160px, header padding=12/8px, content padding=12px (all match `ShaderNode.tsx` / `base-node.tsx`).
+- **Final count:** 22 components (8 atoms + 11 molecules + 3 organisms) + 21 template items
+- Updated `.figma/design-system.md` with new component IDs, flexible Node Card spec, full template list.
+- Updated Code Connect mappings: Node Card ID `39:288` → `40:649`.
+
+### 2026-02-21 (Session 6 — Atomic Hierarchy Rebuild)
+- **Restructured entire Figma design system** from flat pages to atomic design methodology
+- **Created 4 new pages:** Atoms, Molecules, Organisms, Templates (replacing Primitives, Components, Compositions, App Layout)
+- **Created 3 new atom components:** Category Header (`37:96`), Port Type Badge (`37:131`, 8 variants), Separator (`37:132`)
+- **Moved 3 existing atoms** to Atoms page: Handle (`17:161`), Palette Item (`17:248`), PlusMinus Button (`17:258`)
+- **Rebuilt Labeled Handle** (`37:181`) with nested `Atoms/Handle` instance (was raw ellipse) — 16 variants
+- **Created Connectable Param Row** (`37:200`) with nested Handle + Float Slider instances — 2 variants
+- **Rebuilt Properties Info Card** (`37:201`) with nested Category Header instance
+- **Rebuilt Properties Port Row** (`37:206`) with nested Port Type Badge instance
+- **Moved 4 molecules** to Molecules page: Float Slider, Enum Select, Color Input, Zoom Bar
+- **Built Node Card organism** (`39:288`) with nested Labeled Handle ×3, Connectable Param Row ×2, Enum Select, Separator ×2 — 2 variants
+- **Built Node Palette organism** (`39:289`) with Category Header ×5, Palette Item ×19, Separator ×4
+- **Built Properties Panel organism** (`39:393`) with Category Header ×4, Info Card, Port Row ×4, Float Slider, Enum Select — 2 variants
+- **Built 6 template frames:** Noise Node, Arithmetic Node, Fragment Output, Node Palette, Properties Panel, Sombra App (1440×900 3-panel)
+- **Deleted 4 old pages:** Primitives, Components, Compositions, App Layout (content migrated/rebuilt)
+- **Cascade chain verified:** Atom changes propagate through Molecules → Organisms → Templates automatically
+- **Final count:** 17 components (6 atoms + 8 molecules + 3 organisms) + 6 template frames
+- Updated `.figma/design-system.md` with atomic hierarchy, new node IDs, cascade chain documentation
+- Updated Code Connect mappings table with new component IDs organized by atomic level
 
 ### 2026-02-21 (Session 5 — Deep Audit)
 - **Full audit** of Figma design system: 33 checks across 9 phases
