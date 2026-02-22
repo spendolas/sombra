@@ -145,6 +145,21 @@ Light mode port colors use the **-600 Tailwind stop** of the same hue — darker
 
 ## Changelog
 
+### 2026-02-21 (Sprint 6 — Color Ramp Node)
+- **Created Gradient Editor molecule** (`50:4208`) on Molecules page — vertical auto-layout component with:
+  - Gradient Bar (FILL × 24px, radius/md, edge/default stroke, linear gradient placeholder)
+  - Stop Markers Row (FILL × 16px, absolute child ellipses 12×12 bound to sizes/handle)
+  - Controls Row (horizontal auto-layout, spacing/xs gap: color swatch + position text + add/remove buttons)
+  - Preset Selector (Enum Select molecule instance)
+  - All fills/strokes bound to UI Colors variables, spacing bound to Spacing variables, dimensions bound to Sizes variables
+- **Created Color Ramp node template** (`50:4226`) on Templates page — 160×302px, COLOR column:
+  - Header ("Color Ramp") + Content (vec3 output "Color", float input "Value", Separator, Enum "Interpolation: smooth", Gradient Editor instance)
+- **Added "Color Ramp" Palette Item** (`50:4260`) to Node Palette COLOR group (20th item total)
+- **Code implementation:** `src/nodes/color/color-ramp.ts` (node definition + GLSL generator), `src/components/ColorRampEditor.tsx` (interactive gradient editor with 6 presets), registered in `src/nodes/index.ts`
+- **Node count:** 19 → 20, **Molecule count:** 11 → 12, **Template count:** 21 → 22
+- Updated `.figma/design-system.md` with new component IDs and Code Connect mappings
+- Updated `NODE_AUTHORING_GUIDE.md` Node Inventory table
+
 ### 2026-02-21 (Session 8 — Fidelity Fix Pass)
 - **Fixed Node Card header** (`40:649`): Added `bg-surface-raised` fill, `border-b border-edge-subtle` bottom stroke, `rounded-t-md` top corners (6px), `gap-2` itemSpacing (was 0). Applied to both selected/unselected variants.
 - **Fixed Node Card content** spacing: `itemSpacing: 0` → `8` (matches code `gap-y-2`). Applied to both variants.

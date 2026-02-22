@@ -238,6 +238,7 @@ Components are built in Figma file `gq5i0l617YkXy0GzAZPtqz`. Code Connect requir
 | Connectable Param Row | `37:200` | `src/components/ShaderNode.tsx` | (inline) | `param`, `connected` |
 | Properties Info Card | `37:201` | `src/components/PropertiesPanel.tsx` | `PropertiesPanel` | `selectedNode` |
 | Properties Port Row | `37:206` | `src/components/PropertiesPanel.tsx` | (inline) | `port`, `type` |
+| Gradient Editor | `50:4208` | `src/components/ColorRampEditor.tsx` | `ColorRampEditor` | `nodeId`, `data` |
 
 ### Organisms
 | Figma Component | Node ID | Code File | React Component | Key Props |
@@ -272,7 +273,7 @@ Page: Atoms (8 components — indivisible building blocks, no nested Sombra inst
 ├── Preview Badge (40:390) — COMPONENT, "PREVIEW" label (surface/raised bg, fg/dim text, radius/sm)
 └── Grid Dot (40:392) — COMPONENT, 4px circle (edge/subtle fill, radius/full)
 
-Page: Molecules (11 components — combine atom instances)
+Page: Molecules (12 components — combine atom instances)
 ├── Labeled Handle (37:181) — COMPONENT_SET, 16 variants: position (left/right) × portType (8)
 │   └── Nests: 1× Atoms/Handle instance (connected overridable)
 │   └── Label: layoutSizingHorizontal=FILL, textAlignHorizontal=RIGHT for right-position
@@ -290,8 +291,13 @@ Page: Molecules (11 components — combine atom instances)
 │   └── Nests: 2× Atoms/PlusMinus Button instances
 ├── Typed Edge (40:432) — COMPONENT_SET, 8 variants: portType — colored bezier wire
 │   └── Stroke bound to Port Types variables
-└── MiniMap (40:433) — COMPONENT, semi-transparent overlay with node indicators
-    └── Fills: surface/alt (85% opacity), indigo/default node rectangles
+├── MiniMap (40:433) — COMPONENT, semi-transparent overlay with node indicators
+│   └── Fills: surface/alt (85% opacity), indigo/default node rectangles
+└── Gradient Editor (50:4208) — COMPONENT, vertical auto-layout (spacing/md gap)
+    └── Gradient Bar (FILL × 24px, radius/md, edge/default stroke, linear gradient fill)
+    └── Stop Markers Row (FILL × 16px, absolute child ellipses 12×12)
+    └── Controls Row (horizontal auto-layout, spacing/xs gap: swatch + position + add/remove)
+    └── Preset Selector (Enum Select molecule instance)
 
 Page: Organisms (3 components — combine molecule/atom instances into UI sections)
 ├── Node Card (40:649) — COMPONENT_SET, 2 variants: selected (true/false)
@@ -301,17 +307,17 @@ Page: Organisms (3 components — combine molecule/atom instances into UI sectio
 │   └── Default: all ON (kitchen sink). Templates toggle OFF unused slots.
 │   └── Nests: Labeled Handle ×7, Connectable Param Row ×5, Dynamic Input Controls ×1,
 │       Enum Select ×2, Float Slider ×2, Color Input ×1, Separator ×2
-├── Node Palette (39:289) — COMPONENT, 200px wide, 5 category groups with 19 palette items
-│   └── Nests: Category Header ×5, Palette Item ×19, Separator ×4
+├── Node Palette (39:289) — COMPONENT, 200px wide, 5 category groups with 20 palette items
+│   └── Nests: Category Header ×5, Palette Item ×20, Separator ×4
 └── Properties Panel (39:393) — COMPONENT_SET, 2 variants: state (empty/selected)
     └── Nests: Category Header ×4, Info Card ×1, Port Row ×4, Float Slider ×1, Enum Select ×1
 
-Page: Templates (21 items — 19 node templates + 2 scene templates)
+Page: Templates (22 items — 20 node templates + 2 scene templates)
 ├── Node Templates (5-column grid by category):
 │   ├── INPUT: Number, Color, Vec2, UV Coordinates, Time, Resolution
 │   ├── MATH: Arithmetic, Trig, Mix, Smoothstep, Remap, Turbulence, Ridged
 │   ├── NOISE: Noise, FBM, Domain Warp
-│   ├── COLOR: HSV to RGB, Brightness/Contrast
+│   ├── COLOR: HSV to RGB, Brightness/Contrast, Color Ramp
 │   └── OUTPUT: Fragment Output
 ├── Default Graph — Time → Noise → Fragment Output (3 Node Card + 2 Typed Edge instances)
 └── Sombra App (1440×900) — 3-panel layout (259/922/259px):
@@ -331,7 +337,7 @@ Atoms/Handle (change vec2 color)
         → Templates/all 19 node templates, Default Graph, Sombra App
 ```
 
-**Component Totals:** 22 components (8 atoms + 11 molecules + 3 organisms) + 21 template items
+**Component Totals:** 23 components (8 atoms + 12 molecules + 3 organisms) + 22 template items
 
 **Variable Collections (4 total, 31 variables):**
 - UI Colors: 13 variables × 2 modes (Dark/Light) — `VariableCollectionId:17:7`

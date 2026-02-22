@@ -134,15 +134,11 @@ Nodes have:
 
 ✅ Complete — Scaffold, React Flow canvas, WebGL2 renderer, GitHub Pages deployment.
 
-## Next Steps (Phase 2, Sprint 6)
+## Next Steps (Phase 2, Sprint 7)
 
-See `ROADMAP.md` for the full Phase 2 brief. Current focus: **Color Ramp**
+See `ROADMAP.md` for the full Phase 2 brief. Current focus: **Pixel Rendering**
 
-- General-purpose multi-stop gradient mapper: float (0-1) → color (vec3)
-- ColorRampEditor component with draggable stops and per-stop color pickers
-- 6 palette presets from spectra-pixel-bg
-
-**After Sprint 6:** Pixel Rendering (Sprint 7)
+**After Sprint 7:** Finalize spectra preset acceptance tests
 
 ## Design Decisions (Why We Did It This Way)
 
@@ -255,15 +251,22 @@ Replicate the full spectra-pixel-bg experience as composable node-graph features
 - Only justified inline styles remain: React Flow component props + dynamic runtime `handleColor`
 - shadcn oklch tokens kept separate (no visual regressions in shadcn primitives)
 
-**Sprint 6 — Color Ramp** ← Next
+**Sprint 6 — Color Ramp** ✅ Complete
+- Color Ramp node: multi-stop gradient mapper (`float 0-1 → vec3 color`) with smooth/linear/constant interpolation
+- `ColorRampEditor` component: draggable stops, per-stop color picker, 6 palette presets (Cobalt Drift, Violet Ember, Teal Afterglow, Solar Ember, Citrus Pulse, Rose Heat)
+- Figma DS: Gradient Editor molecule (`50:4208`), Color Ramp template (`50:4226`), Palette Item (`50:4260`) — all variable-bound
+- Files: `src/nodes/color/color-ramp.ts`, `src/components/ColorRampEditor.tsx`, modified `src/nodes/index.ts`
 
-**Remaining sprints:** Color Ramp (Sprint 6) → Pixel Rendering (Sprint 7)
+**Sprint 7 — Pixel Rendering** ← Next
+
+**Remaining sprints:** Pixel Rendering (Sprint 7)
 
 **Acceptance test:** Manually wire node graphs that reproduce all 4 spectra presets (Value FBM, Simplex FBM, Worley Ridged, Box None).
 
 **Node count after Sprint 4.75:** 18 nodes (down from 20 — merged 4 math nodes into 2)
 **Node count after Sprint 5:** 19 nodes (18 + Vec2 Constant; UV Coords modified, not added)
 **Node count after Sprint 5.5:** 19 nodes (no new nodes — compiler change + rename only)
+**Node count after Sprint 6:** 20 nodes (19 + Color Ramp)
 
 ## Design Tokens
 

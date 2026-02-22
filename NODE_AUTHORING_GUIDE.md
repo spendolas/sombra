@@ -465,6 +465,7 @@ Key variable collections (full IDs in Claude memory file `figma-ds.md`):
 | `domain_warp` | Domain Warp | Noise | `noise/domain-warp.ts` | connectable, fnref input, auto_uv, addFunction |
 | `hsv_to_rgb` | HSV to RGB | Color | `color/hsv-to-rgb.ts` | GLSL helper function |
 | `brightness_contrast` | Brightness/Contrast | Color | `color/brightness-contrast.ts` | connectable |
+| `color_ramp` | Color Ramp | Color | `color/color-ramp.ts` | enum, hidden param, custom component (ColorRampEditor), presets |
 | `fragment_output` | Fragment Output | Output | `output/fragment-output.ts` | master output (one per graph) |
 
 All files are under `src/nodes/`. Use the closest match as a starting template for new nodes.
@@ -482,7 +483,7 @@ src/nodes/
 ├── input/              # Constants, UV, time, resolution
 ├── math/               # Arithmetic, trig, mix, smoothstep, remap, turbulence, ridged
 ├── noise/              # Noise, FBM, domain warp
-├── color/              # HSV to RGB, brightness/contrast
+├── color/              # HSV to RGB, brightness/contrast, color ramp
 └── output/             # Fragment output
 ```
 

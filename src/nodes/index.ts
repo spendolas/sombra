@@ -29,6 +29,7 @@ import { domainWarpNode } from './noise/domain-warp'
 // Color nodes
 import { hsvToRgbNode } from './color/hsv-to-rgb'
 import { brightnessContrastNode } from './color/brightness-contrast'
+import { colorRampNode } from './color/color-ramp'
 
 // Output nodes
 import { fragmentOutputNode } from './output/fragment-output'
@@ -62,6 +63,7 @@ export const ALL_NODES = [
   // Color
   hsvToRgbNode,
   brightnessContrastNode,
+  colorRampNode,
 
   // Output
   fragmentOutputNode,
