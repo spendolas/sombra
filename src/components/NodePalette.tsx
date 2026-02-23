@@ -3,8 +3,6 @@
  */
 
 import { nodeRegistry } from '../nodes/registry'
-import { Separator } from '@/components/ui/separator'
-
 export function NodePalette() {
   const categories = nodeRegistry.getCategories()
 
@@ -15,11 +13,10 @@ export function NodePalette() {
 
   return (
     <div className="space-y-3">
-      {categories.map((category, idx) => {
+      {categories.map((category) => {
         const nodes = nodeRegistry.getByCategory(category)
         return (
           <div key={category}>
-            {idx > 0 && <Separator className="mb-3" />}
             <h3 className="text-[10px] font-semibold uppercase tracking-wider mb-2 text-fg-subtle">
               {category}
             </h3>

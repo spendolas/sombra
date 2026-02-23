@@ -127,7 +127,7 @@ export function FloatingPreview({ targetRef }: FloatingPreviewProps) {
       <PreviewToolbar className="absolute top-2 right-2 z-10" />
       {/* Invisible drag surface */}
       <div
-        className="absolute top-0 left-0 right-0 h-8 z-[5] cursor-grab active:cursor-grabbing opacity-0 hover:opacity-10 transition-opacity bg-surface-raised"
+        className="absolute top-0 left-0 right-0 h-8 z-[5] cursor-grab active:cursor-grabbing"
         onMouseDown={onDragStart}
       />
       <div ref={targetRef} className="w-full h-full" />
