@@ -7,6 +7,74 @@ import type { NodeData, EdgeData } from '../nodes/types'
 import { layoutGraph } from './layout'
 
 /**
+ * Default startup graph: Time → Noise → Color Ramp → Output
+ * Animated simplex noise with Cobalt Drift palette — simple but visually appealing
+ */
+export function createDefaultGraph(): {
+  nodes: Node<NodeData>[]
+  edges: Edge<EdgeData>[]
+} {
+  const nodes: Node<NodeData>[] = [
+    {
+      id: 'def-time',
+      type: 'shaderNode',
+      position: { x: 0, y: 0 },
+      data: { type: 'time', params: { speed: 0.3 } },
+    },
+    {
+      id: 'def-noise',
+      type: 'shaderNode',
+      position: { x: 0, y: 0 },
+      data: { type: 'noise', params: { scale: 3.0, noiseType: 'simplex' } },
+    },
+    {
+      id: 'def-ramp',
+      type: 'shaderNode',
+      position: { x: 0, y: 0 },
+      data: {
+        type: 'color_ramp',
+        params: {
+          interpolation: 'smooth',
+          stops: [
+            { position: 0.0, color: [0.020, 0.027, 0.051] },
+            { position: 0.25, color: [0.137, 0.231, 0.416] },
+            { position: 0.5, color: [0.235, 0.435, 1.000] },
+            { position: 0.75, color: [0.549, 0.776, 1.000] },
+            { position: 1.0, color: [0.663, 0.729, 0.839] },
+          ],
+        },
+      },
+    },
+    {
+      id: 'def-output',
+      type: 'shaderNode',
+      position: { x: 0, y: 0 },
+      data: { type: 'fragment_output', params: {} },
+    },
+  ]
+
+  const edges: Edge<EdgeData>[] = [
+    {
+      id: 'def-e1', source: 'def-time', target: 'def-noise',
+      sourceHandle: 'time', targetHandle: 'phase', type: 'typed',
+      data: { sourcePort: 'time', targetPort: 'phase', sourcePortType: 'float' },
+    },
+    {
+      id: 'def-e2', source: 'def-noise', target: 'def-ramp',
+      sourceHandle: 'value', targetHandle: 't', type: 'typed',
+      data: { sourcePort: 'value', targetPort: 't', sourcePortType: 'float' },
+    },
+    {
+      id: 'def-e3', source: 'def-ramp', target: 'def-output',
+      sourceHandle: 'color', targetHandle: 'color', type: 'typed',
+      data: { sourcePort: 'color', targetPort: 'color', sourcePortType: 'vec3' },
+    },
+  ]
+
+  return { nodes: layoutGraph(nodes, edges), edges }
+}
+
+/**
  * Create a simple test graph: Color → Fragment Output
  * This tests the minimal viable pipeline
  */

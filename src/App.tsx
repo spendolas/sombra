@@ -6,7 +6,7 @@ import { WebGLRenderer } from './webgl/renderer'
 import { useLiveCompiler } from './compiler'
 import { useGraphStore } from './stores/graphStore'
 import { useSettingsStore } from './stores/settingsStore'
-import { createSpectraWorleyRidged } from './utils/test-graph'
+import { createDefaultGraph } from './utils/test-graph'
 import { nodeRegistry } from './nodes/registry'
 import { ShaderNode } from './components/ShaderNode'
 import { NodePalette } from './components/NodePalette'
@@ -100,7 +100,7 @@ function App() {
 
   // Load test graph on mount (temporary for Phase 1 testing)
   useEffect(() => {
-    const testGraph = createSpectraWorleyRidged()
+    const testGraph = createDefaultGraph()
     setNodes(testGraph.nodes)
     setEdges(testGraph.edges)
   }, [setNodes, setEdges])

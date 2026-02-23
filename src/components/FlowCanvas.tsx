@@ -32,7 +32,10 @@ export function FlowCanvas({
   onConnect,
   onAddNode,
 }: FlowCanvasProps) {
-  const { screenToFlowPosition } = useReactFlow()
+  const { screenToFlowPosition, fitView } = useReactFlow()
+  const onInit = useCallback(() => {
+    setTimeout(() => fitView({ padding: 0.2, duration: 200 }), 50)
+  }, [fitView])
 
   // Register custom edge types
   const edgeTypes = useMemo(() => ({ typed: TypedEdge }), [])
@@ -159,7 +162,7 @@ export function FlowCanvas({
       defaultViewport={{ x: 0, y: 0, zoom: 1 }}
       minZoom={0.1}
       maxZoom={4}
-      fitView
+      onInit={onInit}
       proOptions={{ hideAttribution: true }}
       style={{ width: '100%', height: '100%', backgroundColor: 'var(--surface)' }}
     >
