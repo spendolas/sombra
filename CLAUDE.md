@@ -33,7 +33,11 @@ sombra/
 │   │   ├── ui/          # shadcn/ui primitives (button, slider, input, etc.)
 │   │   ├── base-node.tsx       # React Flow BaseNode wrapper
 │   │   ├── labeled-handle.tsx  # React Flow typed handle with label
-│   │   └── zoom-slider.tsx     # React Flow zoom control
+│   │   ├── zoom-slider.tsx     # React Flow zoom control
+│   │   ├── PreviewToolbar.tsx  # Preview mode switcher (4 view modes)
+│   │   ├── PreviewPanel.tsx    # Docked preview container
+│   │   ├── FloatingPreview.tsx # Draggable/resizable floating preview window
+│   │   └── FullWindowOverlay.tsx # Fullscreen preview overlay
 │   ├── lib/             # Utility functions (cn helper, etc.)
 │   ├── nodes/           # Node type definitions (one file per category or node)
 │   ├── compiler/        # Graph-to-GLSL compiler logic
@@ -89,11 +93,20 @@ Nodes have:
 - **Optional `functionKey`** - GLSL function name for fnref outputs (`string` or `(params) => string` for dynamic)
 - **Optional custom UI** - React component for node body (e.g., color picker, sliders)
 
+### Preview Mode System
+
+The shader preview supports three modes, switchable via a 4-icon toolbar pill:
+- **Docked (vertical/horizontal split)**: Preview panel alongside the node canvas in a resizable split. Split sizes are persisted per direction in the settings store.
+- **Floating**: Draggable, resizable window overlaid on the canvas. Resize from all 4 corners and edges with viewport clamping. Position and size persisted.
+- **Fullwindow**: Full-screen overlay. Esc returns to the previous mode (not always docked).
+
+Canvas reparenting: A single `<canvas>` element is moved between target refs (`dockTargetRef`, `floatTargetRef`, `fullTargetRef`) via `useEffect` depending on `previewMode` and `splitDirection`.
+
 ### State Management
 
-- **Zustand stores** for app-wide state (nodes, edges, settings, undo/redo history)
+- **Zustand stores** for app-wide state (nodes, edges, settings)
 - **React Flow** manages canvas state (pan, zoom, selection)
-- **localStorage** auto-saves graph state with versioned schema
+- **Settings store** persisted to `localStorage` (preview mode, split sizes, floating position/size)
 
 ## Development Workflow
 
@@ -182,6 +195,21 @@ Free, simple, integrates well with GitHub Actions. Custom domain can be added la
 **Phase 1** - ✅ Complete (16 nodes, compiler, live preview, full reactive pipeline)
 **Phase 1.2** - ✅ Complete (UI polish, resizable layout, frozen-ref preview)
 **Phase 2** - ✅ Complete (Spectra Mode + UX Polish — 23 nodes, all spectra presets reproducible)
+**Phase 2.5** - ✅ Complete (Preview Mode System + UI Polish)
+
+### Phase 2.5 — Preview Mode System + UI Polish ✅ Complete
+
+Multi-mode preview system with toolbar, floating window, and layout refinements.
+
+- **Preview modes**: Docked (vertical/horizontal split), Floating (PiP), Fullwindow (overlay with Esc to return to previous mode)
+- **Preview toolbar**: 4-icon pill (Rows2, Columns2, PictureInPicture2, Scan) — active state `bg-indigo`, inactive hover `bg-white/15`, cursor-pointer on inactive, cursor-default on active
+- **Floating preview**: Draggable via invisible top strip, resizable from all 4 corners + 4 edges, viewport-clamped resize, position/size persisted
+- **Per-direction split sizes**: `verticalSplitPct`/`horizontalSplitPct` in settings store, persisted independently via `onLayoutChanged`
+- **Canvas reparenting**: Single `<canvas>` moved between dock/float/fullwindow target refs. `key={splitDirection}` on inner panel group forces remount; reparenting effect depends on both `previewMode` and `splitDirection`
+- **Esc behavior**: Fullwindow Esc returns to `previousPreviewMode` (tracked in store), guards against looping back to fullwindow
+- **Borderless panels**: Resize handles `bg-transparent hover:bg-border`, no panel border classes
+- **Default layout**: Side panels at 12% minimum, simple 4-node default graph (Time → Noise → Color Ramp → Output), fit-to-view on init
+- Files: `PreviewToolbar.tsx`, `PreviewPanel.tsx`, `FloatingPreview.tsx`, `FullWindowOverlay.tsx`, `App.tsx`, `settingsStore.ts`, `resizable.tsx`
 
 ### Phase 2 — Spectra Mode + UX Polish
 
@@ -317,8 +345,11 @@ All tokens work with any Tailwind color utility prefix: `bg-`, `text-`, `border-
 ## Important Layout Notes
 
 The app uses react-resizable-panels for the main layout:
-- Outer horizontal group: palette (18%) | center (64%) | properties (18%)
-- Center vertical group: node canvas (70%) | shader preview (30%)
-- All panels are resizable with min/max constraints
+- Outer horizontal group: palette (12%) | center | properties (12%) — panels start at minimum width
+- When docked: inner split group (vertical or horizontal) with canvas + preview. Split sizes persisted per direction via `verticalSplitPct`/`horizontalSplitPct` in settings store. Panel group uses `key={splitDirection}` to remount on direction change.
+- When floating/fullwindow: center is full-width canvas only; preview renders in separate overlay components
+- Panel resize handles are invisible by default (`bg-transparent`), visible on hover (`hover:bg-border`)
+- No visible borders between panels — clean seamless look
 - React Flow requires its parent to have explicit width/height — the panel system provides this
+- Canvas reparenting `useEffect` must depend on both `previewMode` and `splitDirection` to re-attach canvas after panel remounts
 - See [src/App.tsx](src/App.tsx) and [src/components/ui/resizable.tsx](src/components/ui/resizable.tsx)
