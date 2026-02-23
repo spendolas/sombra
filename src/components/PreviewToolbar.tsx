@@ -17,7 +17,7 @@ export function PreviewToolbar({ className }: PreviewToolbarProps) {
   const isDockedV = previewMode === 'docked' && splitDirection === 'vertical'
 
   const active = 'bg-indigo text-fg hover:bg-indigo cursor-default'
-  const inactive = 'text-fg-dim hover:bg-white/15 hover:text-fg cursor-pointer'
+  const inactive = 'text-fg-dim hover:bg-surface-elevated hover:text-fg cursor-pointer'
 
   return (
     <div

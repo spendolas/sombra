@@ -4,16 +4,7 @@
 
 import { BaseEdge, getBezierPath, type EdgeProps } from '@xyflow/react'
 import type { EdgeData } from '../nodes/types'
-
-const PORT_COLORS: Record<string, string> = {
-  float: '#d4d4d8',
-  vec2: '#34d399',
-  vec3: '#60a5fa',
-  vec4: '#a78bfa',
-  color: '#fbbf24',
-  sampler2D: '#f472b6',
-  fnref: '#22d3ee',
-}
+import { PORT_COLORS } from '../utils/port-colors'
 
 export function TypedEdge({
   id,
@@ -38,7 +29,7 @@ export function TypedEdge({
 
   const edgeData = data as EdgeData | undefined
   const portType = edgeData?.sourcePortType as string | undefined
-  const color = (portType && PORT_COLORS[portType]) ?? '#6b7280'
+  const color = (portType && PORT_COLORS[portType]) ?? PORT_COLORS.default
 
   return (
     <BaseEdge

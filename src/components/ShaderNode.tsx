@@ -13,29 +13,7 @@ import { LabeledHandle } from '@/components/labeled-handle'
 import { BaseHandle } from '@/components/base-handle'
 import { cn } from '@/lib/utils'
 
-/**
- * Get color for port type (for visual differentiation)
- */
-function getPortColor(type: string): string {
-  switch (type) {
-    case 'float':
-      return '#d4d4d8'
-    case 'vec2':
-      return '#34d399'
-    case 'vec3':
-      return '#60a5fa'
-    case 'vec4':
-      return '#a78bfa'
-    case 'color':
-      return '#fbbf24'
-    case 'sampler2D':
-      return '#f472b6'
-    case 'fnref':
-      return '#22d3ee'
-    default:
-      return '#9ca3af'
-  }
-}
+import { getPortColor } from '../utils/port-colors'
 
 /**
  * Check if a param is visible given current param values
@@ -109,7 +87,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
 
   if (!definition) {
     return (
-      <div className="px-4 py-2 bg-red-900 border border-red-700 rounded text-white">
+      <div className="px-4 py-2 bg-surface-raised border border-edge rounded text-destructive">
         Unknown node: {nodeData.type}
       </div>
     )

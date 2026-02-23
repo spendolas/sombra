@@ -24,7 +24,7 @@ export function BaseHandle({
       )}
       style={{
         borderColor: handleColor ?? '#6b7280',
-        backgroundColor: connected ? (handleColor ?? '#6b7280') : 'var(--surface-elevated, #1a1a2e)',
+        backgroundColor: connected ? (handleColor ?? '#6b7280') : 'var(--surface-elevated)',
         ...props.style,
       }}
     >
