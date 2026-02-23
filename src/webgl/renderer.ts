@@ -151,6 +151,7 @@ export class WebGLRenderer {
   render() {
     const gl = this.gl
     if (!this.program || !this.vao) return
+    if (gl.isContextLost()) return
 
     // Update canvas size (account for device pixel ratio for crisp rendering)
     const dpr = window.devicePixelRatio || 1

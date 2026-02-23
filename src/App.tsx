@@ -5,12 +5,16 @@ import '@xyflow/react/dist/style.css'
 import { WebGLRenderer } from './webgl/renderer'
 import { useLiveCompiler } from './compiler'
 import { useGraphStore } from './stores/graphStore'
+import { useSettingsStore } from './stores/settingsStore'
 import { createSpectraWorleyRidged } from './utils/test-graph'
 import { nodeRegistry } from './nodes/registry'
 import { ShaderNode } from './components/ShaderNode'
 import { NodePalette } from './components/NodePalette'
 import { FlowCanvas } from './components/FlowCanvas'
 import { PropertiesPanel } from './components/PropertiesPanel'
+import { PreviewPanel } from './components/PreviewPanel'
+import { FloatingPreview } from './components/FloatingPreview'
+import { FullWindowOverlay } from './components/FullWindowOverlay'
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -20,6 +24,18 @@ import {
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rendererRef = useRef<WebGLRenderer | null>(null)
+
+  // Target refs for canvas reparenting
+  const dockTargetRef = useRef<HTMLDivElement>(null)
+  const floatTargetRef = useRef<HTMLDivElement>(null)
+  const fullTargetRef = useRef<HTMLDivElement>(null)
+
+  // Preview mode state
+  const previewMode = useSettingsStore((s) => s.previewMode)
+  const splitDirection = useSettingsStore((s) => s.splitDirection)
+  const setPreviewMode = useSettingsStore((s) => s.setPreviewMode)
+  const splitPct = useSettingsStore((s) => splitDirection === 'vertical' ? s.verticalSplitPct : s.horizontalSplitPct)
+  const setSplitPct = useSettingsStore((s) => s.setSplitPct)
 
   // React Flow integration
   const nodes = useGraphStore((state) => state.nodes)
@@ -101,6 +117,35 @@ function App() {
     }
   }, [])
 
+  // Reparent canvas into the active target container
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const targetMap = {
+      docked: dockTargetRef.current,
+      floating: floatTargetRef.current,
+      fullwindow: fullTargetRef.current,
+    }
+    const target = targetMap[previewMode]
+    if (target && canvas.parentElement !== target) {
+      target.appendChild(canvas)
+    }
+  }, [previewMode, splitDirection])
+
+  // Esc key exits fullwindow mode
+  useEffect(() => {
+    if (previewMode !== 'fullwindow') return
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setPreviewMode('docked')
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [previewMode, setPreviewMode])
+
   // Live compiler - updates shader when graph changes
   const handleCompile = useCallback((result: { success: boolean; fragmentShader: string }) => {
     if (result.success && rendererRef.current) {
@@ -113,9 +158,20 @@ function App() {
 
   useLiveCompiler(handleCompile)
 
+  // Determine center split direction based on mode
+  const isDocked = previewMode === 'docked'
+
   return (
     <ReactFlowProvider>
       <div className="h-screen w-screen grid grid-cols-1 bg-surface">
+        {/* Hidden canvas holder — canvas is always mounted here initially */}
+        <div className="hidden">
+          <canvas
+            ref={canvasRef}
+            className="w-full h-full block"
+          />
+        </div>
+
         <ResizablePanelGroup direction="horizontal">
           {/* Left — Node Palette */}
           <ResizablePanel id="palette" defaultSize="18%" minSize="12%" maxSize="30%">
@@ -125,36 +181,43 @@ function App() {
           </ResizablePanel>
           <ResizableHandle />
 
-          {/* Center — Canvas + Preview (vertical split) */}
+          {/* Center — Canvas + Preview */}
           <ResizablePanel id="center" defaultSize="64%">
-            <ResizablePanelGroup direction="vertical">
-              <ResizablePanel id="canvas" defaultSize="70%" minSize="30%">
-                <div className="relative w-full h-full">
-                  <FlowCanvas
-                    nodes={nodes}
-                    edges={edges}
-                    nodeTypes={nodeTypes}
-                    onNodesChange={onNodesChange}
-                    onEdgesChange={onEdgesChange}
-                    setEdges={setEdges}
-                    onConnect={onConnect}
-                    onAddNode={addNode}
-                  />
-                </div>
-              </ResizablePanel>
-              <ResizableHandle />
-              <ResizablePanel id="preview" defaultSize="30%" minSize="10%">
-                <div className="relative w-full h-full bg-black border-t border-edge">
-                  <div className="absolute top-2 left-2 z-10 text-xs px-2 py-1 rounded text-fg-dim bg-surface-raised">
-                    Preview
+            {isDocked ? (
+              <ResizablePanelGroup key={splitDirection} direction={splitDirection} onLayoutChanged={(layout) => { if (layout.preview != null) setSplitPct(splitDirection, layout.preview) }}>
+                <ResizablePanel id="canvas" defaultSize={`${100 - splitPct}%`} minSize="30%">
+                  <div className="relative w-full h-full">
+                    <FlowCanvas
+                      nodes={nodes}
+                      edges={edges}
+                      nodeTypes={nodeTypes}
+                      onNodesChange={onNodesChange}
+                      onEdgesChange={onEdgesChange}
+                      setEdges={setEdges}
+                      onConnect={onConnect}
+                      onAddNode={addNode}
+                    />
                   </div>
-                  <canvas
-                    ref={canvasRef}
-                    className="w-full h-full"
-                  />
-                </div>
-              </ResizablePanel>
-            </ResizablePanelGroup>
+                </ResizablePanel>
+                <ResizableHandle />
+                <ResizablePanel id="preview" defaultSize={`${splitPct}%`} minSize="10%">
+                  <PreviewPanel targetRef={dockTargetRef} />
+                </ResizablePanel>
+              </ResizablePanelGroup>
+            ) : (
+              <div className="relative w-full h-full">
+                <FlowCanvas
+                  nodes={nodes}
+                  edges={edges}
+                  nodeTypes={nodeTypes}
+                  onNodesChange={onNodesChange}
+                  onEdgesChange={onEdgesChange}
+                  setEdges={setEdges}
+                  onConnect={onConnect}
+                  onAddNode={addNode}
+                />
+              </div>
+            )}
           </ResizablePanel>
           <ResizableHandle />
 
@@ -165,6 +228,16 @@ function App() {
             </div>
           </ResizablePanel>
         </ResizablePanelGroup>
+
+        {/* Floating preview — rendered outside panel layout */}
+        {previewMode === 'floating' && (
+          <FloatingPreview targetRef={floatTargetRef} />
+        )}
+
+        {/* Full window overlay — covers everything */}
+        {previewMode === 'fullwindow' && (
+          <FullWindowOverlay targetRef={fullTargetRef} />
+        )}
       </div>
     </ReactFlowProvider>
   )
