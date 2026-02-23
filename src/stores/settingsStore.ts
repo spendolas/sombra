@@ -23,6 +23,7 @@ interface SettingsState {
   autoCompile: boolean   // Auto-compile on graph changes
   compileDebounceMs: number  // Debounce delay for auto-compile
   previewMode: PreviewMode
+  previousPreviewMode: PreviewMode
   splitDirection: SplitDirection
   floatingPosition: { x: number; y: number }
   floatingSize: { width: number; height: number }
@@ -61,6 +62,7 @@ const DEFAULT_SETTINGS: Omit<SettingsState, keyof SettingsActions> = {
   autoCompile: true,
   compileDebounceMs: 100,
   previewMode: 'docked',
+  previousPreviewMode: 'docked',
   splitDirection: 'vertical',
   floatingPosition: { x: -1, y: -1 },  // sentinel → compute default on first use
   floatingSize: { width: 400, height: 300 },
@@ -101,7 +103,7 @@ export const useSettingsStore = create<SettingsState>()(
       setPreviewHeight: (height) => set({ previewHeight: height }),
       setAutoCompile: (auto) => set({ autoCompile: auto }),
       setCompileDebounceMs: (ms) => set({ compileDebounceMs: ms }),
-      setPreviewMode: (mode) => set({ previewMode: mode }),
+      setPreviewMode: (mode) => set((s) => ({ previousPreviewMode: s.previewMode, previewMode: mode })),
       setSplitDirection: (dir) => set({ splitDirection: dir }),
       setFloatingPosition: (pos) => set({ floatingPosition: pos }),
       setFloatingSize: (size) => set({ floatingSize: size }),

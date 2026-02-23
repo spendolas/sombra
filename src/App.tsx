@@ -32,6 +32,7 @@ function App() {
 
   // Preview mode state
   const previewMode = useSettingsStore((s) => s.previewMode)
+  const previousPreviewMode = useSettingsStore((s) => s.previousPreviewMode)
   const splitDirection = useSettingsStore((s) => s.splitDirection)
   const setPreviewMode = useSettingsStore((s) => s.setPreviewMode)
   const splitPct = useSettingsStore((s) => splitDirection === 'vertical' ? s.verticalSplitPct : s.horizontalSplitPct)
@@ -139,7 +140,7 @@ function App() {
 
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setPreviewMode('docked')
+        setPreviewMode(previousPreviewMode === 'fullwindow' ? 'docked' : previousPreviewMode)
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -174,8 +175,8 @@ function App() {
 
         <ResizablePanelGroup direction="horizontal">
           {/* Left — Node Palette */}
-          <ResizablePanel id="palette" defaultSize="18%" minSize="12%" maxSize="30%">
-            <div className="h-full p-4 overflow-y-auto bg-surface-alt border-r border-edge min-w-[160px]">
+          <ResizablePanel id="palette" defaultSize="12%" minSize="12%" maxSize="30%">
+            <div className="h-full p-4 overflow-y-auto bg-surface-alt min-w-[160px]">
               <NodePalette />
             </div>
           </ResizablePanel>
@@ -222,8 +223,8 @@ function App() {
           <ResizableHandle />
 
           {/* Right — Properties */}
-          <ResizablePanel id="properties" defaultSize="18%" minSize="12%" maxSize="30%">
-            <div className="h-full p-4 overflow-y-auto bg-surface-alt border-l border-edge min-w-[160px]">
+          <ResizablePanel id="properties" defaultSize="12%" minSize="12%" maxSize="30%">
+            <div className="h-full p-4 overflow-y-auto bg-surface-alt min-w-[160px]">
               <PropertiesPanel selectedNode={selectedNode} />
             </div>
           </ResizablePanel>
