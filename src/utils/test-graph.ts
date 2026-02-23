@@ -4,6 +4,7 @@
 
 import type { Node, Edge } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
+import { layoutGraph } from './layout'
 
 /**
  * Create a simple test graph: Color → Fragment Output
@@ -111,27 +112,28 @@ export function createSpectraValueFBM(): {
   edges: Edge<EdgeData>[]
 } {
   const nodes: Node<NodeData>[] = [
-    // Value noise fnref source
+    // Time feeds FBM.phase (2nd input) — above Noise to match handle order
+    {
+      id: 'sp-time',
+      type: 'shaderNode',
+      position: { x: 0, y: 0 },
+      data: { type: 'time', params: { speed: 0.5 } },
+    },
+    // Value noise fnref source → FBM.noiseFn (3rd input) — below Time
     {
       id: 'sp-noise-ref',
       type: 'shaderNode',
-      position: { x: 0, y: 0 },
+      position: { x: 0, y: 160 },
       data: {
         type: 'noise',
         params: { scale: 1.0, noiseType: 'value' },
       },
     },
-    {
-      id: 'sp-time',
-      type: 'shaderNode',
-      position: { x: 0, y: 280 },
-      data: { type: 'time', params: { speed: 0.5 } },
-    },
     // FBM: 1 octave = single noise pass (auto_uv coords)
     {
       id: 'sp-fbm',
       type: 'shaderNode',
-      position: { x: 300, y: 0 },
+      position: { x: 280, y: 40 },
       data: {
         type: 'fbm',
         params: { scale: 1.0, fractalMode: 'standard', octaves: 1, lacunarity: 2.0, gain: 0.5 },
@@ -141,7 +143,7 @@ export function createSpectraValueFBM(): {
     {
       id: 'sp-ramp',
       type: 'shaderNode',
-      position: { x: 600, y: 0 },
+      position: { x: 560, y: 40 },
       data: {
         type: 'color_ramp',
         params: {
@@ -160,7 +162,7 @@ export function createSpectraValueFBM(): {
     {
       id: 'sp-pixel',
       type: 'shaderNode',
-      position: { x: 900, y: 0 },
+      position: { x: 840, y: 40 },
       data: {
         type: 'pixel_grid',
         params: { pixelSize: 8, shape: 'square', threshold: 1.0 },
@@ -169,7 +171,7 @@ export function createSpectraValueFBM(): {
     {
       id: 'sp-output',
       type: 'shaderNode',
-      position: { x: 1200, y: 60 },
+      position: { x: 1100, y: 40 },
       data: { type: 'fragment_output', params: {} },
     },
   ]
@@ -213,7 +215,7 @@ export function createSpectraValueFBM(): {
     },
   ]
 
-  return { nodes, edges }
+  return { nodes: layoutGraph(nodes, edges), edges }
 }
 
 /**
@@ -228,7 +230,7 @@ export function createSpectraSimplexFBM(): {
   edges: Edge<EdgeData>[]
 } {
   const nodes: Node<NodeData>[] = [
-    // Noise cell quantization: 344px cells (8 dots per cell row at pixelSize=43)
+    // Quantize UV → FBM.coords (1st input) — top of column 0
     {
       id: 'sp2-quv',
       type: 'shaderNode',
@@ -238,27 +240,28 @@ export function createSpectraSimplexFBM(): {
         params: { pixelSize: 344 },
       },
     },
-    // Simplex noise fnref source
+    // Time → FBM.phase (2nd input) — middle of column 0
+    {
+      id: 'sp2-time',
+      type: 'shaderNode',
+      position: { x: 0, y: 140 },
+      data: { type: 'time', params: { speed: 0.25 } },
+    },
+    // Simplex noise fnref → FBM.noiseFn (3rd input) — bottom of column 0
     {
       id: 'sp2-noise-ref',
       type: 'shaderNode',
-      position: { x: 0, y: 220 },
+      position: { x: 0, y: 280 },
       data: {
         type: 'noise',
         params: { scale: 1.0, noiseType: 'simplex' },
       },
     },
-    {
-      id: 'sp2-time',
-      type: 'shaderNode',
-      position: { x: 0, y: 440 },
-      data: { type: 'time', params: { speed: 0.25 } },
-    },
     // FBM: 1 octave = single noise pass (coords from Quantize UV)
     {
       id: 'sp2-fbm',
       type: 'shaderNode',
-      position: { x: 300, y: 0 },
+      position: { x: 280, y: 40 },
       data: {
         type: 'fbm',
         params: { scale: 1.0, fractalMode: 'standard', octaves: 1, lacunarity: 2.0, gain: 0.5 },
@@ -268,7 +271,7 @@ export function createSpectraSimplexFBM(): {
     {
       id: 'sp2-ramp',
       type: 'shaderNode',
-      position: { x: 600, y: 0 },
+      position: { x: 560, y: 40 },
       data: {
         type: 'color_ramp',
         params: {
@@ -285,7 +288,7 @@ export function createSpectraSimplexFBM(): {
     {
       id: 'sp2-pixel',
       type: 'shaderNode',
-      position: { x: 900, y: 0 },
+      position: { x: 840, y: 40 },
       data: {
         type: 'pixel_grid',
         params: { pixelSize: 43, shape: 'square', threshold: 1.0 },
@@ -294,7 +297,7 @@ export function createSpectraSimplexFBM(): {
     {
       id: 'sp2-output',
       type: 'shaderNode',
-      position: { x: 1200, y: 60 },
+      position: { x: 1100, y: 40 },
       data: { type: 'fragment_output', params: {} },
     },
   ]
@@ -344,7 +347,7 @@ export function createSpectraSimplexFBM(): {
     },
   ]
 
-  return { nodes, edges }
+  return { nodes: layoutGraph(nodes, edges), edges }
 }
 
 /**
@@ -366,86 +369,54 @@ export function createSpectraWorleyRidged(): {
   edges: Edge<EdgeData>[]
 } {
   const nodes: Node<NodeData>[] = [
-    // Quantize UV: 28px cells (pixelSize only — scale/seed moved to UV Transform)
+    // === Main chain — cascading Y for horizontal output→input wires ===
+    // Traced backward from Fragment Output: each node's output aligns with target's input
     {
       id: 'sp3-quv',
       type: 'shaderNode',
-      position: { x: 0, y: 0 },
+      position: { x: 0, y: 234 },
       data: {
         type: 'quantize_uv',
         params: { pixelSize: 28 },
       },
     },
-    // UV Transform: scale=0.1 (spectra foldScale), offset=seed (spectra random)
     {
       id: 'sp3-uvt',
       type: 'shaderNode',
-      position: { x: 150, y: 0 },
+      position: { x: 260, y: 206 },
       data: {
         type: 'uv_transform',
         params: { scaleX: 0.1, scaleY: 0.1, offsetX: 95.7, offsetY: 79.98 },
       },
     },
-    // Domain Warp: organic distortion (spectra warpStrength=0.2, base frequency)
     {
       id: 'sp3-warp',
       type: 'shaderNode',
-      position: { x: 300, y: 0 },
+      position: { x: 520, y: 156 },
       data: {
         type: 'domain_warp',
         params: { strength: 0.2, frequency: 1.0 },
       },
     },
-    // Worley noise fnref source
-    {
-      id: 'sp3-noise-ref',
-      type: 'shaderNode',
-      position: { x: 0, y: 220 },
-      data: {
-        type: 'noise',
-        params: { scale: 1.0, noiseType: 'worley2d' },
-      },
-    },
-    {
-      id: 'sp3-time',
-      type: 'shaderNode',
-      position: { x: 0, y: 440 },
-      data: { type: 'time', params: { speed: 0.0001 } },
-    },
-    // FBM: ridged worley, 1 octave, scale=1.0 (foldScale already applied in Quantize UV)
     {
       id: 'sp3-fbm',
       type: 'shaderNode',
-      position: { x: 600, y: 0 },
+      position: { x: 780, y: 128 },
       data: {
         type: 'fbm',
         params: { scale: 1.0, fractalMode: 'ridged', octaves: 1, lacunarity: 2.0, gain: 0.1 },
       },
     },
-    // Smoothstep range compression: smoothstep(0.2, 0.8, noise) — matches spectra
-    {
-      id: 'sp3-edge0',
-      type: 'shaderNode',
-      position: { x: 600, y: 220 },
-      data: { type: 'float_constant', params: { value: 0.2 } },
-    },
-    {
-      id: 'sp3-edge1',
-      type: 'shaderNode',
-      position: { x: 600, y: 340 },
-      data: { type: 'float_constant', params: { value: 0.8 } },
-    },
     {
       id: 'sp3-smooth',
       type: 'shaderNode',
-      position: { x: 900, y: 0 },
+      position: { x: 1040, y: 56 },
       data: { type: 'smoothstep', params: {} },
     },
-    // Cobalt Drift ramp
     {
       id: 'sp3-ramp',
       type: 'shaderNode',
-      position: { x: 1200, y: 0 },
+      position: { x: 1300, y: 28 },
       data: {
         type: 'color_ramp',
         params: {
@@ -458,11 +429,10 @@ export function createSpectraWorleyRidged(): {
         },
       },
     },
-    // Pixel Grid: 4px visible pixels, square, binary threshold
     {
       id: 'sp3-pixel',
       type: 'shaderNode',
-      position: { x: 1500, y: 0 },
+      position: { x: 1560, y: 0 },
       data: {
         type: 'pixel_grid',
         params: { pixelSize: 3.5, shape: 'square', threshold: 1.0 },
@@ -471,8 +441,43 @@ export function createSpectraWorleyRidged(): {
     {
       id: 'sp3-output',
       type: 'shaderNode',
-      position: { x: 1800, y: 60 },
+      position: { x: 1800, y: 0 },
       data: { type: 'fragment_output', params: {} },
+    },
+
+    // === Aux: above main chain (feed upper inputs on target) ===
+    // Number(0.2) → Smoothstep.edge0 (1st input) — sub-column between FBM and SS
+    {
+      id: 'sp3-edge0',
+      type: 'shaderNode',
+      position: { x: 900, y: -20 },
+      data: { type: 'float_constant', params: { value: 0.2 } },
+    },
+    // Number(0.8) → Smoothstep.edge1 (2nd input) — below 0.2, still above SS.x level
+    {
+      id: 'sp3-edge1',
+      type: 'shaderNode',
+      position: { x: 900, y: 56 },
+      data: { type: 'float_constant', params: { value: 0.8 } },
+    },
+
+    // === Aux: below main chain (feed lower inputs on target) ===
+    // Time → Domain Warp.phase (2nd input, below coords)
+    {
+      id: 'sp3-time',
+      type: 'shaderNode',
+      position: { x: 520, y: 490 },
+      data: { type: 'time', params: { speed: 0.0001 } },
+    },
+    // Worley noise → FBM.noiseFn (3rd input, below coords/phase)
+    {
+      id: 'sp3-noise-ref',
+      type: 'shaderNode',
+      position: { x: 780, y: 530 },
+      data: {
+        type: 'noise',
+        params: { scale: 1.0, noiseType: 'worley2d' },
+      },
     },
   ]
 
@@ -557,7 +562,7 @@ export function createSpectraWorleyRidged(): {
     },
   ]
 
-  return { nodes, edges }
+  return { nodes: layoutGraph(nodes, edges), edges }
 }
 
 /**
@@ -756,7 +761,7 @@ export function createSpectraBoxNone(): {
     },
   ]
 
-  return { nodes, edges }
+  return { nodes: layoutGraph(nodes, edges), edges }
 }
 
 /**

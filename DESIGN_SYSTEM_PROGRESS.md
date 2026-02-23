@@ -145,6 +145,13 @@ Light mode port colors use the **-600 Tailwind stop** of the same hue — darker
 
 ## Changelog
 
+### 2026-02-23 (Auto-Layout Utility — Dagre + Handle-Order Post-Processing)
+- **New file:** `src/utils/layout.ts` — dagre-based auto-layout for node graphs
+- **Two-pass layout:** Pass 1: `@dagrejs/dagre` left-to-right DAG positioning with estimated node dimensions. Pass 2: handle-order post-processing reorders siblings in the same rank to match the target's input handle order (eliminates wire crossings).
+- **Node size estimation:** Computes width/height from `NodeDefinition` port counts (header + outputs + inputs + connectable params + regular params + custom component area).
+- **All test graph presets updated:** `src/utils/test-graph.ts` — all 4 spectra presets + utility test graphs now use `layoutGraph()` instead of manual positions.
+- **New dependency:** `@dagrejs/dagre` (+ `@types/dagre`)
+
 ### 2026-02-23 (Random Node Refactor — Stable Seed + Decimals + Semantic Recompilation)
 - **Random node refactored:** Replaced `u_random` uniform with stored `seed` hidden param. Value is now deterministic and stable — only changes on explicit Randomise click.
 - **New `decimals` param:** Controls output precision (0 = integer, 7 = full float). GLSL rounds via `floor(raw / step + 0.5) * step`.

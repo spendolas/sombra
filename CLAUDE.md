@@ -19,6 +19,7 @@
 | UI Components | shadcn/ui + react-resizable-panels | Headless components, resizable layout |
 | Styling | Tailwind CSS v4 | Utility-first, Vite plugin integration |
 | WebGL | Raw WebGL2 | No Three.js - output is fragment shaders only |
+| Layout | @dagrejs/dagre | DAG auto-layout for node positioning |
 | GLSL | GLSL ES 3.0 | Modern syntax, 97%+ browser support |
 | Backend | None (Phase 0-4) | localStorage + JSON export, static site |
 | Deploy | GitHub Pages | Free hosting at `/sombra/` base path |
@@ -37,6 +38,7 @@ sombra/
 │   ├── nodes/           # Node type definitions (one file per category or node)
 │   ├── compiler/        # Graph-to-GLSL compiler logic
 │   ├── stores/          # Zustand stores for app state
+│   ├── utils/           # Graph layout (dagre auto-layout), test preset graphs
 │   ├── webgl/           # WebGL renderer (fullscreen quad, offscreen preview)
 │   ├── App.tsx          # Root layout component
 │   ├── main.tsx         # Entry point
@@ -272,6 +274,14 @@ Replicate the full spectra-pixel-bg experience as composable node-graph features
 - Files: modified `pixel-grid.ts`, `bayer-dither.ts`, created `postprocess/quantize-uv.ts`, modified `index.ts`, `test-graph.ts`
 
 **Acceptance test:** All 4 spectra presets (Value FBM, Simplex FBM, Worley Ridged, Box None) reproducible as node graphs. ✅
+
+**Auto-Layout Utility** ✅ Complete
+- **Dagre auto-layout** (`src/utils/layout.ts`): two-pass layout for test graph presets
+  - Pass 1: `@dagrejs/dagre` LR layout with estimated node dimensions from `NodeDefinition` port counts
+  - Pass 2: handle-order post-processing — reorders siblings in the same dagre rank feeding the same target so nodes match the target's input handle order (top handle → topmost node)
+- Node size estimation: header + outputs + inputs + connectable params + regular params + custom component area
+- All 4 spectra presets and utility test graphs use `layoutGraph()` — no manual positions needed
+- Files: `src/utils/layout.ts` (new), `src/utils/test-graph.ts` (all presets use layoutGraph), `package.json` (+@dagrejs/dagre)
 
 **Node count after Sprint 4.75:** 18 nodes (down from 20 — merged 4 math nodes into 2)
 **Node count after Sprint 5:** 19 nodes (18 + Vec2 Constant; UV Coords modified, not added)

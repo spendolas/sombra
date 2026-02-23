@@ -290,6 +290,15 @@ General-purpose multi-stop gradient mapper: float (0-1) → color (vec3). This i
 
 **After Sprint 4: 20 nodes** (4 separate noise → 1 unified = net -3). **After Sprint 4.5: still 20 nodes** (adds connectable param handles, no new nodes). **After Sprint 4.75: 18 nodes** (merged 4 math → 2 unified). **After Sprint 5: 19 nodes** (UV Coords extended, +1 Vec2 Constant). **After Sprint 5.5: 19 nodes** (compiler change + rename, no new nodes). **After Sprint 6: 20 nodes** (+1 Color Ramp). **After Sprint 7: 22 nodes** (+2 Pixel Grid, Bayer Dither). **Phase 2 complete: 22 nodes.**
 
+### Auto-Layout Utility ✅ Complete
+
+Dagre-based auto-layout for node positioning (`src/utils/layout.ts`, dependency: `@dagrejs/dagre`).
+
+- **Two-pass layout:** dagre LR positioning + handle-order post-processing
+- **Node size estimation:** derives width/height from `NodeDefinition` port counts (outputs, inputs, connectable params, regular params, custom component area)
+- **Handle-order reorder:** siblings in the same dagre rank feeding the same target are vertically reordered to match the target's input handle order, eliminating wire crossings
+- All 4 spectra presets and utility test graphs use `layoutGraph()` — manual positions are no longer needed
+
 ### Key Files
 
 | File | Sprint 4 Changes |
