@@ -66,7 +66,7 @@ export function createUVTestGraph(): {
     type: 'shaderNode',
     position: { x: 100, y: 100 },
     data: {
-      type: 'uv_coords',
+      type: 'uv_transform',
       params: {},
     },
   }
@@ -339,6 +339,418 @@ export function createSpectraSimplexFBM(): {
     // Pixel Grid → Fragment Output
     {
       id: 'sp2-e6', source: 'sp2-pixel', target: 'sp2-output',
+      sourceHandle: 'result', targetHandle: 'color', type: 'typed',
+      data: { sourcePort: 'result', targetPort: 'color', sourcePortType: 'vec3' },
+    },
+  ]
+
+  return { nodes, edges }
+}
+
+/**
+ * Spectra preset: Worley Ridged
+ * Pipeline: Quantize UV(28) → UV Transform(scale=0.1, offset=seed) → Domain Warp(0.2) →
+ *           FBM(worley, ridged, 1.0) → Smoothstep(0.2,0.8) → Color Ramp + Pixel Grid(3.5) → Output
+ *
+ * Spectra params matched exactly:
+ * - foldScale=0.1 → UV Transform scale
+ * - seed=[95.7, 79.98] → UV Transform offset
+ * - warpStrength=0.2 → Domain Warp strength
+ * - octaves=1, gain=0, lacunarity=2 → FBM params
+ * - min=0.2, max=0.8 → Smoothstep range compression
+ * - speed=0.00001 → Time node (near-static)
+ * - 28px noise cells (cellPixelSize = 8 × 3.5), 3.5px visible pixels
+ */
+export function createSpectraWorleyRidged(): {
+  nodes: Node<NodeData>[]
+  edges: Edge<EdgeData>[]
+} {
+  const nodes: Node<NodeData>[] = [
+    // Quantize UV: 28px cells (pixelSize only — scale/seed moved to UV Transform)
+    {
+      id: 'sp3-quv',
+      type: 'shaderNode',
+      position: { x: 0, y: 0 },
+      data: {
+        type: 'quantize_uv',
+        params: { pixelSize: 28 },
+      },
+    },
+    // UV Transform: scale=0.1 (spectra foldScale), offset=seed (spectra random)
+    {
+      id: 'sp3-uvt',
+      type: 'shaderNode',
+      position: { x: 150, y: 0 },
+      data: {
+        type: 'uv_transform',
+        params: { scaleX: 0.1, scaleY: 0.1, offsetX: 95.7, offsetY: 79.98 },
+      },
+    },
+    // Domain Warp: organic distortion (spectra warpStrength=0.2, base frequency)
+    {
+      id: 'sp3-warp',
+      type: 'shaderNode',
+      position: { x: 300, y: 0 },
+      data: {
+        type: 'domain_warp',
+        params: { strength: 0.2, frequency: 1.0 },
+      },
+    },
+    // Worley noise fnref source
+    {
+      id: 'sp3-noise-ref',
+      type: 'shaderNode',
+      position: { x: 0, y: 220 },
+      data: {
+        type: 'noise',
+        params: { scale: 1.0, noiseType: 'worley2d' },
+      },
+    },
+    {
+      id: 'sp3-time',
+      type: 'shaderNode',
+      position: { x: 0, y: 440 },
+      data: { type: 'time', params: { speed: 0.0001 } },
+    },
+    // FBM: ridged worley, 1 octave, scale=1.0 (foldScale already applied in Quantize UV)
+    {
+      id: 'sp3-fbm',
+      type: 'shaderNode',
+      position: { x: 600, y: 0 },
+      data: {
+        type: 'fbm',
+        params: { scale: 1.0, fractalMode: 'ridged', octaves: 1, lacunarity: 2.0, gain: 0.1 },
+      },
+    },
+    // Smoothstep range compression: smoothstep(0.2, 0.8, noise) — matches spectra
+    {
+      id: 'sp3-edge0',
+      type: 'shaderNode',
+      position: { x: 600, y: 220 },
+      data: { type: 'float_constant', params: { value: 0.2 } },
+    },
+    {
+      id: 'sp3-edge1',
+      type: 'shaderNode',
+      position: { x: 600, y: 340 },
+      data: { type: 'float_constant', params: { value: 0.8 } },
+    },
+    {
+      id: 'sp3-smooth',
+      type: 'shaderNode',
+      position: { x: 900, y: 0 },
+      data: { type: 'smoothstep', params: {} },
+    },
+    // Cobalt Drift ramp
+    {
+      id: 'sp3-ramp',
+      type: 'shaderNode',
+      position: { x: 1200, y: 0 },
+      data: {
+        type: 'color_ramp',
+        params: {
+          interpolation: 'smooth',
+          stops: [
+            { position: 0.0, color: [0.137, 0.231, 0.416] },
+            { position: 0.5, color: [0.186, 0.333, 0.710] },
+            { position: 1.0, color: [0.300, 0.500, 1.000] },
+          ],
+        },
+      },
+    },
+    // Pixel Grid: 4px visible pixels, square, binary threshold
+    {
+      id: 'sp3-pixel',
+      type: 'shaderNode',
+      position: { x: 1500, y: 0 },
+      data: {
+        type: 'pixel_grid',
+        params: { pixelSize: 3.5, shape: 'square', threshold: 1.0 },
+      },
+    },
+    {
+      id: 'sp3-output',
+      type: 'shaderNode',
+      position: { x: 1800, y: 60 },
+      data: { type: 'fragment_output', params: {} },
+    },
+  ]
+
+  const edges: Edge<EdgeData>[] = [
+    // Quantize UV → UV Transform.coords
+    {
+      id: 'sp3-e0a', source: 'sp3-quv', target: 'sp3-uvt',
+      sourceHandle: 'uv', targetHandle: 'coords', type: 'typed',
+      data: { sourcePort: 'uv', targetPort: 'coords', sourcePortType: 'vec2' },
+    },
+    // UV Transform → Domain Warp.coords (scaled + seeded)
+    {
+      id: 'sp3-e0b', source: 'sp3-uvt', target: 'sp3-warp',
+      sourceHandle: 'uv', targetHandle: 'coords', type: 'typed',
+      data: { sourcePort: 'uv', targetPort: 'coords', sourcePortType: 'vec2' },
+    },
+    // Domain Warp.warped → FBM.coords
+    {
+      id: 'sp3-ew', source: 'sp3-warp', target: 'sp3-fbm',
+      sourceHandle: 'warped', targetHandle: 'coords', type: 'typed',
+      data: { sourcePort: 'warped', targetPort: 'coords', sourcePortType: 'vec2' },
+    },
+    // Noise(worley).fn → FBM.noiseFn (fnref)
+    {
+      id: 'sp3-e1', source: 'sp3-noise-ref', target: 'sp3-fbm',
+      sourceHandle: 'fn', targetHandle: 'noiseFn', type: 'typed',
+      data: { sourcePort: 'fn', targetPort: 'noiseFn', sourcePortType: 'fnref' },
+    },
+    // Time → Domain Warp.phase (3D warp displaces phase too)
+    {
+      id: 'sp3-et', source: 'sp3-time', target: 'sp3-warp',
+      sourceHandle: 'time', targetHandle: 'phase', type: 'typed',
+      data: { sourcePort: 'time', targetPort: 'phase', sourcePortType: 'float' },
+    },
+    // Domain Warp.warpedPhase → FBM.phase (spatially-varying phase from 3D warp)
+    {
+      id: 'sp3-e2', source: 'sp3-warp', target: 'sp3-fbm',
+      sourceHandle: 'warpedPhase', targetHandle: 'phase', type: 'typed',
+      data: { sourcePort: 'warpedPhase', targetPort: 'phase', sourcePortType: 'float' },
+    },
+    // Number(0.2) → Smoothstep.edge0
+    {
+      id: 'sp3-es0', source: 'sp3-edge0', target: 'sp3-smooth',
+      sourceHandle: 'value', targetHandle: 'edge0', type: 'typed',
+      data: { sourcePort: 'value', targetPort: 'edge0', sourcePortType: 'float' },
+    },
+    // Number(0.8) → Smoothstep.edge1
+    {
+      id: 'sp3-es1', source: 'sp3-edge1', target: 'sp3-smooth',
+      sourceHandle: 'value', targetHandle: 'edge1', type: 'typed',
+      data: { sourcePort: 'value', targetPort: 'edge1', sourcePortType: 'float' },
+    },
+    // FBM.value → Smoothstep.x
+    {
+      id: 'sp3-e3a', source: 'sp3-fbm', target: 'sp3-smooth',
+      sourceHandle: 'value', targetHandle: 'x', type: 'typed',
+      data: { sourcePort: 'value', targetPort: 'x', sourcePortType: 'float' },
+    },
+    // Smoothstep.result → Color Ramp.t
+    {
+      id: 'sp3-e3', source: 'sp3-smooth', target: 'sp3-ramp',
+      sourceHandle: 'result', targetHandle: 't', type: 'typed',
+      data: { sourcePort: 'result', targetPort: 't', sourcePortType: 'float' },
+    },
+    // Smoothstep.result → Pixel Grid.threshold
+    {
+      id: 'sp3-e4', source: 'sp3-smooth', target: 'sp3-pixel',
+      sourceHandle: 'result', targetHandle: 'threshold', type: 'typed',
+      data: { sourcePort: 'result', targetPort: 'threshold', sourcePortType: 'float' },
+    },
+    // Color Ramp → Pixel Grid.color
+    {
+      id: 'sp3-e5', source: 'sp3-ramp', target: 'sp3-pixel',
+      sourceHandle: 'color', targetHandle: 'color', type: 'typed',
+      data: { sourcePort: 'color', targetPort: 'color', sourcePortType: 'vec3' },
+    },
+    // Pixel Grid → Fragment Output
+    {
+      id: 'sp3-e6', source: 'sp3-pixel', target: 'sp3-output',
+      sourceHandle: 'result', targetHandle: 'color', type: 'typed',
+      data: { sourcePort: 'result', targetPort: 'color', sourcePortType: 'vec3' },
+    },
+  ]
+
+  return { nodes, edges }
+}
+
+/**
+ * Spectra preset: Box None
+ * Pipeline: Quantize UV(104) → UV Transform(scale=0.5, offset=seed) → Domain Warp(strength=5) →
+ *           Noise(box, boxFreq=201) → Smoothstep(0.2,0.8) → Color Ramp + Pixel Grid(13) → Output
+ *
+ * Spectra params:
+ * - foldScale=0.5 → UV Transform scale
+ * - seed=[42.3, 167.5] → UV Transform offset
+ * - foldIntensity=2 → pixelSize = 3.0 + 2×5.0 = 13, cellPixelSize = 8×13 = 104
+ * - noiseType=box, fractalType=none → raw box noise, no FBM
+ * - boxFreq=201 → extremely fine hash grid
+ * - warpStrength=5 → heavy domain warp
+ * - speed=5 → fast animation
+ * - min=0.2, max=0.8 → Smoothstep range compression
+ * - colors=Cobalt Drift (default)
+ */
+export function createSpectraBoxNone(): {
+  nodes: Node<NodeData>[]
+  edges: Edge<EdgeData>[]
+} {
+  const nodes: Node<NodeData>[] = [
+    // Quantize UV: 104px cells (8×13) — pixelSize only
+    {
+      id: 'sp4-quv',
+      type: 'shaderNode',
+      position: { x: 0, y: 0 },
+      data: {
+        type: 'quantize_uv',
+        params: { pixelSize: 104 },
+      },
+    },
+    // UV Transform: scale=0.5 (spectra foldScale), offset=seed
+    {
+      id: 'sp4-uvt',
+      type: 'shaderNode',
+      position: { x: 150, y: 0 },
+      data: {
+        type: 'uv_transform',
+        params: { scaleX: 0.5, scaleY: 0.5, offsetX: 42.3, offsetY: 167.5 },
+      },
+    },
+    // Domain Warp: heavy distortion (spectra warpStrength=5)
+    {
+      id: 'sp4-warp',
+      type: 'shaderNode',
+      position: { x: 300, y: 0 },
+      data: {
+        type: 'domain_warp',
+        params: { strength: 5.0, frequency: 1.0 },
+      },
+    },
+    {
+      id: 'sp4-time',
+      type: 'shaderNode',
+      position: { x: 0, y: 220 },
+      data: { type: 'time', params: { speed: 5.0 } },
+    },
+    // Box noise: raw (no FBM), boxFreq=201
+    {
+      id: 'sp4-noise',
+      type: 'shaderNode',
+      position: { x: 600, y: 0 },
+      data: {
+        type: 'noise',
+        params: { scale: 1.0, noiseType: 'box', boxFreq: 201 },
+      },
+    },
+    // Smoothstep range compression: smoothstep(0.2, 0.8, noise)
+    {
+      id: 'sp4-edge0',
+      type: 'shaderNode',
+      position: { x: 600, y: 220 },
+      data: { type: 'float_constant', params: { value: 0.2 } },
+    },
+    {
+      id: 'sp4-edge1',
+      type: 'shaderNode',
+      position: { x: 600, y: 340 },
+      data: { type: 'float_constant', params: { value: 0.8 } },
+    },
+    {
+      id: 'sp4-smooth',
+      type: 'shaderNode',
+      position: { x: 900, y: 0 },
+      data: { type: 'smoothstep', params: {} },
+    },
+    // Cobalt Drift ramp
+    {
+      id: 'sp4-ramp',
+      type: 'shaderNode',
+      position: { x: 1200, y: 0 },
+      data: {
+        type: 'color_ramp',
+        params: {
+          interpolation: 'smooth',
+          stops: [
+            { position: 0.0, color: [0.137, 0.231, 0.416] },
+            { position: 0.5, color: [0.186, 0.333, 0.710] },
+            { position: 1.0, color: [0.300, 0.500, 1.000] },
+          ],
+        },
+      },
+    },
+    // Pixel Grid: 13px visible pixels, square
+    {
+      id: 'sp4-pixel',
+      type: 'shaderNode',
+      position: { x: 1500, y: 0 },
+      data: {
+        type: 'pixel_grid',
+        params: { pixelSize: 13, shape: 'square', threshold: 1.0 },
+      },
+    },
+    {
+      id: 'sp4-output',
+      type: 'shaderNode',
+      position: { x: 1800, y: 60 },
+      data: { type: 'fragment_output', params: {} },
+    },
+  ]
+
+  const edges: Edge<EdgeData>[] = [
+    // Quantize UV → UV Transform.coords
+    {
+      id: 'sp4-e0a', source: 'sp4-quv', target: 'sp4-uvt',
+      sourceHandle: 'uv', targetHandle: 'coords', type: 'typed',
+      data: { sourcePort: 'uv', targetPort: 'coords', sourcePortType: 'vec2' },
+    },
+    // UV Transform → Domain Warp.coords (scaled + seeded)
+    {
+      id: 'sp4-e0b', source: 'sp4-uvt', target: 'sp4-warp',
+      sourceHandle: 'uv', targetHandle: 'coords', type: 'typed',
+      data: { sourcePort: 'uv', targetPort: 'coords', sourcePortType: 'vec2' },
+    },
+    // Time → Domain Warp.phase
+    {
+      id: 'sp4-et1', source: 'sp4-time', target: 'sp4-warp',
+      sourceHandle: 'time', targetHandle: 'phase', type: 'typed',
+      data: { sourcePort: 'time', targetPort: 'phase', sourcePortType: 'float' },
+    },
+    // Domain Warp.warped → Noise.coords
+    {
+      id: 'sp4-ew', source: 'sp4-warp', target: 'sp4-noise',
+      sourceHandle: 'warped', targetHandle: 'coords', type: 'typed',
+      data: { sourcePort: 'warped', targetPort: 'coords', sourcePortType: 'vec2' },
+    },
+    // Time → Noise.phase
+    {
+      id: 'sp4-et2', source: 'sp4-time', target: 'sp4-noise',
+      sourceHandle: 'time', targetHandle: 'phase', type: 'typed',
+      data: { sourcePort: 'time', targetPort: 'phase', sourcePortType: 'float' },
+    },
+    // Number(0.2) → Smoothstep.edge0
+    {
+      id: 'sp4-es0', source: 'sp4-edge0', target: 'sp4-smooth',
+      sourceHandle: 'value', targetHandle: 'edge0', type: 'typed',
+      data: { sourcePort: 'value', targetPort: 'edge0', sourcePortType: 'float' },
+    },
+    // Number(0.8) → Smoothstep.edge1
+    {
+      id: 'sp4-es1', source: 'sp4-edge1', target: 'sp4-smooth',
+      sourceHandle: 'value', targetHandle: 'edge1', type: 'typed',
+      data: { sourcePort: 'value', targetPort: 'edge1', sourcePortType: 'float' },
+    },
+    // Noise.value → Smoothstep.x
+    {
+      id: 'sp4-e3a', source: 'sp4-noise', target: 'sp4-smooth',
+      sourceHandle: 'value', targetHandle: 'x', type: 'typed',
+      data: { sourcePort: 'value', targetPort: 'x', sourcePortType: 'float' },
+    },
+    // Smoothstep.result → Color Ramp.t
+    {
+      id: 'sp4-e3', source: 'sp4-smooth', target: 'sp4-ramp',
+      sourceHandle: 'result', targetHandle: 't', type: 'typed',
+      data: { sourcePort: 'result', targetPort: 't', sourcePortType: 'float' },
+    },
+    // Smoothstep.result → Pixel Grid.threshold
+    {
+      id: 'sp4-e4', source: 'sp4-smooth', target: 'sp4-pixel',
+      sourceHandle: 'result', targetHandle: 'threshold', type: 'typed',
+      data: { sourcePort: 'result', targetPort: 'threshold', sourcePortType: 'float' },
+    },
+    // Color Ramp → Pixel Grid.color
+    {
+      id: 'sp4-e5', source: 'sp4-ramp', target: 'sp4-pixel',
+      sourceHandle: 'color', targetHandle: 'color', type: 'typed',
+      data: { sourcePort: 'color', targetPort: 'color', sourcePortType: 'vec3' },
+    },
+    // Pixel Grid → Fragment Output
+    {
+      id: 'sp4-e6', source: 'sp4-pixel', target: 'sp4-output',
       sourceHandle: 'result', targetHandle: 'color', type: 'typed',
       data: { sourcePort: 'result', targetPort: 'color', sourcePortType: 'vec3' },
     },

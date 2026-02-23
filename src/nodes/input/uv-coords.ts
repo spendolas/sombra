@@ -1,17 +1,20 @@
 /**
- * UV Coordinates node - provides fragment UV coordinates (0-1)
- * with optional Scale/Rotate/Translate transform (Redshift-style)
+ * UV Transform node - SRT transform for UV coordinates
+ * When unconnected, generates frozen-ref UVs (same as auto_uv).
+ * When wired, transforms incoming coordinates (e.g. from Quantize UV).
  */
 
 import type { NodeDefinition } from '../types'
 
 export const uvCoordsNode: NodeDefinition = {
-  type: 'uv_coords',
-  label: 'UV Coordinates',
+  type: 'uv_transform',
+  label: 'UV Transform',
   category: 'Input',
-  description: 'UV coordinates with optional SRT transform',
+  description: 'Scale, rotate, and translate UV coordinates',
 
-  inputs: [],
+  inputs: [
+    { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },
+  ],
 
   outputs: [
     {
@@ -30,12 +33,10 @@ export const uvCoordsNode: NodeDefinition = {
   ],
 
   glsl: (ctx) => {
-    const { outputs, inputs, uniforms } = ctx
-    uniforms.add('u_resolution')
-    uniforms.add('u_ref_size')
+    const { outputs, inputs } = ctx
     const c = `${outputs.uv}_c`
     const s = `${outputs.uv}_s`
-    return `vec2 ${outputs.uv} = (v_uv - 0.5) * u_resolution / u_ref_size + 0.5;
+    return `vec2 ${outputs.uv} = ${inputs.coords};
 ${outputs.uv} -= 0.5;
 ${outputs.uv} *= vec2(${inputs.scaleX}, ${inputs.scaleY});
 float ${c} = cos(${inputs.rotate});

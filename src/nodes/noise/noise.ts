@@ -10,6 +10,7 @@ const FUNCTION_KEY_MAP: Record<string, string> = {
   simplex: 'snoise3d_01',
   value: 'vnoise3d',
   worley: 'worley3d',
+  worley2d: 'worley2d',
   box: 'boxnoise3d',
 }
 
@@ -17,7 +18,7 @@ export const noiseNode: NodeDefinition = {
   type: 'noise',
   label: 'Noise',
   category: 'Noise',
-  description: 'Configurable 3D noise — simplex, value, worley, or box',
+  description: 'Configurable noise — simplex, value, worley (2D/3D), or box',
 
   functionKey: (params) => FUNCTION_KEY_MAP[(params.noiseType as string) || 'simplex'] || 'snoise3d_01',
 
@@ -38,43 +39,54 @@ export const noiseNode: NodeDefinition = {
       options: [
         { value: 'simplex', label: 'Simplex' },
         { value: 'value', label: 'Value' },
-        { value: 'worley', label: 'Worley' },
+        { value: 'worley', label: 'Worley 3D' },
+        { value: 'worley2d', label: 'Worley 2D' },
         { value: 'box', label: 'Box' },
       ],
     },
-    { id: 'boxFreq', label: 'Box Freq', type: 'float', default: 1.0, min: 0.5, max: 8.0, step: 0.5, connectable: true, showWhen: { noiseType: 'box' } },
+    { id: 'boxFreq', label: 'Box Freq', type: 'float', default: 1.0, min: 0.5, max: 256.0, step: 0.5, connectable: true, showWhen: { noiseType: 'box' } },
+    { id: 'seed', label: 'Seed', type: 'float', default: 12345, min: 0, max: 99999, step: 1, connectable: true },
   ],
 
   glsl: (ctx) => {
     const { inputs, outputs, params } = ctx
     const noiseType = (params.noiseType as string) || 'simplex'
 
-    // inputs.scale and inputs.boxFreq are GLSL expressions (connectable params)
+    // inputs.scale, inputs.boxFreq, inputs.seed are GLSL expressions (connectable params)
     const s = inputs.scale
+    const id = ctx.nodeId.replace(/-/g, '_')
+    const seedOff = `n_soff_${id}`
+    const sc = `n_sc_${id}`
+    const seedLine = `vec2 ${seedOff} = fract(vec2(${inputs.seed}) * vec2(12.9898, 78.233)) * 1000.0;`
+    const coordsLine = `vec2 ${sc} = ${inputs.coords} + ${seedOff};`
 
     // Register functions based on selected noise type
     switch (noiseType) {
       case 'simplex':
         registerSimplex(ctx)
-        return `float ${outputs.value} = snoise3d_01(vec3(${inputs.coords} * ${s}, ${inputs.phase}));`
+        return `${seedLine}\n  ${coordsLine}\n  float ${outputs.value} = snoise3d_01(vec3(${sc} * ${s}, ${inputs.phase}));`
 
       case 'value':
         registerValueNoise(ctx)
-        return `float ${outputs.value} = vnoise3d(vec3(${inputs.coords} * ${s}, ${inputs.phase}));`
+        return `${seedLine}\n  ${coordsLine}\n  float ${outputs.value} = vnoise3d(vec3(${sc} * ${s}, ${inputs.phase}));`
 
       case 'worley':
         registerWorley(ctx)
-        return `float ${outputs.value} = worley3d(vec3(${inputs.coords} * ${s}, ${inputs.phase}));`
+        return `${seedLine}\n  ${coordsLine}\n  float ${outputs.value} = worley3d(vec3(${sc} * ${s}, ${inputs.phase}));`
+
+      case 'worley2d':
+        registerWorley2d(ctx)
+        return `${seedLine}\n  ${coordsLine}\n  float ${outputs.value} = worley2d(vec3(${sc} * ${s}, ${inputs.phase}));`
 
       case 'box': {
         registerBoxNoise(ctx)
         const bf = inputs.boxFreq
-        return `float ${outputs.value} = hash3(floor(vec3(${inputs.coords} * ${s}, ${inputs.phase}) * ${bf}) / ${bf});`
+        return `${seedLine}\n  ${coordsLine}\n  float ${outputs.value} = vnoise3d(floor(vec3(${sc} * ${s}, ${inputs.phase}) * ${bf}) / ${bf});`
       }
 
       default:
         registerSimplex(ctx)
-        return `float ${outputs.value} = snoise3d_01(vec3(${inputs.coords} * ${s}, ${inputs.phase}));`
+        return `${seedLine}\n  ${coordsLine}\n  float ${outputs.value} = snoise3d_01(vec3(${sc} * ${s}, ${inputs.phase}));`
     }
   },
 }
@@ -185,15 +197,40 @@ function registerWorley(ctx: import('../types').GLSLContext) {
 }`)
 }
 
+// --- Worley 2D (spectra-compatible) ---
+function registerWorley2d(ctx: import('../types').GLSLContext) {
+  addFunction(ctx, 'hash12', `float hash12(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}`)
+  addFunction(ctx, 'worley2d', `float worley2d(vec3 p) {
+  vec2 i = floor(p.xy);
+  vec2 f = fract(p.xy);
+  float minDist = 1.0;
+  for (int y = -1; y <= 1; y++) {
+    for (int x = -1; x <= 1; x++) {
+      vec2 offset = vec2(float(x), float(y));
+      vec2 cell = i + offset;
+      float h1 = hash12(cell + vec2(37.0, 17.0) + floor(p.z));
+      float h2 = hash12(cell + vec2(11.0, 29.0) + floor(p.z));
+      vec2 r = vec2(
+        fract(sin(h1 * 43758.5453 + p.z) * 43758.5453),
+        fract(sin(h2 * 24693.173 + p.z) * 43758.5453)
+      );
+      vec2 d = offset + r - f;
+      float dist = dot(d, d);
+      minDist = min(minDist, dist);
+    }
+  }
+  return clamp(1.0 - sqrt(minDist), 0.0, 1.0);
+}`)
+}
+
 // --- Box Noise ---
 function registerBoxNoise(ctx: import('../types').GLSLContext) {
-  addFunction(ctx, 'hash3', `float hash3(vec3 p) {
-  p = fract(p * 0.1031);
-  p += dot(p, p.zyx + 31.32);
-  return fract((p.x + p.y) * p.z);
-}`)
+  // Box noise uses vnoise3d for spatially-correlated output (matching spectra)
+  registerValueNoise(ctx)
   // 1-arg version for fnref consumers (boxFreq=1.0)
   addFunction(ctx, 'boxnoise3d', `float boxnoise3d(vec3 p) {
-  return hash3(floor(p));
+  return vnoise3d(floor(p));
 }`)
 }

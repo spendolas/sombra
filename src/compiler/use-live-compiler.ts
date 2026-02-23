@@ -2,7 +2,7 @@
  * Live compiler hook - watches graph changes and auto-compiles
  */
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useGraphStore } from '../stores/graphStore'
 import { useCompilerStore } from '../stores/compilerStore'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -29,6 +29,19 @@ export function useLiveCompiler(
 
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
+  // Keep latest nodes/edges in refs so they're accessible without triggering the effect
+  const nodesRef = useRef(nodes)
+  const edgesRef = useRef(edges)
+  nodesRef.current = nodes
+  edgesRef.current = edges
+
+  // Derive semantic key from only shader-relevant data (skip selection, position, measured state)
+  const semanticKey = useMemo(() => {
+    const nk = nodes.map(n => `${n.id}:${JSON.stringify(n.data)}`).join('|')
+    const ek = edges.map(e => `${e.source}:${e.sourceHandle}->${e.target}:${e.targetHandle}`).join('|')
+    return nk + '||' + ek
+  }, [nodes, edges])
+
   useEffect(() => {
     if (!autoCompile) return
 
@@ -42,7 +55,7 @@ export function useLiveCompiler(
 
     timeoutRef.current = setTimeout(() => {
       try {
-        const result = compileGraph(nodes, edges)
+        const result = compileGraph(nodesRef.current, edgesRef.current)
 
         if (result.success) {
           // Update stores with successful compilation
@@ -91,5 +104,6 @@ export function useLiveCompiler(
         clearTimeout(timeoutRef.current)
       }
     }
-  }, [nodes, edges, autoCompile, debounceMs, setShaders, setErrors, setCompiling, markCompileSuccess, onCompile])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [semanticKey, autoCompile, debounceMs, setShaders, setErrors, setCompiling, markCompileSuccess, onCompile])
 }

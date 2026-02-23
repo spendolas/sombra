@@ -63,7 +63,7 @@ That's it. The node appears in the palette, compiles to GLSL, and renders on the
 |---|---|---|---|
 | `type` | `string` | Yes | Unique identifier, snake_case (e.g. `'float_constant'`) |
 | `label` | `string` | Yes | Display name in palette and node header |
-| `category` | `string` | Yes | Palette grouping: `'Input'`, `'Math'`, `'Noise'`, `'Color'`, `'Output'` |
+| `category` | `string` | Yes | Palette grouping: `'Input'`, `'Math'`, `'Noise'`, `'Color'`, `'Post-process'`, `'Output'` |
 | `description` | `string` | No | Tooltip in palette |
 | `inputs` | `PortDefinition[]` | Yes | Input ports (can be empty `[]`) |
 | `outputs` | `PortDefinition[]` | Yes | Output ports |
@@ -247,12 +247,12 @@ glsl: (ctx) => {
 }
 ```
 
-Available uniforms: `u_time` (float), `u_resolution` (vec2), `u_mouse` (vec2), `u_ref_size` (float).
+Available uniforms: `u_time` (float), `u_resolution` (vec2), `u_mouse` (vec2), `u_ref_size` (float), `u_dpr` (float).
 
 ### Pattern: Multi-line GLSL
 
 ```ts
-// UV Coordinates — src/nodes/input/uv-coords.ts
+// UV Transform — src/nodes/input/uv-coords.ts
 glsl: (ctx) => {
   ctx.uniforms.add('u_resolution')
   ctx.uniforms.add('u_ref_size')
@@ -450,7 +450,8 @@ Key variable collections (full IDs in Claude memory file `figma-ds.md`):
 | `float_constant` | Number | Input | `input/float-constant.ts` | — |
 | `color_constant` | Color | Input | `input/color-constant.ts` | color param |
 | `vec2_constant` | Vec2 | Input | `input/vec2-constant.ts` | — |
-| `uv_coords` | UV Coordinates | Input | `input/uv-coords.ts` | connectable (5 SRT params) |
+| `uv_transform` | UV Transform | Input | `input/uv-coords.ts` | coords input (auto_uv), connectable (5 SRT params) |
+| `random` | Random | Input | `input/random.ts` | connectable (min/max), Decimals param, hidden seed, custom component (RandomDisplay), per-instance hash |
 | `time` | Time | Input | `input/time.ts` | uniform |
 | `resolution` | Resolution | Input | `input/resolution.ts` | uniform |
 | `arithmetic` | Arithmetic | Math | `math/arithmetic.ts` | enum, dynamicInputs, hidden |
@@ -460,15 +461,15 @@ Key variable collections (full IDs in Claude memory file `figma-ds.md`):
 | `remap` | Remap | Math | `math/remap.ts` | — |
 | `turbulence` | Turbulence | Math | `math/turbulence.ts` | — |
 | `ridged` | Ridged | Math | `math/ridged.ts` | — |
-| `noise` | Noise | Noise | `noise/noise.ts` | enum, connectable, fnref output, auto_uv, showWhen, addFunction |
-| `fbm` | FBM | Noise | `noise/fbm.ts` | connectable (4), enum, fnref input, auto_uv, instance-unique function |
-| `domain_warp` | Domain Warp | Noise | `noise/domain-warp.ts` | connectable, fnref input, auto_uv, addFunction |
+| `noise` | Noise | Noise | `noise/noise.ts` | enum, connectable (scale, seed), fnref output, auto_uv, showWhen, addFunction |
+| `fbm` | FBM | Noise | `noise/fbm.ts` | connectable (4 + seed), enum, fnref input, auto_uv, instance-unique function |
+| `domain_warp` | Domain Warp | Noise | `noise/domain-warp.ts` | connectable (strength, freq, seed), fnref input, auto_uv, warpedPhase output, addFunction |
 | `hsv_to_rgb` | HSV to RGB | Color | `color/hsv-to-rgb.ts` | GLSL helper function |
 | `brightness_contrast` | Brightness/Contrast | Color | `color/brightness-contrast.ts` | connectable |
 | `color_ramp` | Color Ramp | Color | `color/color-ramp.ts` | enum, hidden param, custom component (ColorRampEditor), presets |
 | `pixel_grid` | Pixel Grid | Post-process | `postprocess/pixel-grid.ts` | connectable (2), enum, addFunction (bayer + SDF), gl_FragCoord |
 | `bayer_dither` | Bayer Dither | Post-process | `postprocess/bayer-dither.ts` | addFunction (bayer), gl_FragCoord |
-| `quantize_uv` | Quantize UV | Post-process | `postprocess/quantize-uv.ts` | connectable, gl_FragCoord, frozen-ref UV output |
+| `quantize_uv` | Quantize UV | Post-process | `postprocess/quantize-uv.ts` | connectable (pixelSize), gl_FragCoord, frozen-ref UV output |
 | `fragment_output` | Fragment Output | Output | `output/fragment-output.ts` | master output (one per graph) |
 
 All files are under `src/nodes/`. Use the closest match as a starting template for new nodes.

@@ -145,6 +145,30 @@ Light mode port colors use the **-600 Tailwind stop** of the same hue — darker
 
 ## Changelog
 
+### 2026-02-23 (Random Node Refactor — Stable Seed + Decimals + Semantic Recompilation)
+- **Random node refactored:** Replaced `u_random` uniform with stored `seed` hidden param. Value is now deterministic and stable — only changes on explicit Randomise click.
+- **New `decimals` param:** Controls output precision (0 = integer, 7 = full float). GLSL rounds via `floor(raw / step + 0.5) * step`.
+- **RandomDisplay custom component:** `src/components/RandomDisplay.tsx` — shows computed value (matching GLSL rounding) + Shuffle icon Randomise button. Auto-initializes seed on first render.
+- **Exported `hashNodeId`:** Now importable from `src/nodes/input/random.ts` for use by both GLSL generator and RandomDisplay.
+- **Removed `u_random` infrastructure:** Removed `randomValue` field + `Math.random()` from `renderer.ts`, removed `u_random` uniform declaration from `glsl-generator.ts`.
+- **Semantic recompilation key:** `use-live-compiler.ts` now derives a `semanticKey` from node data + edges only (skips selection, position, measured state). Eliminates wasteful recompilation on select/deselect/drag.
+- **Figma:** Random template (80:733) updated: added Separator, Float Slider "Decimals" (value: 7), Random Display frame (mono value text + Randomise button). All colors variable-bound, button size/radius bound to Sizes/Radius collections.
+
+### 2026-02-22 (Seed System + Random Node + DS Updates)
+- **UV Coordinates → UV Transform:** Renamed node type (`uv_coords` → `uv_transform`), added `coords` input with `default: 'auto_uv'` (dual-purpose: source when unconnected, transformer when wired)
+- **Seed param on noise nodes:** Added `seed` float param (default: 12345, connectable) to Noise, FBM, and Domain Warp. GLSL derives vec2 offset from seed for pattern variation.
+- **Domain Warp `warpedPhase` output:** New float output for spatially-varying phase (3rd warp channel, z-displacement)
+- **Random Number node:** New `src/nodes/input/random.ts` — per-instance node ID hash + `u_random` uniform, connectable min/max params
+- **`u_random` uniform:** Added to `renderer.ts` (Math.random() per recompile) and `glsl-generator.ts` declaration
+- **Quantize UV simplified:** Stripped `scale`, `seedX`, `seedY` params — now only `pixelSize`. Single-purpose: snap to pixel grid.
+- **Presets 3 & 4 rewired:** Added UV Transform nodes for scale/offset instead of Quantize UV params
+- **Node count:** 23 → 24 (Random added, UV Coordinates renamed to UV Transform, Quantize UV simplified)
+- **Figma:**
+  - Templates: UV Transform (renamed + Coords input), Noise/FBM/Domain Warp (Seed param row), Random (new), Quantize UV (new, pixelSize only), Domain Warp (Warped Phase output)
+  - Node Palette: 22 → 24 items (Random + Quantize UV added, UV Coordinates → UV Transform)
+  - Updated `.figma/design-system.md` template list and palette count
+  - Updated `NODE_AUTHORING_GUIDE.md` node inventory
+
 ### 2026-02-22 (Visual Parity Fix — Value FBM)
 - **Pixel Grid:** Removed `coords` input, now uses `gl_FragCoord.xy` directly for square screen-space pixels
 - **Bayer Dither:** Removed `coords` input, now uses `gl_FragCoord.xy` directly

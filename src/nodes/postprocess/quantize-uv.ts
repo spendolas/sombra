@@ -25,7 +25,7 @@ export const quantizeUvNode: NodeDefinition = {
       type: 'float',
       default: 8,
       min: 2,
-      max: 64,
+      max: 256,
       step: 1,
       connectable: true,
     },

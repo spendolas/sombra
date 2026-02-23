@@ -70,7 +70,7 @@ export const pixelGridNode: NodeDefinition = {
       type: 'float',
       default: 8,
       min: 2,
-      max: 20,
+      max: 64,
       step: 1,
       connectable: true,
     },

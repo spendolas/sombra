@@ -11,6 +11,7 @@ import { floatConstantNode } from './input/float-constant'
 import { vec2ConstantNode } from './input/vec2-constant'
 import { timeNode } from './input/time'
 import { resolutionNode } from './input/resolution'
+import { randomNode } from './input/random'
 
 // Math nodes
 import { arithmeticNode } from './math/arithmetic'
@@ -50,6 +51,7 @@ export const ALL_NODES = [
   vec2ConstantNode,
   timeNode,
   resolutionNode,
+  randomNode,
 
   // Math
   arithmeticNode,

@@ -36,6 +36,7 @@ export const fbmNode: NodeDefinition = {
     { id: 'octaves', label: 'Octaves', type: 'float', default: 4, min: 1, max: 8, step: 1, connectable: true },
     { id: 'lacunarity', label: 'Lacunarity', type: 'float', default: 2.0, min: 1.0, max: 4.0, step: 0.1, connectable: true },
     { id: 'gain', label: 'Gain', type: 'float', default: 0.5, min: 0.1, max: 0.9, step: 0.05, connectable: true },
+    { id: 'seed', label: 'Seed', type: 'float', default: 12345, min: 0, max: 99999, step: 1, connectable: true },
   ],
 
   glsl: (ctx) => {
@@ -75,8 +76,10 @@ ${loopBody}
   return total / maxAmp;
 }`)
 
-    // inputs.scale, inputs.octaves, inputs.lacunarity, inputs.gain are GLSL expressions (connectable params)
-    return `float ${outputs.value} = ${fbmKey}(vec3(${inputs.coords} * ${inputs.scale}, ${inputs.phase}), ${inputs.octaves}, ${inputs.lacunarity}, ${inputs.gain});`
+    // inputs.scale, inputs.octaves, inputs.lacunarity, inputs.gain, inputs.seed are GLSL expressions (connectable params)
+    const seedOff = `fbm_soff_${sanitizedId}`
+    const sc = `fbm_sc_${sanitizedId}`
+    return `vec2 ${seedOff} = fract(vec2(${inputs.seed}) * vec2(12.9898, 78.233)) * 1000.0;\n  vec2 ${sc} = ${inputs.coords} + ${seedOff};\n  float ${outputs.value} = ${fbmKey}(vec3(${sc} * ${inputs.scale}, ${inputs.phase}), ${inputs.octaves}, ${inputs.lacunarity}, ${inputs.gain});`
   },
 }
 
