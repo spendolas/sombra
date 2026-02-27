@@ -45,11 +45,13 @@ sombra/
 │   ├── utils/           # Graph layout (dagre auto-layout), test preset graphs
 │   ├── webgl/           # WebGL renderer (fullscreen quad, offscreen preview)
 │   ├── App.tsx          # Root layout component
-│   ├── main.tsx         # Entry point
+│   ├── main.tsx         # Entry point (inits node library + dev bridge)
+│   ├── dev-bridge.ts    # Exposes window.__sombra for browser automation
 │   └── index.css        # Tailwind imports + dark theme base styles
 ├── components.json      # shadcn/ui configuration
 ├── public/              # Static assets
 ├── ROADMAP.md           # Detailed roadmap (Phases 0-5)
+├── BROWSER-AUTOMATION.md # Full API reference for window.__sombra
 ├── CLAUDE.md            # This file
 └── package.json
 ```
@@ -108,6 +110,16 @@ Canvas reparenting: A single `<canvas>` element is moved between target refs (`d
 - **React Flow** manages canvas state (pan, zoom, selection)
 - **Settings store** persisted to `localStorage` (preview mode, split sizes, floating position/size)
 
+### Dev Bridge (`window.__sombra`)
+
+At startup, `main.tsx` calls `installDevBridge()` which mounts a programmatic API on `window.__sombra`. This allows the Claude Chrome extension, browser console, or any automation tool to create, wire, and manipulate nodes via JavaScript injection.
+
+Key methods: `createNode()`, `connect()`, `setParams()`, `moveNode()`, `removeNode()`, `clearGraph()`, `compile()`, `describeGraph()`, `describeNode()`, `listNodeTypes()`, `exportGraph()`, `importGraph()`, `getFragmentShader()`.
+
+Raw store access: `sombra.stores.graph`, `sombra.stores.compiler`, `sombra.stores.settings`.
+
+See [`BROWSER-AUTOMATION.md`](BROWSER-AUTOMATION.md) for the full API reference with examples.
+
 ## Development Workflow
 
 1. **Adding a new node type**:
@@ -137,6 +149,43 @@ Canvas reparenting: A single `<canvas>` element is moved between target refs (`d
    - Manual testing via dev server (`npm run dev`)
    - Shader compilation errors logged to console with node IDs
    - Future: Unit tests for compiler, integration tests for rendering
+
+## System-Wide Change Checklist
+
+Every non-trivial change should propagate across these layers. Check each that applies:
+
+### Code
+- [ ] New node type: create `src/nodes/<category>/<name>.ts`, register in `src/nodes/index.ts`
+- [ ] New UI component: identify atomic level (atom/molecule/organism), reuse existing DS components first
+- [ ] Token compliance: no raw hex values outside `port-colors.ts` and `bg-black` containers
+- [ ] Connectable params / new port types: update `isValidConnection` in `FlowCanvas.tsx`
+- [ ] New port type: add to `src/utils/port-colors.ts` + update Figma Port Types variable collection
+
+### Browser Automation (`BROWSER-AUTOMATION.md`)
+- [ ] New node type: add to Node Types tables (inputs, outputs, key params)
+- [ ] New port type: add to Port Types & Compatibility table
+- [ ] New API method on `window.__sombra`: document in API Reference section
+- [ ] Changed store shape: update Raw Store Access section
+
+### Figma Design System
+- [ ] New UI component: create Figma component following atomic hierarchy (atom → molecule → organism), bind all fills/strokes/spacing to existing Figma variables — see [`.figma/IMPLEMENTATION_GUIDE.md`](.figma/IMPLEMENTATION_GUIDE.md)
+- [ ] New node type: create node template on Templates page using Node Card component instance with correct handles and params
+- [ ] New token/variable: add to the appropriate Figma variable collection (UI Colors / Port Types / Spacing / Radius / Sizes)
+- [ ] Reuse first: check existing Figma components before creating new ones — compose existing atoms/molecules
+
+### Figma Wiki (`.figma/wiki/`)
+- [ ] New component: add wiki page at appropriate level (`atoms/`, `molecules/`, `organisms/`)
+- [ ] New node type: update `templates/node-templates.md` inventory
+- [ ] Update `README.md` parity table and Table of Contents
+- [ ] Update `.figma/IMPLEMENTATION_GUIDE.md` Section 4 Code Connect table if new named React component
+
+### Project Documentation
+- [ ] Update node count in CLAUDE.md and ROADMAP.md
+- [ ] Update phase status / sprint notes if delivering a tracked feature
+- [ ] Add new node to test graph presets in `src/utils/test-graph.ts` if it demonstrates a key capability
+
+### Cross-Session Memory
+- [ ] Update memory files if new conventions, architecture decisions, or workflow patterns were introduced
 
 ## Deployment
 
@@ -188,6 +237,7 @@ Free, simple, integrates well with GitHub Actions. Custom domain can be added la
 - Shader errors are mapped back to node IDs - look for console logs
 - Use `npm run lint` before committing to catch TypeScript errors early
 - Test WebGL changes in multiple browsers (Chrome, Firefox, Safari) - shader compilation can vary
+- After any change, run through the **System-Wide Change Checklist** above — it covers code, Figma DS, wiki, browser automation, and project docs
 
 ## Current Phase
 
@@ -196,6 +246,7 @@ Free, simple, integrates well with GitHub Actions. Custom domain can be added la
 **Phase 1.2** - ✅ Complete (UI polish, resizable layout, frozen-ref preview)
 **Phase 2** - ✅ Complete (Spectra Mode + UX Polish — 23 nodes, all spectra presets reproducible)
 **Phase 2.5** - ✅ Complete (Preview Mode System + UI Polish)
+**Dev Bridge** - ✅ Complete (`window.__sombra` API for browser automation)
 
 ### Phase 2.5 — Preview Mode System + UI Polish ✅ Complete
 

@@ -330,6 +330,25 @@ Dagre-based auto-layout for node positioning (`src/utils/layout.ts`, dependency:
 
 ---
 
+## Dev Bridge — Browser Automation API ✅ COMPLETE
+
+**Goal:** Expose Sombra's internals on `window.__sombra` so the Claude Chrome extension (or any browser automation / console tool) can programmatically create, wire, and manipulate nodes via JS injection.
+
+**Status:** ✅ Delivered February 2026
+
+### Delivered Features
+
+- [x] `src/dev-bridge.ts` — installs `window.__sombra` at startup via `main.tsx`
+- [x] High-level helpers: `createNode()`, `connect()`, `setParams()`, `moveNode()`, `removeNode()`, `clearGraph()`, `compile()`, `describeGraph()`, `describeNode()`, `listNodeTypes()`, `exportGraph()`, `importGraph()`, `getFragmentShader()`
+- [x] Raw Zustand store access: `sombra.stores.graph`, `sombra.stores.compiler`, `sombra.stores.settings`
+- [x] Node registry access: `sombra.registry`
+- [x] Low-level compiler access: `sombra.compileGraph()`
+- [x] Full API reference: `BROWSER-AUTOMATION.md`
+
+**Milestone:** ✅ Build entire shader graphs from browser console or Chrome extension JS injection.
+
+---
+
 ## Phase 3 — Save/Load/Export
 
 - localStorage auto-save with schema versioning
