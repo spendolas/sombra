@@ -278,6 +278,101 @@ function getFragmentShader(): string | null {
   return useCompilerStore.getState().fragmentShader
 }
 
+/**
+ * Returns a structured description of the entire API surface.
+ * Also prints a formatted summary to the console.
+ */
+function help() {
+  const methods = {
+    createNode: {
+      signature: 'createNode(type, position?, paramOverrides?) → nodeId',
+      description: 'Create a node and add it to the graph',
+    },
+    connect: {
+      signature: 'connect(sourceId, targetId, sourcePort?, targetPort?) → edgeId',
+      description: 'Connect an output port to an input port (defaults to first output/input)',
+    },
+    setParams: {
+      signature: 'setParams(nodeId, params)',
+      description: 'Merge new param values into an existing node',
+    },
+    moveNode: {
+      signature: 'moveNode(nodeId, x, y)',
+      description: 'Reposition a node on the canvas',
+    },
+    removeNode: {
+      signature: 'removeNode(nodeId)',
+      description: 'Delete a node and all its edges',
+    },
+    removeEdge: {
+      signature: 'removeEdge(edgeId)',
+      description: 'Delete a single edge',
+    },
+    clearGraph: {
+      signature: 'clearGraph()',
+      description: 'Remove all nodes and edges',
+    },
+    compile: {
+      signature: 'compile() → CompilationResult',
+      description: 'Manually trigger shader compilation',
+    },
+    exportGraph: {
+      signature: 'exportGraph() → { nodes, edges }',
+      description: 'Snapshot the current graph as JSON',
+    },
+    importGraph: {
+      signature: 'importGraph({ nodes, edges })',
+      description: 'Replace current graph from a snapshot',
+    },
+    listNodeTypes: {
+      signature: 'listNodeTypes() → [{ type, label, category }]',
+      description: 'List all available node type IDs',
+    },
+    describeNode: {
+      signature: 'describeNode(type) → { inputs, outputs, params, ... }',
+      description: 'Get full definition of a node type',
+    },
+    describeGraph: {
+      signature: 'describeGraph() → { nodes, edges }',
+      description: 'Describe the current graph with types, params, and connections',
+    },
+    getFragmentShader: {
+      signature: 'getFragmentShader() → string | null',
+      description: 'Get the compiled fragment shader source',
+    },
+    help: {
+      signature: 'help() → API description object',
+      description: 'Print this help information',
+    },
+  }
+
+  const nodeTypes = listNodeTypes()
+  const portTypes = ['float', 'vec2', 'vec3', 'vec4', 'color', 'sampler2D', 'fnref']
+
+  // Console-friendly output
+  console.log(
+    '%c[Sombra API]%c Available methods:\n' +
+    Object.entries(methods).map(([, m]) => `  ${m.signature}`).join('\n') +
+    '\n\nNode types: ' + nodeTypes.map(n => n.type).join(', ') +
+    '\nPort types: ' + portTypes.join(', ') +
+    '\n\nRaw stores: __sombra.stores.{graph, compiler, settings}' +
+    '\nNode registry: __sombra.registry' +
+    '\nFull docs: BROWSER-AUTOMATION.md',
+    'color: #6366f1; font-weight: bold',
+    'color: inherit',
+  )
+
+  return {
+    description: 'Sombra shader graph automation API',
+    docs: 'See BROWSER-AUTOMATION.md in the repo root for full reference with examples',
+    methods,
+    nodeTypes,
+    portTypes,
+    stores: 'Access via __sombra.stores.{graph, compiler, settings}',
+    registry: 'Access via __sombra.registry',
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /*  Mount on window                                                   */
 /* ------------------------------------------------------------------ */
@@ -299,6 +394,7 @@ export function installDevBridge(): void {
     describeNode,
     describeGraph,
     getFragmentShader,
+    help,
 
     // Raw store access (for advanced use)
     stores: {
@@ -315,5 +411,5 @@ export function installDevBridge(): void {
   }
 
   ;(window as unknown as Record<string, unknown>).__sombra = api
-  console.log('[Sombra] Dev bridge installed → window.__sombra')
+  console.log('[Sombra] Dev bridge installed → window.__sombra  (call __sombra.help() for API docs)')
 }
