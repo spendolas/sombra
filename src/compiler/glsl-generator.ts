@@ -280,22 +280,26 @@ export function compileGraph(
   }
 }
 
+/** Coerce unknown value to a safe GLSL float literal (NaN/Infinity → 0.0) */
+function safeFloat(v: unknown): string {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return '0.0'
+  return Number.isInteger(n) ? `${n}.0` : `${n}`
+}
+
 /**
  * Format a default value as GLSL
  */
 function formatDefaultValue(value: unknown, type: string): string {
-  if (type === 'float') {
-    const n = Number(value)
-    return Number.isInteger(n) ? `${n}.0` : `${n}`
-  }
+  if (type === 'float') return safeFloat(value)
   if (type === 'vec2' && Array.isArray(value)) {
-    return `vec2(${value[0]}, ${value[1]})`
+    return `vec2(${safeFloat(value[0])}, ${safeFloat(value[1])})`
   }
   if (type === 'vec3' && Array.isArray(value)) {
-    return `vec3(${value[0]}, ${value[1]}, ${value[2]})`
+    return `vec3(${safeFloat(value[0])}, ${safeFloat(value[1])}, ${safeFloat(value[2])})`
   }
   if (type === 'vec4' && Array.isArray(value)) {
-    return `vec4(${value[0]}, ${value[1]}, ${value[2]}, ${value[3]})`
+    return `vec4(${safeFloat(value[0])}, ${safeFloat(value[1])}, ${safeFloat(value[2])}, ${safeFloat(value[3])})`
   }
   return '0.0'
 }

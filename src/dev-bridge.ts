@@ -125,6 +125,17 @@ function connect(
   return id
 }
 
+/** Sanitize a param value: coerce non-finite numbers to 0, recurse into arrays */
+function sanitizeParamValue(value: unknown): unknown {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0
+  }
+  if (Array.isArray(value)) {
+    return value.map(sanitizeParamValue)
+  }
+  return value // strings (enums), booleans, objects (color stops) pass through
+}
+
 /**
  * Update params on an existing node.
  *
@@ -134,8 +145,12 @@ function connect(
 function setParams(nodeId: string, params: Record<string, unknown>): void {
   const node = useGraphStore.getState().getNode(nodeId)
   if (!node) throw new Error(`Node "${nodeId}" not found`)
+  const sanitized: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(params)) {
+    sanitized[k] = sanitizeParamValue(v)
+  }
   useGraphStore.getState().updateNodeData(nodeId, {
-    params: { ...(node.data.params as Record<string, unknown>), ...params },
+    params: { ...(node.data.params as Record<string, unknown>), ...sanitized },
   })
 }
 
@@ -199,10 +214,41 @@ function exportGraph(): { nodes: Node<NodeData>[]; edges: Edge<EdgeData>[] } {
   return { nodes, edges }
 }
 
+/** Validate that a graph snapshot has the expected structure */
+function validateGraphSnapshot(graph: unknown): graph is { nodes: Node<NodeData>[]; edges: Edge<EdgeData>[] } {
+  if (!graph || typeof graph !== 'object') return false
+  const g = graph as Record<string, unknown>
+  if (!Array.isArray(g.nodes) || !Array.isArray(g.edges)) return false
+
+  for (const node of g.nodes) {
+    if (!node || typeof node !== 'object') return false
+    const n = node as Record<string, unknown>
+    if (typeof n.id !== 'string') return false
+    if (!n.position || typeof n.position !== 'object') return false
+    if (!n.data || typeof n.data !== 'object') return false
+    const d = n.data as Record<string, unknown>
+    if (typeof d.type !== 'string') return false
+    if (!nodeRegistry.get(d.type)) return false
+  }
+
+  for (const edge of g.edges) {
+    if (!edge || typeof edge !== 'object') return false
+    const e = edge as Record<string, unknown>
+    if (typeof e.id !== 'string') return false
+    if (typeof e.source !== 'string') return false
+    if (typeof e.target !== 'string') return false
+  }
+
+  return true
+}
+
 /**
  * Load a graph from a snapshot (replaces current graph).
  */
-function importGraph(graph: { nodes: Node<NodeData>[]; edges: Edge<EdgeData>[] }): void {
+function importGraph(graph: unknown): void {
+  if (!validateGraphSnapshot(graph)) {
+    throw new Error('Invalid graph snapshot: expected { nodes: [...], edges: [...] } with valid node types')
+  }
   const gs = useGraphStore.getState()
   gs.setNodes(graph.nodes)
   gs.setEdges(graph.edges)
