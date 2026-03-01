@@ -1,6 +1,6 @@
-# Figma-First Implementation Guide
+# Sombra Design System Implementation Guide (V2)
 
-This document is the complete reference for any Claude Code agent implementing designs from the Sombra Figma file. After the parity alignment sprint, Figma is the **single source of truth** for all visual decisions.
+This document is the complete reference for any Claude Code agent working with the Sombra Figma file. V2 uses a **code-first** approach — React components are the source of truth, Figma components are built from code specs.
 
 ---
 
@@ -170,37 +170,33 @@ Figma: Full Window Overlay → <FullWindowOverlay targetRef={ref} />
 
 Complete mapping of every Figma component to its React source:
 
-### Atoms
+### Atoms (V2 IDs)
 | Figma Component | Node ID | Source File | React Component |
 |---|---|---|---|
-| Handle | `17:161` | `src/components/base-handle.tsx` | `BaseHandle` |
-| Palette Item | `17:248` | `src/components/NodePalette.tsx` | (inline) |
-| PlusMinus Button | `17:258` | `src/components/ShaderNode.tsx` | (inline) |
-| Category Header | `37:96` | `src/components/NodePalette.tsx` | (inline `<h3>`) |
-| Port Type Badge | `37:131` | `src/components/PropertiesPanel.tsx` | (inline) |
-| Separator | `37:132` | `src/components/ui/separator.tsx` | `Separator` |
+| Handle | `106:84` | `src/components/base-handle.tsx` | `BaseHandle` |
+| Separator | `106:89` | `src/components/ui/separator.tsx` | `Separator` |
+| Category Header | `106:92` | `src/components/NodePalette.tsx` | (inline `<h3>`) |
+| Palette Item | `106:95` | `src/components/NodePalette.tsx` | (inline) |
+| PlusMinus Button | `106:108` | `src/components/ShaderNode.tsx` | (inline) |
 
-### Molecules
+### Molecules (V2 IDs)
 | Figma Component | Node ID | Source File | React Component |
 |---|---|---|---|
-| Labeled Handle | `37:181` | `src/components/labeled-handle.tsx` | `LabeledHandle` |
-| Float Slider | `17:234` | `src/components/NodeParameters.tsx` | `FloatSlider` |
-| Enum Select | `17:235` | `src/components/NodeParameters.tsx` | `EnumSelect` |
-| Color Input | `17:240` | `src/components/NodeParameters.tsx` | `ColorInput` |
-| Zoom Bar | `17:314` | `src/components/zoom-slider.tsx` | `ZoomSlider` |
-| Connectable Param Row | `37:200` | `src/components/ShaderNode.tsx` | (inline) |
-| Gradient Editor | `50:4208` | `src/components/ColorRampEditor.tsx` | `ColorRampEditor` |
-| Preview Toolbar | `86:100` | `src/components/PreviewToolbar.tsx` | `PreviewToolbar` |
-| Preview Panel | `86:173` | `src/components/PreviewPanel.tsx` | `PreviewPanel` |
+| Labeled Handle | `106:269` | `src/components/labeled-handle.tsx` | `LabeledHandle` |
+| Float Slider | `106:282` | `src/components/NodeParameters.tsx` | `FloatSlider` |
+| Enum Select | `106:288` | `src/components/NodeParameters.tsx` | `EnumSelect` |
+| Color Input | `106:292` | `src/components/NodeParameters.tsx` | `ColorInput` |
+| Connectable Param Row | `106:311` | `src/components/ShaderNode.tsx` | (inline) |
+| Preview Toolbar | `106:352` | `src/components/PreviewToolbar.tsx` | `PreviewToolbar` |
 
-### Organisms
+### Organisms (V2 IDs)
 | Figma Component | Node ID | Source File | React Component |
 |---|---|---|---|
-| Node Card | `88:2435` | `src/components/ShaderNode.tsx` | `ShaderNode` |
-| Node Palette | `39:289` | `src/components/NodePalette.tsx` | `NodePalette` |
-| Properties Panel | `39:393` | `src/components/PropertiesPanel.tsx` | `PropertiesPanel` |
-| Floating Preview | `86:261` | `src/components/FloatingPreview.tsx` | `FloatingPreview` |
-| Full Window Overlay | `86:286` | `src/components/FullWindowOverlay.tsx` | `FullWindowOverlay` |
+| Node Card | `106:405` | `src/components/ShaderNode.tsx` | `ShaderNode` |
+| Node Palette | `106:453` | `src/components/NodePalette.tsx` | `NodePalette` |
+| Properties Panel | `106:485` | `src/components/PropertiesPanel.tsx` | `PropertiesPanel` |
+| Floating Preview | `106:498` | `src/components/FloatingPreview.tsx` | `FloatingPreview` |
+| Full Window Overlay | `106:511` | `src/components/FullWindowOverlay.tsx` | `FullWindowOverlay` |
 
 ---
 
@@ -291,12 +287,13 @@ Uses `react-resizable-panels` with min/max constraints. Panels bg: `bg-surface-a
 
 ### Preview Modes
 
-| Mode | Layout | Figma Scene |
+| Mode | Layout | Figma Scene (V2) |
 |---|---|---|
-| Docked Vertical | Canvas top, preview bottom (70/30 split) | `40:19498` |
-| Docked Horizontal | Canvas left, preview right (70/30 split) | `86:1214` |
-| Floating | Full canvas + 400×300 floating window | `86:1527` |
-| Full Window | Black overlay covering everything | `86:1610` |
+| Docked-V (Default) | Canvas top, preview bottom (70/30 split) | `107:2576` |
+| Docked-H | Canvas left, preview right (70/30 split) | `107:1195` |
+| Floating | Full canvas + floating PiP window | `107:2741` |
+| Fullwindow | Black overlay covering everything | `107:2907` |
+| Selected Node | Docked-V + populated Properties Panel | `107:2921` |
 
 ### Node Card Structure
 
@@ -351,43 +348,34 @@ After implementing any code change from a Figma design:
 
 ---
 
-## 10. Variable Collection Quick Reference
+## 10. Variable Collection Quick Reference (V2)
 
 For Plugin API access, use these collection and variable IDs:
 
 | Collection | ID | Variables |
 |---|---|---|
-| UI Colors | `VariableCollectionId:17:7` | 13 + white(48:4147) |
-| Port Types | `VariableCollectionId:17:21` | 8 |
-| Spacing | `VariableCollectionId:17:914` | 6 |
-| Radius | `VariableCollectionId:17:921` | 4 |
-| Sizes | `VariableCollectionId:43:3517` | 9 |
+| UI Colors | `VariableCollectionId:106:2` | 14 |
+| Port Types | `VariableCollectionId:106:17` | 8 |
+| Spacing | `VariableCollectionId:106:26` | 6 |
+| Radius | (V2) | 4 |
+| Sizes | (V2) | 9 |
 
-**Variable ID format for Plugin API:** `VariableID:17:12` (prefix required)
+**Variable ID format for Plugin API:** `VariableID:106:3` (prefix required)
 
-**Key variable IDs:**
+**Key variable IDs (V2):**
 | Variable | Full ID |
 |---|---|
-| surface/default | `VariableID:17:8` |
-| surface/alt | `VariableID:17:9` |
-| surface/raised | `VariableID:17:10` |
-| surface/elevated | `VariableID:17:11` |
-| fg/default | `VariableID:17:12` |
-| fg/dim | `VariableID:17:13` |
-| fg/subtle | `VariableID:17:14` |
-| fg/muted | `VariableID:17:15` |
-| edge/default | `VariableID:17:16` |
-| edge/subtle | `VariableID:17:17` |
-| indigo/default | `VariableID:17:18` |
-| spacing/xs | `VariableID:17:915` |
-| spacing/sm | `VariableID:17:916` |
-| spacing/md | `VariableID:17:917` |
-| spacing/lg | `VariableID:17:918` |
-| spacing/xl | `VariableID:17:919` |
-| radius/sm | `VariableID:17:922` |
-| radius/md | `VariableID:17:923` |
-| radius/lg | `VariableID:17:924` |
-| radius/full | `VariableID:17:925` |
-| size/handle | `VariableID:43:3518` |
-| size/node-min-w | `VariableID:43:3523` |
-| white | `VariableID:48:4147` |
+| surface/default | `VariableID:106:3` |
+| surface/alt | `VariableID:106:4` |
+| surface/raised | `VariableID:106:5` |
+| surface/elevated | `VariableID:106:6` |
+| fg/default | `VariableID:106:7` |
+| fg/dim | `VariableID:106:8` |
+| fg/subtle | `VariableID:106:9` |
+| fg/muted | `VariableID:106:10` |
+| edge/default | `VariableID:106:11` |
+| edge/subtle | `VariableID:106:12` |
+| indigo/default | `VariableID:106:13` |
+| indigo/hover | `VariableID:106:14` |
+| indigo/active | `VariableID:106:15` |
+| white | `VariableID:106:16` |
