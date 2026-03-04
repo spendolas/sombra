@@ -58,10 +58,10 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
   if (!selectedNode) {
     return (
       <div>
-        <h2 className="text-xs font-semibold uppercase tracking-wider mb-3 text-fg-dim">
+        <h2 className="text-section mb-lg text-fg-dim">
           Properties
         </h2>
-        <p className="text-xs text-fg-muted">
+        <p className="text-body text-fg-muted">
           Select a node to edit properties...
         </p>
       </div>
@@ -73,10 +73,10 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
   if (!definition) {
     return (
       <div>
-        <h2 className="text-xs font-semibold uppercase tracking-wider mb-3 text-fg-dim">
+        <h2 className="text-section mb-lg text-fg-dim">
           Properties
         </h2>
-        <p className="text-xs text-red-400">
+        <p className="text-body text-red-400">
           Unknown node type: {selectedNode.data.type}
         </p>
       </div>
@@ -106,43 +106,43 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
 
   return (
     <div>
-      <h2 className="text-xs font-semibold uppercase tracking-wider mb-3 text-fg-dim">
+      <h2 className="text-section mb-lg text-fg-dim">
         Properties
       </h2>
 
       {/* Node Info */}
-      <div className="mb-4 p-3 rounded-lg bg-surface-raised border border-edge">
-        <div className="text-[10px] uppercase tracking-wide mb-1 text-fg-subtle">
+      <div className="mb-xl p-lg rounded-lg bg-surface-raised border border-edge">
+        <div className="text-category-meta mb-xs text-fg-subtle">
           {definition.category}
         </div>
-        <div className="text-sm font-medium mb-2 text-fg">
+        <div className="text-node-title mb-md text-fg">
           {definition.label}
         </div>
         {definition.description && (
-          <div className="text-xs leading-relaxed text-fg-dim">
+          <div className="text-description text-fg-dim">
             {definition.description}
           </div>
         )}
-        <Separator className="my-2" />
-        <div className="text-[10px] font-mono text-fg-muted">
+        <Separator className="my-md" />
+        <div className="text-mono-id text-fg-muted">
           ID: {selectedNode.id}
         </div>
       </div>
 
       {/* Inputs */}
       {resolvedInputs.length > 0 && (
-        <div className="mb-4">
-          <Label className="text-xs font-semibold mb-2 block text-fg-dim">
+        <div className="mb-xl">
+          <Label className="text-section mb-md block text-fg-dim">
             Inputs
           </Label>
-          <div className="space-y-1">
+          <div className="flex flex-col gap-xs">
             {resolvedInputs.map((input) => (
               <div
                 key={input.id}
-                className="flex justify-between text-[11px] px-2 py-1 rounded bg-surface-raised"
+                className="flex justify-between text-port-type px-md py-xs rounded-sm bg-surface-raised"
               >
                 <span className="text-fg-dim">{input.label}</span>
-                <span className="font-mono text-fg-muted">
+                <span className="text-mono-value text-fg-muted">
                   {input.type}
                 </span>
               </div>
@@ -153,18 +153,18 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
 
       {/* Outputs */}
       {definition.outputs.length > 0 && (
-        <div className="mb-4">
-          <Label className="text-xs font-semibold mb-2 block text-fg-dim">
+        <div className="mb-xl">
+          <Label className="text-section mb-md block text-fg-dim">
             Outputs
           </Label>
-          <div className="space-y-1">
+          <div className="flex flex-col gap-xs">
             {definition.outputs.map((output) => (
               <div
                 key={output.id}
-                className="flex justify-between text-[11px] px-2 py-1 rounded bg-surface-raised"
+                className="flex justify-between text-port-type px-md py-xs rounded-sm bg-surface-raised"
               >
                 <span className="text-fg-dim">{output.label}</span>
-                <span className="font-mono text-fg-muted">
+                <span className="text-mono-value text-fg-muted">
                   {output.type}
                 </span>
               </div>
@@ -175,11 +175,11 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
 
       {/* Parameters */}
       {hasParameters && (
-        <div className="mb-4">
-          <Label className="text-xs font-semibold mb-3 block text-fg-dim">
+        <div className="mb-xl">
+          <Label className="text-section mb-lg block text-fg-dim">
             Parameters
           </Label>
-          <div className="p-3 rounded-lg bg-surface-raised border border-edge">
+          <div className="p-lg rounded-lg bg-surface-raised border border-edge">
             <NodeParameters
               nodeId={selectedNode.id}
               parameters={visibleParams}
@@ -193,11 +193,11 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
 
       {/* Custom Component */}
       {definition.component && (
-        <div className="mb-4">
-          <Label className="text-xs font-semibold mb-3 block text-fg-dim">
+        <div className="mb-xl">
+          <Label className="text-section mb-lg block text-fg-dim">
             Custom Controls
           </Label>
-          <div className="p-3 rounded-lg bg-surface-raised border border-edge">
+          <div className="p-lg rounded-lg bg-surface-raised border border-edge">
             <definition.component nodeId={selectedNode.id} data={selectedNode.data.params || {}} />
           </div>
         </div>

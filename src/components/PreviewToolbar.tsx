@@ -22,7 +22,7 @@ export function PreviewToolbar({ className }: PreviewToolbarProps) {
   return (
     <div
       className={cn(
-        'flex items-center gap-1.5 text-xs px-2 py-1 rounded bg-surface-raised text-fg-dim',
+        'flex items-center gap-sm text-body px-md py-xs rounded-sm bg-surface-raised text-fg-dim',
         className
       )}
     >

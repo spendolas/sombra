@@ -8,7 +8,7 @@ interface PreviewPanelProps {
 export function PreviewPanel({ targetRef }: PreviewPanelProps) {
   return (
     <div className="relative w-full h-full bg-black">
-      <PreviewToolbar className="absolute top-2 right-2 z-10" />
+      <PreviewToolbar className="absolute top-md right-md z-10" />
       <div ref={targetRef} className="w-full h-full" />
     </div>
   )

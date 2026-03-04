@@ -176,7 +176,7 @@ function App() {
         <ResizablePanelGroup direction="horizontal">
           {/* Left — Node Palette */}
           <ResizablePanel id="palette" defaultSize="12%" minSize="12%" maxSize="30%">
-            <div className="h-full p-4 overflow-y-auto bg-surface-alt min-w-[160px]">
+            <div className="h-full p-xl overflow-y-auto bg-surface-alt min-w-node">
               <NodePalette />
             </div>
           </ResizablePanel>
@@ -224,7 +224,7 @@ function App() {
 
           {/* Right — Properties */}
           <ResizablePanel id="properties" defaultSize="12%" minSize="12%" maxSize="30%">
-            <div className="h-full p-4 overflow-y-auto bg-surface-alt min-w-[160px]">
+            <div className="h-full p-xl overflow-y-auto bg-surface-alt min-w-node">
               <PropertiesPanel selectedNode={selectedNode} />
             </div>
           </ResizablePanel>

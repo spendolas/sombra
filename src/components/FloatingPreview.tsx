@@ -124,7 +124,7 @@ export function FloatingPreview({ targetRef }: FloatingPreviewProps) {
         height: floatingSize.height,
       }}
     >
-      <PreviewToolbar className="absolute top-2 right-2 z-10" />
+      <PreviewToolbar className="absolute top-md right-md z-10" />
       {/* Invisible drag surface */}
       <div
         className="absolute top-0 left-0 right-0 h-8 z-[5] cursor-grab active:cursor-grabbing"

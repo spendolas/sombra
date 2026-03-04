@@ -87,7 +87,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
 
   if (!definition) {
     return (
-      <div className="px-4 py-2 bg-surface-raised border border-edge rounded text-destructive">
+      <div className="px-4 py-2 bg-surface-raised border border-edge rounded-sm text-destructive">
         Unknown node: {nodeData.type}
       </div>
     )
@@ -126,9 +126,9 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   const hasDynamicInputs = !!definition.dynamicInputs
 
   return (
-    <BaseNode className="min-w-[160px] bg-surface-elevated">
+    <BaseNode className="min-w-node bg-surface-elevated">
       <BaseNodeHeader className="rounded-t-md bg-surface-raised border-b border-edge-subtle">
-        <BaseNodeHeaderTitle className="text-sm text-fg">
+        <BaseNodeHeaderTitle className="text-node-title text-fg">
           {definition.label}
         </BaseNodeHeaderTitle>
       </BaseNodeHeader>
@@ -142,8 +142,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
             position={Position.Right}
             id={output.id}
             title={output.label}
-            handleClassName="!w-3 !h-3"
-            labelClassName="text-xs"
+            labelClassName="text-handle"
             handleColor={getPortColor(output.type)}
             connected={connectedOutputs.has(output.id)}
           />
@@ -157,8 +156,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
             position={Position.Left}
             id={input.id}
             title={input.label}
-            handleClassName="!w-3 !h-3"
-            labelClassName="text-xs"
+            labelClassName="text-handle"
             handleColor={getPortColor(input.type)}
             connected={connectedInputs.has(input.id)}
           />
@@ -166,12 +164,12 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
 
         {/* +/- buttons for dynamic input nodes */}
         {hasDynamicInputs && (
-          <div className="flex items-center justify-center gap-2 py-1">
+          <div className="flex items-center justify-center gap-md py-xs">
             <button
               onClick={handleRemoveInput}
               disabled={inputCount <= 2}
               className={cn(
-                "w-5 h-5 flex items-center justify-center rounded text-xs leading-none border border-edge",
+                "size-btn-sm flex items-center justify-center rounded-sm text-param border border-edge",
                 inputCount <= 2
                   ? "bg-surface-raised text-fg-muted cursor-default"
                   : "bg-surface-alt text-fg cursor-pointer"
@@ -179,14 +177,14 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
             >
               -
             </button>
-            <span className="text-[10px] text-fg-muted">
+            <span className="text-param text-fg-muted">
               {inputCount}
             </span>
             <button
               onClick={handleAddInput}
               disabled={inputCount >= 8}
               className={cn(
-                "w-5 h-5 flex items-center justify-center rounded text-xs leading-none border border-edge",
+                "size-btn-sm flex items-center justify-center rounded-sm text-param border border-edge",
                 inputCount >= 8
                   ? "bg-surface-raised text-fg-muted cursor-default"
                   : "bg-surface-alt text-fg cursor-pointer"
@@ -229,15 +227,14 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                 id={param.id}
                 handleColor={getPortColor(param.type)}
                 connected={isConnected}
-                className="!w-3 !h-3"
               />
-              <div className="flex-1 pl-4 pr-1">
+              <div className="flex-1 pl-handle-offset pr-xs">
                 {isConnected && !hasResolvedValue ? (
-                  <div className="flex justify-between items-center py-0.5">
-                    <span className="text-[10px] text-fg-subtle">
+                  <div className="flex justify-between items-center py-2xs">
+                    <span className="text-param text-fg-subtle">
                       {param.label}
                     </span>
-                    <span className="text-[10px] text-fg-muted">
+                    <span className="text-param text-fg-muted">
                       {'← ' + sourceLabel}
                     </span>
                   </div>
@@ -256,7 +253,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
 
         {/* Non-connectable params (enums, sliders without handles) */}
         {regularParams.length > 0 && (
-          <div className="mt-1 pt-2 w-full border-t border-edge-subtle">
+          <div className="mt-xs pt-md w-full border-t border-edge-subtle">
             <NodeParameters
               nodeId={id}
               parameters={regularParams}
@@ -267,7 +264,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
 
         {/* Custom component (if provided) */}
         {definition.component && (
-          <div className={cn("mt-1 pt-2 w-full", regularParams.length === 0 && "border-t border-edge-subtle")}>
+          <div className={cn("mt-xs pt-md w-full", regularParams.length === 0 && "border-t border-edge-subtle")}>
             <definition.component nodeId={id} data={currentValues} />
           </div>
         )}

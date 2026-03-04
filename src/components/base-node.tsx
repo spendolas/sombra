@@ -35,7 +35,7 @@ export function BaseNodeHeader({
     <header
       {...props}
       className={cn(
-        "mx-0 my-0 -mb-1 flex flex-row items-center justify-between gap-2 px-3 py-2",
+        "mx-0 my-0 -mb-1 flex flex-row items-center justify-between gap-md px-lg py-md",
         // Remove or modify these classes if you modify the padding in the
         // `<BaseNode />` component.
         className,
@@ -55,7 +55,7 @@ export function BaseNodeHeaderTitle({
   return (
     <h3
       data-slot="base-node-title"
-      className={cn("user-select-none flex-1 font-semibold", className)}
+      className={cn("user-select-none flex-1 text-node-title", className)}
       {...props}
     />
   );
@@ -68,7 +68,7 @@ export function BaseNodeContent({
   return (
     <div
       data-slot="base-node-content"
-      className={cn("flex flex-col gap-y-2 p-3", className)}
+      className={cn("flex flex-col gap-y-md p-lg", className)}
       {...props}
     />
   );
@@ -79,7 +79,7 @@ export function BaseNodeFooter({ className, ...props }: ComponentProps<"div">) {
     <div
       data-slot="base-node-footer"
       className={cn(
-        "flex flex-col items-center gap-y-2 border-t px-3 pt-2 pb-3",
+        "flex flex-col items-center gap-y-md border-t px-lg pt-md pb-lg",
         className,
       )}
       {...props}

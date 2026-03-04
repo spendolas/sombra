@@ -40,13 +40,13 @@ export function RandomDisplay({
   }
 
   return (
-    <div className="nodrag nowheel flex items-center justify-between gap-2 px-1">
-      <span className="text-fg font-mono text-xs tabular-nums">
+    <div className="nodrag nowheel flex items-center justify-between gap-md px-xs">
+      <span className="text-fg text-mono-value tabular-nums">
         {value.toFixed(dp)}
       </span>
       <button
         onClick={handleRandomise}
-        className="flex h-5 w-5 items-center justify-center rounded border border-edge bg-surface-alt text-fg-dim transition-colors hover:bg-surface-raised hover:text-fg"
+        className="flex size-btn-sm items-center justify-center rounded-sm border border-edge bg-surface-alt text-fg-dim transition-colors hover:bg-surface-raised hover:text-fg"
         title="Randomise"
       >
         <Shuffle size={12} />

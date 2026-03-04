@@ -311,22 +311,22 @@ export function ColorRampEditor({
   )
 
   return (
-    <div className="nodrag nowheel space-y-2">
+    <div className="nodrag nowheel flex flex-col gap-md">
       {/* Gradient bar */}
       <div
         ref={barRef}
-        className="relative h-6 rounded-md border border-edge cursor-crosshair"
+        className="relative h-input-h rounded-md border border-edge cursor-crosshair"
         style={{ background: `linear-gradient(to right, ${gradientCSS})` }}
         onClick={handleBarClick}
       />
 
       {/* Stop markers */}
-      <div className="relative h-4">
+      <div className="relative h-icon-sm">
         {stops.map((stop, i) => (
           <button
             key={i}
             className={cn(
-              'absolute top-0 -translate-x-1/2 w-3 h-3 rounded-full border-2 border-surface-elevated',
+              'absolute top-0 -translate-x-1/2 size-handle rounded-full border-2 border-surface-elevated',
               i === safeIndex && 'ring-2 ring-indigo'
             )}
             style={{
@@ -339,20 +339,20 @@ export function ColorRampEditor({
       </div>
 
       {/* Controls row */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-md">
         <input
           type="color"
           value={stopToHex(selectedStop)}
           onChange={(e) => handleColorChange(e.target.value)}
-          className="w-6 h-6 rounded cursor-pointer border border-edge bg-surface-raised"
+          className="size-input-h rounded-sm cursor-pointer border border-edge bg-surface-raised"
         />
-        <span className="text-[10px] tabular-nums text-fg-dim">
+        <span className="text-param tabular-nums text-fg-dim">
           {Math.round(selectedStop.position * 100)}%
         </span>
         <div className="flex-1" />
         <button
           onClick={handleAddStop}
-          className="w-5 h-5 flex items-center justify-center rounded text-xs leading-none border border-edge bg-surface-alt text-fg cursor-pointer"
+          className="size-btn-sm flex items-center justify-center rounded-sm text-param border border-edge bg-surface-alt text-fg cursor-pointer"
         >
           +
         </button>
@@ -360,7 +360,7 @@ export function ColorRampEditor({
           onClick={handleRemoveStop}
           disabled={stops.length <= 2}
           className={cn(
-            'w-5 h-5 flex items-center justify-center rounded text-xs leading-none border border-edge',
+            'size-btn-sm flex items-center justify-center rounded-sm text-param border border-edge',
             stops.length <= 2
               ? 'bg-surface-raised text-fg-muted cursor-default'
               : 'bg-surface-alt text-fg cursor-pointer'
@@ -374,13 +374,13 @@ export function ColorRampEditor({
       <Select onValueChange={handlePreset}>
         <SelectTrigger
           size="sm"
-          className="w-full h-7 text-xs bg-surface-raised border-edge text-fg"
+          className="w-full h-select-h text-body bg-surface-raised border-edge text-fg"
         >
           <SelectValue placeholder="Preset" />
         </SelectTrigger>
         <SelectContent className="bg-surface-elevated border-edge">
           {PRESETS.map((preset) => (
-            <SelectItem key={preset.name} value={preset.name} className="text-xs">
+            <SelectItem key={preset.name} value={preset.name} className="text-body">
               {preset.name}
             </SelectItem>
           ))}

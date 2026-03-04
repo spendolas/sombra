@@ -48,7 +48,7 @@ export function NodeParameters({ nodeId, parameters, currentValues, connectedInp
   const visibleParams = parameters.filter((p) => !p.hidden)
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-lg">
       {visibleParams.map((param) => {
         const isConnected = connectedInputs?.has(param.id) ?? false
         const source = connectedSources?.get(param.id)
@@ -60,10 +60,10 @@ export function NodeParameters({ nodeId, parameters, currentValues, connectedInp
                   return <FloatSlider param={param} value={source.value} onChange={() => {}} disabled />
                 }
                 return (
-                  <div className="space-y-1.5">
+                  <div className="flex flex-col gap-sm">
                     <div className="flex justify-between items-center">
-                      <Label className="text-[10px] text-fg-subtle">{param.label}</Label>
-                      <span className="text-[10px] text-fg-muted">{'← ' + source.sourceLabel}</span>
+                      <Label className="text-param text-fg-subtle">{param.label}</Label>
+                      <span className="text-param text-fg-muted">{'← ' + source.sourceLabel}</span>
                     </div>
                   </div>
                 )
@@ -110,13 +110,13 @@ export function FloatSlider({ param, value, onChange, disabled }: FloatSliderPro
   const step = param.step ?? 0.01
 
   return (
-    <div className={`space-y-1.5${disabled ? ' opacity-60 pointer-events-none' : ''}`}>
+    <div className={`flex flex-col gap-sm${disabled ? ' opacity-60 pointer-events-none' : ''}`}>
       <div className="flex justify-between items-center">
-        <Label className="text-[10px] text-fg-subtle">
+        <Label className="text-param text-fg-subtle">
           {param.label}
         </Label>
         {disabled ? (
-          <span className="text-[10px] tabular-nums pr-1 text-fg-muted">
+          <span className="text-param tabular-nums pr-1 text-fg-muted">
             {value}
           </span>
         ) : (
@@ -128,7 +128,7 @@ export function FloatSlider({ param, value, onChange, disabled }: FloatSliderPro
               if (!isNaN(newValue)) onChange(newValue)
             }}
             step={step}
-            className="w-16 h-6 px-1 py-0.5 text-right text-[10px]"
+            className="w-input-w h-input-h px-xs py-2xs text-right text-param"
           />
         )}
       </div>
@@ -158,20 +158,20 @@ interface EnumSelectProps {
 
 function EnumSelect({ param, value, onChange }: EnumSelectProps) {
   return (
-    <div className="space-y-1.5">
-      <Label className="text-[10px] text-fg-subtle">
+    <div className="flex flex-col gap-sm">
+      <Label className="text-param text-fg-subtle">
         {param.label}
       </Label>
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger
           size="sm"
-          className="w-full h-7 text-xs bg-surface-raised border-edge text-fg"
+          className="w-full h-select-h text-body bg-surface-raised border-edge text-fg"
         >
           <SelectValue />
         </SelectTrigger>
         <SelectContent className="bg-surface-elevated border-edge">
           {param.options!.map((option) => (
-            <SelectItem key={option.value} value={option.value} className="text-xs">
+            <SelectItem key={option.value} value={option.value} className="text-body">
               {option.label}
             </SelectItem>
           ))}
@@ -196,15 +196,15 @@ function ColorInput({ param, value, onChange }: ColorInputProps) {
   }
 
   return (
-    <div className="space-y-1.5">
-      <Label className="text-[10px] text-fg-subtle">
+    <div className="flex flex-col gap-sm">
+      <Label className="text-param text-fg-subtle">
         {param.label}
       </Label>
       <input
         type="color"
         value={hexColor}
         onChange={(e) => handleColorChange(e.target.value)}
-        className="w-full h-6 rounded cursor-pointer border border-edge bg-surface-raised"
+        className="w-full h-input-h rounded-sm cursor-pointer border border-edge bg-surface-raised"
       />
     </div>
   )
