@@ -170,7 +170,7 @@ export function createUVTestGraph(): {
 
 /**
  * Spectra preset: Value FBM
- * Pipeline: Noise(value).fn → FBM → Color Ramp → Pixel Grid → Output
+ * Pipeline: Time → FBM(value, 1 oct) → Color Ramp → Pixel Grid → Output
  * - Value noise via FBM (1 octave = single pass), auto_uv coords
  * - Time drives FBM phase for animation
  * - Binary Bayer threshold per visible pixel
@@ -180,31 +180,20 @@ export function createSpectraValueFBM(): {
   edges: Edge<EdgeData>[]
 } {
   const nodes: Node<NodeData>[] = [
-    // Time feeds FBM.phase (2nd input) — above Noise to match handle order
     {
       id: 'sp-time',
       type: 'shaderNode',
       position: { x: 0, y: 0 },
       data: { type: 'time', params: { speed: 0.5 } },
     },
-    // Value noise fnref source → FBM.noiseFn (3rd input) — below Time
-    {
-      id: 'sp-noise-ref',
-      type: 'shaderNode',
-      position: { x: 0, y: 160 },
-      data: {
-        type: 'noise',
-        params: { scale: 1.0, noiseType: 'value' },
-      },
-    },
-    // FBM: 1 octave = single noise pass (auto_uv coords)
+    // FBM: value noise, 1 octave (auto_uv coords)
     {
       id: 'sp-fbm',
       type: 'shaderNode',
       position: { x: 280, y: 40 },
       data: {
         type: 'fbm',
-        params: { scale: 1.0, fractalMode: 'standard', octaves: 1, lacunarity: 2.0, gain: 0.5 },
+        params: { scale: 1.0, noiseType: 'value', fractalMode: 'standard', octaves: 1, lacunarity: 2.0, gain: 0.5 },
       },
     },
     // Cobalt Drift color ramp
@@ -232,7 +221,7 @@ export function createSpectraValueFBM(): {
       type: 'shaderNode',
       position: { x: 840, y: 40 },
       data: {
-        type: 'pixel_grid',
+        type: 'dither',
         params: { pixelSize: 8, shape: 'square', threshold: 1.0 },
       },
     },
@@ -245,12 +234,6 @@ export function createSpectraValueFBM(): {
   ]
 
   const edges: Edge<EdgeData>[] = [
-    // Noise(value).fn → FBM.noiseFn (fnref)
-    {
-      id: 'sp-e1', source: 'sp-noise-ref', target: 'sp-fbm',
-      sourceHandle: 'fn', targetHandle: 'noiseFn', type: 'typed',
-      data: { sourcePort: 'fn', targetPort: 'noiseFn', sourcePortType: 'fnref' },
-    },
     // Time → FBM.phase
     {
       id: 'sp-e2', source: 'sp-time', target: 'sp-fbm',
@@ -288,7 +271,7 @@ export function createSpectraValueFBM(): {
 
 /**
  * Spectra preset: Simplex FBM
- * Pipeline: Quantize UV(344) → FBM(simplex) → Color Ramp → Pixel Grid(43) → Output
+ * Pipeline: Quantize UV(344) → FBM(simplex, 1 oct) → Color Ramp → Pixel Grid(43) → Output
  * - Simplex noise via FBM (1 octave), quantized to 344px cells (8×8 dots per cell)
  * - Large 43px visible pixels, square shape, Bayer dithered
  * - Cobalt Drift palette
@@ -298,7 +281,6 @@ export function createSpectraSimplexFBM(): {
   edges: Edge<EdgeData>[]
 } {
   const nodes: Node<NodeData>[] = [
-    // Quantize UV → FBM.coords (1st input) — top of column 0
     {
       id: 'sp2-quv',
       type: 'shaderNode',
@@ -308,34 +290,22 @@ export function createSpectraSimplexFBM(): {
         params: { pixelSize: 344 },
       },
     },
-    // Time → FBM.phase (2nd input) — middle of column 0
     {
       id: 'sp2-time',
       type: 'shaderNode',
       position: { x: 0, y: 140 },
       data: { type: 'time', params: { speed: 0.25 } },
     },
-    // Simplex noise fnref → FBM.noiseFn (3rd input) — bottom of column 0
-    {
-      id: 'sp2-noise-ref',
-      type: 'shaderNode',
-      position: { x: 0, y: 280 },
-      data: {
-        type: 'noise',
-        params: { scale: 1.0, noiseType: 'simplex' },
-      },
-    },
-    // FBM: 1 octave = single noise pass (coords from Quantize UV)
+    // FBM: simplex noise, 1 octave (coords from Quantize UV)
     {
       id: 'sp2-fbm',
       type: 'shaderNode',
       position: { x: 280, y: 40 },
       data: {
         type: 'fbm',
-        params: { scale: 1.0, fractalMode: 'standard', octaves: 1, lacunarity: 2.0, gain: 0.5 },
+        params: { scale: 1.0, noiseType: 'simplex', fractalMode: 'standard', octaves: 1, lacunarity: 2.0, gain: 0.5 },
       },
     },
-    // Muted Cobalt Drift ramp — spectra uses only dark-to-mid blue range
     {
       id: 'sp2-ramp',
       type: 'shaderNode',
@@ -352,13 +322,12 @@ export function createSpectraSimplexFBM(): {
         },
       },
     },
-    // Pixel Grid: 43px visible pixels, square, binary threshold
     {
       id: 'sp2-pixel',
       type: 'shaderNode',
       position: { x: 840, y: 40 },
       data: {
-        type: 'pixel_grid',
+        type: 'dither',
         params: { pixelSize: 43, shape: 'square', threshold: 1.0 },
       },
     },
@@ -376,12 +345,6 @@ export function createSpectraSimplexFBM(): {
       id: 'sp2-e0', source: 'sp2-quv', target: 'sp2-fbm',
       sourceHandle: 'uv', targetHandle: 'coords', type: 'typed',
       data: { sourcePort: 'uv', targetPort: 'coords', sourcePortType: 'vec2' },
-    },
-    // Noise(simplex).fn → FBM.noiseFn (fnref)
-    {
-      id: 'sp2-e1', source: 'sp2-noise-ref', target: 'sp2-fbm',
-      sourceHandle: 'fn', targetHandle: 'noiseFn', type: 'typed',
-      data: { sourcePort: 'fn', targetPort: 'noiseFn', sourcePortType: 'fnref' },
     },
     // Time → FBM.phase
     {
@@ -472,7 +435,7 @@ export function createSpectraWorleyRidged(): {
       position: { x: 780, y: 128 },
       data: {
         type: 'fbm',
-        params: { scale: 1.0, fractalMode: 'ridged', octaves: 1, lacunarity: 2.0, gain: 0.1 },
+        params: { scale: 1.0, noiseType: 'worley2d', fractalMode: 'ridged', octaves: 1, lacunarity: 2.0, gain: 0.1 },
       },
     },
     {
@@ -502,7 +465,7 @@ export function createSpectraWorleyRidged(): {
       type: 'shaderNode',
       position: { x: 1560, y: 0 },
       data: {
-        type: 'pixel_grid',
+        type: 'dither',
         params: { pixelSize: 3.5, shape: 'square', threshold: 1.0 },
       },
     },
@@ -537,16 +500,6 @@ export function createSpectraWorleyRidged(): {
       position: { x: 520, y: 490 },
       data: { type: 'time', params: { speed: 0.0001 } },
     },
-    // Worley noise → FBM.noiseFn (3rd input, below coords/phase)
-    {
-      id: 'sp3-noise-ref',
-      type: 'shaderNode',
-      position: { x: 780, y: 530 },
-      data: {
-        type: 'noise',
-        params: { scale: 1.0, noiseType: 'worley2d' },
-      },
-    },
   ]
 
   const edges: Edge<EdgeData>[] = [
@@ -567,12 +520,6 @@ export function createSpectraWorleyRidged(): {
       id: 'sp3-ew', source: 'sp3-warp', target: 'sp3-fbm',
       sourceHandle: 'warped', targetHandle: 'coords', type: 'typed',
       data: { sourcePort: 'warped', targetPort: 'coords', sourcePortType: 'vec2' },
-    },
-    // Noise(worley).fn → FBM.noiseFn (fnref)
-    {
-      id: 'sp3-e1', source: 'sp3-noise-ref', target: 'sp3-fbm',
-      sourceHandle: 'fn', targetHandle: 'noiseFn', type: 'typed',
-      data: { sourcePort: 'fn', targetPort: 'noiseFn', sourcePortType: 'fnref' },
     },
     // Time → Domain Warp.phase (3D warp displaces phase too)
     {
@@ -742,7 +689,7 @@ export function createSpectraBoxNone(): {
       type: 'shaderNode',
       position: { x: 1500, y: 0 },
       data: {
-        type: 'pixel_grid',
+        type: 'dither',
         params: { pixelSize: 13, shape: 'square', threshold: 1.0 },
       },
     },

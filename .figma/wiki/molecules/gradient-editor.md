@@ -4,13 +4,13 @@
 
 | Field | Value |
 |---|---|
-| Figma ID | `50:4208` |
-| Figma Page | Molecules |
+| Figma ID | `111:949` |
+| Figma Page | Components (Molecules) |
 | Type | COMPONENT |
 | Variants | none |
 | React File | `src/components/ColorRampEditor.tsx` |
 | React Component | `<ColorRampEditor />` |
-| Figma URL | [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=50:4208) |
+| Figma URL | [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=111:949) |
 
 ## Figma Screenshot
 
@@ -77,8 +77,7 @@ Compact gradient editor with: gradient preview bar (dark-to-light), stop marker 
 
 ## Code Connect
 
-- **Status:** Skipped (org mismatch)
-- **Figma Node:** `50:4208`
+- **Figma Node:** `111:949`
 - **React:** `<ColorRampEditor nodeId={id} data={params} />`
 - **File:** `src/components/ColorRampEditor.tsx`
 

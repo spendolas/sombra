@@ -291,7 +291,6 @@ function describeNode(type: string) {
       showWhen: p.showWhen,
     })),
     hasDynamicInputs: !!def.dynamicInputs,
-    hasFunctionKey: !!def.functionKey,
   }
 }
 
@@ -393,7 +392,7 @@ function help() {
   }
 
   const nodeTypes = listNodeTypes()
-  const portTypes = ['float', 'vec2', 'vec3', 'vec4', 'color', 'sampler2D', 'fnref']
+  const portTypes = ['float', 'vec2', 'vec3', 'vec4', 'color', 'sampler2D']
 
   // Console-friendly output
   console.log(

@@ -106,56 +106,34 @@ export function compileGraph(
         const edge = incomingEdges.find((e) => e.targetHandle === inputPort.id)
 
         if (edge) {
-          if (inputPort.type === 'fnref') {
-            // fnref input: resolve to source node's functionKey
-            const sourceNode = nodeMap.get(edge.source)
-            if (sourceNode) {
-              const sourceDefinition = nodeRegistry.get(sourceNode.data.type)
-              if (sourceDefinition?.functionKey) {
-                const key = typeof sourceDefinition.functionKey === 'function'
-                  ? sourceDefinition.functionKey(sourceNode.data.params || {})
-                  : sourceDefinition.functionKey
-                inputs[inputPort.id] = key
-              } else {
-                errors.push({
-                  message: `Source node "${sourceNode.data.type}" has no functionKey for fnref port`,
-                  nodeId: node.id,
-                })
-              }
-            }
-          } else {
-            // Value input: use source node's output variable
-            const sourceNode = nodeMap.get(edge.source)
-            if (sourceNode) {
-              const sourceDefinition = nodeRegistry.get(sourceNode.data.type)
-              if (sourceDefinition) {
-                const sourcePort = sourceDefinition.outputs.find(
-                  (p) => p.id === edge.sourceHandle
-                )
-                if (sourcePort) {
-                  // Sanitize node ID for GLSL (replace hyphens with underscores)
-                  const sourceVarName = `node_${edge.source.replace(/-/g, '_')}_${edge.sourceHandle}`
+          // Value input: use source node's output variable
+          const sourceNode = nodeMap.get(edge.source)
+          if (sourceNode) {
+            const sourceDefinition = nodeRegistry.get(sourceNode.data.type)
+            if (sourceDefinition) {
+              const sourcePort = sourceDefinition.outputs.find(
+                (p) => p.id === edge.sourceHandle
+              )
+              if (sourcePort) {
+                // Sanitize node ID for GLSL (replace hyphens with underscores)
+                const sourceVarName = `node_${edge.source.replace(/-/g, '_')}_${edge.sourceHandle}`
 
-                  // Apply type coercion if needed
-                  if (sourcePort.type !== inputPort.type) {
-                    inputs[inputPort.id] = coerceType(
-                      sourceVarName,
-                      sourcePort.type,
-                      inputPort.type
-                    )
-                  } else {
-                    inputs[inputPort.id] = sourceVarName
-                  }
+                // Apply type coercion if needed
+                if (sourcePort.type !== inputPort.type) {
+                  inputs[inputPort.id] = coerceType(
+                    sourceVarName,
+                    sourcePort.type,
+                    inputPort.type
+                  )
+                } else {
+                  inputs[inputPort.id] = sourceVarName
                 }
               }
             }
           }
         } else {
           // Input is not connected - use default value
-          if (inputPort.type === 'fnref') {
-            // fnref unconnected: default is a function name string
-            inputs[inputPort.id] = String(inputPort.default ?? '')
-          } else if (inputPort.default === 'auto_uv' && inputPort.type === 'vec2') {
+          if (inputPort.default === 'auto_uv' && inputPort.type === 'vec2') {
             // auto_uv sentinel: generate frozen-ref UV inline
             const autoUvVar = `node_${sanitizedNodeId}_auto_uv`
             preambleLines.push(`vec2 ${autoUvVar} = (v_uv - 0.5) * u_resolution / u_ref_size + 0.5;`)

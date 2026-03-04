@@ -4,13 +4,13 @@
 
 | Field | Value |
 |---|---|
-| Figma ID | `17:314` |
-| Figma Page | Molecules |
+| Figma ID | `111:930` |
+| Figma Page | Components (Molecules) |
 | Type | COMPONENT |
 | Variants | none |
 | React File | `src/components/zoom-slider.tsx` |
 | React Component | `<ZoomSlider />` |
-| Figma URL | [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=17:314) |
+| Figma URL | [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=111:930) |
 
 ## Figma Screenshot
 
@@ -60,8 +60,7 @@ Horizontal bar with: minus button, slider track with thumb, plus button, "100%" 
 
 ## Code Connect
 
-- **Status:** Skipped (org mismatch)
-- **Figma Node:** `17:314`
+- **Figma Node:** `111:930`
 - **React:** `<ZoomSlider position="bottom-center" />`
 - **File:** `src/components/zoom-slider.tsx`
 

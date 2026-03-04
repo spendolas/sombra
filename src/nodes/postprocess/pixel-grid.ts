@@ -49,9 +49,9 @@ function registerShapeSDF(ctx: import('../types').GLSLContext, shape: string): s
   return 'sdf_circle'
 }
 
-export const pixelGridNode: NodeDefinition = {
-  type: 'pixel_grid',
-  label: 'Pixel Grid',
+export const ditherNode: NodeDefinition = {
+  type: 'dither',
+  label: 'Dither',
   category: 'Post-process',
   description: 'Pixelate with shape masking and ordered dithering',
 

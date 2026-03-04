@@ -3,9 +3,13 @@
  */
 
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import type { Node, Edge, OnNodesChange, OnEdgesChange } from '@xyflow/react'
 import { applyNodeChanges, applyEdgeChanges } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
+
+/** Schema version — bump when persisted shape changes */
+const GRAPH_SCHEMA_VERSION = 1
 
 /**
  * Graph state interface
@@ -45,70 +49,82 @@ interface GraphState {
 /**
  * Graph store - manages the shader node graph
  */
-export const useGraphStore = create<GraphState>((set, get) => ({
-  nodes: [],
-  edges: [],
-  selectedNodeIds: [],
-  selectedEdgeIds: [],
+export const useGraphStore = create<GraphState>()(
+  persist(
+    (set, get) => ({
+      nodes: [],
+      edges: [],
+      selectedNodeIds: [],
+      selectedEdgeIds: [],
 
-  setNodes: (nodes) => set({ nodes }),
-  setEdges: (edges) => set({ edges }),
+      setNodes: (nodes) => set({ nodes }),
+      setEdges: (edges) => set({ edges }),
 
-  onNodesChange: (changes) => {
-    set({
-      nodes: applyNodeChanges(changes, get().nodes),
-    })
-  },
+      onNodesChange: (changes) => {
+        set({
+          nodes: applyNodeChanges(changes, get().nodes),
+        })
+      },
 
-  onEdgesChange: (changes) => {
-    set({
-      edges: applyEdgeChanges(changes, get().edges),
-    })
-  },
+      onEdgesChange: (changes) => {
+        set({
+          edges: applyEdgeChanges(changes, get().edges),
+        })
+      },
 
-  addNode: (node) => {
-    set((state) => ({
-      nodes: [...state.nodes, node],
-    }))
-  },
+      addNode: (node) => {
+        set((state) => ({
+          nodes: [...state.nodes, node],
+        }))
+      },
 
-  removeNode: (nodeId) => {
-    set((state) => ({
-      nodes: state.nodes.filter((n) => n.id !== nodeId),
-      edges: state.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
-      selectedNodeIds: state.selectedNodeIds.filter((id) => id !== nodeId),
-    }))
-  },
+      removeNode: (nodeId) => {
+        set((state) => ({
+          nodes: state.nodes.filter((n) => n.id !== nodeId),
+          edges: state.edges.filter((e) => e.source !== nodeId && e.target !== nodeId),
+          selectedNodeIds: state.selectedNodeIds.filter((id) => id !== nodeId),
+        }))
+      },
 
-  updateNodeData: (nodeId, data) => {
-    set((state) => ({
-      nodes: state.nodes.map((node) =>
-        node.id === nodeId
-          ? { ...node, data: { ...node.data, ...data } }
-          : node
-      ),
-    }))
-  },
+      updateNodeData: (nodeId, data) => {
+        set((state) => ({
+          nodes: state.nodes.map((node) =>
+            node.id === nodeId
+              ? { ...node, data: { ...node.data, ...data } }
+              : node
+          ),
+        }))
+      },
 
-  addEdge: (edge) => {
-    set((state) => ({
-      edges: [...state.edges, edge],
-    }))
-  },
+      addEdge: (edge) => {
+        set((state) => ({
+          edges: [...state.edges, edge],
+        }))
+      },
 
-  removeEdge: (edgeId) => {
-    set((state) => ({
-      edges: state.edges.filter((e) => e.id !== edgeId),
-      selectedEdgeIds: state.selectedEdgeIds.filter((id) => id !== edgeId),
-    }))
-  },
+      removeEdge: (edgeId) => {
+        set((state) => ({
+          edges: state.edges.filter((e) => e.id !== edgeId),
+          selectedEdgeIds: state.selectedEdgeIds.filter((id) => id !== edgeId),
+        }))
+      },
 
-  setSelectedNodes: (nodeIds) => set({ selectedNodeIds: nodeIds }),
-  setSelectedEdges: (edgeIds) => set({ selectedEdgeIds: edgeIds }),
-  clearSelection: () => set({ selectedNodeIds: [], selectedEdgeIds: [] }),
+      setSelectedNodes: (nodeIds) => set({ selectedNodeIds: nodeIds }),
+      setSelectedEdges: (edgeIds) => set({ selectedEdgeIds: edgeIds }),
+      clearSelection: () => set({ selectedNodeIds: [], selectedEdgeIds: [] }),
 
-  getNode: (nodeId) => get().nodes.find((n) => n.id === nodeId),
-  getEdge: (edgeId) => get().edges.find((e) => e.id === edgeId),
+      getNode: (nodeId) => get().nodes.find((n) => n.id === nodeId),
+      getEdge: (edgeId) => get().edges.find((e) => e.id === edgeId),
 
-  clear: () => set({ nodes: [], edges: [], selectedNodeIds: [], selectedEdgeIds: [] }),
-}))
+      clear: () => set({ nodes: [], edges: [], selectedNodeIds: [], selectedEdgeIds: [] }),
+    }),
+    {
+      name: 'sombra-graph',
+      version: GRAPH_SCHEMA_VERSION,
+      partialize: (state) => ({
+        nodes: state.nodes,
+        edges: state.edges,
+      }),
+    }
+  )
+)

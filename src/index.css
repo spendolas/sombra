@@ -21,6 +21,7 @@
 
   --edge: #3a3a52;
   --edge-subtle: #2a2a3e;
+  --edge-card: oklch(1 0 0 / 10%); /* edge/card  VariableID:254:632 — white 10% */
 
   --indigo: #6366f1;
   --indigo-hover: #818cf8;
@@ -182,6 +183,7 @@ html, body, #root {
   --color-fg-muted: var(--fg-muted);
   --color-edge: var(--edge);
   --color-edge-subtle: var(--edge-subtle);
+  --color-edge-card: var(--edge-card);
   --color-indigo: var(--indigo);
   --color-indigo-hover: var(--indigo-hover);
   --color-indigo-active: var(--indigo-active);

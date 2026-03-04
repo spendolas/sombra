@@ -98,12 +98,15 @@ function App() {
     return nodes.find((node) => node.selected) || null
   }, [nodes])
 
-  // Load test graph on mount (temporary for Phase 1 testing)
+  // Load default graph only when no persisted graph exists
   useEffect(() => {
-    const testGraph = createDefaultGraph()
-    setNodes(testGraph.nodes)
-    setEdges(testGraph.edges)
-  }, [setNodes, setEdges])
+    if (nodes.length === 0) {
+      const testGraph = createDefaultGraph()
+      setNodes(testGraph.nodes)
+      setEdges(testGraph.edges)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only run on mount
+  }, [])
 
   // Initialize WebGL renderer
   useEffect(() => {

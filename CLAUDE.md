@@ -385,6 +385,7 @@ Sombra uses custom CSS variables registered with Tailwind v4's `@theme inline` b
 | `--fg-muted` | `text-fg-muted` | `#5a5a6e` | Disabled text, IDs, hints |
 | `--edge` | `border-edge` | `#3a3a52` | Primary borders, dividers |
 | `--edge-subtle` | `border-edge-subtle` | `#2a2a3e` | Subtle borders, node separators |
+| `--edge-card` | `border-edge-card` | `oklch(1 0 0 / 10%)` | Node card border (white 10%) |
 | `--indigo` | `bg-indigo` / `text-indigo` | `#6366f1` | Accent, selection highlight |
 | `--indigo-hover` | `bg-indigo-hover` | `#818cf8` | Accent hover state |
 | `--indigo-active` | `bg-indigo-active` | `#4f46e5` | Accent active/pressed state |
@@ -392,6 +393,35 @@ Sombra uses custom CSS variables registered with Tailwind v4's `@theme inline` b
 All tokens work with any Tailwind color utility prefix: `bg-`, `text-`, `border-`, `ring-`, etc.
 
 **shadcn tokens** (`--background`, `--foreground`, etc.) are separate oklch values used by shadcn/ui primitives. Don't remap Sombra tokens to shadcn tokens.
+
+## Figma Sync Check
+
+Sombra tracks Figma↔Code drift via `.figma/sync-snapshot.json` — a baseline of all variable values, text style properties, and component layout bindings at the time of last sync.
+
+### Detection Tiers (all on-demand, user-driven)
+
+| Tier | Trigger | What it scans | Plugin API calls |
+|---|---|---|---|
+| **1 — Token Scan** | "check tokens" / "I changed a variable" | All variables + text styles | 2 |
+| **2 — Targeted Component** | "I updated Node Header" / Figma URL + note | Specific component(s) | 1-2 per component |
+| **3 — Full Audit** | "full audit" / before major release | All 22 tracked components + Tier 1 | ~24 |
+
+Tier 1 is most useful during the **design foundation phase** when token values are in flux. Once the DS tokens are settled, it becomes occasional. All tiers use **dynamic discovery** — `figma.variables.getLocalVariables()` and `figma.getLocalTextStyles()` read everything in the file, so new variables/styles added after the snapshot are automatically detected as untracked.
+
+### Workflow
+
+1. **User says what changed** → Claude picks the appropriate tier
+2. **Run Plugin API scan** via Chrome extension (Figma desktop must be open)
+3. **Diff against snapshot** → report changes grouped by: token values, text styles, component bindings, structural changes, new elements
+4. **Implement code changes** to match Figma
+5. **Update only changed entries** in `sync-snapshot.json`
+6. **Commit code + snapshot together**
+
+**Single-component sync** (Figma URL + note): use MCP `get_design_context` instead of Plugin API, compare to snapshot + current code, implement, update snapshot entry.
+
+### Scan Scripts
+
+The Plugin API scripts are run inline by Claude — no separate script files. See the plan file for Tier 1 (token scan) and Tier 2 (component scan) script templates. Tier 3 iterates Tier 2 over all tracked component IDs from the snapshot.
 
 ## Important Layout Notes
 

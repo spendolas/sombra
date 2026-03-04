@@ -33,8 +33,7 @@ import { brightnessContrastNode } from './color/brightness-contrast'
 import { colorRampNode } from './color/color-ramp'
 
 // Post-process nodes
-import { pixelGridNode } from './postprocess/pixel-grid'
-import { bayerDitherNode } from './postprocess/bayer-dither'
+import { ditherNode } from './postprocess/pixel-grid'
 import { quantizeUvNode } from './postprocess/quantize-uv'
 
 // Output nodes
@@ -73,8 +72,7 @@ export const ALL_NODES = [
   colorRampNode,
 
   // Post-process
-  pixelGridNode,
-  bayerDitherNode,
+  ditherNode,
   quantizeUvNode,
 
   // Output

@@ -2,7 +2,7 @@
 
 ## Overview
 
-24 node templates on the Figma Templates page. Each template is a COMPONENT that composes a Node Card organism with specific LabeledHandles, ConnectableParamRows, and NodeParameters configured for that node type.
+25 node templates on the Figma Templates page. Each template is a **COMPONENT** that composes child instances (Node Header, Labeled Handles, Connectable Param Rows, Float Sliders, Enum Selects, etc.) configured for that node type.
 
 **Figma Page:** Templates
 **Figma URL:** [Open Templates page](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=44:3164)
@@ -47,9 +47,8 @@ Full node card with: header "Color Ramp", output (Color vec3), input (Value floa
 ## Structure
 
 Every template follows this internal structure:
-1. **Node Card** organism (selected=false variant)
-2. **Header:** Node name (text-sm font-semibold text-fg, bg-surface-raised)
-3. **Content:** (bg-surface-elevated, p-3, gap-y-2)
+1. **Node Header** instance (`111:488`) — 14px Semi Bold title, `surface/raised` bg, FILL width
+2. **Content frame:** (bg-surface-elevated, p-3, gap-y-2)
    - Output LabeledHandles (position=right)
    - Input LabeledHandles (position=left)
    - Dynamic Input Controls (if `dynamicInputs` defined)
@@ -60,9 +59,11 @@ Every template follows this internal structure:
 
 ## Variable Binding Status
 
-All 24 templates were audited in Sprint 5:
-- **Colors:** 0 unbound — all fills, strokes, text colors bound to variables
-- **Layout:** 0 unbound — all padding, gap, radius bound to variables
+All 25 templates audited:
+- **Headers:** 25/25 use Node Header component instances (14px Semi Bold)
+- **Colors:** 0 unbound — all fills, strokes, text colors bound to V2 variables
+- **Layout:** 0 unbound — all padding, gap, radius bound to V2 variables
 - **Port colors:** All handle strokes bound to Port Types collection
+- **Float Sliders:** All instances show track + indigo range + white thumb
 
-## Parity: ✅ All 24 templates match app source
+## Parity: ✅ All 25 templates match app source

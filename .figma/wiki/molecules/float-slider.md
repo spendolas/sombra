@@ -4,20 +4,27 @@
 
 | Field | Value |
 |---|---|
-| Figma ID | `17:234` |
-| Figma Page | Molecules |
-| Type | COMPONENT_SET |
-| Variants | 3: state (default / disabled / connected) |
+| Figma ID | `106:282` |
+| Figma Page | Components (Molecules) |
+| Type | COMPONENT |
+| Variants | — (single state, default) |
 | React File | `src/components/NodeParameters.tsx` |
 | React Component | `<FloatSlider />` |
-| Figma URL | [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=17:234) |
+| Figma URL | [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=106:282) |
 
-## Figma Screenshot
+## Structure
 
-Three variants stacked:
-- **Default:** "Scale" label, "1.00" input, indigo slider track with white thumb
-- **Disabled:** Same layout, 60% opacity, no interaction
-- **Connected:** "Scale" label left, "← Noise" source label right
+```
+COMPONENT "Float Slider" [VERTICAL 140×46, gap=6]
+  FRAME "Label Row" [HORIZONTAL 140×24]
+    TEXT "Parameter" (label/param, 10px)
+    FRAME "Value Box" [64×24, r=4, surface-raised fill]
+      TEXT "0.50" (mono/value, 12px)
+  FRAME "Slider" [NONE 140×16, no fill]
+    RECTANGLE "Track" [140×6, r=full, surface/raised fill, y=5]
+    RECTANGLE "Range" [42×6, r=full, indigo/default fill, x=0, y=5]
+    ELLIPSE "Thumb" [16×16, white fill, x=34, y=0]
+```
 
 ## Properties
 
@@ -26,26 +33,27 @@ Three variants stacked:
 | Property | Figma | Figma Variable | Code | Match |
 |---|---|---|---|---|
 | Width | FILL | — | block-level div | ✅ |
-| Slider track height | 6px | size/track-h (`43:3525`) | shadcn Slider (6px) | ✅ |
-| Thumb size | 16px | size/thumb (`43:3524`) | shadcn Slider thumb (16px) | ✅ |
+| Slider wrapper height | 16px | slider/thumb (`106:46`) | — (Radix handles) | ✅ |
+| Slider track height | 6px | slider/track (`106:45`) | `h-1.5` (6px) | ✅ |
+| Thumb size | 16px | slider/thumb (`106:46`) | `size-4` (16px) | ✅ |
 
 ### Colors
 
 | Property | Figma Hex | Figma Variable | Tailwind | Match |
 |---|---|---|---|---|
-| Label text | `#88889a` | fg/subtle (`17:14`) | `text-fg-subtle` | ✅ |
-| Value text | `#5a5a6e` | fg/muted (`17:15`) | `text-fg-muted` (disabled) | ✅ |
-| Track bg | `#252538` | surface/raised (`17:10`) | shadcn track | ✅ |
-| Track fill | `#6366f1` | indigo/default (`17:18`) | shadcn range fill | ✅ |
-| Thumb | `#ffffff` | white (`48:4147`) | shadcn thumb | ✅ |
-| Input bg | `#252538` | surface/raised (`17:10`) | shadcn Input | ✅ |
+| Label text | `#88889a` | fg/subtle (`106:9`) | `text-fg-subtle` | ✅ |
+| Value text | `#5a5a6e` | fg/muted (`106:10`) | `text-fg-muted` (disabled) | ✅ |
+| Track bg | `#252538` | surface/raised (`106:5`) | `bg-muted` on Radix Track | ✅ |
+| Range fill | `#6366f1` | indigo/default (`106:13`) | `bg-primary` on Radix Range | ✅ |
+| Thumb | `#ffffff` | white (`106:16`) | `bg-white` on Radix Thumb | ✅ |
+| Input bg | `#252538` | surface/raised (`106:5`) | shadcn Input | ✅ |
 
 ### Spacing & Layout
 
 | Property | Figma | Figma Variable | Code | Match |
 |---|---|---|---|---|
-| Label ↔ value gap | 6px | spacing/sm (`17:916`) | `space-y-1.5` row + flex between | ✅ |
-| Stack gap | 6px | spacing/sm (`17:916`) | `space-y-1.5` | ✅ |
+| Label ↔ value gap | 4px | xs/4 (`106:27`) | flex + gap between items | ✅ |
+| Stack gap | 6px | sm/6 (`106:28`) | `space-y-1.5` | ✅ |
 
 ### Typography
 
@@ -58,17 +66,19 @@ Three variants stacked:
 
 ## Children
 
-- Label text (fg/subtle)
-- Number input (10px, right-aligned)
-- shadcn Slider (track + thumb)
+- **Label Row** — parameter name (`label/param`) + value input (`mono/value`, right-aligned)
+- **Slider** — NONE-layout wrapper containing:
+  - **Track** — full-width rectangle, `surface/raised`, `r=full`
+  - **Range** — left-aligned rectangle, `indigo/default`, `r=full` (represents filled portion)
+  - **Thumb** — 16px ellipse, `white`, positioned at range edge
 
 ## Code Connect
 
 - **Status:** Skipped (org mismatch)
-- **Figma Node:** `17:234`
+- **Figma Node:** `106:282`
 - **React:** `<FloatSlider param={param} value={value} onChange={fn} disabled={isConnected} />`
 - **File:** `src/components/NodeParameters.tsx`
 
 ## Parity: ✅ Match
 
-All three states match. Default shows interactive slider + number input. Disabled shows 60% opacity with non-interactive controls. Connected shows source label instead of controls.
+Slider colors match exactly between Figma and app: track `surface/raised` (#252538), range `indigo/default` (#6366f1), thumb `white` (#ffffff). Code uses Sombra tokens directly (`bg-surface-raised`, `bg-indigo`, `border-indigo`) instead of generic shadcn defaults.

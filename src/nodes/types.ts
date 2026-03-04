@@ -12,7 +12,6 @@ export type PortType =
   | 'vec4'       // 4D vector (RGBA color)
   | 'color'      // Alias for vec3, UI shows color picker
   | 'sampler2D'  // Texture sampler (future)
-  | 'fnref'      // GLSL function name reference (higher-order composition)
 
 /**
  * Definition of an input or output port on a node
@@ -82,13 +81,6 @@ export interface NodeDefinition {
    * When present, compiler and UI use this instead of static `inputs`.
    */
   dynamicInputs?: (params: Record<string, unknown>) => PortDefinition[]
-
-  /**
-   * GLSL function name this node provides via fnref output ports.
-   * Convention: all fnref noise functions share signature `float name(vec3 p)`.
-   * Can be a string or a function that returns a string based on current params.
-   */
-  functionKey?: string | ((params: Record<string, unknown>) => string)
 
   /**
    * Generate GLSL code for this node
