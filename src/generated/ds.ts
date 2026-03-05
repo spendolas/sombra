@@ -31,6 +31,9 @@ export const ds = {
   },
   previewToolbar: {
     root: "flex flex-row items-center bg-surface-raised rounded-sm px-md py-xs gap-sm text-body text-fg-dim",
+    wrapper: "flex flex-row items-center gap-md",
+    buttonActive: "bg-indigo text-fg cursor-default hover:bg-indigo",
+    buttonInactive: "text-fg-dim cursor-pointer hover:bg-surface-elevated hover:text-fg",
   },
   paletteItem: {
     root: "bg-surface-raised rounded-sm border border-edge-subtle px-md py-sm text-body text-fg-dim cursor-move transition-colors hover:bg-surface-elevated hover:text-fg",

@@ -19,8 +19,8 @@ export function PreviewToolbar({ className }: PreviewToolbarProps) {
   const isDockedH = previewMode === 'docked' && splitDirection === 'horizontal'
   const isDockedV = previewMode === 'docked' && splitDirection === 'vertical'
 
-  const active = 'bg-indigo text-fg hover:bg-indigo cursor-default'
-  const inactive = 'text-fg-dim hover:bg-surface-elevated hover:text-fg cursor-pointer'
+  const active = ds.previewToolbar.buttonActive
+  const inactive = ds.previewToolbar.buttonInactive
 
   // In fullwindow mode, only show a collapse button
   if (previewMode === 'fullwindow') {
@@ -45,7 +45,7 @@ export function PreviewToolbar({ className }: PreviewToolbarProps) {
   }
 
   return (
-    <div className={cn("flex flex-row items-center gap-md", className)}>
+    <div className={cn(ds.previewToolbar.wrapper, className)}>
       <div
         className={ds.previewToolbar.root}
       >
