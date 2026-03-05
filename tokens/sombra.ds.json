@@ -569,14 +569,14 @@
           "extra": "-mb-1"
         },
         "title": {
-          "figmaNodeId": null,
+          "figmaNodeId": "306:213",
           "textStyle": "text-node-title",
           "textColor": "fg",
           "userSelect": "none",
           "extra": "flex-1"
         },
         "content": {
-          "figmaNodeId": null,
+          "figmaNodeId": "306:213",
           "layout": "vertical",
           "padding": "lg",
           "gap": {
@@ -657,12 +657,12 @@
           "gap": "xs"
         },
         "categoryGroup": {
-          "figmaNodeId": null,
+          "figmaNodeId": "306:213",
           "layout": "vertical",
           "gap": "lg"
         },
         "itemList": {
-          "figmaNodeId": null,
+          "figmaNodeId": "306:213",
           "layout": "vertical",
           "gap": "xs"
         }
@@ -682,7 +682,7 @@
           "gap": "xl"
         },
         "nodeInfo": {
-          "figmaNodeId": null,
+          "figmaNodeId": "306:213",
           "padding": "lg",
           "radius": "lg",
           "fill": "surface/raised",
@@ -692,7 +692,7 @@
           }
         },
         "portRow": {
-          "figmaNodeId": null,
+          "figmaNodeId": "306:213",
           "layout": "horizontal",
           "justify": "between",
           "padding": {
@@ -703,7 +703,7 @@
           "fill": "surface/raised"
         },
         "paramSection": {
-          "figmaNodeId": null,
+          "figmaNodeId": "306:213",
           "padding": "lg",
           "radius": "lg",
           "fill": "surface/raised",
@@ -755,7 +755,7 @@
           "gap": "md"
         },
         "buttonActive": {
-          "figmaNodeId": null,
+          "figmaNodeId": "306:213",
           "fill": "indigo/default",
           "textColor": "fg",
           "cursor": "default",
@@ -764,7 +764,7 @@
           }
         },
         "buttonInactive": {
-          "figmaNodeId": null,
+          "figmaNodeId": "306:213",
           "textColor": "fg-dim",
           "cursor": "pointer",
           "hover": {
@@ -876,7 +876,7 @@
           "extra": "flex"
         },
         "label": {
-          "figmaNodeId": null,
+          "figmaNodeId": "306:213",
           "textStyle": "text-handle",
           "textColor": "foreground",
           "extra": "px-handle-offset flex-1"
@@ -910,12 +910,12 @@
           "gap": "sm"
         },
         "label": {
-          "figmaNodeId": null,
+          "figmaNodeId": "306:213",
           "textStyle": "text-param",
           "textColor": "fg-subtle"
         },
         "trigger": {
-          "figmaNodeId": null,
+          "figmaNodeId": "306:213",
           "fill": "surface/raised",
           "stroke": {
             "color": "edge/default"
@@ -926,14 +926,14 @@
           "textColor": "fg"
         },
         "content": {
-          "figmaNodeId": null,
+          "figmaNodeId": "306:213",
           "fill": "surface/elevated",
           "stroke": {
             "color": "edge/default"
           }
         },
         "item": {
-          "figmaNodeId": null,
+          "figmaNodeId": "306:213",
           "textStyle": "text-body"
         }
       }
@@ -950,12 +950,12 @@
           "gap": "sm"
         },
         "label": {
-          "figmaNodeId": null,
+          "figmaNodeId": "306:213",
           "textStyle": "text-param",
           "textColor": "fg-subtle"
         },
         "input": {
-          "figmaNodeId": null,
+          "figmaNodeId": "306:213",
           "radius": "sm",
           "fill": "surface/raised",
           "stroke": {
@@ -981,7 +981,7 @@
           "position": "relative"
         },
         "innerFrame": {
-          "figmaNodeId": null,
+          "figmaNodeId": "306:213",
           "padding": {
             "left": "handle-offset",
             "right": "xs"
@@ -1021,13 +1021,13 @@
           "extra": "nodrag nowheel"
         },
         "value": {
-          "figmaNodeId": null,
+          "figmaNodeId": "306:213",
           "textColor": "fg",
           "textStyle": "text-mono-value",
           "extra": "tabular-nums"
         },
         "button": {
-          "figmaNodeId": null,
+          "figmaNodeId": "306:213",
           "layout": "horizontal",
           "fill": "surface/alt",
           "stroke": {
@@ -1089,7 +1089,7 @@
       "codeFile": "src/components/PreviewPanel.tsx",
       "parts": {
         "root": {
-          "figmaNodeId": null,
+          "figmaNodeId": "306:213",
           "position": "relative",
           "width": "full",
           "height": "full",
