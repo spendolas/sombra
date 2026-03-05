@@ -1,7 +1,5 @@
 "use client";
 
-import { Maximize, Minus, Plus } from "lucide-react";
-
 import {
   Panel,
   useViewport,
@@ -12,6 +10,7 @@ import {
 
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
+import { IconButton } from "@/components/IconButton";
 import { cn } from "@/lib/utils";
 import { ds } from "@/generated/ds";
 
@@ -42,13 +41,10 @@ export function ZoomSlider({
           orientation === "horizontal" ? "flex-row" : "flex-col-reverse",
         )}
       >
-        <Button
-          variant="ghost"
-          size="icon"
+        <IconButton
+          icon="minus"
           onClick={() => zoomOut({ duration: 300 })}
-        >
-          <Minus className="h-4 w-4" />
-        </Button>
+        />
         <Slider
           className={cn(
             orientation === "horizontal" ? "w-[140px]" : "h-[140px]",
@@ -60,13 +56,10 @@ export function ZoomSlider({
           step={0.01}
           onValueChange={(values) => zoomTo(values[0])}
         />
-        <Button
-          variant="ghost"
-          size="icon"
+        <IconButton
+          icon="plus"
           onClick={() => zoomIn({ duration: 300 })}
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
+        />
       </div>
       <Button
         className={cn(
@@ -80,13 +73,10 @@ export function ZoomSlider({
       >
         {(100 * zoom).toFixed(0)}%
       </Button>
-      <Button
-        variant="ghost"
-        size="icon"
+      <IconButton
+        icon="maximize"
         onClick={() => fitView({ duration: 300 })}
-      >
-        <Maximize className="h-4 w-4" />
-      </Button>
+      />
     </Panel>
   );
 }

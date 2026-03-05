@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { IconButton } from '@/components/IconButton'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
 
@@ -351,27 +352,27 @@ export function ColorRampEditor({
           {Math.round(selectedStop.position * 100)}%
         </span>
         <div className="flex-1" />
-        <button
+        <IconButton
+          icon="plus"
+          variant="unstyled"
+          size="icon-node"
           onClick={handleAddStop}
-          className={cn(
-            ds.plusMinusButton.root,
-            "text-fg cursor-pointer"
-          )}
-        >
-          +
-        </button>
-        <button
+          className={cn(ds.plusMinusButton.root, "text-fg cursor-pointer")}
+        />
+        <IconButton
+          icon="minus"
+          variant="unstyled"
+          size="icon-node"
           onClick={handleRemoveStop}
           disabled={stops.length <= 2}
           className={cn(
             ds.plusMinusButton.root,
+            "disabled:opacity-100",
             stops.length <= 2
               ? "text-fg-muted cursor-default"
               : "text-fg cursor-pointer"
           )}
-        >
-          -
-        </button>
+        />
       </div>
 
       {/* Preset dropdown */}

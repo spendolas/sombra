@@ -4,7 +4,7 @@
  */
 
 import { useEffect } from 'react'
-import { Shuffle } from 'lucide-react'
+import { IconButton } from '@/components/IconButton'
 import { useGraphStore } from '@/stores/graphStore'
 import { hashNodeId } from '@/nodes/input/random'
 import { ds } from '@/generated/ds'
@@ -45,13 +45,14 @@ export function RandomDisplay({
       <span className={ds.randomDisplay.value}>
         {value.toFixed(dp)}
       </span>
-      <button
+      <IconButton
+        icon="shuffle"
+        variant="unstyled"
+        size="icon-node"
         onClick={handleRandomise}
         className={ds.randomDisplay.button}
         title="Randomise"
-      >
-        <Shuffle size={12} />
-      </button>
+      />
     </div>
   )
 }

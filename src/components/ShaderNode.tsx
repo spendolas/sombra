@@ -11,6 +11,7 @@ import { useGraphStore } from '../stores/graphStore'
 import { BaseNode, BaseNodeHeader, BaseNodeHeaderTitle, BaseNodeContent } from '@/components/base-node'
 import { LabeledHandle } from '@/components/labeled-handle'
 import { BaseHandle } from '@/components/base-handle'
+import { IconButton } from '@/components/IconButton'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
 
@@ -164,33 +165,37 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
         {/* +/- buttons for dynamic input nodes */}
         {hasDynamicInputs && (
           <div className="flex items-center justify-center gap-md py-xs">
-            <button
+            <IconButton
+              icon="minus"
+              variant="unstyled"
+              size="icon-node"
               onClick={handleRemoveInput}
               disabled={inputCount <= 2}
               className={cn(
                 ds.plusMinusButton.root,
+                "disabled:opacity-100",
                 inputCount <= 2
                   ? "text-fg-muted cursor-default"
                   : "text-fg cursor-pointer"
               )}
-            >
-              -
-            </button>
+            />
             <span className="text-param text-fg-muted">
               {inputCount}
             </span>
-            <button
+            <IconButton
+              icon="plus"
+              variant="unstyled"
+              size="icon-node"
               onClick={handleAddInput}
               disabled={inputCount >= 8}
               className={cn(
                 ds.plusMinusButton.root,
+                "disabled:opacity-100",
                 inputCount >= 8
                   ? "text-fg-muted cursor-default"
                   : "text-fg cursor-pointer"
               )}
-            >
-              +
-            </button>
+            />
           </div>
         )}
 

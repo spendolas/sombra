@@ -319,6 +319,18 @@
         }
       ]
     },
+    "VariableID:298:208": {
+      "figmaName": "btn/md",
+      "cssVar": "--sz-btn-md",
+      "value": 24,
+      "unit": "px",
+      "tailwind": [
+        {
+          "namespace": "size",
+          "key": "btn-md"
+        }
+      ]
+    },
     "VariableID:106:43": {
       "figmaName": "input/h",
       "cssVar": "--sz-input-h",
@@ -726,21 +738,18 @@
       "codeFile": "src/components/PreviewToolbar.tsx",
       "parts": {
         "root": {
-          "figmaNodeId": "106:352",
+          "figmaNodeId": "282:627",
           "layout": "horizontal",
-          "fill": "surface/raised",
-          "radius": "sm",
-          "padding": {
-            "x": "md",
-            "y": "xs"
-          },
-          "gap": "sm",
+          "fill": "surface/alt",
+          "radius": "md",
+          "padding": "xs",
+          "gap": "xs",
           "align": "center",
           "textStyle": "text-body",
           "textColor": "fg-dim"
         },
         "wrapper": {
-          "figmaNodeId": null,
+          "figmaNodeId": "106:321",
           "layout": "horizontal",
           "align": "center",
           "gap": "md"
@@ -828,7 +837,7 @@
           "align": "center",
           "justify": "center",
           "textStyle": "text-param",
-          "extra": "size-btn-sm"
+          "extra": "size-btn-md"
         }
       }
     },
@@ -1035,7 +1044,7 @@
             "fill": "surface/raised",
             "textColor": "fg"
           },
-          "extra": "size-btn-sm"
+          "extra": "size-btn-md"
         }
       }
     },
@@ -1063,12 +1072,13 @@
       "codeFile": "src/components/GraphToolbar.tsx",
       "parts": {
         "root": {
-          "figmaNodeId": null,
+          "figmaNodeId": "268:1427",
           "layout": "horizontal",
           "fill": "surface/alt",
           "radius": "md",
           "padding": "xs",
-          "gap": "xs"
+          "gap": "xs",
+          "textColor": "fg-dim"
         }
       }
     },
