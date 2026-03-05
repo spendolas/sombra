@@ -180,6 +180,7 @@ Every non-trivial change should propagate across these layers. Check each that a
 - [ ] Component parts: include all visual fields (textStyle, textColor, cursor, hover states, etc.) — not just structural
 - [ ] After DB changes: run `npm run tokens` to regenerate, then wire component to `ds.*` references
 - [ ] After Figma changes: run `npm run tokens:audit` to verify Figma↔DB parity
+- [ ] Inline visual classes: if adding visual Tailwind classes directly (not from `ds.*`), append a task to `.claude/ds-queue.md` for DS migration
 
 ### Browser Automation (`BROWSER-AUTOMATION.md`)
 - [ ] New node type: add to Node Types tables (inputs, outputs, key params)

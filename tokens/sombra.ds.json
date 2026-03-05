@@ -738,6 +738,30 @@
           "align": "center",
           "textStyle": "text-body",
           "textColor": "fg-dim"
+        },
+        "wrapper": {
+          "figmaNodeId": null,
+          "layout": "horizontal",
+          "align": "center",
+          "gap": "md"
+        },
+        "buttonActive": {
+          "figmaNodeId": null,
+          "fill": "indigo/default",
+          "textColor": "fg",
+          "cursor": "default",
+          "hover": {
+            "fill": "indigo/default"
+          }
+        },
+        "buttonInactive": {
+          "figmaNodeId": null,
+          "textColor": "fg-dim",
+          "cursor": "pointer",
+          "hover": {
+            "fill": "surface/elevated",
+            "textColor": "fg"
+          }
         }
       }
     },
