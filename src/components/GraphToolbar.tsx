@@ -4,8 +4,7 @@
 
 import { useCallback, useState } from 'react'
 import { Panel, useReactFlow } from '@xyflow/react'
-import { Check, Download, FolderOpen, Share2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { IconButton } from '@/components/IconButton'
 import { useGraphStore } from '@/stores/graphStore'
 import {
   exportToFile,
@@ -56,34 +55,22 @@ export function GraphToolbar() {
       position="top-left"
       className={ds.graphToolbar.root}
     >
-      <Button
-        variant="ghost"
-        size="icon"
+      <IconButton
+        icon="download"
         onClick={handleSave}
         title="Save graph (.sombra)"
-      >
-        <Download className="h-4 w-4" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
+      />
+      <IconButton
+        icon="folderOpen"
         onClick={handleOpen}
         title="Open graph (.sombra)"
-      >
-        <FolderOpen className="h-4 w-4" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
+      />
+      <IconButton
+        icon={copied ? 'check' : 'share'}
+        iconClassName={copied ? 'text-green-400' : undefined}
         onClick={handleShare}
         title="Copy shareable viewer URL"
-      >
-        {copied ? (
-          <Check className="h-4 w-4 text-green-400" />
-        ) : (
-          <Share2 className="h-4 w-4" />
-        )}
-      </Button>
+      />
     </Panel>
   )
 }

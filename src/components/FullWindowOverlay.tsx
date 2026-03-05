@@ -10,7 +10,7 @@ export function FullWindowOverlay({ targetRef }: FullWindowOverlayProps) {
   return (
     <div className={ds.fullWindowOverlay.root}>
       <div ref={targetRef} className="w-full h-full" />
-      <PreviewToolbar className="absolute top-md right-md z-10" />
+      <PreviewToolbar className="absolute top-xl right-xl z-10" />
     </div>
   )
 }

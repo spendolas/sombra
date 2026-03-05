@@ -30,7 +30,7 @@ export const ds = {
     root: "flex flex-row bg-surface-alt rounded-md p-xs gap-xs text-fg-dim",
   },
   previewToolbar: {
-    root: "flex flex-row items-center bg-surface-raised rounded-sm px-md py-xs gap-sm text-body text-fg-dim",
+    root: "flex flex-row items-center bg-surface-alt rounded-md p-xs gap-xs text-body text-fg-dim",
     wrapper: "flex flex-row items-center gap-md",
     buttonActive: "bg-indigo text-fg cursor-default hover:bg-indigo",
     buttonInactive: "text-fg-dim cursor-pointer hover:bg-surface-elevated hover:text-fg",
@@ -42,7 +42,7 @@ export const ds = {
     root: "pb-md text-category text-fg-subtle",
   },
   plusMinusButton: {
-    root: "flex flex-row items-center justify-center bg-surface-alt rounded-sm border border-edge text-param size-btn-sm",
+    root: "flex flex-row items-center justify-center bg-surface-alt rounded-sm border border-edge text-param size-btn-md",
   },
   labeledHandle: {
     root: "items-center relative flex",
@@ -73,13 +73,13 @@ export const ds = {
   randomDisplay: {
     root: "flex flex-row items-center justify-between px-xs gap-md nodrag nowheel",
     value: "text-mono-value text-fg tabular-nums",
-    button: "flex flex-row items-center justify-center bg-surface-alt rounded-sm border border-edge text-fg-dim cursor-pointer transition-colors hover:bg-surface-raised hover:text-fg size-btn-sm",
+    button: "flex flex-row items-center justify-center bg-surface-alt rounded-sm border border-edge text-fg-dim cursor-pointer transition-colors hover:bg-surface-raised hover:text-fg size-btn-md",
   },
   miniMap: {
     root: "bg-surface-alt rounded-md border border-edge-subtle",
   },
   graphToolbar: {
-    root: "flex flex-row bg-surface-alt rounded-md p-xs gap-xs",
+    root: "flex flex-row bg-surface-alt rounded-md p-xs gap-xs text-fg-dim",
   },
   previewPanel: {
     root: "bg-black relative w-full h-full",

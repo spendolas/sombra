@@ -1,5 +1,4 @@
-import { PictureInPicture2, Scan, Minimize2, Columns2, Rows2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { IconButton } from '@/components/IconButton'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
@@ -31,15 +30,12 @@ export function PreviewToolbar({ className }: PreviewToolbarProps) {
           className
         )}
       >
-        <Button
-          variant="ghost"
-          size="icon-xs"
+        <IconButton
+          icon="minimize"
           title="Exit full window (F / Esc)"
           className={inactive}
           onClick={() => setPreviewMode(previousPreviewMode === 'fullwindow' ? 'docked' : previousPreviewMode)}
-        >
-          <Minimize2 />
-        </Button>
+        />
       </div>
     )
   }
@@ -49,44 +45,32 @@ export function PreviewToolbar({ className }: PreviewToolbarProps) {
       <div
         className={ds.previewToolbar.root}
       >
-        <Button
-          variant="ghost"
-          size="icon-xs"
+        <IconButton
+          icon="rows"
           title="Vertical split"
           className={isDockedV ? active : inactive}
           onClick={() => { if (isDockedV) { toggleSplitSwapped() } else { setPreviewMode('docked'); setSplitDirection('vertical') } }}
-        >
-          <Rows2 />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-xs"
+        />
+        <IconButton
+          icon="columns"
           title="Horizontal split"
           className={isDockedH ? active : inactive}
           onClick={() => { if (isDockedH) { toggleSplitSwapped() } else { setPreviewMode('docked'); setSplitDirection('horizontal') } }}
-        >
-          <Columns2 />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-xs"
+        />
+        <IconButton
+          icon="pip"
           title="Floating"
           className={previewMode === 'floating' ? active : inactive}
           onClick={() => setPreviewMode('floating')}
-        >
-          <PictureInPicture2 />
-        </Button>
+        />
       </div>
       <div className={ds.previewToolbar.root}>
-        <Button
-          variant="ghost"
-          size="icon-xs"
+        <IconButton
+          icon="scan"
           title="Full window (F)"
           className={inactive}
           onClick={() => setPreviewMode('fullwindow')}
-        >
-          <Scan />
-        </Button>
+        />
       </div>
     </div>
   )
