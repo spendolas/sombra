@@ -1,6 +1,7 @@
 /**
  * Shared port type color definitions — single source of truth
- * Matches Figma "Port Types" variable collection (dark mode values)
+ * AUTO-GENERATED from tokens/sombra.ds.json — do not edit manually
+ * Run `npm run tokens` to regenerate
  */
 
 export const PORT_COLORS: Record<string, string> = {

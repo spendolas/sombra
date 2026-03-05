@@ -1,18 +1,15 @@
 import type { ComponentProps } from "react";
 
 import { cn } from "@/lib/utils";
+import { ds } from "@/generated/ds";
 
 export function BaseNode({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
       className={cn(
-        "bg-card text-card-foreground relative rounded-md border border-edge-card",
+        ds.nodeCard.root,
+        "relative",
         "hover:ring-1",
-        // React Flow displays node elements inside of a `NodeWrapper` component,
-        // which compiles down to a div with the class `react-flow__node`.
-        // When a node is selected, the class `selected` is added to the
-        // `react-flow__node` element. This allows us to style the node when it
-        // is selected, using Tailwind's `&` selector.
         "[.react-flow\\_\\_node.selected_&]:border-muted-foreground",
         "[.react-flow\\_\\_node.selected_&]:shadow-lg",
         className,
@@ -34,12 +31,7 @@ export function BaseNodeHeader({
   return (
     <header
       {...props}
-      className={cn(
-        "mx-0 my-0 -mb-1 flex flex-row items-center justify-between gap-md px-lg py-md",
-        // Remove or modify these classes if you modify the padding in the
-        // `<BaseNode />` component.
-        className,
-      )}
+      className={cn(ds.nodeCard.header, "-mb-1", className)}
     />
   );
 }
@@ -68,7 +60,7 @@ export function BaseNodeContent({
   return (
     <div
       data-slot="base-node-content"
-      className={cn("flex flex-col gap-y-md p-lg", className)}
+      className={cn(ds.nodeCard.content, className)}
       {...props}
     />
   );
@@ -78,10 +70,7 @@ export function BaseNodeFooter({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
       data-slot="base-node-footer"
-      className={cn(
-        "flex flex-col items-center gap-y-md border-t px-lg pt-md pb-lg",
-        className,
-      )}
+      className={cn(ds.nodeCard.footer, className)}
       {...props}
     />
   );

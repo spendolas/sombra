@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { ds } from '@/generated/ds'
 
 // --- Types ---
 
@@ -311,7 +312,7 @@ export function ColorRampEditor({
   )
 
   return (
-    <div className="nodrag nowheel flex flex-col gap-md">
+    <div className={cn(ds.gradientEditor.root, "nodrag nowheel")}>
       {/* Gradient bar */}
       <div
         ref={barRef}
@@ -344,7 +345,7 @@ export function ColorRampEditor({
           type="color"
           value={stopToHex(selectedStop)}
           onChange={(e) => handleColorChange(e.target.value)}
-          className="size-input-h rounded-sm cursor-pointer border border-edge bg-surface-raised"
+          className={cn(ds.colorInput.input, "size-input-h cursor-pointer")}
         />
         <span className="text-param tabular-nums text-fg-dim">
           {Math.round(selectedStop.position * 100)}%
@@ -352,7 +353,10 @@ export function ColorRampEditor({
         <div className="flex-1" />
         <button
           onClick={handleAddStop}
-          className="size-btn-sm flex items-center justify-center rounded-sm text-param border border-edge bg-surface-alt text-fg cursor-pointer"
+          className={cn(
+            ds.plusMinusButton.root,
+            "size-btn-sm flex items-center justify-center text-param text-fg cursor-pointer"
+          )}
         >
           +
         </button>
@@ -360,10 +364,11 @@ export function ColorRampEditor({
           onClick={handleRemoveStop}
           disabled={stops.length <= 2}
           className={cn(
-            'size-btn-sm flex items-center justify-center rounded-sm text-param border border-edge',
+            ds.plusMinusButton.root,
+            "size-btn-sm flex items-center justify-center text-param",
             stops.length <= 2
-              ? 'bg-surface-raised text-fg-muted cursor-default'
-              : 'bg-surface-alt text-fg cursor-pointer'
+              ? "text-fg-muted cursor-default"
+              : "text-fg cursor-pointer"
           )}
         >
           -
@@ -374,11 +379,11 @@ export function ColorRampEditor({
       <Select onValueChange={handlePreset}>
         <SelectTrigger
           size="sm"
-          className="w-full h-select-h text-body bg-surface-raised border-edge text-fg"
+          className={cn(ds.enumSelect.trigger, "w-full h-select-h text-body text-fg")}
         >
           <SelectValue placeholder="Preset" />
         </SelectTrigger>
-        <SelectContent className="bg-surface-elevated border-edge">
+        <SelectContent className={ds.enumSelect.content}>
           {PRESETS.map((preset) => (
             <SelectItem key={preset.name} value={preset.name} className="text-body">
               {preset.name}

@@ -12,6 +12,7 @@ import { BaseNode, BaseNodeHeader, BaseNodeHeaderTitle, BaseNodeContent } from '
 import { LabeledHandle } from '@/components/labeled-handle'
 import { BaseHandle } from '@/components/base-handle'
 import { cn } from '@/lib/utils'
+import { ds } from '@/generated/ds'
 
 import { getPortColor } from '../utils/port-colors'
 
@@ -126,9 +127,9 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   const hasDynamicInputs = !!definition.dynamicInputs
 
   return (
-    <BaseNode className="min-w-node bg-surface-elevated">
-      <BaseNodeHeader className="rounded-t-md bg-surface-raised border-b border-edge-subtle">
-        <BaseNodeHeaderTitle className="text-node-title text-fg">
+    <BaseNode className="min-w-node">
+      <BaseNodeHeader>
+        <BaseNodeHeaderTitle className="text-fg">
           {definition.label}
         </BaseNodeHeaderTitle>
       </BaseNodeHeader>
@@ -169,10 +170,11 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
               onClick={handleRemoveInput}
               disabled={inputCount <= 2}
               className={cn(
-                "size-btn-sm flex items-center justify-center rounded-sm text-param border border-edge",
+                ds.plusMinusButton.root,
+                "size-btn-sm flex items-center justify-center text-param",
                 inputCount <= 2
-                  ? "bg-surface-raised text-fg-muted cursor-default"
-                  : "bg-surface-alt text-fg cursor-pointer"
+                  ? "text-fg-muted cursor-default"
+                  : "text-fg cursor-pointer"
               )}
             >
               -
@@ -184,10 +186,11 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
               onClick={handleAddInput}
               disabled={inputCount >= 8}
               className={cn(
-                "size-btn-sm flex items-center justify-center rounded-sm text-param border border-edge",
+                ds.plusMinusButton.root,
+                "size-btn-sm flex items-center justify-center text-param",
                 inputCount >= 8
-                  ? "bg-surface-raised text-fg-muted cursor-default"
-                  : "bg-surface-alt text-fg cursor-pointer"
+                  ? "text-fg-muted cursor-default"
+                  : "text-fg cursor-pointer"
               )}
             >
               +
@@ -220,7 +223,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
           }
 
           return (
-            <div key={param.id} className="relative flex items-center">
+            <div key={param.id} className={cn(ds.connectableParamRow.root, "relative")}>
               <BaseHandle
                 type="target"
                 position={Position.Left}
@@ -228,7 +231,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                 handleColor={getPortColor(param.type)}
                 connected={isConnected}
               />
-              <div className="flex-1 pl-handle-offset pr-xs">
+              <div className={ds.connectableParamRow.innerFrame}>
                 {isConnected && !hasResolvedValue ? (
                   <div className="flex justify-between items-center py-2xs">
                     <span className="text-param text-fg-subtle">

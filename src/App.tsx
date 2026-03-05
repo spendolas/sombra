@@ -20,6 +20,8 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from '@/components/ui/resizable'
+import { cn } from '@/lib/utils'
+import { ds } from '@/generated/ds'
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -194,7 +196,7 @@ function App() {
         <ResizablePanelGroup direction="horizontal">
           {/* Left — Node Palette */}
           <ResizablePanel id="palette" defaultSize="12%" minSize="12%" maxSize="30%">
-            <div className="h-full p-xl overflow-y-auto bg-surface-alt min-w-node">
+            <div className={cn(ds.nodePalette.root, "h-full overflow-y-auto min-w-node")}>
               <NodePalette />
             </div>
           </ResizablePanel>
@@ -242,7 +244,7 @@ function App() {
 
           {/* Right — Properties */}
           <ResizablePanel id="properties" defaultSize="12%" minSize="12%" maxSize="30%">
-            <div className="h-full p-xl overflow-y-auto bg-surface-alt min-w-node">
+            <div className={cn(ds.propertiesPanel.root, "h-full overflow-y-auto min-w-node")}>
               <PropertiesPanel selectedNode={selectedNode} />
             </div>
           </ResizablePanel>

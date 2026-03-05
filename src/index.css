@@ -8,6 +8,7 @@
   line-height: 1.5;
   font-weight: 400;
 
+  /* === GENERATED:START root-vars === */
   /* Sombra color palette */
   --surface: #0f0f1a;
   --surface-alt: #1a1a2e;
@@ -29,27 +30,28 @@
 
   /* ── Sombra spacing tokens (Figma: Spacing collection) ── */
   --sp-2xs: 2px;   /* spacing/2xs  VariableID:216:1079 */
-  --sp-xs:  4px;   /* spacing/xs   VariableID:106:27 */
-  --sp-sm:  6px;   /* spacing/sm   VariableID:106:28 */
-  --sp-md:  8px;   /* spacing/md   VariableID:106:29 */
-  --sp-lg:  12px;  /* spacing/lg   VariableID:106:30 */
-  --sp-xl:  16px;  /* spacing/xl   VariableID:106:31 */
-  --sp-2xl: 24px;  /* spacing/2xl  VariableID:106:32 */
+  --sp-xs: 4px;   /* spacing/xs  VariableID:106:27 */
+  --sp-sm: 6px;   /* spacing/sm  VariableID:106:28 */
+  --sp-md: 8px;   /* spacing/md  VariableID:106:29 */
+  --sp-lg: 12px;   /* spacing/lg  VariableID:106:30 */
+  --sp-xl: 16px;   /* spacing/xl  VariableID:106:31 */
+  --sp-2xl: 24px;   /* spacing/2xl  VariableID:106:32 */
 
   /* ── Sombra size tokens (Figma: Sizes collection) ── */
-  --sz-handle:       12px;  /* size/handle       VariableID:106:39 */
-  --sz-icon-sm:      16px;  /* size/icon-sm      VariableID:106:40 */
-  --sz-icon-md:      20px;  /* size/icon-md      VariableID:106:41 */
-  --sz-btn-sm:       20px;  /* size/btn-sm       VariableID:106:42 */
-  --sz-input-h:      24px;  /* size/input-h      VariableID:106:43 */
-  --sz-select-h:     28px;  /* size/select-h     VariableID:106:44 */
-  --sz-slider-track: 6px;   /* size/slider-track VariableID:106:45 */
-  --sz-slider-thumb: 16px;  /* size/slider-thumb VariableID:106:46 */
-  --sz-node-min-w:   160px; /* size/node-min-w   VariableID:106:47 */
-  --sz-input-w:      64px;  /* size/input-w      VariableID:216:1080 */
+  --sz-handle:        12px;  /* size/handle       VariableID:106:39 */
+  --sz-icon-sm:       16px;  /* size/icon-sm      VariableID:106:40 */
+  --sz-icon-md:       20px;  /* size/icon-md      VariableID:106:41 */
+  --sz-btn-sm:        20px;  /* size/btn-sm       VariableID:106:42 */
+  --sz-input-h:       24px;  /* size/input-h      VariableID:106:43 */
+  --sz-select-h:      28px;  /* size/select-h     VariableID:106:44 */
+  --sz-slider-track:  6px;  /* size/slider-track VariableID:106:45 */
+  --sz-slider-thumb:  16px;  /* size/slider-thumb VariableID:106:46 */
+  --sz-node-min-w:    160px;  /* size/node-min-w   VariableID:106:47 */
+  --sz-input-w:       64px;  /* size/size-input-w VariableID:216:1080 */
 
   /* ── Computed ── */
   --handle-offset: calc(var(--sz-handle) / 2 + var(--sp-sm));
+  /* === GENERATED:END root-vars === */
 
   /* shadcn variables — dark by default */
   --radius: 0.625rem;
@@ -134,9 +136,12 @@ html, body, #root {
 }
 
 @theme inline {
+  /* === GENERATED:START theme-radius === */
   --radius-sm: 4px;  /* Figma radius/sm (VariableID:106:34) */
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-full: 9999px;
+  /* === GENERATED:END theme-radius === */
   --radius-xl: calc(var(--radius) + 4px);
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
@@ -172,6 +177,7 @@ html, body, #root {
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  /* === GENERATED:START theme-sombra === */
   /* Sombra design tokens */
   --color-surface: var(--surface);
   --color-surface-alt: var(--surface-alt);
@@ -190,30 +196,31 @@ html, body, #root {
 
   /* ── Sombra spacing → Tailwind utilities ── */
   --spacing-2xs: var(--sp-2xs);
-  --spacing-xs:  var(--sp-xs);
-  --spacing-sm:  var(--sp-sm);
-  --spacing-md:  var(--sp-md);
-  --spacing-lg:  var(--sp-lg);
-  --spacing-xl:  var(--sp-xl);
+  --spacing-xs: var(--sp-xs);
+  --spacing-sm: var(--sp-sm);
+  --spacing-md: var(--sp-md);
+  --spacing-lg: var(--sp-lg);
+  --spacing-xl: var(--sp-xl);
   --spacing-2xl: var(--sp-2xl);
   --spacing-handle-offset: var(--handle-offset);
 
   /* Sizes registered as spacing (for h-*, w-* utilities) */
-  --spacing-input-h:      var(--sz-input-h);
-  --spacing-select-h:     var(--sz-select-h);
+  --spacing-input-h: var(--sz-input-h);
+  --spacing-select-h: var(--sz-select-h);
   --spacing-slider-track: var(--sz-slider-track);
-  --spacing-input-w:      var(--sz-input-w);
+  --spacing-input-w: var(--sz-input-w);
 
   /* ── Sombra sizes → Tailwind size-* utilities ── */
-  --size-handle:       var(--sz-handle);
-  --size-icon-sm:      var(--sz-icon-sm);
-  --size-icon-md:      var(--sz-icon-md);
-  --size-btn-sm:       var(--sz-btn-sm);
-  --size-input-h:      var(--sz-input-h);
+  --size-handle: var(--sz-handle);
+  --size-icon-sm: var(--sz-icon-sm);
+  --size-icon-md: var(--sz-icon-md);
+  --size-btn-sm: var(--sz-btn-sm);
+  --size-input-h: var(--sz-input-h);
   --size-slider-thumb: var(--sz-slider-thumb);
 
   /* ── Min-width → Tailwind min-w-node ── */
   --min-width-node: var(--sz-node-min-w);
+  /* === GENERATED:END theme-sombra === */
 }
 
 @layer base {
@@ -225,68 +232,70 @@ html, body, #root {
   }
 }
 
+/* === GENERATED:START utilities === */
 /* ── Figma text style → Tailwind @utility ── */
 
-@utility text-node-title {           /* heading/node-title: 14px SemiBold */
+@utility text-node-title {                 /* heading/node-title: 14px, SemiBold */
   font-size: 14px;
   font-weight: 600;
   line-height: 1.5;
 }
-@utility text-section {              /* heading/section: 12px SemiBold, 0.6px ls, UPPER */
+@utility text-section {                    /* heading/section: 12px, SemiBold, 0.05em ls, UPPER */
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   line-height: 1.5;
 }
-@utility text-category {             /* heading/category: 10px SemiBold, 0.5px ls, UPPER */
+@utility text-category {                   /* heading/category: 10px, SemiBold, 0.05em ls, UPPER */
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   line-height: 1.5;
 }
-@utility text-body {                 /* body/default: 12px Regular */
+@utility text-body {                       /* body/default: 12px, Regular */
   font-size: 12px;
   font-weight: 400;
   line-height: 1.5;
 }
-@utility text-description {          /* body/description: 12px Regular, LH 162.5% */
+@utility text-description {                /* body/description: 12px, Regular, LH 162.5% */
   font-size: 12px;
   font-weight: 400;
   line-height: 1.625;
 }
-@utility text-handle {               /* body/handle: 13px Regular */
+@utility text-handle {                     /* body/handle: 13px, Regular */
   font-size: 13px;
   font-weight: 400;
   line-height: 1.5;
 }
-@utility text-param {                /* label/param: 10px Regular */
+@utility text-param {                      /* label/param: 10px, Regular */
   font-size: 10px;
   font-weight: 400;
   line-height: 1.5;
 }
-@utility text-category-meta {        /* label/category-meta: 10px Regular, 0.25px ls, UPPER */
+@utility text-category-meta {              /* label/category-meta: 10px, Regular, 0.025em ls, UPPER */
   font-size: 10px;
   font-weight: 400;
   letter-spacing: 0.025em;
   text-transform: uppercase;
   line-height: 1.5;
 }
-@utility text-mono-value {           /* mono/value: 12px Regular mono */
+@utility text-mono-value {                 /* mono/value: 12px, Regular, mono */
   font-size: 12px;
   font-weight: 400;
   font-family: ui-monospace, SFMono-Regular, monospace;
   line-height: 1.5;
 }
-@utility text-mono-id {              /* mono/id: 10px Regular mono */
+@utility text-mono-id {                    /* mono/id: 10px, Regular, mono */
   font-size: 10px;
   font-weight: 400;
   font-family: ui-monospace, SFMono-Regular, monospace;
   line-height: 1.5;
 }
-@utility text-port-type {            /* port-row/type: 11px Regular */
+@utility text-port-type {                  /* port-row/type: 11px, Regular */
   font-size: 11px;
   font-weight: 400;
   line-height: 1.5;
 }
+  /* === GENERATED:END utilities === */

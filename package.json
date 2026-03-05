@@ -6,8 +6,12 @@
   "scripts": {
     "postinstall": "node -e \"require('fs').writeFileSync('node_modules/.package-lock-hash',require('crypto').createHash('sha256').update(require('fs').readFileSync('package-lock.json')).digest('hex'))\"",
     "check-deps": "node -e \"const f=require('fs'),c=require('crypto');const want=c.createHash('sha256').update(f.readFileSync('package-lock.json')).digest('hex');let have;try{have=f.readFileSync('node_modules/.package-lock-hash','utf8')}catch{}if(want!==have){console.error('node_modules is out of sync with package-lock.json.\\nRun: rm -rf node_modules && npm install');process.exit(1)}\"",
-    "predev": "npm run check-deps",
-    "prebuild": "npm run check-deps",
+    "tokens": "tsx scripts/generate-tokens.ts",
+    "tokens:pull": "tsx scripts/figma-pull.ts",
+    "tokens:check": "tsx scripts/generate-tokens.ts --check",
+    "tokens:sync": "npm run tokens:pull && npm run tokens",
+    "predev": "npm run check-deps && npm run tokens",
+    "prebuild": "npm run check-deps && npm run tokens",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
@@ -39,6 +43,7 @@
     "globals": "^15.14.0",
     "shadcn": "^3.8.5",
     "tailwindcss": "^4.1.18",
+    "tsx": "^4.21.0",
     "typescript": "~5.6.2",
     "typescript-eslint": "^8.18.2",
     "vite": "^6.0.5"

@@ -7,6 +7,8 @@ import { useEffect } from 'react'
 import { Shuffle } from 'lucide-react'
 import { useGraphStore } from '@/stores/graphStore'
 import { hashNodeId } from '@/nodes/input/random'
+import { cn } from '@/lib/utils'
+import { ds } from '@/generated/ds'
 
 export function RandomDisplay({
   nodeId,
@@ -40,13 +42,16 @@ export function RandomDisplay({
   }
 
   return (
-    <div className="nodrag nowheel flex items-center justify-between gap-md px-xs">
+    <div className={cn(ds.randomDisplay.root, "nodrag nowheel")}>
       <span className="text-fg text-mono-value tabular-nums">
         {value.toFixed(dp)}
       </span>
       <button
         onClick={handleRandomise}
-        className="flex size-btn-sm items-center justify-center rounded-sm border border-edge bg-surface-alt text-fg-dim transition-colors hover:bg-surface-raised hover:text-fg"
+        className={cn(
+          ds.randomDisplay.button,
+          "flex size-btn-sm items-center justify-center text-fg-dim transition-colors hover:bg-surface-raised hover:text-fg"
+        )}
         title="Randomise"
       >
         <Shuffle size={12} />

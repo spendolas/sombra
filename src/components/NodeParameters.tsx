@@ -14,6 +14,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { cn } from '@/lib/utils'
+import { ds } from '@/generated/ds'
 
 export interface SourceInfo {
   value: number | null
@@ -132,18 +134,18 @@ interface EnumSelectProps {
 
 function EnumSelect({ param, value, onChange }: EnumSelectProps) {
   return (
-    <div className="flex flex-col gap-sm">
+    <div className={ds.enumSelect.root}>
       <Label className="text-param text-fg-subtle">
         {param.label}
       </Label>
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger
           size="sm"
-          className="w-full h-select-h text-body bg-surface-raised border-edge text-fg"
+          className={cn(ds.enumSelect.trigger, "w-full h-select-h text-body text-fg")}
         >
           <SelectValue />
         </SelectTrigger>
-        <SelectContent className="bg-surface-elevated border-edge">
+        <SelectContent className={ds.enumSelect.content}>
           {param.options!.map((option) => (
             <SelectItem key={option.value} value={option.value} className="text-body">
               {option.label}
@@ -170,7 +172,7 @@ function ColorInput({ param, value, onChange }: ColorInputProps) {
   }
 
   return (
-    <div className="flex flex-col gap-sm">
+    <div className={ds.colorInput.root}>
       <Label className="text-param text-fg-subtle">
         {param.label}
       </Label>
@@ -178,7 +180,7 @@ function ColorInput({ param, value, onChange }: ColorInputProps) {
         type="color"
         value={hexColor}
         onChange={(e) => handleColorChange(e.target.value)}
-        className="w-full h-input-h rounded-sm cursor-pointer border border-edge bg-surface-raised"
+        className={cn(ds.colorInput.input, "w-full h-input-h cursor-pointer")}
       />
     </div>
   )

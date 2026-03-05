@@ -10,6 +10,8 @@ import { useGraphStore } from '../stores/graphStore'
 import { NodeParameters, type SourceInfo } from './NodeParameters'
 import { Separator } from '@/components/ui/separator'
 import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/utils'
+import { ds } from '@/generated/ds'
 
 interface PropertiesPanelProps {
   selectedNode: Node<NodeData> | null
@@ -111,7 +113,7 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
       </h2>
 
       {/* Node Info */}
-      <div className="mb-xl p-lg rounded-lg bg-surface-raised border border-edge">
+      <div className={cn(ds.propertiesPanel.nodeInfo, "mb-xl")}>
         <div className="text-category-meta mb-xs text-fg-subtle">
           {definition.category}
         </div>
@@ -139,7 +141,7 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
             {resolvedInputs.map((input) => (
               <div
                 key={input.id}
-                className="flex justify-between text-port-type px-md py-xs rounded-sm bg-surface-raised"
+                className={cn(ds.propertiesPanel.portRow, "text-port-type")}
               >
                 <span className="text-fg-dim">{input.label}</span>
                 <span className="text-mono-value text-fg-muted">
@@ -161,7 +163,7 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
             {definition.outputs.map((output) => (
               <div
                 key={output.id}
-                className="flex justify-between text-port-type px-md py-xs rounded-sm bg-surface-raised"
+                className={cn(ds.propertiesPanel.portRow, "text-port-type")}
               >
                 <span className="text-fg-dim">{output.label}</span>
                 <span className="text-mono-value text-fg-muted">
@@ -179,7 +181,7 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
           <Label className="text-section mb-lg block text-fg-dim">
             Parameters
           </Label>
-          <div className="p-lg rounded-lg bg-surface-raised border border-edge">
+          <div className={ds.propertiesPanel.paramSection}>
             <NodeParameters
               nodeId={selectedNode.id}
               parameters={visibleParams}
@@ -197,7 +199,7 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
           <Label className="text-section mb-lg block text-fg-dim">
             Custom Controls
           </Label>
-          <div className="p-lg rounded-lg bg-surface-raised border border-edge">
+          <div className={ds.propertiesPanel.paramSection}>
             <definition.component nodeId={selectedNode.id} data={selectedNode.data.params || {}} />
           </div>
         </div>

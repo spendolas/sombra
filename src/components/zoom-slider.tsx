@@ -13,6 +13,7 @@ import {
 import { Slider } from "@/components/ui/slider";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { ds } from "@/generated/ds";
 
 export function ZoomSlider({
   className,
@@ -29,7 +30,8 @@ export function ZoomSlider({
   return (
     <Panel
       className={cn(
-        "bg-surface-alt text-fg flex gap-xs rounded-md p-xs",
+        ds.zoomBar.root,
+        "text-fg",
         orientation === "horizontal" ? "flex-row" : "flex-col",
         className,
       )}

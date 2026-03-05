@@ -2,6 +2,7 @@ import { PictureInPicture2, Scan, Columns2, Rows2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { cn } from '@/lib/utils'
+import { ds } from '@/generated/ds'
 
 interface PreviewToolbarProps {
   className?: string
@@ -22,7 +23,8 @@ export function PreviewToolbar({ className }: PreviewToolbarProps) {
   return (
     <div
       className={cn(
-        'flex items-center gap-sm text-body px-md py-xs rounded-sm bg-surface-raised text-fg-dim',
+        ds.previewToolbar.root,
+        'text-body text-fg-dim',
         className
       )}
     >

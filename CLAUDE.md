@@ -28,6 +28,11 @@
 
 ```
 sombra/
+├── tokens/
+│   └── sombra.ds.json          # THE design system database (tokens + components)
+├── scripts/
+│   ├── generate-tokens.ts      # DB → index.css + ds.ts + port-colors.ts generator
+│   └── figma-pull.ts           # Figma REST API → DB sync
 ├── src/
 │   ├── components/      # React components (panels, toolbar, UI widgets)
 │   │   ├── ui/          # shadcn/ui primitives (button, slider, input, etc.)
@@ -38,16 +43,19 @@ sombra/
 │   │   ├── PreviewPanel.tsx    # Docked preview container
 │   │   ├── FloatingPreview.tsx # Draggable/resizable floating preview window
 │   │   └── FullWindowOverlay.tsx # Fullscreen preview overlay
+│   ├── generated/
+│   │   └── ds.ts               # Generated component Tailwind class strings
 │   ├── lib/             # Utility functions (cn helper, etc.)
 │   ├── nodes/           # Node type definitions (one file per category or node)
 │   ├── compiler/        # Graph-to-GLSL compiler logic
 │   ├── stores/          # Zustand stores for app state
-│   ├── utils/           # Graph layout (dagre auto-layout), test preset graphs
+│   ├── utils/           # Graph layout (dagre auto-layout), test preset graphs, port-colors.ts (generated)
 │   ├── webgl/           # WebGL renderer (fullscreen quad, offscreen preview)
 │   ├── App.tsx          # Root layout component
 │   ├── main.tsx         # Entry point (inits node library + dev bridge)
 │   ├── dev-bridge.ts    # Exposes window.__sombra for browser automation
-│   └── index.css        # Tailwind imports + dark theme base styles
+│   └── index.css        # Tailwind imports + dark theme (marker regions generated from DB)
+├── .env                 # FIGMA_TOKEN for Figma REST API (gitignored)
 ├── components.json      # shadcn/ui configuration
 ├── public/              # Static assets
 ├── ROADMAP.md           # Detailed roadmap (Phases 0-5)
@@ -69,10 +77,14 @@ sombra/
 ## Commands
 
 ```bash
-npm run dev      # Start dev server (http://localhost:5173)
-npm run build    # Production build (outputs to dist/)
-npm run lint     # Run ESLint
-npm run preview  # Preview production build locally
+npm run dev          # Start dev server (auto-generates tokens first)
+npm run build        # Production build (auto-generates tokens first)
+npm run lint         # Run ESLint
+npm run preview      # Preview production build locally
+npm run tokens       # Generate CSS + ds.ts + port-colors from sombra.ds.json
+npm run tokens:pull  # Fetch latest values from Figma REST API → update DB
+npm run tokens:sync  # Pull from Figma + regenerate code (the main workflow)
+npm run tokens:check # CI guard: fail if generated files diverge from DB
 ```
 
 ## Architecture
@@ -394,34 +406,63 @@ All tokens work with any Tailwind color utility prefix: `bg-`, `text-`, `border-
 
 **shadcn tokens** (`--background`, `--foreground`, etc.) are separate oklch values used by shadcn/ui primitives. Don't remap Sombra tokens to shadcn tokens.
 
-## Figma Sync Check
+## Design System Database
 
-Sombra tracks Figma↔Code drift via `.figma/sync-snapshot.json` — a baseline of all variable values, text style properties, and component layout bindings at the time of last sync.
+**Golden Rule: Figma is the source of truth.** ALL visual additions start in Figma first. Any new color, spacing, size, radius, text style, or component MUST be created as a Figma variable/component and connected to the token system BEFORE writing code. The flow is always: **Figma → DB → generated code → components.**
 
-### Detection Tiers (all on-demand, user-driven)
+### Architecture
 
-| Tier | Trigger | What it scans | Plugin API calls |
-|---|---|---|---|
-| **1 — Token Scan** | "check tokens" / "I changed a variable" | All variables + text styles | 2 |
-| **2 — Targeted Component** | "I updated Node Header" / Figma URL + note | Specific component(s) | 1-2 per component |
-| **3 — Full Audit** | "full audit" / before major release | All 22 tracked components + Tier 1 | ~24 |
+```
+Figma  ──(REST API)──►  tokens/sombra.ds.json  ──(generate)──►  src/index.css (CSS vars)
+                           (single source                        src/generated/ds.ts (component classes)
+                            of truth)                             src/utils/port-colors.ts
+```
 
-Tier 1 is most useful during the **design foundation phase** when token values are in flux. Once the DS tokens are settled, it becomes occasional. All tiers use **dynamic discovery** — `figma.variables.getLocalVariables()` and `figma.getLocalTextStyles()` read everything in the file, so new variables/styles added after the snapshot are automatically detected as untracked.
+**One database. Two generators. Zero manual CSS for design tokens.**
 
-### Workflow
+### Database (`tokens/sombra.ds.json`)
 
-1. **User says what changed** → Claude picks the appropriate tier
-2. **Run Plugin API scan** via Chrome extension (Figma desktop must be open)
-3. **Diff against snapshot** → report changes grouped by: token values, text styles, component bindings, structural changes, new elements
-4. **Implement code changes** to match Figma
-5. **Update only changed entries** in `sync-snapshot.json`
-6. **Commit code + snapshot together**
+The unified DS database contains:
+- **colors** (14): UI Colors with CSS vars + Tailwind mappings (keyed by Figma VariableID)
+- **portColors** (7): Port type colors for handles/edges
+- **spacing** (7): Spacing tokens with CSS vars
+- **radius** (4): Border radius tokens
+- **sizes** (10): Component size tokens
+- **computed** (1): Derived tokens (e.g., `handle-offset`)
+- **textStyles** (11): Typography utilities (keyed by Figma style key)
+- **components** (22): Component parts with structural design properties (fill, stroke, radius, padding, gap, layout)
+- **nodeTemplates** (23): Node type reference data
+- **scenes** (5): Scene/layout reference data
 
-**Single-component sync** (Figma URL + note): use MCP `get_design_context` instead of Plugin API, compare to snapshot + current code, implement, update snapshot entry.
+### Generated Files
 
-### Scan Scripts
+| File | Generated from | Purpose |
+|---|---|---|
+| `src/index.css` (4 marker regions) | tokens: colors, spacing, sizes, radius, text styles | CSS variables + Tailwind `@theme inline` + `@utility` blocks |
+| `src/generated/ds.ts` | components | Typed Tailwind class string objects for each component |
+| `src/utils/port-colors.ts` | portColors | Port type → color constant map |
 
-The Plugin API scripts are run inline by Claude — no separate script files. See the plan file for Tier 1 (token scan) and Tier 2 (component scan) script templates. Tier 3 iterates Tier 2 over all tracked component IDs from the snapshot.
+Components import `ds` and use class strings directly:
+```tsx
+import { ds } from '@/generated/ds';
+<BaseNode className={cn(ds.nodeCard.root, "min-w-node")}>
+```
+
+Design classes (fill, stroke, radius, spacing) come from `ds.*`. Behavioral classes (hover, cursor, transition, selection states) stay in component code.
+
+### Figma Sync Workflow
+
+The daily flow: **`npm run tokens:sync`** — pulls from Figma REST API, updates DB, regenerates code. Requires `FIGMA_TOKEN` in `.env` (personal access token from figma.com/developers).
+
+| Scenario | Command |
+|---|---|
+| Token changed in Figma | `npm run tokens:sync` |
+| Component changed in Figma | `npm run tokens:sync` (for token values) + manual DB component part update |
+| New token added in Figma | `npm run tokens:sync` → auto-detected, needs manual DB entry |
+| DB edited manually | `npm run tokens` |
+| CI drift check | `npm run tokens:check` |
+
+The pull script (`scripts/figma-pull.ts`) uses version-check optimization: compares Figma file version to `lastFigmaVersion` in DB. If unchanged, exits early (1 API call). Only does full scan when version bumps.
 
 ## Important Layout Notes
 

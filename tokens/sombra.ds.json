@@ -1,0 +1,1110 @@
+{
+  "version": 3,
+  "lastSync": "2026-03-05T12:00:00Z",
+  "figmaFileKey": "gq5i0l617YkXy0GzAZPtqz",
+  "colors": {
+    "VariableID:106:3": {
+      "figmaName": "surface/default",
+      "cssVar": "--surface",
+      "value": "#0f0f1a",
+      "tailwind": {
+        "namespace": "color",
+        "key": "surface"
+      }
+    },
+    "VariableID:106:4": {
+      "figmaName": "surface/alt",
+      "cssVar": "--surface-alt",
+      "value": "#1a1a2e",
+      "tailwind": {
+        "namespace": "color",
+        "key": "surface-alt"
+      }
+    },
+    "VariableID:106:5": {
+      "figmaName": "surface/raised",
+      "cssVar": "--surface-raised",
+      "value": "#252538",
+      "tailwind": {
+        "namespace": "color",
+        "key": "surface-raised"
+      }
+    },
+    "VariableID:106:6": {
+      "figmaName": "surface/elevated",
+      "cssVar": "--surface-elevated",
+      "value": "#2d2d44",
+      "tailwind": {
+        "namespace": "color",
+        "key": "surface-elevated"
+      }
+    },
+    "VariableID:106:7": {
+      "figmaName": "fg/default",
+      "cssVar": "--fg",
+      "value": "#e8e8f0",
+      "tailwind": {
+        "namespace": "color",
+        "key": "fg"
+      }
+    },
+    "VariableID:106:8": {
+      "figmaName": "fg/dim",
+      "cssVar": "--fg-dim",
+      "value": "#b8b8c8",
+      "tailwind": {
+        "namespace": "color",
+        "key": "fg-dim"
+      }
+    },
+    "VariableID:106:9": {
+      "figmaName": "fg/subtle",
+      "cssVar": "--fg-subtle",
+      "value": "#88889a",
+      "tailwind": {
+        "namespace": "color",
+        "key": "fg-subtle"
+      }
+    },
+    "VariableID:106:10": {
+      "figmaName": "fg/muted",
+      "cssVar": "--fg-muted",
+      "value": "#5a5a6e",
+      "tailwind": {
+        "namespace": "color",
+        "key": "fg-muted"
+      }
+    },
+    "VariableID:106:11": {
+      "figmaName": "edge/default",
+      "cssVar": "--edge",
+      "value": "#3a3a52",
+      "tailwind": {
+        "namespace": "color",
+        "key": "edge"
+      }
+    },
+    "VariableID:106:12": {
+      "figmaName": "edge/subtle",
+      "cssVar": "--edge-subtle",
+      "value": "#2a2a3e",
+      "tailwind": {
+        "namespace": "color",
+        "key": "edge-subtle"
+      }
+    },
+    "VariableID:254:632": {
+      "figmaName": "edge/card",
+      "cssVar": "--edge-card",
+      "value": "oklch(1 0 0 / 10%)",
+      "tailwind": {
+        "namespace": "color",
+        "key": "edge-card"
+      }
+    },
+    "VariableID:106:13": {
+      "figmaName": "indigo/default",
+      "cssVar": "--indigo",
+      "value": "#6366f1",
+      "tailwind": {
+        "namespace": "color",
+        "key": "indigo"
+      }
+    },
+    "VariableID:106:14": {
+      "figmaName": "indigo/hover",
+      "cssVar": "--indigo-hover",
+      "value": "#818cf8",
+      "tailwind": {
+        "namespace": "color",
+        "key": "indigo-hover"
+      }
+    },
+    "VariableID:106:15": {
+      "figmaName": "indigo/active",
+      "cssVar": "--indigo-active",
+      "value": "#4f46e5",
+      "tailwind": {
+        "namespace": "color",
+        "key": "indigo-active"
+      }
+    }
+  },
+  "portColors": {
+    "VariableID:106:18": {
+      "figmaName": "float",
+      "value": "#d4d4d8"
+    },
+    "VariableID:106:19": {
+      "figmaName": "vec2",
+      "value": "#34d399"
+    },
+    "VariableID:106:20": {
+      "figmaName": "vec3",
+      "value": "#60a5fa"
+    },
+    "VariableID:106:21": {
+      "figmaName": "vec4",
+      "value": "#a78bfa"
+    },
+    "VariableID:106:22": {
+      "figmaName": "color",
+      "value": "#fbbf24"
+    },
+    "VariableID:106:23": {
+      "figmaName": "sampler2D",
+      "value": "#f472b6"
+    },
+    "VariableID:106:25": {
+      "figmaName": "default",
+      "value": "#6b7280"
+    }
+  },
+  "spacing": {
+    "VariableID:216:1079": {
+      "figmaName": "spacing/2xs",
+      "cssVar": "--sp-2xs",
+      "value": 2,
+      "unit": "px",
+      "tailwind": {
+        "namespace": "spacing",
+        "key": "2xs"
+      }
+    },
+    "VariableID:106:27": {
+      "figmaName": "xs/4",
+      "cssVar": "--sp-xs",
+      "value": 4,
+      "unit": "px",
+      "tailwind": {
+        "namespace": "spacing",
+        "key": "xs"
+      }
+    },
+    "VariableID:106:28": {
+      "figmaName": "sm/6",
+      "cssVar": "--sp-sm",
+      "value": 6,
+      "unit": "px",
+      "tailwind": {
+        "namespace": "spacing",
+        "key": "sm"
+      }
+    },
+    "VariableID:106:29": {
+      "figmaName": "md/8",
+      "cssVar": "--sp-md",
+      "value": 8,
+      "unit": "px",
+      "tailwind": {
+        "namespace": "spacing",
+        "key": "md"
+      }
+    },
+    "VariableID:106:30": {
+      "figmaName": "lg/12",
+      "cssVar": "--sp-lg",
+      "value": 12,
+      "unit": "px",
+      "tailwind": {
+        "namespace": "spacing",
+        "key": "lg"
+      }
+    },
+    "VariableID:106:31": {
+      "figmaName": "xl/16",
+      "cssVar": "--sp-xl",
+      "value": 16,
+      "unit": "px",
+      "tailwind": {
+        "namespace": "spacing",
+        "key": "xl"
+      }
+    },
+    "VariableID:106:32": {
+      "figmaName": "2xl/24",
+      "cssVar": "--sp-2xl",
+      "value": 24,
+      "unit": "px",
+      "tailwind": {
+        "namespace": "spacing",
+        "key": "2xl"
+      }
+    }
+  },
+  "radius": {
+    "VariableID:106:34": {
+      "figmaName": "sm/4",
+      "value": 4,
+      "unit": "px",
+      "tailwind": {
+        "namespace": "radius",
+        "key": "sm"
+      }
+    },
+    "VariableID:106:35": {
+      "figmaName": "md/8",
+      "value": 8,
+      "unit": "px",
+      "tailwind": {
+        "namespace": "radius",
+        "key": "md"
+      }
+    },
+    "VariableID:106:36": {
+      "figmaName": "lg/10",
+      "value": 10,
+      "unit": "px",
+      "tailwind": {
+        "namespace": "radius",
+        "key": "lg"
+      }
+    },
+    "VariableID:106:37": {
+      "figmaName": "full/9999",
+      "value": 9999,
+      "unit": "px",
+      "tailwind": {
+        "namespace": "radius",
+        "key": "full"
+      }
+    }
+  },
+  "sizes": {
+    "VariableID:106:39": {
+      "figmaName": "handle",
+      "cssVar": "--sz-handle",
+      "value": 12,
+      "unit": "px",
+      "tailwind": [
+        {
+          "namespace": "size",
+          "key": "handle"
+        }
+      ]
+    },
+    "VariableID:106:40": {
+      "figmaName": "icon/sm",
+      "cssVar": "--sz-icon-sm",
+      "value": 16,
+      "unit": "px",
+      "tailwind": [
+        {
+          "namespace": "size",
+          "key": "icon-sm"
+        }
+      ]
+    },
+    "VariableID:106:41": {
+      "figmaName": "icon/md",
+      "cssVar": "--sz-icon-md",
+      "value": 20,
+      "unit": "px",
+      "tailwind": [
+        {
+          "namespace": "size",
+          "key": "icon-md"
+        }
+      ]
+    },
+    "VariableID:106:42": {
+      "figmaName": "btn/sm",
+      "cssVar": "--sz-btn-sm",
+      "value": 20,
+      "unit": "px",
+      "tailwind": [
+        {
+          "namespace": "size",
+          "key": "btn-sm"
+        }
+      ]
+    },
+    "VariableID:106:43": {
+      "figmaName": "input/h",
+      "cssVar": "--sz-input-h",
+      "value": 24,
+      "unit": "px",
+      "tailwind": [
+        {
+          "namespace": "size",
+          "key": "input-h"
+        },
+        {
+          "namespace": "spacing",
+          "key": "input-h"
+        }
+      ]
+    },
+    "VariableID:106:44": {
+      "figmaName": "select/h",
+      "cssVar": "--sz-select-h",
+      "value": 28,
+      "unit": "px",
+      "tailwind": [
+        {
+          "namespace": "spacing",
+          "key": "select-h"
+        }
+      ]
+    },
+    "VariableID:106:45": {
+      "figmaName": "slider/track",
+      "cssVar": "--sz-slider-track",
+      "value": 6,
+      "unit": "px",
+      "tailwind": [
+        {
+          "namespace": "spacing",
+          "key": "slider-track"
+        }
+      ]
+    },
+    "VariableID:106:46": {
+      "figmaName": "slider/thumb",
+      "cssVar": "--sz-slider-thumb",
+      "value": 16,
+      "unit": "px",
+      "tailwind": [
+        {
+          "namespace": "size",
+          "key": "slider-thumb"
+        }
+      ]
+    },
+    "VariableID:106:47": {
+      "figmaName": "node/min-w",
+      "cssVar": "--sz-node-min-w",
+      "value": 160,
+      "unit": "px",
+      "tailwind": [
+        {
+          "namespace": "min-width",
+          "key": "node"
+        }
+      ]
+    },
+    "VariableID:216:1080": {
+      "figmaName": "size/input-w",
+      "cssVar": "--sz-input-w",
+      "value": 64,
+      "unit": "px",
+      "tailwind": [
+        {
+          "namespace": "spacing",
+          "key": "input-w"
+        }
+      ]
+    }
+  },
+  "computed": {
+    "handle-offset": {
+      "cssVar": "--handle-offset",
+      "expression": "calc(var(--sz-handle) / 2 + var(--sp-sm))",
+      "tailwind": {
+        "namespace": "spacing",
+        "key": "handle-offset"
+      }
+    }
+  },
+  "textStyles": {
+    "S:ae1da69bb6e4f63f683fb1463dfc6bac4c6a9c33,": {
+      "figmaName": "heading/node-title",
+      "utility": "text-node-title",
+      "properties": {
+        "fontSize": "14px",
+        "fontWeight": 600,
+        "lineHeight": 1.5
+      }
+    },
+    "S:c40fb50e44a65585b2fa14095888cde6cf1a5994,": {
+      "figmaName": "heading/section",
+      "utility": "text-section",
+      "properties": {
+        "fontSize": "12px",
+        "fontWeight": 600,
+        "letterSpacing": "0.05em",
+        "textTransform": "uppercase",
+        "lineHeight": 1.5
+      }
+    },
+    "S:0626cc9a604f91df61f45fcd2c78aaa0076713b3,": {
+      "figmaName": "heading/category",
+      "utility": "text-category",
+      "properties": {
+        "fontSize": "10px",
+        "fontWeight": 600,
+        "letterSpacing": "0.05em",
+        "textTransform": "uppercase",
+        "lineHeight": 1.5
+      }
+    },
+    "S:d3ec751216e3caa16d6257f4b9ea912007bb561f,": {
+      "figmaName": "body/default",
+      "utility": "text-body",
+      "properties": {
+        "fontSize": "12px",
+        "fontWeight": 400,
+        "lineHeight": 1.5
+      }
+    },
+    "S:fb93df82ffa6661b87498ddbc01d54b00cbf514e,": {
+      "figmaName": "body/description",
+      "utility": "text-description",
+      "properties": {
+        "fontSize": "12px",
+        "fontWeight": 400,
+        "lineHeight": 1.625
+      }
+    },
+    "S:548a13de59211b1cff9cded59773a198a81ed501,": {
+      "figmaName": "body/handle",
+      "utility": "text-handle",
+      "properties": {
+        "fontSize": "13px",
+        "fontWeight": 400,
+        "lineHeight": 1.5
+      }
+    },
+    "S:ede2674e59e24f8d3286655ebf7669b90cc307c4,": {
+      "figmaName": "label/param",
+      "utility": "text-param",
+      "properties": {
+        "fontSize": "10px",
+        "fontWeight": 400,
+        "lineHeight": 1.5
+      }
+    },
+    "S:9d4a978168442f111b562b37f9bb8e4de8d3c700,": {
+      "figmaName": "label/category-meta",
+      "utility": "text-category-meta",
+      "properties": {
+        "fontSize": "10px",
+        "fontWeight": 400,
+        "letterSpacing": "0.025em",
+        "textTransform": "uppercase",
+        "lineHeight": 1.5
+      }
+    },
+    "S:9d5974b42e594da7c6af1dddcd76fa67ac64e3d7,": {
+      "figmaName": "mono/value",
+      "utility": "text-mono-value",
+      "properties": {
+        "fontSize": "12px",
+        "fontWeight": 400,
+        "fontFamily": "ui-monospace, SFMono-Regular, monospace",
+        "lineHeight": 1.5
+      }
+    },
+    "S:1181640d2c3fd5f4a7bc505ecd6f710e0ce5b517,": {
+      "figmaName": "mono/id",
+      "utility": "text-mono-id",
+      "properties": {
+        "fontSize": "10px",
+        "fontWeight": 400,
+        "fontFamily": "ui-monospace, SFMono-Regular, monospace",
+        "lineHeight": 1.5
+      }
+    },
+    "S:3b18697fb26ac85ea535f18904098a0fcde17d2c,": {
+      "figmaName": "port-row/type",
+      "utility": "text-port-type",
+      "properties": {
+        "fontSize": "11px",
+        "fontWeight": 400,
+        "lineHeight": 1.5
+      }
+    }
+  },
+  "components": {
+    "106:405": {
+      "name": "Node Card",
+      "type": "organism",
+      "dsKey": "nodeCard",
+      "codeFile": "src/components/ShaderNode.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "106:405",
+          "layout": "vertical",
+          "fill": "surface/elevated",
+          "stroke": {
+            "color": "edge/card",
+            "weight": 1
+          },
+          "radius": "md"
+        },
+        "header": {
+          "figmaNodeId": "111:488",
+          "layout": "horizontal",
+          "fill": "surface/raised",
+          "stroke": {
+            "side": "bottom",
+            "color": "edge/subtle",
+            "weight": 1
+          },
+          "radius": {
+            "top": "md"
+          },
+          "padding": {
+            "x": "lg",
+            "y": "md"
+          },
+          "gap": "md",
+          "align": "center",
+          "justify": "between"
+        },
+        "content": {
+          "figmaNodeId": null,
+          "layout": "vertical",
+          "padding": "lg",
+          "gap": {
+            "y": "md"
+          }
+        },
+        "footer": {
+          "figmaNodeId": "111:491",
+          "layout": "vertical",
+          "stroke": {
+            "side": "top"
+          },
+          "padding": {
+            "x": "lg",
+            "top": "md",
+            "bottom": "lg"
+          },
+          "gap": {
+            "y": "md"
+          },
+          "align": "center"
+        }
+      }
+    },
+    "106:498": {
+      "name": "Floating Preview",
+      "type": "organism",
+      "dsKey": "floatingPreview",
+      "codeFile": "src/components/FloatingPreview.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "106:498",
+          "layout": "vertical",
+          "fill": "black",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "radius": "lg",
+          "effects": [
+            {
+              "type": "shadow",
+              "class": "shadow-2xl"
+            }
+          ],
+          "extra": "overflow-hidden"
+        }
+      }
+    },
+    "106:511": {
+      "name": "Full Window Overlay",
+      "type": "organism",
+      "dsKey": "fullWindowOverlay",
+      "codeFile": "src/components/FullWindowOverlay.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "106:511",
+          "fill": "black"
+        }
+      }
+    },
+    "106:453": {
+      "name": "Node Palette",
+      "type": "organism",
+      "dsKey": "nodePalette",
+      "codeFile": "src/components/NodePalette.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "106:453",
+          "layout": "vertical",
+          "fill": "surface/alt",
+          "padding": "xl",
+          "gap": "xs"
+        },
+        "categoryGroup": {
+          "figmaNodeId": null,
+          "layout": "vertical",
+          "gap": "lg"
+        }
+      }
+    },
+    "106:485": {
+      "name": "Properties Panel",
+      "type": "organism",
+      "dsKey": "propertiesPanel",
+      "codeFile": "src/components/PropertiesPanel.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "106:485",
+          "layout": "vertical",
+          "fill": "surface/alt",
+          "padding": "xl",
+          "gap": "xl"
+        },
+        "nodeInfo": {
+          "figmaNodeId": null,
+          "padding": "lg",
+          "radius": "lg",
+          "fill": "surface/raised",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          }
+        },
+        "portRow": {
+          "figmaNodeId": null,
+          "layout": "horizontal",
+          "justify": "between",
+          "padding": {
+            "x": "md",
+            "y": "xs"
+          },
+          "radius": "sm",
+          "fill": "surface/raised"
+        },
+        "paramSection": {
+          "figmaNodeId": null,
+          "padding": "lg",
+          "radius": "lg",
+          "fill": "surface/raised",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          }
+        }
+      }
+    },
+    "111:930": {
+      "name": "Zoom Bar",
+      "type": "molecule",
+      "dsKey": "zoomBar",
+      "codeFile": "src/components/zoom-slider.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "111:930",
+          "layout": "horizontal",
+          "fill": "surface/alt",
+          "radius": "md",
+          "padding": "xs",
+          "gap": "xs"
+        }
+      }
+    },
+    "106:352": {
+      "name": "Preview Toolbar",
+      "type": "molecule",
+      "dsKey": "previewToolbar",
+      "codeFile": "src/components/PreviewToolbar.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "106:352",
+          "layout": "horizontal",
+          "fill": "surface/raised",
+          "radius": "sm",
+          "padding": {
+            "x": "md",
+            "y": "xs"
+          },
+          "gap": "sm",
+          "align": "center"
+        }
+      }
+    },
+    "106:95": {
+      "name": "Palette Item",
+      "type": "atom",
+      "dsKey": "paletteItem",
+      "codeFile": "src/components/NodePalette.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "106:95",
+          "fill": "surface/raised",
+          "stroke": {
+            "color": "edge/subtle",
+            "weight": 1
+          },
+          "radius": "sm",
+          "padding": {
+            "x": "md",
+            "y": "sm"
+          }
+        }
+      }
+    },
+    "106:92": {
+      "name": "Category Header",
+      "type": "atom",
+      "dsKey": "categoryHeader",
+      "codeFile": "src/components/NodePalette.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "106:92",
+          "padding": {
+            "bottom": "md"
+          }
+        }
+      }
+    },
+    "106:108": {
+      "name": "Plus Minus Button",
+      "type": "atom",
+      "dsKey": "plusMinusButton",
+      "codeFile": "src/components/ShaderNode.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "106:108",
+          "fill": "surface/alt",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "radius": "sm"
+        }
+      }
+    },
+    "106:84": {
+      "name": "Handle",
+      "type": "atom",
+      "dsKey": "handle",
+      "codeFile": "src/components/base-handle.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "106:84"
+        }
+      }
+    },
+    "106:89": {
+      "name": "Separator",
+      "type": "atom",
+      "dsKey": "separator",
+      "codeFile": "src/components/ui/separator.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "106:89"
+        }
+      }
+    },
+    "106:269": {
+      "name": "Labeled Handle",
+      "type": "molecule",
+      "dsKey": "labeledHandle",
+      "codeFile": "src/components/labeled-handle.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "106:269",
+          "layout": "horizontal",
+          "padding": {
+            "right": "lg"
+          },
+          "gap": "sm"
+        }
+      }
+    },
+    "106:282": {
+      "name": "Float Slider",
+      "type": "molecule",
+      "dsKey": "floatSlider",
+      "codeFile": "src/components/ui/sombra-slider.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "106:282",
+          "layout": "vertical",
+          "gap": "sm"
+        }
+      }
+    },
+    "106:288": {
+      "name": "Enum Select",
+      "type": "molecule",
+      "dsKey": "enumSelect",
+      "codeFile": "src/components/NodeParameters.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "106:288",
+          "layout": "vertical",
+          "gap": "sm"
+        },
+        "trigger": {
+          "figmaNodeId": null,
+          "fill": "surface/raised",
+          "stroke": {
+            "color": "edge/default"
+          }
+        },
+        "content": {
+          "figmaNodeId": null,
+          "fill": "surface/elevated",
+          "stroke": {
+            "color": "edge/default"
+          }
+        }
+      }
+    },
+    "106:292": {
+      "name": "Color Input",
+      "type": "molecule",
+      "dsKey": "colorInput",
+      "codeFile": "src/components/NodeParameters.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "106:292",
+          "layout": "vertical",
+          "gap": "sm"
+        },
+        "input": {
+          "figmaNodeId": null,
+          "radius": "sm",
+          "fill": "surface/raised",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          }
+        }
+      }
+    },
+    "106:311": {
+      "name": "Connectable Param Row",
+      "type": "molecule",
+      "dsKey": "connectableParamRow",
+      "codeFile": "src/components/ShaderNode.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "106:311",
+          "layout": "horizontal",
+          "align": "center"
+        },
+        "innerFrame": {
+          "figmaNodeId": null,
+          "padding": {
+            "left": "handle-offset",
+            "right": "xs"
+          },
+          "extra": "flex-1"
+        }
+      }
+    },
+    "111:949": {
+      "name": "Gradient Editor",
+      "type": "molecule",
+      "dsKey": "gradientEditor",
+      "codeFile": "src/components/ColorRampEditor.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "111:949",
+          "layout": "vertical",
+          "gap": "md"
+        }
+      }
+    },
+    "111:954": {
+      "name": "Random Display",
+      "type": "molecule",
+      "dsKey": "randomDisplay",
+      "codeFile": "src/components/RandomDisplay.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "111:954",
+          "layout": "horizontal",
+          "padding": {
+            "x": "xs"
+          },
+          "gap": "md",
+          "align": "center",
+          "justify": "between"
+        },
+        "button": {
+          "figmaNodeId": null,
+          "fill": "surface/alt",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "radius": "sm"
+        }
+      }
+    },
+    "111:963": {
+      "name": "MiniMap",
+      "type": "molecule",
+      "dsKey": "miniMap",
+      "codeFile": null,
+      "parts": {
+        "root": {
+          "figmaNodeId": "111:963",
+          "fill": "surface/alt",
+          "stroke": {
+            "color": "edge/subtle",
+            "weight": 1
+          },
+          "radius": "md"
+        }
+      }
+    }
+  },
+  "nodeTemplates": {
+    "_shared": {
+      "fill": "surface/elevated",
+      "stroke": "edge/card",
+      "radius": "md"
+    },
+    "123:1810": {
+      "name": "Resolution",
+      "category": "Input",
+      "nodeFile": "src/nodes/input/resolution.ts"
+    },
+    "123:1807": {
+      "name": "Number",
+      "category": "Input",
+      "nodeFile": "src/nodes/input/number.ts"
+    },
+    "123:1809": {
+      "name": "Time",
+      "category": "Input",
+      "nodeFile": "src/nodes/input/time.ts"
+    },
+    "123:1806": {
+      "name": "Color",
+      "category": "Input",
+      "nodeFile": "src/nodes/input/color-constant.ts"
+    },
+    "123:1808": {
+      "name": "Vec2",
+      "category": "Input",
+      "nodeFile": "src/nodes/input/vec2-constant.ts"
+    },
+    "123:1811": {
+      "name": "Random",
+      "category": "Input",
+      "nodeFile": "src/nodes/input/random.ts"
+    },
+    "123:1805": {
+      "name": "UV Transform",
+      "category": "Input",
+      "nodeFile": "src/nodes/input/uv-coords.ts"
+    },
+    "123:1812": {
+      "name": "Noise",
+      "category": "Noise",
+      "nodeFile": "src/nodes/noise/noise.ts"
+    },
+    "123:1814": {
+      "name": "Warp UV",
+      "category": "Transform",
+      "nodeFile": "src/nodes/noise/domain-warp.ts"
+    },
+    "123:1813": {
+      "name": "FBM",
+      "category": "Noise",
+      "nodeFile": "src/nodes/noise/fbm.ts"
+    },
+    "123:1820": {
+      "name": "Turbulence",
+      "category": "Distort",
+      "nodeFile": "src/nodes/math/turbulence.ts"
+    },
+    "123:1821": {
+      "name": "Ridged",
+      "category": "Distort",
+      "nodeFile": "src/nodes/math/ridged.ts"
+    },
+    "123:1818": {
+      "name": "Smoothstep",
+      "category": "Distort",
+      "nodeFile": "src/nodes/math/smoothstep.ts"
+    },
+    "123:1815": {
+      "name": "Arithmetic",
+      "category": "Math",
+      "nodeFile": "src/nodes/math/arithmetic.ts"
+    },
+    "123:1817": {
+      "name": "Mix",
+      "category": "Math",
+      "nodeFile": "src/nodes/math/mix.ts"
+    },
+    "123:1819": {
+      "name": "Remap",
+      "category": "Math",
+      "nodeFile": "src/nodes/math/remap.ts"
+    },
+    "123:1816": {
+      "name": "Trig",
+      "category": "Math",
+      "nodeFile": "src/nodes/math/trig.ts"
+    },
+    "123:1822": {
+      "name": "HSV to RGB",
+      "category": "Color",
+      "nodeFile": "src/nodes/color/hsv-to-rgb.ts"
+    },
+    "123:1824": {
+      "name": "Color Ramp",
+      "category": "Color",
+      "nodeFile": "src/nodes/color/color-ramp.ts"
+    },
+    "123:1823": {
+      "name": "Brightness/Contrast",
+      "category": "Color",
+      "nodeFile": "src/nodes/color/brightness-contrast.ts"
+    },
+    "123:1827": {
+      "name": "Quantize UV",
+      "category": "Transform",
+      "nodeFile": "src/nodes/postprocess/quantize-uv.ts"
+    },
+    "123:1825": {
+      "name": "Dither",
+      "category": "Effect",
+      "nodeFile": "src/nodes/postprocess/pixel-grid.ts"
+    },
+    "123:1828": {
+      "name": "Fragment Output",
+      "category": "Output",
+      "nodeFile": "src/nodes/output/fragment-output.ts"
+    }
+  },
+  "scenes": {
+    "205:10": {
+      "name": "Docked-V (Stacked, Default)",
+      "size": [
+        1440,
+        971
+      ]
+    },
+    "205:13": {
+      "name": "Docked-H (Side by Side)",
+      "size": [
+        1440,
+        971
+      ]
+    },
+    "205:17": {
+      "name": "Floating",
+      "size": [
+        1440,
+        971
+      ]
+    },
+    "205:20": {
+      "name": "Fullwindow",
+      "size": [
+        1440,
+        971
+      ]
+    },
+    "205:598": {
+      "name": "Selected Node",
+      "size": [
+        1440,
+        971
+      ]
+    }
+  }
+}
