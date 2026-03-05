@@ -357,7 +357,7 @@ export function ColorRampEditor({
           variant="unstyled"
           size="icon-node"
           onClick={handleAddStop}
-          className={cn(ds.plusMinusButton.root, "text-fg cursor-pointer")}
+          className={cn(ds.iconButton.root, ds.iconButton.solid)}
         />
         <IconButton
           icon="minus"
@@ -366,11 +366,10 @@ export function ColorRampEditor({
           onClick={handleRemoveStop}
           disabled={stops.length <= 2}
           className={cn(
-            ds.plusMinusButton.root,
-            "disabled:opacity-100",
+            ds.iconButton.root,
             stops.length <= 2
-              ? "text-fg-muted cursor-default"
-              : "text-fg cursor-pointer"
+              ? ds.iconButton.solidDisabled
+              : ds.iconButton.solid
           )}
         />
       </div>
