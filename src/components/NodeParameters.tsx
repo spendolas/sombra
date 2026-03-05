@@ -5,8 +5,7 @@
 import { useCallback } from 'react'
 import type { NodeParameter } from '../nodes/types'
 import { useGraphStore } from '../stores/graphStore'
-import { Slider } from '@/components/ui/slider'
-import { Input } from '@/components/ui/input'
+import { SombraSlider } from '@/components/ui/sombra-slider'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -105,42 +104,17 @@ export interface FloatSliderProps {
 }
 
 export function FloatSlider({ param, value, onChange, disabled }: FloatSliderProps) {
-  const min = param.min ?? 0
-  const max = param.max ?? 1
-  const step = param.step ?? 0.01
-
   return (
-    <div className={`flex flex-col gap-sm${disabled ? ' opacity-60 pointer-events-none' : ''}`}>
-      <div className="flex justify-between items-center">
-        <Label className="text-param text-fg-subtle">
-          {param.label}
-        </Label>
-        {disabled ? (
-          <span className="text-param tabular-nums pr-1 text-fg-muted">
-            {value}
-          </span>
-        ) : (
-          <Input
-            type="number"
-            value={value}
-            onChange={(e) => {
-              const newValue = parseFloat(e.target.value)
-              if (!isNaN(newValue)) onChange(newValue)
-            }}
-            step={step}
-            className="w-input-w h-input-h px-xs py-2xs text-right text-param"
-          />
-        )}
-      </div>
-      <Slider
-        value={[value]}
-        min={min}
-        max={max}
-        step={step}
-        onValueChange={(values) => onChange(values[0])}
-        disabled={disabled}
-      />
-    </div>
+    <SombraSlider
+      label={param.label}
+      value={value}
+      onChange={onChange as (v: number | [number, number]) => void}
+      min={param.min ?? 0}
+      max={param.max ?? 1}
+      step={param.step ?? 0.01}
+      defaultValue={param.default as number}
+      disabled={disabled}
+    />
   )
 }
 

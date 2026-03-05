@@ -17,24 +17,28 @@ import { randomNode } from './input/random'
 import { arithmeticNode } from './math/arithmetic'
 import { trigNode } from './math/trig'
 import { mixNode } from './math/mix'
-import { smoothstepNode } from './math/smoothstep'
 import { remapNode } from './math/remap'
+
+// Distort nodes
+import { smoothstepNode } from './math/smoothstep'
 import { turbulenceNode } from './math/turbulence'
 import { ridgedNode } from './math/ridged'
 
 // Noise nodes
 import { noiseNode } from './noise/noise'
 import { fbmNode } from './noise/fbm'
+
+// Transform nodes
 import { domainWarpNode } from './noise/domain-warp'
+import { quantizeUvNode } from './postprocess/quantize-uv'
 
 // Color nodes
 import { hsvToRgbNode } from './color/hsv-to-rgb'
 import { brightnessContrastNode } from './color/brightness-contrast'
 import { colorRampNode } from './color/color-ramp'
 
-// Post-process nodes
+// Effect nodes
 import { ditherNode } from './postprocess/pixel-grid'
-import { quantizeUvNode } from './postprocess/quantize-uv'
 
 // Output nodes
 import { fragmentOutputNode } from './output/fragment-output'
@@ -56,24 +60,28 @@ export const ALL_NODES = [
   arithmeticNode,
   trigNode,
   mixNode,
-  smoothstepNode,
   remapNode,
+
+  // Distort
+  smoothstepNode,
   turbulenceNode,
   ridgedNode,
 
   // Noise
   noiseNode,
   fbmNode,
+
+  // Transform
   domainWarpNode,
+  quantizeUvNode,
 
   // Color
   hsvToRgbNode,
   brightnessContrastNode,
   colorRampNode,
 
-  // Post-process
+  // Effect
   ditherNode,
-  quantizeUvNode,
 
   // Output
   fragmentOutputNode,

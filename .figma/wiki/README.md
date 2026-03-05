@@ -17,15 +17,15 @@ V2 was rebuilt from scratch using a **code-driven approach**: every Figma compon
 
 ---
 
-## Parity Score: 39/39 ✅
+## Parity Score: 38/38 ✅
 
 | Level | Total | ✅ Match | Notes |
 |---|---|---|---|
-| Tokens | 5 collections + 11 text styles | All | 41 variables + 11 text styles, dark mode only |
+| Tokens | 5 collections + 11 text styles | All | 40 variables + 11 text styles, dark mode only |
 | Atoms | 7 | 7 | Handle, Separator, Category Header, Palette Item, Plus Minus Button, Node Header, Node Footer |
-| Molecules | 10 | 10 | Labeled Handle, Float Slider, Enum Select, Color Input, Connectable Param Row, Preview Toolbar, Zoom Bar, Gradient Editor, Random Display, MiniMap |
+| Molecules | 10 | 10 | Labeled Handle, Float Slider (SombraSlider), Enum Select, Color Input, Connectable Param Row, Preview Toolbar, Zoom Bar, Gradient Editor, Random Display, MiniMap |
 | Organisms | 5 | 5 | Node Card, Node Palette, Properties Panel, Floating Preview, Full Window Overlay |
-| Templates | 24 | 24 | All node types |
+| Templates | 23 | 23 | All node types (Bayer Dither removed, Domain Warp → Warp UV, Pixel Grid → Dither) |
 | Scenes | 5 | 5 | All preview modes |
 
 ---
@@ -35,7 +35,7 @@ V2 was rebuilt from scratch using a **code-driven approach**: every Figma compon
 ### Tokens
 | Page | Description | Parity |
 |---|---|---|
-| [colors.md](tokens/colors.md) | UI Colors (14 vars) + Port Types (8 vars) | ✅ 22/22 |
+| [colors.md](tokens/colors.md) | UI Colors (14 vars) + Port Types (7 vars) | ✅ 21/21 |
 | [spacing.md](tokens/spacing.md) | 6 spacing tokens (xs→2xl) | ✅ 6/6 |
 | [radius.md](tokens/radius.md) | 4 radius tokens (sm/md/lg/full) | ✅ 4/4 |
 | [sizes.md](tokens/sizes.md) | 9 size tokens (handle→track-h) | ✅ 9/9 |
@@ -78,7 +78,7 @@ V2 was rebuilt from scratch using a **code-driven approach**: every Figma compon
 ### Templates
 | Page | Description | Parity |
 |---|---|---|
-| [node-templates.md](templates/node-templates.md) | All 24 node templates with port/param inventory | ✅ 24/24 |
+| [node-templates.md](templates/node-templates.md) | All 23 node templates with port/param inventory | ✅ 23/23 |
 
 ### Scenes
 | Page | Description | Parity |
@@ -121,12 +121,12 @@ The 18 component mappings below are documented for reference but not activated i
 | Collection | ID | Variables | Modes |
 |---|---|---|---|
 | UI Colors | `VariableCollectionId:106:2` | 14 | Dark, Light |
-| Port Types | `VariableCollectionId:106:17` | 8 | Dark, Light |
+| Port Types | `VariableCollectionId:106:17` | 7 | Dark, Light |
 | Spacing | `VariableCollectionId:106:26` | 6 | Single |
 | Radius | `VariableCollectionId:106:33` | 4 | Single |
 | Sizes | `VariableCollectionId:106:38` | 9 | Single |
 
-**Total:** 41 variables across 5 collections
+**Total:** 40 variables across 5 collections
 
 ## Text Styles (V2)
 
@@ -162,7 +162,7 @@ Foundations (tokens, typography)
         └── Organisms (5 components)
             ├── Node Card, Node Palette, Properties Panel
             ├── Floating Preview, Full Window Overlay
-            └── Templates (24 node types)
+            └── Templates (23 node types)
                 └── Scenes (5 app layouts)
 ```
 

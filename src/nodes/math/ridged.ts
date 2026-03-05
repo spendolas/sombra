@@ -8,7 +8,7 @@ import type { NodeDefinition } from '../types'
 export const ridgedNode: NodeDefinition = {
   type: 'ridged',
   label: 'Ridged',
-  category: 'Math',
+  category: 'Distort',
   description: 'Inverted turbulence squared — sharp bright ridges on dark background',
 
   inputs: [

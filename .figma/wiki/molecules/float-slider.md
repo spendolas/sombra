@@ -1,4 +1,4 @@
-# Float Slider
+# Float Slider (SombraSlider)
 
 ## Overview
 
@@ -8,23 +8,33 @@
 | Figma Page | Components (Molecules) |
 | Type | COMPONENT |
 | Variants | — (single state, default) |
-| React File | `src/components/NodeParameters.tsx` |
-| React Component | `<FloatSlider />` |
+| React File | `src/components/ui/sombra-slider.tsx` |
+| React Component | `<SombraSlider />` |
+| Wrapper | `<FloatSlider />` in `src/components/NodeParameters.tsx` |
 | Figma URL | [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=106:282) |
 
 ## Structure
 
 ```
-COMPONENT "Float Slider" [VERTICAL 140×46, gap=6]
-  FRAME "Label Row" [HORIZONTAL 140×24]
-    TEXT "Parameter" (label/param, 10px)
-    FRAME "Value Box" [64×24, r=4, surface-raised fill]
-      TEXT "0.50" (mono/value, 12px)
-  FRAME "Slider" [NONE 140×16, no fill]
-    RECTANGLE "Track" [140×6, r=full, surface/raised fill, y=5]
-    RECTANGLE "Range" [42×6, r=full, indigo/default fill, x=0, y=5]
-    ELLIPSE "Thumb" [16×16, white fill, x=34, y=0]
+COMPONENT "Float Slider" [VERTICAL 140×30, gap=2xs]
+  FRAME "Label Row" [HORIZONTAL 140×18, cursor=ew-resize]
+    TEXT "Parameter" (label/param, 10px, fg-subtle)
+    TEXT "0.42" (label/param, 10px, fg, tabular-nums, cursor=text)
+  RECTANGLE "Track" [140×6, r=full, surface-raised fill]
+    RECTANGLE "Fill" [58×6, r=full, indigo fill, left-aligned]
 ```
+
+No visible thumb — the fill edge IS the thumb.
+
+## Features
+
+- **Blender-style label scrub** — drag anywhere on label row to scrub value (ew-resize cursor)
+- **Shift+drag fine control** — 10x smaller step when Shift held during drag
+- **Double-click to reset** — resets to `param.default`
+- **Click value to edit** — inline text input for precise entry
+- **Dual-thumb range mode** — `[number, number]` value renders two fill edges with highlighted range between
+- **Track shows param range** — scrub/text entry allow values beyond visible range
+- **nodrag nowheel** — prevents React Flow canvas interference
 
 ## Properties
 
@@ -33,52 +43,42 @@ COMPONENT "Float Slider" [VERTICAL 140×46, gap=6]
 | Property | Figma | Figma Variable | Code | Match |
 |---|---|---|---|---|
 | Width | FILL | — | block-level div | ✅ |
-| Slider wrapper height | 16px | slider/thumb (`106:46`) | — (Radix handles) | ✅ |
-| Slider track height | 6px | slider/track (`106:45`) | `h-1.5` (6px) | ✅ |
-| Thumb size | 16px | slider/thumb (`106:46`) | `size-4` (16px) | ✅ |
+| Slider track height | 6px | slider/track (`106:45`) | `h-slider-track` (6px) | ✅ |
+| Label+value row gap | 2xs (2px) | 2xs/2 (`106:26`) | `gap-2xs` | ✅ |
 
 ### Colors
 
 | Property | Figma Hex | Figma Variable | Tailwind | Match |
 |---|---|---|---|---|
 | Label text | `#88889a` | fg/subtle (`106:9`) | `text-fg-subtle` | ✅ |
-| Value text | `#5a5a6e` | fg/muted (`106:10`) | `text-fg-muted` (disabled) | ✅ |
-| Track bg | `#252538` | surface/raised (`106:5`) | `bg-muted` on Radix Track | ✅ |
-| Range fill | `#6366f1` | indigo/default (`106:13`) | `bg-primary` on Radix Range | ✅ |
-| Thumb | `#ffffff` | white (`106:16`) | `bg-white` on Radix Thumb | ✅ |
-| Input bg | `#252538` | surface/raised (`106:5`) | shadcn Input | ✅ |
-
-### Spacing & Layout
-
-| Property | Figma | Figma Variable | Code | Match |
-|---|---|---|---|---|
-| Label ↔ value gap | 4px | xs/4 (`106:27`) | flex + gap between items | ✅ |
-| Stack gap | 6px | sm/6 (`106:28`) | `space-y-1.5` | ✅ |
+| Value text | `#e8e8f0` | fg (`106:7`) | `text-fg` | ✅ |
+| Track bg | `#252538` | surface/raised (`106:5`) | `bg-surface-raised` | ✅ |
+| Fill | `#6366f1` | indigo/default (`106:13`) | `bg-indigo` | ✅ |
 
 ### Typography
 
 | Property | Figma | Code | Match |
 |---|---|---|---|
-| Label size | 10px | `text-[10px]` | ✅ |
-| Value size | 10px | `text-[10px]` | ✅ |
-| Value alignment | RIGHT | `text-right` on Input | ✅ |
-| Value font | tabular-nums | `tabular-nums` | ✅ |
+| Label size | 10px | `text-param` (10px) | ✅ |
+| Value size | 10px | `text-param` (10px) | ✅ |
+| Value alignment | RIGHT | `text-right` | ✅ |
+| Value font feature | tabular-nums | `tabular-nums` | ✅ |
 
-## Children
+## Dual-Thumb Range Mode
 
-- **Label Row** — parameter name (`label/param`) + value input (`mono/value`, right-aligned)
-- **Slider** — NONE-layout wrapper containing:
-  - **Track** — full-width rectangle, `surface/raised`, `r=full`
-  - **Range** — left-aligned rectangle, `indigo/default`, `r=full` (represents filled portion)
-  - **Thumb** — 16px ellipse, `white`, positioned at range edge
+When `value` is `[number, number]`:
+- Two labels displayed: "Min 0.20" on left, "Max 0.80" on right
+- Track fill between the two positions
+- Each thumb independently draggable and scrubbable
+- Used by Smoothstep node (Min/Max connectable params)
 
 ## Code Connect
 
 - **Status:** Skipped (org mismatch)
 - **Figma Node:** `106:282`
-- **React:** `<FloatSlider param={param} value={value} onChange={fn} disabled={isConnected} />`
-- **File:** `src/components/NodeParameters.tsx`
+- **React:** `<SombraSlider label={label} value={value} onChange={fn} min={min} max={max} step={step} defaultValue={def} />`
+- **File:** `src/components/ui/sombra-slider.tsx`
 
 ## Parity: ✅ Match
 
-Slider colors match exactly between Figma and app: track `surface/raised` (#252538), range `indigo/default` (#6366f1), thumb `white` (#ffffff). Code uses Sombra tokens directly (`bg-surface-raised`, `bg-indigo`, `border-indigo`) instead of generic shadcn defaults.
+Slider uses SombraSlider: track `bg-surface-raised` (#252538), fill `bg-indigo` (#6366f1), no visible thumb, label scrub with ew-resize cursor.

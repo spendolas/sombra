@@ -9,7 +9,7 @@ import type { NodeDefinition } from '../types'
 export const quantizeUvNode: NodeDefinition = {
   type: 'quantize_uv',
   label: 'Quantize UV',
-  category: 'Post-process',
+  category: 'Transform',
   description: 'Snap coordinates to pixel grid cell centers',
 
   inputs: [],

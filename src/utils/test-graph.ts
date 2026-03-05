@@ -425,7 +425,7 @@ export function createSpectraWorleyRidged(): {
       type: 'shaderNode',
       position: { x: 520, y: 156 },
       data: {
-        type: 'domain_warp',
+        type: 'warp_uv',
         params: { strength: 0.2, frequency: 1.0 },
       },
     },
@@ -442,7 +442,7 @@ export function createSpectraWorleyRidged(): {
       id: 'sp3-smooth',
       type: 'shaderNode',
       position: { x: 1040, y: 56 },
-      data: { type: 'smoothstep', params: {} },
+      data: { type: 'smoothstep', params: { min: 0.2, max: 0.8 } },
     },
     {
       id: 'sp3-ramp',
@@ -474,22 +474,6 @@ export function createSpectraWorleyRidged(): {
       type: 'shaderNode',
       position: { x: 1800, y: 0 },
       data: { type: 'fragment_output', params: {} },
-    },
-
-    // === Aux: above main chain (feed upper inputs on target) ===
-    // Number(0.2) → Smoothstep.edge0 (1st input) — sub-column between FBM and SS
-    {
-      id: 'sp3-edge0',
-      type: 'shaderNode',
-      position: { x: 900, y: -20 },
-      data: { type: 'float_constant', params: { value: 0.2 } },
-    },
-    // Number(0.8) → Smoothstep.edge1 (2nd input) — below 0.2, still above SS.x level
-    {
-      id: 'sp3-edge1',
-      type: 'shaderNode',
-      position: { x: 900, y: 56 },
-      data: { type: 'float_constant', params: { value: 0.8 } },
     },
 
     // === Aux: below main chain (feed lower inputs on target) ===
@@ -532,18 +516,6 @@ export function createSpectraWorleyRidged(): {
       id: 'sp3-e2', source: 'sp3-warp', target: 'sp3-fbm',
       sourceHandle: 'warpedPhase', targetHandle: 'phase', type: 'typed',
       data: { sourcePort: 'warpedPhase', targetPort: 'phase', sourcePortType: 'float' },
-    },
-    // Number(0.2) → Smoothstep.edge0
-    {
-      id: 'sp3-es0', source: 'sp3-edge0', target: 'sp3-smooth',
-      sourceHandle: 'value', targetHandle: 'edge0', type: 'typed',
-      data: { sourcePort: 'value', targetPort: 'edge0', sourcePortType: 'float' },
-    },
-    // Number(0.8) → Smoothstep.edge1
-    {
-      id: 'sp3-es1', source: 'sp3-edge1', target: 'sp3-smooth',
-      sourceHandle: 'value', targetHandle: 'edge1', type: 'typed',
-      data: { sourcePort: 'value', targetPort: 'edge1', sourcePortType: 'float' },
     },
     // FBM.value → Smoothstep.x
     {
@@ -627,7 +599,7 @@ export function createSpectraBoxNone(): {
       type: 'shaderNode',
       position: { x: 300, y: 0 },
       data: {
-        type: 'domain_warp',
+        type: 'warp_uv',
         params: { strength: 5.0, frequency: 1.0 },
       },
     },
@@ -649,22 +621,10 @@ export function createSpectraBoxNone(): {
     },
     // Smoothstep range compression: smoothstep(0.2, 0.8, noise)
     {
-      id: 'sp4-edge0',
-      type: 'shaderNode',
-      position: { x: 600, y: 220 },
-      data: { type: 'float_constant', params: { value: 0.2 } },
-    },
-    {
-      id: 'sp4-edge1',
-      type: 'shaderNode',
-      position: { x: 600, y: 340 },
-      data: { type: 'float_constant', params: { value: 0.8 } },
-    },
-    {
       id: 'sp4-smooth',
       type: 'shaderNode',
       position: { x: 900, y: 0 },
-      data: { type: 'smoothstep', params: {} },
+      data: { type: 'smoothstep', params: { min: 0.2, max: 0.8 } },
     },
     // Cobalt Drift ramp
     {
@@ -731,18 +691,6 @@ export function createSpectraBoxNone(): {
       id: 'sp4-et2', source: 'sp4-time', target: 'sp4-noise',
       sourceHandle: 'time', targetHandle: 'phase', type: 'typed',
       data: { sourcePort: 'time', targetPort: 'phase', sourcePortType: 'float' },
-    },
-    // Number(0.2) → Smoothstep.edge0
-    {
-      id: 'sp4-es0', source: 'sp4-edge0', target: 'sp4-smooth',
-      sourceHandle: 'value', targetHandle: 'edge0', type: 'typed',
-      data: { sourcePort: 'value', targetPort: 'edge0', sourcePortType: 'float' },
-    },
-    // Number(0.8) → Smoothstep.edge1
-    {
-      id: 'sp4-es1', source: 'sp4-edge1', target: 'sp4-smooth',
-      sourceHandle: 'value', targetHandle: 'edge1', type: 'typed',
-      data: { sourcePort: 'value', targetPort: 'edge1', sourcePortType: 'float' },
     },
     // Noise.value → Smoothstep.x
     {

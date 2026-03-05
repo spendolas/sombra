@@ -2,7 +2,7 @@
 
 ## Overview
 
-25 node templates on the Figma Templates page. Each template is a **COMPONENT** that composes child instances (Node Header, Labeled Handles, Connectable Param Rows, Float Sliders, Enum Selects, etc.) configured for that node type.
+23 node templates on the Figma Templates page. Each template is a **COMPONENT** that composes child instances (Node Header, Labeled Handles, Connectable Param Rows, Float Sliders, Enum Selects, etc.) configured for that node type.
 
 **Figma Page:** Templates
 **Figma URL:** [Open Templates page](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=44:3164)
@@ -11,35 +11,34 @@
 
 | Template | Figma ID | Category | Inputs | Outputs | Connectable Params | Regular Params | Custom Component |
 |---|---|---|---|---|---|---|---|
-| Number | `44:3164` | Input | 0 | 1 (float) | 0 | 1 (value) | — |
-| Color | `44:3165` | Input | 0 | 1 (vec3) | 0 | 1 (color) | — |
-| Vec2 | `44:3166` | Input | 0 | 1 (vec2) | 0 | 2 (x, y) | — |
-| UV Coordinates | `44:3167` | Input | 0 | 1 (vec2) | 5 (scaleX, scaleY, rotate, offsetX, offsetY) | 0 | — |
-| Time | `44:3168` | Input | 0 | 1 (float) | 0 | 0 | — |
-| Resolution | `44:3169` | Input | 0 | 1 (vec2) | 0 | 0 | — |
-| Arithmetic | `44:3170` | Math | 2+ (dynamic) | 1 (float) | 0 | 1 (operation) | +/- buttons |
-| Trig | `44:3171` | Math | 1 (x) | 1 (result) | 2 (freq, amp) | 1 (function) | — |
-| Mix | `44:3172` | Math | 2 (a, b) | 1 (result) | 1 (factor) | 0 | — |
-| Smoothstep | `44:3173` | Math | 1 (x) | 1 (result) | 2 (edge0, edge1) | 0 | — |
-| Remap | `44:3174` | Math | 1 (x) | 1 (result) | 4 (inMin, inMax, outMin, outMax) | 0 | — |
-| Turbulence | `44:3175` | Math | 1 (x) | 1 (result) | 0 | 0 | — |
-| Ridged | `44:3176` | Math | 1 (x) | 1 (result) | 0 | 0 | — |
-| Noise | `44:3177` | Noise | 2 (coords, phase) | 2 (value, fn) | 2 (scale, seed) | 1 (noiseType) | — |
-| FBM | `44:3178` | Noise | 2 (coords, noiseFn) | 1 (value) | 3 (octaves, lacunarity, gain) | 1 (fractalMode) | — |
-| Domain Warp | `44:3179` | Noise | 2 (coords, noiseFn) | 1 (warped) | 2 (strength, frequency) | 0 | — |
-| HSV to RGB | `44:3180` | Color | 3 (h, s, v) | 1 (rgb) | 0 | 0 | — |
-| Brightness/Contrast | `44:3181` | Color | 1 (color) | 1 (result) | 2 (brightness, contrast) | 0 | — |
-| Color Ramp | `50:4226` | Color | 1 (value) | 1 (color) | 0 | 1 (interpolation) | ColorRampEditor |
-| Pixel Grid | `72:627` | Post-process | 1 (color) | 1 (result) | 2 (pixelSize, dither) | 1 (shape) | — |
-| Bayer Dither | `72:668` | Post-process | 1 (color) | 1 (result) | 0 | 0 | — |
-| Quantize UV | `80:700` | Post-process | 0 | 1 (uv) | 1 (pixelSize) | 0 | — |
-| Random | `80:733` | Input | 0 | 1 (float) | 1 (seed) | 0 | — |
-| Fragment Output | `44:3182` | Output | 1 (color) | 0 | 0 | 0 | — |
+| Number | `123:1815` | Input | 0 | 1 (float) | 0 | 1 (value) | — |
+| Color | `123:1816` | Input | 0 | 1 (vec3) | 0 | 1 (color) | — |
+| Vec2 | `123:1817` | Input | 0 | 1 (vec2) | 0 | 2 (x, y) | — |
+| UV Transform | `123:1819` | Input | 0 | 1 (vec2) | 5 (scaleX, scaleY, rotate, offsetX, offsetY) | 0 | — |
+| Time | `123:1822` | Input | 0 | 1 (float) | 0 | 0 | — |
+| Resolution | `123:1823` | Input | 0 | 1 (vec2) | 0 | 0 | — |
+| Random | `123:1828` | Input | 0 | 1 (float) | 1 (seed) | 0 | — |
+| Arithmetic | `123:1824` | Math | 2+ (dynamic) | 1 (float) | 0 | 1 (operation) | +/- buttons |
+| Trig | `123:1829` | Math | 1 (x) | 1 (result) | 2 (freq, amp) | 1 (function) | — |
+| Mix | `123:1830` | Math | 2 (a, b) | 1 (result) | 1 (factor) | 0 | — |
+| Remap | `123:1831` | Math | 1 (x) | 1 (result) | 4 (inMin, inMax, outMin, outMax) | 0 | — |
+| Smoothstep | `123:1818` | Distort | 1 (value) | 1 (result) | 2 (min, max) | 0 | — |
+| Turbulence | `123:1820` | Distort | 1 (x) | 1 (result) | 0 | 0 | — |
+| Ridged | `123:1821` | Distort | 1 (x) | 1 (result) | 0 | 0 | — |
+| Noise | `123:1812` | Noise | 2 (coords, phase) | 1 (value) | 2 (scale, seed) | 1 (noiseType) | — |
+| FBM | `123:1813` | Noise | 2 (coords, phase) | 1 (value) | 5 (octaves, lacunarity, gain, scale, seed) | 2 (noiseType, fractalMode) | — |
+| Warp UV | `123:1814` | Transform | 2 (coords, phase) | 2 (warped, warpedPhase) | 3 (strength, frequency, seed) | 1 (noiseType) | — |
+| HSV to RGB | `123:1832` | Color | 3 (h, s, v) | 1 (rgb) | 0 | 0 | — |
+| Brightness/Contrast | `123:1833` | Color | 1 (color) | 1 (result) | 2 (brightness, contrast) | 0 | — |
+| Color Ramp | `123:1834` | Color | 1 (value) | 1 (color) | 0 | 1 (interpolation) | ColorRampEditor |
+| Dither | `123:1825` | Effect | 1 (color) | 1 (result) | 2 (pixelSize, dither) | 1 (shape) | — |
+| Quantize UV | `123:1827` | Transform | 0 | 1 (uv) | 1 (pixelSize) | 0 | — |
+| Fragment Output | `123:1835` | Output | 1 (color) | 0 | 0 | 0 | — |
 
 ## Representative Screenshots
 
 ### Noise Template
-Full node card with: header "Noise", outputs (Value float, Fn fnref), inputs (Coords vec2, Phase float), connectable params (Scale, Seed with sliders), regular param (Noise Type enum select).
+Full node card with: header "Noise", output (Value float), inputs (Coords vec2, Phase float), connectable params (Scale, Seed with sliders), regular param (Noise Type enum select).
 
 ### Color Ramp Template
 Full node card with: header "Color Ramp", output (Color vec3), input (Value float), regular param (Interpolation enum), custom component (ColorRampEditor with gradient bar, stops, +/- buttons, preset dropdown).
@@ -59,11 +58,11 @@ Every template follows this internal structure:
 
 ## Variable Binding Status
 
-All 25 templates audited:
-- **Headers:** 25/25 use Node Header component instances (14px Semi Bold)
+All 23 templates audited:
+- **Headers:** 23/23 use Node Header component instances (14px Semi Bold)
 - **Colors:** 0 unbound — all fills, strokes, text colors bound to V2 variables
 - **Layout:** 0 unbound — all padding, gap, radius bound to V2 variables
 - **Port colors:** All handle strokes bound to Port Types collection
-- **Float Sliders:** All instances show track + indigo range + white thumb
+- **Float Sliders:** SombraSlider style — filled track with no visible thumb, indigo range fill
 
-## Parity: ✅ All 25 templates match app source
+## Parity: ✅ All 23 templates match app source

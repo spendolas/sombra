@@ -77,7 +77,6 @@ Port colors are NOT CSS variables — they are hardcoded in `src/utils/port-colo
 | `vec4` | `#a78bfa` | 4D vectors |
 | `color` | `#fbbf24` | Color values |
 | `sampler2D` | `#f472b6` | Textures |
-| `fnref` | `#22d3ee` | Function references |
 | `default` | `#6b7280` | Untyped/fallback |
 
 **Code pattern:**
@@ -226,7 +225,7 @@ When the Figma design uses a component that doesn't exist in code yet:
 When the Figma design specifies a new shader node:
 
 1. **Read the Figma template** to extract:
-   - Inputs: count, types (`float`, `vec2`, `vec3`, `vec4`, `color`, `sampler2D`, `fnref`), labels
+   - Inputs: count, types (`float`, `vec2`, `vec3`, `vec4`, `color`, `sampler2D`), labels
    - Outputs: count, types, labels
    - Parameters: type (`float`/`enum`/`color`), min/max/default, connectable flag, showWhen conditions
    - Custom component (if any): gradient editor, special controls
@@ -234,8 +233,6 @@ When the Figma design specifies a new shader node:
 2. **Create the node definition** — `src/nodes/<category>/<name>.ts`
    - Follow `NODE_AUTHORING_GUIDE.md` for the full skeleton
    - Define `NodeDefinition` with inputs, outputs, params, GLSL generator
-   - Set `functionKey` if the node produces a `fnref` output
-
 3. **Register in `src/nodes/index.ts`:**
    ```ts
    import { myNodeDef } from './<category>/<name>'

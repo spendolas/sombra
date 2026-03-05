@@ -69,10 +69,11 @@ Two Figma variable collections govern all colors in the design system.
 | vec4 | `106:21` | `#a78bfa` | `#7c3aed` | `'#a78bfa'` | ✅ |
 | color | `106:22` | `#fbbf24` | `#d97706` | `'#fbbf24'` | ✅ |
 | sampler2D | `106:23` | `#f472b6` | `#db2777` | `'#f472b6'` | ✅ |
-| fnref | `106:24` | `#22d3ee` | `#0891b2` | `'#22d3ee'` | ✅ |
 | default | `106:25` | `#6b7280` | `#6b7280` | `'#6b7280'` | ✅ |
 
-**Total Port Types: 8 variables, all matched**
+**Total Port Types: 7 variables, all matched**
+
+> **Removed:** `fnref` (`106:24`) — fnref port type was removed in P0 (noise nodes use enum dropdown instead).
 
 ---
 
@@ -82,6 +83,6 @@ Two Figma variable collections govern all colors in the design system.
 - All Sombra tokens use hex values. The separate shadcn/ui tokens use oklch and are not part of this DS.
 - Port colors use inline `style={{ }}` because they're dynamic per-port-type — this is a justified exception to the "no inline styles" rule.
 - `white` (`106:16`) is used for specific fills (e.g., gradient stop markers) that must remain white in both modes.
-- All color variables in all 22 components are bound to V2 collection variables (`106:*`).
+- All color variables in all 21 components are bound to V2 collection variables (`106:*`).
 
-## Parity: ✅ All 22 color variables match
+## Parity: ✅ All 21 color variables match

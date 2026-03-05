@@ -137,6 +137,21 @@ function App() {
     }
   }, [previewMode, splitDirection])
 
+  // Undo/redo keybindings (Cmd+Z / Cmd+Shift+Z)
+  const undo = useGraphStore((state) => state.undo)
+  const redo = useGraphStore((state) => state.redo)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+        e.preventDefault()
+        if (e.shiftKey) redo()
+        else undo()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [undo, redo])
+
   // Esc key exits fullwindow mode
   useEffect(() => {
     if (previewMode !== 'fullwindow') return

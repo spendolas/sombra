@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastSync": "2026-03-04T15:30:00Z",
+  "lastSync": "2026-03-05T12:00:00Z",
   "figmaFileKey": "gq5i0l617YkXy0GzAZPtqz",
 
   "variables": {
@@ -133,13 +133,6 @@
       "name": "sampler2D",
       "collection": "Port Types",
       "value": "#f472b6",
-      "cssVar": null,
-      "codeLocation": "src/utils/port-colors.ts"
-    },
-    "VariableID:106:24": {
-      "name": "fnref",
-      "collection": "Port Types",
-      "value": "#22d3ee",
       "cssVar": null,
       "codeLocation": "src/utils/port-colors.ts"
     },
@@ -528,7 +521,7 @@
     "106:282": {
       "name": "Float Slider",
       "type": "molecule",
-      "file": "src/components/NodeParameters.tsx",
+      "file": "src/components/ui/sombra-slider.tsx",
       "layout": {
         "layoutMode": "VERTICAL",
         "paddingTop": { "value": 0, "binding": null },
@@ -712,7 +705,7 @@
       "fills": [{ "color": "#1a1a2e", "binding": "surface/alt", "code": "bg-surface-alt (App.tsx wrapper div)" }],
       "strokes": [],
       "effects": [],
-      "children": ["Category Header", "Palette Item", "Palette Item", "Palette Item", "Palette Item", "Category Header", "Palette Item", "Palette Item", "Palette Item", "Category Header", "Palette Item", "Palette Item", "Palette Item", "Palette Item", "Category Header", "Palette Item", "Palette Item", "Category Header", "Palette Item", "Palette Item", "Palette Item", "Category Header", "Palette Item"]
+      "children": ["Category Header", "Palette Item", "Palette Item", "Palette Item", "Category Header", "Palette Item", "Palette Item", "Palette Item", "Category Header", "Palette Item", "Category Header", "Palette Item", "Palette Item", "Palette Item", "Palette Item", "Palette Item", "Palette Item", "Palette Item", "Category Header", "Palette Item", "Palette Item", "Palette Item", "Palette Item", "Category Header", "Palette Item", "Palette Item", "Category Header", "Palette Item", "Category Header", "Palette Item", "Palette Item"]
     },
     "106:485": {
       "name": "Properties Panel",
@@ -769,7 +762,7 @@
   },
 
   "nodeTemplates": {
-    "_note": "24 COMPONENT nodes on Templates page. Each represents one node type. All share identical layout/visual properties — only name and internal instances differ.",
+    "_note": "23 COMPONENT nodes on Templates page. Each represents one node type. All share identical layout/visual properties — only name and internal instances differ.",
     "_shared": {
       "layout": {
         "layoutMode": "VERTICAL",
@@ -794,11 +787,11 @@
       "123:1811": { "name": "Random", "category": "Input", "nodeFile": "src/nodes/input/random.ts" },
       "123:1805": { "name": "UV Transform", "category": "Input", "nodeFile": "src/nodes/input/uv-coords.ts" },
       "123:1812": { "name": "Noise", "category": "Noise", "nodeFile": "src/nodes/noise/noise.ts" },
-      "123:1814": { "name": "Domain Warp", "category": "Noise", "nodeFile": "src/nodes/noise/domain-warp.ts" },
+      "123:1814": { "name": "Warp UV", "category": "Transform", "nodeFile": "src/nodes/noise/domain-warp.ts" },
       "123:1813": { "name": "FBM", "category": "Noise", "nodeFile": "src/nodes/noise/fbm.ts" },
-      "123:1820": { "name": "Turbulence", "category": "Math", "nodeFile": "src/nodes/math/turbulence.ts" },
-      "123:1821": { "name": "Ridged", "category": "Math", "nodeFile": "src/nodes/math/ridged.ts" },
-      "123:1818": { "name": "Smoothstep", "category": "Math", "nodeFile": "src/nodes/math/smoothstep.ts" },
+      "123:1820": { "name": "Turbulence", "category": "Distort", "nodeFile": "src/nodes/math/turbulence.ts" },
+      "123:1821": { "name": "Ridged", "category": "Distort", "nodeFile": "src/nodes/math/ridged.ts" },
+      "123:1818": { "name": "Smoothstep", "category": "Distort", "nodeFile": "src/nodes/math/smoothstep.ts" },
       "123:1815": { "name": "Arithmetic", "category": "Math", "nodeFile": "src/nodes/math/arithmetic.ts" },
       "123:1817": { "name": "Mix", "category": "Math", "nodeFile": "src/nodes/math/mix.ts" },
       "123:1819": { "name": "Remap", "category": "Math", "nodeFile": "src/nodes/math/remap.ts" },
@@ -806,9 +799,8 @@
       "123:1822": { "name": "HSV to RGB", "category": "Color", "nodeFile": "src/nodes/color/hsv-to-rgb.ts" },
       "123:1824": { "name": "Color Ramp", "category": "Color", "nodeFile": "src/nodes/color/color-ramp.ts" },
       "123:1823": { "name": "Brightness/Contrast", "category": "Color", "nodeFile": "src/nodes/color/brightness-contrast.ts" },
-      "123:1826": { "name": "Bayer Dither", "category": "Post-process", "nodeFile": "src/nodes/postprocess/bayer-dither.ts" },
-      "123:1827": { "name": "Quantize UV", "category": "Post-process", "nodeFile": "src/nodes/postprocess/quantize-uv.ts" },
-      "123:1825": { "name": "Pixel Grid", "category": "Post-process", "nodeFile": "src/nodes/postprocess/pixel-grid.ts" },
+      "123:1827": { "name": "Quantize UV", "category": "Transform", "nodeFile": "src/nodes/postprocess/quantize-uv.ts" },
+      "123:1825": { "name": "Dither", "category": "Effect", "nodeFile": "src/nodes/postprocess/pixel-grid.ts" },
       "123:1828": { "name": "Fragment Output", "category": "Output", "nodeFile": "src/nodes/output/fragment-output.ts" }
     }
   },

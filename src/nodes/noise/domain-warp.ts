@@ -7,9 +7,9 @@ import type { NodeDefinition } from '../types'
 import { NOISE_TYPE_OPTIONS, resolveNoiseFn, registerNoiseType } from './noise-functions'
 
 export const domainWarpNode: NodeDefinition = {
-  type: 'domain_warp',
-  label: 'Domain Warp',
-  category: 'Noise',
+  type: 'warp_uv',
+  label: 'Warp UV',
+  category: 'Transform',
   description: 'Distorts UV coordinates using noise for organic warping effects',
 
   inputs: [

@@ -52,7 +52,7 @@ function registerShapeSDF(ctx: import('../types').GLSLContext, shape: string): s
 export const ditherNode: NodeDefinition = {
   type: 'dither',
   label: 'Dither',
-  category: 'Post-process',
+  category: 'Effect',
   description: 'Pixelate with shape masking and ordered dithering',
 
   inputs: [
