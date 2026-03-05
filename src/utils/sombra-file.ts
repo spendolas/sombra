@@ -5,6 +5,7 @@
  * The `sombra` field is the file format version (distinct from GRAPH_SCHEMA_VERSION).
  */
 
+import pako from 'pako'
 import type { Node, Edge } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
@@ -121,6 +122,43 @@ export function downloadSombraFile(
  * Open a file picker and read a .sombra/.json file.
  * Returns the parsed JSON content.
  */
+/**
+ * Compress a graph into a URL-safe base64url string.
+ */
+export function encodeGraphToHash(
+  nodes: Node<NodeData>[],
+  edges: Edge<EdgeData>[],
+): string {
+  const file = exportToFile(nodes, edges)
+  const json = JSON.stringify(file)
+  const compressed = pako.deflate(new TextEncoder().encode(json))
+  // base64url: replace +/ with -_, strip = padding
+  const base64 = btoa(String.fromCharCode(...compressed))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
+  return base64
+}
+
+/**
+ * Decode a base64url-compressed graph hash back into nodes and edges.
+ */
+export function decodeGraphFromHash(hash: string): {
+  nodes: Node<NodeData>[]
+  edges: Edge<EdgeData>[]
+} {
+  // Restore standard base64 from base64url
+  let base64 = hash.replace(/-/g, '+').replace(/_/g, '/')
+  // Re-add padding
+  while (base64.length % 4 !== 0) base64 += '='
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  const json = new TextDecoder().decode(pako.inflate(bytes))
+  const parsed = JSON.parse(json)
+  return importFromFile(parsed)
+}
+
 export function openSombraFile(): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const input = document.createElement('input')

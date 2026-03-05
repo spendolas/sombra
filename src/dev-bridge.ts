@@ -13,7 +13,7 @@ import { nodeRegistry } from './nodes/registry'
 import { compileGraph } from './compiler/glsl-generator'
 import type { NodeData, EdgeData, PortType } from './nodes/types'
 import type { Node, Edge } from '@xyflow/react'
-import { exportToFile, importFromFile } from './utils/sombra-file'
+import { exportToFile, importFromFile, encodeGraphToHash } from './utils/sombra-file'
 
 /* ------------------------------------------------------------------ */
 /*  Helper: unique ID generator                                       */
@@ -226,6 +226,16 @@ function importGraph(graph: unknown): void {
 }
 
 /**
+ * Generate a shareable viewer URL for the current graph.
+ * The URL opens a lightweight preview page (no editor UI).
+ */
+function shareGraph(): string {
+  const { nodes, edges } = useGraphStore.getState()
+  const hash = encodeGraphToHash(nodes, edges)
+  return `${location.origin}/sombra/viewer.html#graph=${hash}`
+}
+
+/**
  * List all available node type IDs with their labels and categories.
  */
 function listNodeTypes(): Array<{ type: string; label: string; category: string }> {
@@ -340,6 +350,10 @@ function help() {
       signature: 'importGraph({ sombra?, nodes, edges })',
       description: 'Replace current graph from a .sombra file or bare snapshot',
     },
+    shareGraph: {
+      signature: 'shareGraph() → string',
+      description: 'Generate a shareable viewer URL for the current graph',
+    },
     listNodeTypes: {
       signature: 'listNodeTypes() → [{ type, label, category }]',
       description: 'List all available node type IDs',
@@ -406,6 +420,7 @@ export function installDevBridge(): void {
     compile,
     exportGraph,
     importGraph,
+    shareGraph,
     listNodeTypes,
     describeNode,
     describeGraph,
