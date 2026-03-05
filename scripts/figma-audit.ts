@@ -184,7 +184,14 @@ function buildReverseMaps(db: DB) {
     colorHexToKey.set(entry.value.toLowerCase(), entry.tailwind.key)
   }
 
-  return { colorVarToKey, spacingVarToKey, radiusVarToKey, spacingValueToKey, radiusValueToKey, colorHexToKey }
+  // figmaName → tailwind key (same mapping the generator uses)
+  // e.g. "edge/default" → "edge", "surface/raised" → "surface-raised"
+  const figmaNameToKey = new Map<string, string>()
+  for (const entry of Object.values(db.colors)) {
+    figmaNameToKey.set(entry.figmaName, entry.tailwind.key)
+  }
+
+  return { colorVarToKey, spacingVarToKey, radiusVarToKey, spacingValueToKey, radiusValueToKey, colorHexToKey, figmaNameToKey }
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -412,8 +419,15 @@ function compareFill(
 
   if (!figmaFillKey) return // No fill to compare
 
-  // DB fill uses slash notation (e.g. "surface/raised") — convert to Tailwind key (e.g. "surface-raised")
-  const dbFillKey = dbPart.fill.replace(/\//g, '-')
+  // Resolve DB fill to Tailwind key using same mapping as the generator:
+  // 1. Check figmaNameToKey (e.g. "edge/default" → "edge")
+  // 2. Handle CSS color names (e.g. "black" → compare against hex)
+  // 3. Fallback: convert slash to dash
+  const dbFillKey = maps.figmaNameToKey.get(dbPart.fill) ?? dbPart.fill.replace(/\//g, '-')
+
+  // Handle CSS color names that aren't in the DS color map
+  const CSS_COLORS: Record<string, string> = { black: '#000000', white: '#ffffff' }
+  if (CSS_COLORS[dbFillKey] && figmaFillKey === CSS_COLORS[dbFillKey]) return // match
 
   if (figmaFillKey !== dbFillKey) {
     mismatches.push({
@@ -446,7 +460,10 @@ function compareStroke(
     }
   }
 
-  const dbStrokeColor = dbPart.stroke.color?.replace(/\//g, '-')
+  // Resolve DB stroke color using figmaNameToKey (same as generator)
+  const dbStrokeColor = dbPart.stroke.color
+    ? (maps.figmaNameToKey.get(dbPart.stroke.color) ?? dbPart.stroke.color.replace(/\//g, '-'))
+    : undefined
   if (dbStrokeColor && figmaStrokeKey && figmaStrokeKey !== dbStrokeColor) {
     mismatches.push({
       component: compKey, part: partKey, property: 'stroke.color',

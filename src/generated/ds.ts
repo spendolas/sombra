@@ -10,7 +10,7 @@ export const ds = {
     footer: "flex flex-col items-center border-t px-lg pt-md pb-lg gap-y-md",
   },
   floatingPreview: {
-    root: "flex flex-col bg-black rounded-lg border border-edge fixed z-40 overflow-hidden shadow-2xl",
+    root: "flex flex-col bg-black rounded-md border border-edge fixed z-40 overflow-hidden shadow-2xl",
   },
   fullWindowOverlay: {
     root: "bg-black fixed z-50 inset-0",
@@ -27,7 +27,7 @@ export const ds = {
     paramSection: "bg-surface-raised rounded-lg border border-edge p-lg",
   },
   zoomBar: {
-    root: "flex flex-row bg-surface-alt rounded-md p-xs gap-xs text-fg",
+    root: "flex flex-row bg-surface-alt rounded-md p-xs gap-xs text-fg-dim",
   },
   previewToolbar: {
     root: "flex flex-row items-center bg-surface-raised rounded-sm px-md py-xs gap-sm text-body text-fg-dim",

@@ -603,7 +603,7 @@
             "color": "edge/default",
             "weight": 1
           },
-          "radius": "lg",
+          "radius": "md",
           "position": "fixed",
           "z": 40,
           "overflow": "hidden",
@@ -715,7 +715,7 @@
           "radius": "md",
           "padding": "xs",
           "gap": "xs",
-          "textColor": "fg"
+          "textColor": "fg-dim"
         }
       }
     },
