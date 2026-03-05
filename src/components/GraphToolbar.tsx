@@ -2,9 +2,9 @@
  * GraphToolbar — floating save/load pill at the top-left of the canvas.
  */
 
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { Panel, useReactFlow } from '@xyflow/react'
-import { Download, FolderOpen } from 'lucide-react'
+import { Check, Download, FolderOpen, Share2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useGraphStore } from '@/stores/graphStore'
 import {
@@ -12,10 +12,13 @@ import {
   importFromFile,
   downloadSombraFile,
   openSombraFile,
+  encodeGraphToHash,
 } from '@/utils/sombra-file'
+import { ds } from '@/generated/ds'
 
 export function GraphToolbar() {
   const { fitView } = useReactFlow()
+  const [copied, setCopied] = useState(false)
 
   const handleSave = useCallback(() => {
     const { nodes, edges } = useGraphStore.getState()
@@ -30,16 +33,28 @@ export function GraphToolbar() {
       useGraphStore.getState().loadGraph(nodes, edges)
       setTimeout(() => fitView({ padding: 0.2, duration: 300 }), 50)
     } catch (err) {
-      // Silently ignore cancellation
       if (err instanceof Error && err.message === 'File selection cancelled') return
       console.error('[Sombra] Failed to open file:', err)
     }
   }, [fitView])
 
+  const handleShare = useCallback(async () => {
+    const { nodes, edges } = useGraphStore.getState()
+    const hash = encodeGraphToHash(nodes, edges)
+    const url = `${location.origin}/sombra/viewer.html#graph=${hash}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      console.error('[Sombra] Failed to copy share URL to clipboard')
+    }
+  }, [])
+
   return (
     <Panel
       position="top-left"
-      className="flex flex-row bg-surface-alt rounded-md p-xs gap-xs"
+      className={ds.graphToolbar.root}
     >
       <Button
         variant="ghost"
@@ -56,6 +71,18 @@ export function GraphToolbar() {
         title="Open graph (.sombra)"
       >
         <FolderOpen className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={handleShare}
+        title="Copy shareable viewer URL"
+      >
+        {copied ? (
+          <Check className="h-4 w-4 text-green-400" />
+        ) : (
+          <Share2 className="h-4 w-4" />
+        )}
       </Button>
     </Panel>
   )
