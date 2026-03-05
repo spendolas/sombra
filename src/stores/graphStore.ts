@@ -56,6 +56,9 @@ interface GraphState {
   setSelectedEdges: (edgeIds: string[]) => void
   clearSelection: () => void
 
+  // Graph loading
+  loadGraph: (nodes: Node<NodeData>[], edges: Edge<EdgeData>[]) => void
+
   // Utility
   getNode: (nodeId: string) => Node<NodeData> | undefined
   getEdge: (edgeId: string) => Edge<EdgeData> | undefined
@@ -218,6 +221,21 @@ export const useGraphStore = create<GraphState>()(
       setSelectedNodes: (nodeIds) => set({ selectedNodeIds: nodeIds }),
       setSelectedEdges: (edgeIds) => set({ selectedEdgeIds: edgeIds }),
       clearSelection: () => set({ selectedNodeIds: [], selectedEdgeIds: [] }),
+
+      loadGraph: (nodes, edges) => {
+        const state = get()
+        const past = pushHistory(state._past, snapshot(state))
+        set({
+          nodes,
+          edges,
+          selectedNodeIds: [],
+          selectedEdgeIds: [],
+          _past: past,
+          _future: [],
+          canUndo: true,
+          canRedo: false,
+        })
+      },
 
       getNode: (nodeId) => get().nodes.find((n) => n.id === nodeId),
       getEdge: (edgeId) => get().edges.find((e) => e.id === edgeId),

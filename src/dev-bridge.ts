@@ -13,6 +13,7 @@ import { nodeRegistry } from './nodes/registry'
 import { compileGraph } from './compiler/glsl-generator'
 import type { NodeData, EdgeData, PortType } from './nodes/types'
 import type { Node, Edge } from '@xyflow/react'
+import { exportToFile, importFromFile } from './utils/sombra-file'
 
 /* ------------------------------------------------------------------ */
 /*  Helper: unique ID generator                                       */
@@ -207,51 +208,21 @@ function compile(): ReturnType<typeof compileGraph> {
 }
 
 /**
- * Snapshot current graph as a plain JSON object (nodes + edges).
+ * Snapshot current graph as a versioned .sombra JSON object.
+ * Returns { sombra: 1, nodes: [...], edges: [...] }
  */
-function exportGraph(): { nodes: Node<NodeData>[]; edges: Edge<EdgeData>[] } {
+function exportGraph() {
   const { nodes, edges } = useGraphStore.getState()
-  return { nodes, edges }
-}
-
-/** Validate that a graph snapshot has the expected structure */
-function validateGraphSnapshot(graph: unknown): graph is { nodes: Node<NodeData>[]; edges: Edge<EdgeData>[] } {
-  if (!graph || typeof graph !== 'object') return false
-  const g = graph as Record<string, unknown>
-  if (!Array.isArray(g.nodes) || !Array.isArray(g.edges)) return false
-
-  for (const node of g.nodes) {
-    if (!node || typeof node !== 'object') return false
-    const n = node as Record<string, unknown>
-    if (typeof n.id !== 'string') return false
-    if (!n.position || typeof n.position !== 'object') return false
-    if (!n.data || typeof n.data !== 'object') return false
-    const d = n.data as Record<string, unknown>
-    if (typeof d.type !== 'string') return false
-    if (!nodeRegistry.get(d.type)) return false
-  }
-
-  for (const edge of g.edges) {
-    if (!edge || typeof edge !== 'object') return false
-    const e = edge as Record<string, unknown>
-    if (typeof e.id !== 'string') return false
-    if (typeof e.source !== 'string') return false
-    if (typeof e.target !== 'string') return false
-  }
-
-  return true
+  return exportToFile(nodes, edges)
 }
 
 /**
- * Load a graph from a snapshot (replaces current graph).
+ * Load a graph from a snapshot or .sombra file (replaces current graph).
+ * Accepts both versioned { sombra: 1, nodes, edges } and bare { nodes, edges }.
  */
 function importGraph(graph: unknown): void {
-  if (!validateGraphSnapshot(graph)) {
-    throw new Error('Invalid graph snapshot: expected { nodes: [...], edges: [...] } with valid node types')
-  }
-  const gs = useGraphStore.getState()
-  gs.setNodes(graph.nodes)
-  gs.setEdges(graph.edges)
+  const { nodes, edges } = importFromFile(graph)
+  useGraphStore.getState().loadGraph(nodes, edges)
 }
 
 /**
@@ -362,12 +333,12 @@ function help() {
       description: 'Manually trigger shader compilation',
     },
     exportGraph: {
-      signature: 'exportGraph() → { nodes, edges }',
-      description: 'Snapshot the current graph as JSON',
+      signature: 'exportGraph() → { sombra, nodes, edges }',
+      description: 'Snapshot the current graph as a versioned .sombra JSON',
     },
     importGraph: {
-      signature: 'importGraph({ nodes, edges })',
-      description: 'Replace current graph from a snapshot',
+      signature: 'importGraph({ sombra?, nodes, edges })',
+      description: 'Replace current graph from a .sombra file or bare snapshot',
     },
     listNodeTypes: {
       signature: 'listNodeTypes() → [{ type, label, category }]',
