@@ -32,8 +32,6 @@ export const ds = {
   previewToolbar: {
     root: "flex flex-row items-center bg-surface-alt rounded-md p-xs gap-xs text-body text-fg-dim",
     wrapper: "flex flex-row items-center gap-md",
-    buttonActive: "bg-indigo text-fg cursor-default hover:bg-indigo",
-    buttonInactive: "text-fg-dim cursor-pointer hover:bg-surface-elevated hover:text-fg",
   },
   paletteItem: {
     root: "bg-surface-raised rounded-sm border border-edge-subtle px-md py-sm text-body text-fg-dim cursor-move transition-colors hover:bg-surface-elevated hover:text-fg",
@@ -41,8 +39,14 @@ export const ds = {
   categoryHeader: {
     root: "pb-md text-category text-fg-subtle",
   },
-  plusMinusButton: {
-    root: "flex flex-row items-center justify-center bg-surface-alt rounded-sm border border-edge text-param size-btn-md",
+  iconButton: {
+    root: "flex flex-col items-center justify-center rounded-sm size-btn-md",
+    solid: "bg-surface-alt border border-edge text-fg-dim cursor-pointer transition-colors hover:bg-surface-raised hover:text-fg",
+    solidDisabled: "text-fg-muted cursor-default",
+    solidActive: "bg-indigo text-fg cursor-default",
+    ghost: "text-fg-dim cursor-pointer transition-colors hover:bg-surface-elevated hover:text-fg",
+    ghostDisabled: "text-fg-muted cursor-default",
+    ghostActive: "bg-indigo text-fg cursor-default hover:bg-indigo",
   },
   labeledHandle: {
     root: "items-center relative flex",
@@ -73,7 +77,6 @@ export const ds = {
   randomDisplay: {
     root: "flex flex-row items-center justify-between px-xs gap-md nodrag nowheel",
     value: "text-mono-value text-fg tabular-nums",
-    button: "flex flex-row items-center justify-center bg-surface-alt rounded-sm border border-edge text-fg-dim cursor-pointer transition-colors hover:bg-surface-raised hover:text-fg size-btn-md",
   },
   miniMap: {
     root: "bg-surface-alt rounded-md border border-edge-subtle",

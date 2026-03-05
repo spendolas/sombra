@@ -7,6 +7,7 @@ import { useEffect } from 'react'
 import { IconButton } from '@/components/IconButton'
 import { useGraphStore } from '@/stores/graphStore'
 import { hashNodeId } from '@/nodes/input/random'
+import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
 
 export function RandomDisplay({
@@ -50,7 +51,7 @@ export function RandomDisplay({
         variant="unstyled"
         size="icon-node"
         onClick={handleRandomise}
-        className={ds.randomDisplay.button}
+        className={cn(ds.iconButton.root, ds.iconButton.solid)}
         title="Randomise"
       />
     </div>

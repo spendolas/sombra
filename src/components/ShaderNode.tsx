@@ -172,11 +172,10 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
               onClick={handleRemoveInput}
               disabled={inputCount <= 2}
               className={cn(
-                ds.plusMinusButton.root,
-                "disabled:opacity-100",
+                ds.iconButton.root,
                 inputCount <= 2
-                  ? "text-fg-muted cursor-default"
-                  : "text-fg cursor-pointer"
+                  ? ds.iconButton.solidDisabled
+                  : ds.iconButton.solid
               )}
             />
             <span className="text-param text-fg-muted">
@@ -189,11 +188,10 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
               onClick={handleAddInput}
               disabled={inputCount >= 8}
               className={cn(
-                ds.plusMinusButton.root,
-                "disabled:opacity-100",
+                ds.iconButton.root,
                 inputCount >= 8
-                  ? "text-fg-muted cursor-default"
-                  : "text-fg cursor-pointer"
+                  ? ds.iconButton.solidDisabled
+                  : ds.iconButton.solid
               )}
             />
           </div>

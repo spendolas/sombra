@@ -544,7 +544,9 @@
           },
           "radius": "md",
           "position": "relative",
-          "hover": { "ring": "1" },
+          "hover": {
+            "ring": "1"
+          },
           "extra": "[.react-flow__node.selected_&]:border-muted-foreground [.react-flow__node.selected_&]:shadow-lg"
         },
         "header": {
@@ -753,24 +755,6 @@
           "layout": "horizontal",
           "align": "center",
           "gap": "md"
-        },
-        "buttonActive": {
-          "figmaNodeId": "306:213",
-          "fill": "indigo/default",
-          "textColor": "fg",
-          "cursor": "default",
-          "hover": {
-            "fill": "indigo/default"
-          }
-        },
-        "buttonInactive": {
-          "figmaNodeId": "306:213",
-          "textColor": "fg-dim",
-          "cursor": "pointer",
-          "hover": {
-            "fill": "surface/elevated",
-            "textColor": "fg"
-          }
         }
       }
     },
@@ -820,24 +804,68 @@
       }
     },
     "106:108": {
-      "name": "Plus Minus Button",
+      "name": "Icon Button",
       "type": "atom",
-      "dsKey": "plusMinusButton",
-      "codeFile": "src/components/ShaderNode.tsx",
+      "dsKey": "iconButton",
+      "codeFile": "src/components/IconButton.tsx",
       "parts": {
         "root": {
           "figmaNodeId": "106:108",
-          "layout": "horizontal",
+          "layout": "vertical",
+          "align": "center",
+          "justify": "center",
+          "radius": "sm",
+          "extra": "size-btn-md"
+        },
+        "solid": {
+          "figmaNodeId": "306:237",
           "fill": "surface/alt",
           "stroke": {
             "color": "edge/default",
             "weight": 1
           },
-          "radius": "sm",
-          "align": "center",
-          "justify": "center",
-          "textStyle": "text-param",
-          "extra": "size-btn-md"
+          "textColor": "fg-dim",
+          "cursor": "pointer",
+          "transition": "colors",
+          "hover": {
+            "fill": "surface/raised",
+            "textColor": "fg"
+          }
+        },
+        "solidDisabled": {
+          "figmaNodeId": "306:240",
+          "textColor": "fg-muted",
+          "cursor": "default"
+        },
+        "solidActive": {
+          "figmaNodeId": "306:243",
+          "fill": "indigo/default",
+          "textColor": "fg",
+          "cursor": "default"
+        },
+        "ghost": {
+          "figmaNodeId": "306:246",
+          "textColor": "fg-dim",
+          "cursor": "pointer",
+          "transition": "colors",
+          "hover": {
+            "fill": "surface/elevated",
+            "textColor": "fg"
+          }
+        },
+        "ghostDisabled": {
+          "figmaNodeId": "306:249",
+          "textColor": "fg-muted",
+          "cursor": "default"
+        },
+        "ghostActive": {
+          "figmaNodeId": "306:252",
+          "fill": "indigo/default",
+          "textColor": "fg",
+          "cursor": "default",
+          "hover": {
+            "fill": "indigo/default"
+          }
         }
       }
     },
@@ -1025,26 +1053,6 @@
           "textColor": "fg",
           "textStyle": "text-mono-value",
           "extra": "tabular-nums"
-        },
-        "button": {
-          "figmaNodeId": "306:213",
-          "layout": "horizontal",
-          "fill": "surface/alt",
-          "stroke": {
-            "color": "edge/default",
-            "weight": 1
-          },
-          "radius": "sm",
-          "align": "center",
-          "justify": "center",
-          "textColor": "fg-dim",
-          "cursor": "pointer",
-          "transition": "colors",
-          "hover": {
-            "fill": "surface/raised",
-            "textColor": "fg"
-          },
-          "extra": "size-btn-md"
         }
       }
     },
@@ -1094,6 +1102,17 @@
           "width": "full",
           "height": "full",
           "fill": "black"
+        }
+      }
+    },
+    "306:236": {
+      "name": "Icon",
+      "type": "atom",
+      "dsKey": "icon",
+      "codeFile": "src/components/icons.ts",
+      "parts": {
+        "root": {
+          "figmaNodeId": "306:236"
         }
       }
     }
