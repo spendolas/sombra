@@ -29,8 +29,8 @@ If `window.__sombra` is `undefined`, the page hasn't finished loading or the bri
 | Clear graph | `sombra.clearGraph()` |
 | Describe current graph | `sombra.describeGraph()` |
 | Get compiled shader | `sombra.getFragmentShader()` |
-| Export graph JSON | `sombra.exportGraph()` |
-| Import graph JSON | `sombra.importGraph({nodes, edges})` |
+| Export graph (.sombra) | `sombra.exportGraph()` → `{ sombra: 1, nodes, edges }` |
+| Import graph (.sombra) | `sombra.importGraph({sombra?, nodes, edges})` |
 | Manual compile | `sombra.compile()` |
 
 ---
@@ -127,9 +127,52 @@ Manually triggers shader compilation and pushes the result to the renderer. Retu
 
 Returns the current compiled fragment shader source string (or `null`).
 
-### `sombra.exportGraph()` / `sombra.importGraph(graph)`
+### `sombra.exportGraph() → SombraFile`
 
-Export the graph as `{ nodes, edges }` JSON. Import replaces the current graph entirely.
+Returns the current graph as a versioned `.sombra` JSON object:
+
+```js
+{
+  sombra: 1,           // file format version
+  nodes: [...],        // React Flow node array
+  edges: [...]         // React Flow edge array
+}
+```
+
+### `sombra.importGraph(graph)`
+
+Replaces the current graph from a `.sombra` file or bare snapshot. Accepts both formats:
+
+```js
+// Versioned .sombra format
+sombra.importGraph({ sombra: 1, nodes: [...], edges: [...] })
+
+// Bare format (backward compatible)
+sombra.importGraph({ nodes: [...], edges: [...] })
+```
+
+Import is undoable — the previous graph is pushed to the undo stack. Validates node types and graph structure; throws on invalid input.
+
+---
+
+## `.sombra` File Format
+
+Sombra graphs are saved as `.sombra` files — JSON with a version envelope:
+
+```json
+{
+  "sombra": 1,
+  "nodes": [...],
+  "edges": [...]
+}
+```
+
+- **`sombra`** — file format version (integer). Distinct from `GRAPH_SCHEMA_VERSION` used for localStorage.
+- **`nodes` / `edges`** — same shape as React Flow's node/edge arrays (position, data, handles, etc.)
+- **Settings are NOT included** — preview mode, split sizes, etc. are UI preferences, not graph content.
+- **File extension:** `.sombra` (also accepts `.json` for convenience)
+
+The **GraphToolbar** in the top-left of the canvas provides Save (download) and Open (upload) buttons for `.sombra` files.
 
 ---
 
@@ -139,7 +182,7 @@ Export the graph as `{ nodes, edges }` JSON. Import replaces the current graph e
 
 | Type | Label | Outputs | Key Params |
 |---|---|---|---|
-| `uv_coordinates` | UV Coordinates | `uv` (vec2) | `scaleX`, `scaleY`, `rotate`, `offsetX`, `offsetY` (all connectable) |
+| `uv_transform` | UV Transform | `uv` (vec2) | `scaleX`, `scaleY`, `rotate`, `offsetX`, `offsetY` (all connectable) |
 | `color_constant` | Color | `color` (color/vec3) | `value` ([r,g,b] 0-1) |
 | `float_constant` | Number | `value` (float) | `value` (float) |
 | `vec2_constant` | Vec2 | `value` (vec2) | `x`, `y` (floats) |
@@ -175,12 +218,11 @@ Export the graph as `{ nodes, edges }` JSON. Import replaces the current graph e
 | `brightness_contrast` | Brightness/Contrast | `color` (vec3) | `color` (vec3) | `brightness` (connectable), `contrast` (connectable) |
 | `color_ramp` | Color Ramp | `t` (float) | `color` (vec3) | `interpolation` (enum: smooth/linear/constant), `stops` (hidden, array of `{position, color}`) |
 
-### Post-process
+### Effect
 
 | Type | Label | Inputs | Outputs | Key Params |
 |---|---|---|---|---|
-| `pixel_grid` | Pixel Grid | `color` (vec3) | `color` (vec3) | `pixelSize` (connectable), `shape` (enum: circle/diamond/triangle), `dither` (connectable) |
-| `bayer_dither` | Bayer Dither | `color` (vec3) | `color` (vec3) | `levels` (float) |
+| `dither` | Dither | `color` (vec3) | `result` (vec3) | `pixelSize` (connectable), `shape` (enum: square/circle/diamond/triangle), `threshold` (connectable), `dither` (connectable, shown for circle) |
 | `quantize_uv` | Quantize UV | — | `uv` (vec2) | `pixelSize` (connectable) |
 
 ### Output

@@ -17,13 +17,13 @@ V2 was rebuilt from scratch using a **code-driven approach**: every Figma compon
 
 ---
 
-## Parity Score: 38/38 ✅
+## Parity Score: 39/39 ✅
 
 | Level | Total | ✅ Match | Notes |
 |---|---|---|---|
 | Tokens | 5 collections + 11 text styles | All | 40 variables + 11 text styles, dark mode only |
 | Atoms | 7 | 7 | Handle, Separator, Category Header, Palette Item, Plus Minus Button, Node Header, Node Footer |
-| Molecules | 10 | 10 | Labeled Handle, Float Slider (SombraSlider), Enum Select, Color Input, Connectable Param Row, Preview Toolbar, Zoom Bar, Gradient Editor, Random Display, MiniMap |
+| Molecules | 11 | 11 | Labeled Handle, Float Slider (SombraSlider), Enum Select, Color Input, Connectable Param Row, Preview Toolbar, Zoom Bar, Gradient Editor, Random Display, MiniMap, Graph Toolbar |
 | Organisms | 5 | 5 | Node Card, Node Palette, Properties Panel, Floating Preview, Full Window Overlay |
 | Templates | 23 | 23 | All node types (Bayer Dither removed, Domain Warp → Warp UV, Pixel Grid → Dither) |
 | Scenes | 5 | 5 | All preview modes |
@@ -65,6 +65,7 @@ V2 was rebuilt from scratch using a **code-driven approach**: every Figma compon
 | [gradient-editor.md](molecules/gradient-editor.md) | `111:949` | — | ColorRampEditor.tsx | ✅ |
 | [random-display.md](molecules/random-display.md) | `111:954` | — | RandomDisplay.tsx | ✅ |
 | [minimap.md](molecules/minimap.md) | `111:963` | — | FlowCanvas.tsx (MiniMap) | ✅ |
+| [graph-toolbar.md](molecules/graph-toolbar.md) | `268:1427` | — | GraphToolbar.tsx | ✅ |
 
 ### Organisms
 | Page | Figma ID | Variants | Code File | Parity |
@@ -113,6 +114,7 @@ The 18 component mappings below are documented for reference but not activated i
 | Properties Panel | `PropertiesPanel` | `src/components/PropertiesPanel.tsx` |
 | Floating Preview | `FloatingPreview` | `src/components/FloatingPreview.tsx` |
 | Full Window Overlay | `FullWindowOverlay` | `src/components/FullWindowOverlay.tsx` |
+| Graph Toolbar | `GraphToolbar` | `src/components/GraphToolbar.tsx` |
 
 ---
 
@@ -155,9 +157,9 @@ Foundations (tokens, typography)
 └── Atoms (7 components)
     ├── Handle, Separator, Palette Item, PlusMinus Button, Category Header
     ├── Node Header, Node Footer
-    └── Molecules (10 components)
+    └── Molecules (11 components)
         ├── Labeled Handle, Float Slider, Enum Select, Color Input
-        ├── Connectable Param Row, Preview Toolbar
+        ├── Connectable Param Row, Preview Toolbar, Graph Toolbar
         ├── Zoom Bar, Gradient Editor, Random Display, MiniMap
         └── Organisms (5 components)
             ├── Node Card, Node Palette, Properties Panel

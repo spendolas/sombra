@@ -530,7 +530,10 @@
             "color": "edge/card",
             "weight": 1
           },
-          "radius": "md"
+          "radius": "md",
+          "position": "relative",
+          "hover": { "ring": "1" },
+          "extra": "[.react-flow__node.selected_&]:border-muted-foreground [.react-flow__node.selected_&]:shadow-lg"
         },
         "header": {
           "figmaNodeId": "111:488",
@@ -550,7 +553,15 @@
           },
           "gap": "md",
           "align": "center",
-          "justify": "between"
+          "justify": "between",
+          "extra": "-mb-1"
+        },
+        "title": {
+          "figmaNodeId": null,
+          "textStyle": "text-node-title",
+          "textColor": "fg",
+          "userSelect": "none",
+          "extra": "flex-1"
         },
         "content": {
           "figmaNodeId": null,
@@ -593,13 +604,15 @@
             "weight": 1
           },
           "radius": "lg",
+          "position": "fixed",
+          "z": 40,
+          "overflow": "hidden",
           "effects": [
             {
               "type": "shadow",
               "class": "shadow-2xl"
             }
-          ],
-          "extra": "overflow-hidden"
+          ]
         }
       }
     },
@@ -611,7 +624,10 @@
       "parts": {
         "root": {
           "figmaNodeId": "106:511",
-          "fill": "black"
+          "fill": "black",
+          "position": "fixed",
+          "inset": "0",
+          "z": 50
         }
       }
     },
@@ -632,6 +648,11 @@
           "figmaNodeId": null,
           "layout": "vertical",
           "gap": "lg"
+        },
+        "itemList": {
+          "figmaNodeId": null,
+          "layout": "vertical",
+          "gap": "xs"
         }
       }
     },
@@ -693,7 +714,8 @@
           "fill": "surface/alt",
           "radius": "md",
           "padding": "xs",
-          "gap": "xs"
+          "gap": "xs",
+          "textColor": "fg"
         }
       }
     },
@@ -713,7 +735,9 @@
             "y": "xs"
           },
           "gap": "sm",
-          "align": "center"
+          "align": "center",
+          "textStyle": "text-body",
+          "textColor": "fg-dim"
         }
       }
     },
@@ -734,6 +758,14 @@
           "padding": {
             "x": "md",
             "y": "sm"
+          },
+          "textStyle": "text-body",
+          "textColor": "fg-dim",
+          "cursor": "move",
+          "transition": "colors",
+          "hover": {
+            "fill": "surface/elevated",
+            "textColor": "fg"
           }
         }
       }
@@ -748,7 +780,9 @@
           "figmaNodeId": "106:92",
           "padding": {
             "bottom": "md"
-          }
+          },
+          "textStyle": "text-category",
+          "textColor": "fg-subtle"
         }
       }
     },
@@ -760,12 +794,17 @@
       "parts": {
         "root": {
           "figmaNodeId": "106:108",
+          "layout": "horizontal",
           "fill": "surface/alt",
           "stroke": {
             "color": "edge/default",
             "weight": 1
           },
-          "radius": "sm"
+          "radius": "sm",
+          "align": "center",
+          "justify": "center",
+          "textStyle": "text-param",
+          "extra": "size-btn-sm"
         }
       }
     },
@@ -799,11 +838,15 @@
       "parts": {
         "root": {
           "figmaNodeId": "106:269",
-          "layout": "horizontal",
-          "padding": {
-            "right": "lg"
-          },
-          "gap": "sm"
+          "position": "relative",
+          "align": "center",
+          "extra": "flex"
+        },
+        "label": {
+          "figmaNodeId": null,
+          "textStyle": "text-handle",
+          "textColor": "foreground",
+          "extra": "px-handle-offset flex-1"
         }
       }
     },
@@ -816,7 +859,9 @@
         "root": {
           "figmaNodeId": "106:282",
           "layout": "vertical",
-          "gap": "sm"
+          "gap": "2xs",
+          "userSelect": "none",
+          "extra": "nodrag nowheel nokey"
         }
       }
     },
@@ -831,12 +876,21 @@
           "layout": "vertical",
           "gap": "sm"
         },
+        "label": {
+          "figmaNodeId": null,
+          "textStyle": "text-param",
+          "textColor": "fg-subtle"
+        },
         "trigger": {
           "figmaNodeId": null,
           "fill": "surface/raised",
           "stroke": {
             "color": "edge/default"
-          }
+          },
+          "width": "full",
+          "height": "select-h",
+          "textStyle": "text-body",
+          "textColor": "fg"
         },
         "content": {
           "figmaNodeId": null,
@@ -844,6 +898,10 @@
           "stroke": {
             "color": "edge/default"
           }
+        },
+        "item": {
+          "figmaNodeId": null,
+          "textStyle": "text-body"
         }
       }
     },
@@ -858,6 +916,11 @@
           "layout": "vertical",
           "gap": "sm"
         },
+        "label": {
+          "figmaNodeId": null,
+          "textStyle": "text-param",
+          "textColor": "fg-subtle"
+        },
         "input": {
           "figmaNodeId": null,
           "radius": "sm",
@@ -865,7 +928,10 @@
           "stroke": {
             "color": "edge/default",
             "weight": 1
-          }
+          },
+          "width": "full",
+          "height": "input-h",
+          "cursor": "pointer"
         }
       }
     },
@@ -878,7 +944,8 @@
         "root": {
           "figmaNodeId": "106:311",
           "layout": "horizontal",
-          "align": "center"
+          "align": "center",
+          "position": "relative"
         },
         "innerFrame": {
           "figmaNodeId": null,
@@ -917,16 +984,34 @@
           },
           "gap": "md",
           "align": "center",
-          "justify": "between"
+          "justify": "between",
+          "extra": "nodrag nowheel"
+        },
+        "value": {
+          "figmaNodeId": null,
+          "textColor": "fg",
+          "textStyle": "text-mono-value",
+          "extra": "tabular-nums"
         },
         "button": {
           "figmaNodeId": null,
+          "layout": "horizontal",
           "fill": "surface/alt",
           "stroke": {
             "color": "edge/default",
             "weight": 1
           },
-          "radius": "sm"
+          "radius": "sm",
+          "align": "center",
+          "justify": "center",
+          "textColor": "fg-dim",
+          "cursor": "pointer",
+          "transition": "colors",
+          "hover": {
+            "fill": "surface/raised",
+            "textColor": "fg"
+          },
+          "extra": "size-btn-sm"
         }
       }
     },
@@ -944,6 +1029,37 @@
             "weight": 1
           },
           "radius": "md"
+        }
+      }
+    },
+    "graph-toolbar": {
+      "name": "Graph Toolbar",
+      "type": "molecule",
+      "dsKey": "graphToolbar",
+      "codeFile": "src/components/GraphToolbar.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": null,
+          "layout": "horizontal",
+          "fill": "surface/alt",
+          "radius": "md",
+          "padding": "xs",
+          "gap": "xs"
+        }
+      }
+    },
+    "preview-panel": {
+      "name": "Preview Panel",
+      "type": "organism",
+      "dsKey": "previewPanel",
+      "codeFile": "src/components/PreviewPanel.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": null,
+          "position": "relative",
+          "width": "full",
+          "height": "full",
+          "fill": "black"
         }
       }
     }

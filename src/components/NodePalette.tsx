@@ -3,7 +3,6 @@
  */
 
 import { nodeRegistry } from '../nodes/registry'
-import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
 
 export function NodePalette() {
@@ -20,19 +19,16 @@ export function NodePalette() {
         const nodes = nodeRegistry.getByCategory(category)
         return (
           <div key={category}>
-            <h3 className={cn(ds.categoryHeader.root, "text-category text-fg-subtle")}>
+            <h3 className={ds.categoryHeader.root}>
               {category}
             </h3>
-            <div className="flex flex-col gap-xs">
+            <div className={ds.nodePalette.itemList}>
               {nodes.map((node) => (
                 <div
                   key={node.type}
                   draggable
                   onDragStart={(e) => onDragStart(e, node.type)}
-                  className={cn(
-                    ds.paletteItem.root,
-                    "text-body cursor-move transition-colors text-fg-dim hover:bg-surface-elevated hover:text-fg"
-                  )}
+                  className={ds.paletteItem.root}
                   title={node.description}
                 >
                   {node.label}

@@ -3,6 +3,7 @@ import { type HandleProps } from "@xyflow/react";
 
 import { cn } from "@/lib/utils";
 import { BaseHandle } from "@/components/base-handle";
+import { ds } from "@/generated/ds";
 
 const flexDirections = {
   top: "flex-col",
@@ -34,7 +35,7 @@ export function LabeledHandle({
     <div
       title={title}
       className={cn(
-        "relative flex items-center",
+        ds.labeledHandle.root,
         flexDirections[position],
         className,
       )}
@@ -47,7 +48,7 @@ export function LabeledHandle({
         connected={connected}
         {...handleProps}
       />
-      <label className={cn("text-foreground text-handle px-handle-offset flex-1", position === "right" && "text-right", labelClassName)}>
+      <label className={cn(ds.labeledHandle.label, position === "right" && "text-right", labelClassName)}>
         {title}
       </label>
     </div>

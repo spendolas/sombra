@@ -349,15 +349,45 @@ Dagre-based auto-layout for node positioning (`src/utils/layout.ts`, dependency:
 
 ---
 
-## Phase 3 — Save/Load/Export
+## Phase 3 — Save/Load/Export 🔄 IN PROGRESS
 
-- localStorage auto-save with schema versioning
-- JSON download/upload for sharing graph files
-- "Copy GLSL" button — exports the compiled fragment shader
-- Embed HTML snippet generator
-- `/embed.html?material=<base64>` shareable URLs (still static, no backend)
+**Status:** Save/Load delivered March 2026. Copy GLSL + Embed pending.
+
+- [x] localStorage auto-save with schema versioning (Zustand persist, `GRAPH_SCHEMA_VERSION`)
+- [x] `.sombra` file download/upload for sharing graph files
+- [ ] "Copy GLSL" button — exports the compiled fragment shader
+- [ ] Embed HTML snippet generator
+- [ ] `/embed.html?material=<base64>` shareable URLs (still static, no backend)
+
+### Delivered Features
+
+- **`.sombra` file format** — versioned JSON envelope (`{ sombra: 1, nodes, edges }`), validates structure + node types on import
+- **GraphToolbar** — floating pill at top-left of canvas with Download (save) and FolderOpen (open) icon buttons
+- **`loadGraph()` store action** — undoable graph replacement (pushes previous state to undo stack)
+- **Dev bridge updated** — `exportGraph()` returns versioned envelope, `importGraph()` accepts both versioned and bare formats
+- New files: `src/utils/sombra-file.ts`, `src/components/GraphToolbar.tsx`
 
 **Milestone:** Save your work, share a link, copy the shader code.
+
+---
+
+## Phase 3.5 — Design System Migration ✅ COMPLETE
+
+**Status:** Delivered March 2026
+
+Expanded the DS database to capture ALL visual properties per component, eliminating inline Tailwind classes in favor of generated `ds.*` references.
+
+- [x] Extended `ComponentPart` schema with 15 new fields: textStyle, textColor, cursor, transition, userSelect, position, z, overflow, opacity, inset, width, height, minWidth, pointerEvents + hover/active state objects
+- [x] Updated `generate-tokens.ts` to emit all new fields as Tailwind utilities
+- [x] Populated all 22 component parts in DB with full visual properties
+- [x] Migrated 12+ component files to use `ds.*` references — zero inline visual classes for design properties
+- [x] Created `figma-audit.ts` script — compares DB component parts against Figma REST API (layout, padding, gap, radius, fill, stroke, text style, text color)
+- [x] Added `npm run tokens:audit` command
+- [x] All components verified: `npm run build` + `npm run tokens:check`
+
+**Key files:** `scripts/generate-tokens.ts`, `scripts/figma-audit.ts`, `tokens/sombra.ds.json`, `src/generated/ds.ts`
+
+**Milestone:** Every visual class on every component is tracked in the DB and generated — single source of truth for design tokens AND component styles.
 
 ---
 
