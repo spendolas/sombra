@@ -9,6 +9,7 @@ import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { areTypesCompatible } from '../nodes/type-coercion'
 import { ZoomSlider } from '@/components/zoom-slider'
+import { GraphToolbar } from '@/components/GraphToolbar'
 import { TypedEdge } from './TypedEdge'
 
 interface FlowCanvasProps {
@@ -171,6 +172,7 @@ export function FlowCanvas({
         gap={16}
         style={{ backgroundColor: 'var(--surface)' }}
       />
+      <GraphToolbar />
       <ZoomSlider position="bottom-left" />
       <MiniMap
         nodeColor="var(--indigo)"

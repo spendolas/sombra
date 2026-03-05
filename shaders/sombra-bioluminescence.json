@@ -1,0 +1,297 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": "n_mm5kkicm_e",
+      "type": "shaderNode",
+      "position": {
+        "x": -463.59589568661977,
+        "y": 224.99530516431923
+      },
+      "data": {
+        "type": "time",
+        "params": {
+          "speed": 0.08
+        }
+      },
+      "measured": {
+        "width": 160,
+        "height": 119
+      }
+    },
+    {
+      "id": "n_mm5kkicm_f",
+      "type": "shaderNode",
+      "position": {
+        "x": -174.80567104059446,
+        "y": -188.72461355153268
+      },
+      "data": {
+        "type": "domain_warp",
+        "params": {
+          "strength": 0.8,
+          "frequency": 2.5,
+          "seed": 42
+        }
+      },
+      "measured": {
+        "width": 161,
+        "height": 303
+      }
+    },
+    {
+      "id": "n_mm5kkicm_g",
+      "type": "shaderNode",
+      "position": {
+        "x": 229.08920187793427,
+        "y": -44.46948356807516
+      },
+      "data": {
+        "type": "domain_warp",
+        "params": {
+          "strength": 0.4,
+          "frequency": 5,
+          "seed": 9999
+        }
+      },
+      "measured": {
+        "width": 161,
+        "height": 303
+      }
+    },
+    {
+      "id": "n_mm5kkicm_h",
+      "type": "shaderNode",
+      "position": {
+        "x": 500.45070422535207,
+        "y": 253.39906103286387
+      },
+      "data": {
+        "type": "fbm",
+        "params": {
+          "scale": 1,
+          "fractalMode": "ridged",
+          "octaves": 7,
+          "lacunarity": 2.1,
+          "gain": 0.55,
+          "seed": 777
+        }
+      },
+      "measured": {
+        "width": 160,
+        "height": 441
+      }
+    },
+    {
+      "id": "n_mm5kkicm_i",
+      "type": "shaderNode",
+      "position": {
+        "x": 774.3344177301526,
+        "y": -68.95293888619591
+      },
+      "data": {
+        "type": "color_ramp",
+        "params": {
+          "interpolation": "smooth",
+          "stops": [
+            {
+              "position": 0,
+              "color": [
+                0.01,
+                0.02,
+                0.08
+              ]
+            },
+            {
+              "position": 0.3,
+              "color": [
+                0,
+                0.12,
+                0.25
+              ]
+            },
+            {
+              "position": 0.55,
+              "color": [
+                0,
+                0.45,
+                0.55
+              ]
+            },
+            {
+              "position": 0.75,
+              "color": [
+                0,
+                0.85,
+                0.8
+              ]
+            },
+            {
+              "position": 0.9,
+              "color": [
+                0.4,
+                1,
+                0.95
+              ]
+            },
+            {
+              "position": 1,
+              "color": [
+                0.9,
+                1,
+                1
+              ]
+            }
+          ]
+        }
+      },
+      "measured": {
+        "width": 160,
+        "height": 313
+      }
+    },
+    {
+      "id": "n_mm5kkicm_j",
+      "type": "shaderNode",
+      "position": {
+        "x": 1000,
+        "y": 200
+      },
+      "data": {
+        "type": "pixel_grid",
+        "params": {
+          "pixelSize": 6,
+          "shape": "square",
+          "threshold": 1,
+          "dither": 0.8
+        }
+      },
+      "measured": {
+        "width": 160,
+        "height": 244
+      }
+    },
+    {
+      "id": "n_mm5kkicm_k",
+      "type": "shaderNode",
+      "position": {
+        "x": 1240,
+        "y": 200
+      },
+      "data": {
+        "type": "fragment_output",
+        "params": {}
+      },
+      "measured": {
+        "width": 160,
+        "height": 75
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_mm5kkicm_l",
+      "source": "n_mm5kkicm_e",
+      "target": "n_mm5kkicm_f",
+      "sourceHandle": "time",
+      "targetHandle": "phase",
+      "type": "typed"
+    },
+    {
+      "id": "e_mm5kkicm_m",
+      "source": "n_mm5kkicm_e",
+      "target": "n_mm5kkicm_g",
+      "sourceHandle": "time",
+      "targetHandle": "phase",
+      "type": "typed"
+    },
+    {
+      "id": "e_mm5kkicm_n",
+      "source": "n_mm5kkicm_f",
+      "target": "n_mm5kkicm_g",
+      "sourceHandle": "warped",
+      "targetHandle": "coords",
+      "type": "typed"
+    },
+    {
+      "id": "e_mm5kkicm_q",
+      "source": "n_mm5kkicm_h",
+      "target": "n_mm5kkicm_i",
+      "sourceHandle": "value",
+      "targetHandle": "t",
+      "type": "typed"
+    },
+    {
+      "id": "e_mm5kkicm_r",
+      "source": "n_mm5kkicm_i",
+      "target": "n_mm5kkicm_j",
+      "sourceHandle": "color",
+      "targetHandle": "color",
+      "type": "typed"
+    },
+    {
+      "id": "e_mm5kkicm_s",
+      "source": "n_mm5kkicm_j",
+      "target": "n_mm5kkicm_k",
+      "sourceHandle": "result",
+      "targetHandle": "color",
+      "type": "typed"
+    },
+    {
+      "id": "e_mm5kovml_t",
+      "source": "n_mm5kkicm_h",
+      "target": "n_mm5kkicm_j",
+      "sourceHandle": "value",
+      "targetHandle": "threshold",
+      "type": "typed"
+    },
+    {
+      "id": "n_mm5kkicm_g-warped-n_mm5kkicm_h-coords",
+      "source": "n_mm5kkicm_g",
+      "target": "n_mm5kkicm_h",
+      "sourceHandle": "warped",
+      "targetHandle": "coords",
+      "type": "typed"
+    },
+    {
+      "id": "n_mm5kkicm_e-time-n_mm5kkicm_h-phase",
+      "source": "n_mm5kkicm_e",
+      "target": "n_mm5kkicm_h",
+      "sourceHandle": "time",
+      "targetHandle": "phase",
+      "type": "typed"
+    }
+  ],
+  "viewport": {
+    "x": 340.043,
+    "y": 208.449,
+    "zoom": 0.524255
+  },
+  "settings": {
+    "state": {
+      "showMiniMap": true,
+      "showGrid": true,
+      "gridSize": 16,
+      "snapToGrid": false,
+      "previewHeight": 256,
+      "autoCompile": true,
+      "compileDebounceMs": 100,
+      "previewMode": "docked",
+      "previousPreviewMode": "floating",
+      "splitDirection": "vertical",
+      "floatingPosition": {
+        "x": 314,
+        "y": 103
+      },
+      "floatingSize": {
+        "width": 688,
+        "height": 1266
+      },
+      "verticalSplitPct": 42.011,
+      "horizontalSplitPct": 37.696,
+      "defaultNodeWidth": 200,
+      "defaultNodeHeight": 100
+    },
+    "version": 0
+  }
+}
