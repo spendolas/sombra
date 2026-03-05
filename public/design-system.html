@@ -28,7 +28,6 @@
       --port-vec4: #a78bfa;
       --port-color: #fbbf24;
       --port-sampler2D: #f472b6;
-      --port-fnref: #22d3ee;
       --port-default: #6b7280;
     }
 
@@ -651,7 +650,7 @@
 
   <!-- ════════════════════ 2. PORT TYPE COLORS ════════════════════ -->
   <div class="section">
-    <div class="section-title">Port Type Colors (8)</div>
+    <div class="section-title">Port Type Colors (7)</div>
     <div class="grid grid-4">
       <div class="port-swatch">
         <div class="port-dot" style="background: var(--port-float);"></div>
@@ -682,11 +681,6 @@
         <div class="port-dot" style="background: var(--port-sampler2D);"></div>
         <span class="port-label">sampler2D</span>
         <span class="port-hex">#f472b6</span>
-      </div>
-      <div class="port-swatch">
-        <div class="port-dot" style="background: var(--port-fnref);"></div>
-        <span class="port-label">fnref</span>
-        <span class="port-hex">#22d3ee</span>
       </div>
       <div class="port-swatch">
         <div class="port-dot" style="background: var(--port-default);"></div>
@@ -832,11 +826,6 @@
             <span class="handle-label output">value</span>
             <div class="handle connected" style="color: var(--port-float); border-color: var(--port-float);"></div>
           </div>
-          <div class="handle-row output">
-            <span class="handle-label output">fn</span>
-            <div class="handle hollow" style="color: var(--port-fnref); border-color: var(--port-fnref);"></div>
-          </div>
-
           <!-- Pure inputs -->
           <div class="handle-row">
             <div class="handle hollow" style="color: var(--port-vec2); border-color: var(--port-vec2);"></div>
@@ -1051,10 +1040,6 @@
           <div class="props-port-row">
             <span class="props-port-name">value</span>
             <span class="props-port-type">float</span>
-          </div>
-          <div class="props-port-row">
-            <span class="props-port-name">fn</span>
-            <span class="props-port-type">fnref</span>
           </div>
         </div>
 

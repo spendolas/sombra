@@ -70,7 +70,6 @@ That's it. The node appears in the palette, compiles to GLSL, and renders on the
 | `params` | `NodeParameter[]` | No | Tweakable controls (sliders, dropdowns, color pickers) |
 | `glsl` | `(ctx: GLSLContext) => string` | Yes | GLSL code generator |
 | `dynamicInputs` | `(params) => PortDefinition[]` | No | Variable port count based on params |
-| `functionKey` | `string \| ((params) => string)` | No | GLSL function name for fnref outputs |
 | `component` | `React.ComponentType` | No | Custom UI below standard controls |
 
 ### PortDefinition
@@ -108,7 +107,6 @@ That's it. The node appears in the palette, compiles to GLSL, and renders on the
 | `vec4` | `vec4` | `vec4(0.0, 0.0, 0.0, 1.0)` | `#a78bfa` | `#7c3aed` |
 | `color` | `vec3` (alias) | `vec3(r, g, b)` | `#fbbf24` | `#d97706` |
 | `sampler2D` | `sampler2D` | — | `#f472b6` | `#db2777` |
-| `fnref` | function name string | `'snoise3d_01'` | `#22d3ee` | `#0891b2` |
 
 ### Type coercion (auto-conversion between connected ports)
 
@@ -304,45 +302,7 @@ glsl: (ctx) => {
 }
 ```
 
-This is only needed when the function body varies per instance (e.g., different noise function wired via fnref). If the function body is always identical, use a shared key.
-
-### Pattern: fnref — producing
-
-Add `functionKey` to your definition and an fnref output port:
-
-```ts
-// Noise — src/nodes/noise/noise.ts
-functionKey: (params) => {
-  const map = { simplex: 'snoise3d_01', value: 'vnoise3d', worley: 'worley3d', box: 'boxnoise3d' }
-  return map[(params.noiseType as string) || 'simplex']
-},
-
-outputs: [
-  { id: 'value', label: 'Value', type: 'float' },
-  { id: 'fn', label: 'Fn', type: 'fnref' },
-],
-```
-
-The compiler resolves `functionKey(params)` and passes the function name string to connected consumer nodes.
-
-### Pattern: fnref — consuming
-
-Accept an fnref input with a fallback default:
-
-```ts
-// FBM — src/nodes/noise/fbm.ts
-inputs: [
-  { id: 'noiseFn', label: 'Noise Fn', type: 'fnref', default: 'snoise3d_01' },
-],
-
-glsl: (ctx) => {
-  const noiseFn = ctx.inputs.noiseFn   // "snoise3d_01" or wired function name
-  registerSimplexFallback(ctx)          // Always register fallback (idempotent)
-  return `... ${noiseFn}(p) * amp ...`  // Call it by name
-}
-```
-
-All fnref noise functions share the signature `float name(vec3 p)`.
+This is only needed when the function body varies per instance (e.g., different noise type selected via enum). If the function body is always identical, use a shared key.
 
 ### Pattern: auto_uv sentinel
 
@@ -421,7 +381,7 @@ When a new node is added to the code, a matching template should be created in t
    - `showParamSeparator` — separator line before params section
 5. **Override labels** on each visible Labeled Handle, slider, and enum
 6. **Swap Handle variants** to match port types:
-   - Each Labeled Handle has variants: `position` (left/right) x `portType` (float/vec2/vec3/vec4/color/sampler2D/fnref/default)
+   - Each Labeled Handle has variants: `position` (left/right) x `portType` (float/vec2/vec3/vec4/color/sampler2D/default)
    - Swap to the correct portType for each handle
 7. **Set connected state** on handles in scene templates (Default Graph, Sombra App) — swap to `connected=true` variant
 
@@ -468,9 +428,9 @@ Key variable collections (full IDs in Claude memory file `figma-ds.md`):
 | `remap` | Remap | Math | `math/remap.ts` | — |
 | `turbulence` | Turbulence | Math | `math/turbulence.ts` | — |
 | `ridged` | Ridged | Math | `math/ridged.ts` | — |
-| `noise` | Noise | Noise | `noise/noise.ts` | enum, connectable (scale, seed), fnref output, auto_uv, showWhen, addFunction |
-| `fbm` | FBM | Noise | `noise/fbm.ts` | connectable (4 + seed), enum, fnref input, auto_uv, instance-unique function |
-| `domain_warp` | Domain Warp | Noise | `noise/domain-warp.ts` | connectable (strength, freq, seed), fnref input, auto_uv, warpedPhase output, addFunction |
+| `noise` | Noise | Noise | `noise/noise.ts` | enum, connectable (scale, seed), auto_uv, showWhen, addFunction |
+| `fbm` | FBM | Noise | `noise/fbm.ts` | connectable (4 + seed), enum (noiseType + fractalMode), auto_uv, instance-unique function |
+| `domain_warp` | Domain Warp | Noise | `noise/domain-warp.ts` | connectable (strength, freq, seed), enum (noiseType), auto_uv, warpedPhase output, addFunction |
 | `hsv_to_rgb` | HSV to RGB | Color | `color/hsv-to-rgb.ts` | GLSL helper function |
 | `brightness_contrast` | Brightness/Contrast | Color | `color/brightness-contrast.ts` | connectable |
 | `color_ramp` | Color Ramp | Color | `color/color-ramp.ts` | enum, hidden param, custom component (ColorRampEditor), presets |

@@ -70,6 +70,23 @@ export const COERCION_RULES: CoercionRule[] = [
     glsl: (v) => `${v}.xy`,
   },
 
+  // vec2, vec3, vec4 -> float (extract x component)
+  {
+    from: 'vec2',
+    to: 'float',
+    glsl: (v) => `${v}.x`,
+  },
+  {
+    from: 'vec3',
+    to: 'float',
+    glsl: (v) => `${v}.x`,
+  },
+  {
+    from: 'vec4',
+    to: 'float',
+    glsl: (v) => `${v}.x`,
+  },
+
   // color is an alias for vec3
   {
     from: 'color',

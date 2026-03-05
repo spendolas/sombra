@@ -147,33 +147,26 @@ All noise nodes share the same interface: `coords` (vec2, `auto_uv` default) + `
 - [x] **Ridged** — Standalone remap: `(1.0 - abs(n * 2.0 - 1.0))^2` (`src/nodes/noise/ridged.ts`)
 - [x] **Domain Warp** — Coordinate distortion using value noise (`src/nodes/noise/domain-warp.ts`)
 
-### Sprint 4 — Unified Noise Node + fnref Revisions + Cleanup ✅ Complete
+### Sprint 4 — Unified Noise Node + Cleanup ✅ Complete
 
-**Goal:** Consolidate 4 separate noise nodes into 1 unified Noise node (Redshift-style), make FBM and Domain Warp composable via `fnref`, and move Turbulence/Ridged to Math.
+**Goal:** Consolidate 4 separate noise nodes into 1 unified Noise node (Redshift-style), and move Turbulence/Ridged to Math.
 
 #### Unified Noise Node
 
-Replace `simplex-noise.ts`, `value-noise.ts`, `worley-noise.ts`, `box-noise.ts` with a single `noise.ts`. One node with a `noiseType` dropdown (simplex/value/worley/box). Changing noise type = dropdown change, no rewiring. Outputs: `value` (float) + `fn` (fnref). The `fn` output dynamically provides the selected noise type's function name.
+Replace `simplex-noise.ts`, `value-noise.ts`, `worley-noise.ts`, `box-noise.ts` with a single `noise.ts`. One node with a `noiseType` dropdown (simplex/value/worley/box). Changing noise type = dropdown change, no rewiring.
 
 - [x] Create `src/nodes/noise/noise.ts` — unified noise node with type enum
 - [x] Delete 4 old files: `simplex-noise.ts`, `value-noise.ts`, `worley-noise.ts`, `box-noise.ts`
 
-#### Dynamic `functionKey`
+#### FBM — noiseType enum
 
-`NodeDefinition.functionKey` changes from `string` to `string | ((params) => string)`. The unified node returns the selected noise type's function name dynamically. Compiler resolves by calling the function with source node's params.
-
-- [x] Update `functionKey` type in `src/nodes/types.ts`
-- [x] Update fnref resolution in `src/compiler/glsl-generator.ts` to handle dynamic functionKey
-
-#### FBM — fnref input (revise)
-
-Remove `noiseType` enum param, add `noiseFn` fnref input. Keep `fractalMode` enum (standard/turbulence/ridged). When unconnected, falls back to simplex and registers its GLSL.
+FBM has its own `noiseType` enum + `fractalMode` enum (standard/turbulence/ridged).
 
 - [x] Revise `src/nodes/noise/fbm.ts`
 
-#### Domain Warp — fnref input (revise)
+#### Domain Warp — noiseType enum
 
-Add `noiseFn` fnref input (default: value noise). When unconnected, registers fallback GLSL.
+Domain Warp has its own `noiseType` enum for selecting noise function.
 
 - [x] Revise `src/nodes/noise/domain-warp.ts`
 
@@ -187,7 +180,6 @@ These are general-purpose signal remaps (`float → float`), not noise-specific.
 #### Other
 
 - [x] Update `src/nodes/index.ts` — replace 4 noise imports with 1, update turbulence/ridged paths
-- [x] Add `fnref` color (cyan `#22d3ee`) to handle/edge color map
 - [x] Right-align output port labels (`labeled-handle.tsx`)
 - [x] `NodeParameter.showWhen` — conditional param visibility (boxFreq only shown when noiseType=box)
 
@@ -275,18 +267,18 @@ General-purpose multi-stop gradient mapper: float (0-1) → color (vec3). This i
 
 ### Node Summary (After Sprint 4)
 
-| Node | Category | fnref | Notes |
-|------|----------|-------|-------|
-| **Noise** | Noise | outputs (dynamic) | Unified: simplex/value/worley/box via dropdown |
-| **FBM** | Noise | consumes fnref | Revised: wirable noise input |
-| **Domain Warp** | Noise | consumes fnref | Revised: wirable noise input |
-| **Turbulence** | Math | — | Moved from Noise (general signal remap) |
-| **Ridged** | Math | — | Moved from Noise (general signal remap) |
-| UV Coordinates | Input | — | Sprint 5: extended with SRT transform params |
-| Vec2 Constant | Input | — | Sprint 5 |
-| Color Ramp | Color | — | Sprint 6 |
-| Pixel Grid | Post-process | — | Sprint 7 |
-| Bayer Dither | Post-process | — | Sprint 7 |
+| Node | Category | Notes |
+|------|----------|-------|
+| **Noise** | Noise | Unified: simplex/value/worley/box via dropdown |
+| **FBM** | Noise | Revised: noiseType enum + fractalMode enum |
+| **Domain Warp** | Noise | Revised: noiseType enum for noise selection |
+| **Turbulence** | Math | Moved from Noise (general signal remap) |
+| **Ridged** | Math | Moved from Noise (general signal remap) |
+| UV Coordinates | Input | Sprint 5: extended with SRT transform params |
+| Vec2 Constant | Input | Sprint 5 |
+| Color Ramp | Color | Sprint 6 |
+| Pixel Grid | Post-process | Sprint 7 |
+| Bayer Dither | Post-process | Sprint 7 |
 
 **After Sprint 4: 20 nodes** (4 separate noise → 1 unified = net -3). **After Sprint 4.5: still 20 nodes** (adds connectable param handles, no new nodes). **After Sprint 4.75: 18 nodes** (merged 4 math → 2 unified). **After Sprint 5: 19 nodes** (UV Coords extended, +1 Vec2 Constant). **After Sprint 5.5: 19 nodes** (compiler change + rename, no new nodes). **After Sprint 6: 20 nodes** (+1 Color Ramp). **After Sprint 7: 22 nodes** (+2 Pixel Grid, Bayer Dither). **Phase 2 complete: 22 nodes.**
 
@@ -304,10 +296,10 @@ Dagre-based auto-layout for node positioning (`src/utils/layout.ts`, dependency:
 | File | Sprint 4 Changes |
 |------|-----------------|
 | `src/nodes/noise/noise.ts` | **New** — unified noise node (replaces 4 files) |
-| `src/nodes/types.ts` | `functionKey` becomes `string \| ((params) => string)` |
-| `src/compiler/glsl-generator.ts` | Dynamic functionKey resolution for fnref |
-| `src/nodes/noise/fbm.ts` | Replace `noiseType` enum with `noiseFn` fnref input |
-| `src/nodes/noise/domain-warp.ts` | Add `noiseFn` fnref input |
+| `src/nodes/types.ts` | Updated with `showWhen`, conditional visibility |
+| `src/compiler/glsl-generator.ts` | Updated for unified noise node |
+| `src/nodes/noise/fbm.ts` | Revised with `noiseType` enum |
+| `src/nodes/noise/domain-warp.ts` | Revised with `noiseType` enum |
 | `src/nodes/math/turbulence.ts` | Moved from `noise/`, category → Math |
 | `src/nodes/math/ridged.ts` | Moved from `noise/`, category → Math |
 | `src/nodes/index.ts` | Replace 4 noise imports with 1, update turbulence/ridged paths |
@@ -315,16 +307,15 @@ Dagre-based auto-layout for node positioning (`src/utils/layout.ts`, dependency:
 
 ### Success Criteria
 
-1. Unified Noise node with type dropdown (simplex/value/worley/box) + dual outputs (value + fn)
-2. FBM accepts wired noise via `fnref` input — wire Noise `fn` → FBM, change dropdown to switch noise type
-3. FBM supports standard/turbulence/ridged fractal modes via enum param
-4. Domain Warp accepts wired noise via `fnref` input
-5. Turbulence and Ridged nodes appear under Math category
-6. Color Ramp maps float → color via interactive gradient editor with 6 spectra palette presets
-7. Pixel Grid renders pixel art with circle/triangle/diamond shapes + Bayer dithering
-8. UV nodes (rotate, scale, offset) enable spectra's `angle` and `flow` behaviors
-9. **Acceptance test:** manually wire graphs that visually reproduce each of the 4 spectra presets
-10. No regressions to live preview pipeline
+1. Unified Noise node with type dropdown (simplex/value/worley/box)
+2. FBM has its own noiseType enum + fractalMode enum (standard/turbulence/ridged)
+3. Domain Warp has its own noiseType enum for noise selection
+4. Turbulence and Ridged nodes appear under Math category
+5. Color Ramp maps float → color via interactive gradient editor with 6 spectra palette presets
+6. Pixel Grid renders pixel art with circle/triangle/diamond shapes + Bayer dithering
+7. UV nodes (rotate, scale, offset) enable spectra's `angle` and `flow` behaviors
+8. **Acceptance test:** manually wire graphs that visually reproduce each of the 4 spectra presets
+9. No regressions to live preview pipeline
 
 **Milestone:** Composable noise→FBM node graph system that can recreate all spectra-pixel-bg effects.
 
@@ -357,7 +348,7 @@ Dagre-based auto-layout for node positioning (`src/utils/layout.ts`, dependency:
 - [x] `.sombra` file download/upload for sharing graph files
 - [ ] "Copy GLSL" button — exports the compiled fragment shader
 - [ ] Embed HTML snippet generator
-- [ ] `/embed.html?material=<base64>` shareable URLs (still static, no backend)
+- [ ] Viewer page placeholder — show branded landing when opened without graph data instead of error message
 
 ### Delivered Features
 

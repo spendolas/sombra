@@ -52,7 +52,7 @@
 ## Decisions Made
 1. **Unify color systems** — Merge the Sombra custom palette and shadcn oklch tokens into a single token set. Sombra palette values are the source of truth; shadcn vars kept separate for shadcn primitives. Custom components use Tailwind utility classes (`bg-surface`, `text-fg-dim`, etc.).
 2. **Light + Dark modes** — Support both themes. Figma variables will have two modes. Dark is the default/primary; light mode values specified in variable tables below.
-3. **Port type colors: separate collection** — Shader data-type colors (float, vec2, vec3, vec4, color, sampler2D, fnref) live in a dedicated "Port Types" Figma variable collection, isolated from the UI palette.
+3. **Port type colors: separate collection** — Shader data-type colors (float, vec2, vec3, vec4, color, sampler2D) live in a dedicated "Port Types" Figma variable collection, isolated from the UI palette.
 4. **Token rename (Sprint 5.75)** — All 13 CSS vars renamed for clarity: `--bg-primary` → `--surface`, `--text-primary` → `--fg`, `--border-primary` → `--edge`, `--accent-primary` → `--indigo`, etc. Old names are fully retired.
 
 ---
@@ -134,10 +134,9 @@ Once variables are created, the CSS token bridge:
 | `vec4` | `#a78bfa` | `#7c3aed` |
 | `color` | `#fbbf24` | `#d97706` |
 | `sampler2D` | `#f472b6` | `#db2777` |
-| `fnref` | `#22d3ee` | `#0891b2` |
 | `default` | `#6b7280` | `#6b7280` |
 
-**Total: 8 variables × 2 modes**
+**Total: 7 variables × 2 modes**
 
 Light mode port colors use the **-600 Tailwind stop** of the same hue — darker for contrast on white surfaces while preserving the same color identity.
 
@@ -388,7 +387,6 @@ Semantic colors for shader data types. Defined identically in **two separate loc
 | `vec4` | `#a78bfa` | violet-400 |
 | `color` | `#fbbf24` | amber-400 |
 | `sampler2D` | `#f472b6` | pink-400 |
-| `fnref` | `#22d3ee` | cyan-400 |
 | Default | `#6b7280` / `#9ca3af` | gray-500 / gray-400 (inconsistent!) |
 
 **Sources:** `src/components/ShaderNode.tsx:getPortColor()` and `src/components/TypedEdge.tsx:PORT_COLORS`

@@ -73,8 +73,6 @@ Two Figma variable collections govern all colors in the design system.
 
 **Total Port Types: 7 variables, all matched**
 
-> **Removed:** `fnref` (`106:24`) — fnref port type was removed in P0 (noise nodes use enum dropdown instead).
-
 ---
 
 ## Notes

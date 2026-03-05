@@ -140,6 +140,11 @@ export function compileGraph(
             uniforms.add('u_resolution')
             uniforms.add('u_ref_size')
             inputs[inputPort.id] = autoUvVar
+          } else if (inputPort.default === 'auto_fragcoord' && inputPort.type === 'vec2') {
+            // auto_fragcoord sentinel: use raw screen-space pixel coordinates
+            const autoFcVar = `node_${sanitizedNodeId}_auto_fc`
+            preambleLines.push(`vec2 ${autoFcVar} = gl_FragCoord.xy;`)
+            inputs[inputPort.id] = autoFcVar
           } else if (inputPort.default !== undefined) {
             const defaultValue = formatDefaultValue(inputPort.default, inputPort.type)
             inputs[inputPort.id] = defaultValue

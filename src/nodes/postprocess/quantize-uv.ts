@@ -12,7 +12,9 @@ export const quantizeUvNode: NodeDefinition = {
   category: 'Transform',
   description: 'Snap coordinates to pixel grid cell centers',
 
-  inputs: [],
+  inputs: [
+    { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_fragcoord' },
+  ],
 
   outputs: [
     { id: 'uv', label: 'UV', type: 'vec2' },
@@ -41,8 +43,8 @@ export const quantizeUvNode: NodeDefinition = {
     const center = `quv_center_${id}`
 
     const lines: string[] = []
-    // Screen-space pixel coordinates (pixelSize is in buffer pixels)
-    lines.push(`vec2 ${px} = gl_FragCoord.xy;`)
+    // Pixel coordinates (defaults to gl_FragCoord.xy via auto_fragcoord sentinel)
+    lines.push(`vec2 ${px} = ${inputs.coords};`)
     // Snap to cell center
     lines.push(`vec2 ${cell} = floor(${px} / ${inputs.pixelSize});`)
     lines.push(`vec2 ${center} = (${cell} + 0.5) * ${inputs.pixelSize};`)

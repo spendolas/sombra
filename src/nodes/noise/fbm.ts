@@ -1,6 +1,5 @@
 /**
  * FBM (Fractal Brownian Motion) - Multi-octave fractal accumulator.
- * Noise type selected via dropdown (no fnref).
  */
 
 import type { NodeDefinition } from '../types'

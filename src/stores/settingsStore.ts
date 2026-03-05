@@ -29,6 +29,8 @@ interface SettingsState {
   floatingSize: { width: number; height: number }
   verticalSplitPct: number   // Preview panel % when vertical split
   horizontalSplitPct: number // Preview panel % when horizontal split
+  verticalSplitSwapped: boolean    // Per-direction swap state
+  horizontalSplitSwapped: boolean
 
   // Node defaults
   defaultNodeWidth: number
@@ -47,6 +49,7 @@ interface SettingsState {
   setFloatingPosition: (pos: { x: number; y: number }) => void
   setFloatingSize: (size: { width: number; height: number }) => void
   setSplitPct: (dir: SplitDirection, pct: number) => void
+  toggleSplitSwapped: () => void
   reset: () => void
 }
 
@@ -68,6 +71,8 @@ const DEFAULT_SETTINGS: Omit<SettingsState, keyof SettingsActions> = {
   floatingSize: { width: 400, height: 300 },
   verticalSplitPct: 30,
   horizontalSplitPct: 30,
+  verticalSplitSwapped: false,
+  horizontalSplitSwapped: false,
   defaultNodeWidth: 200,
   defaultNodeHeight: 100,
 }
@@ -85,6 +90,7 @@ type SettingsActions = {
   setFloatingPosition: (pos: { x: number; y: number }) => void
   setFloatingSize: (size: { width: number; height: number }) => void
   setSplitPct: (dir: SplitDirection, pct: number) => void
+  toggleSplitSwapped: () => void
   reset: () => void
 }
 
@@ -108,6 +114,7 @@ export const useSettingsStore = create<SettingsState>()(
       setFloatingPosition: (pos) => set({ floatingPosition: pos }),
       setFloatingSize: (size) => set({ floatingSize: size }),
       setSplitPct: (dir, pct) => set(dir === 'vertical' ? { verticalSplitPct: pct } : { horizontalSplitPct: pct }),
+      toggleSplitSwapped: () => set((s) => s.splitDirection === 'vertical' ? { verticalSplitSwapped: !s.verticalSplitSwapped } : { horizontalSplitSwapped: !s.horizontalSplitSwapped }),
 
       reset: () => set(DEFAULT_SETTINGS),
     }),

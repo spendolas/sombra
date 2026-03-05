@@ -104,10 +104,9 @@ npm run tokens:audit # Compare DB component parts against Figma REST API (requir
 
 Nodes have:
 - **Type** (e.g., `noise`, `mix`, `uv_coords`)
-- **Inputs/Outputs** with typed ports (float, vec2, vec3, vec4, color, sampler2D, fnref)
+- **Inputs/Outputs** with typed ports (float, vec2, vec3, vec4, color, sampler2D)
 - **Parameters** with default values
 - **GLSL generator function** - emits GLSL code snippet given inputs/outputs/params
-- **Optional `functionKey`** - GLSL function name for fnref outputs (`string` or `(params) => string` for dynamic)
 - **Optional custom UI** - React component for node body (e.g., color picker, sliders)
 
 ### Preview Mode System
@@ -282,7 +281,8 @@ Multi-mode preview system with toolbar, floating window, and layout refinements.
 - **Preview toolbar**: 4-icon pill (Rows2, Columns2, PictureInPicture2, Scan) — active state `bg-indigo`, inactive hover `bg-white/15`, cursor-pointer on inactive, cursor-default on active
 - **Floating preview**: Draggable via invisible top strip, resizable from all 4 corners + 4 edges, viewport-clamped resize, position/size persisted
 - **Per-direction split sizes**: `verticalSplitPct`/`horizontalSplitPct` in settings store, persisted independently via `onLayoutChanged`
-- **Canvas reparenting**: Single `<canvas>` moved between dock/float/fullwindow target refs. `key={splitDirection}` on inner panel group forces remount; reparenting effect depends on both `previewMode` and `splitDirection`
+- **Canvas reparenting**: Single `<canvas>` moved between dock/float/fullwindow target refs. Reparenting effect depends on both `previewMode` and `splitDirection`
+- **Stable FlowCanvas mount**: FlowCanvas always renders at the same JSX tree position (inside a single `ResizablePanelGroup`) regardless of preview mode. The docked preview panel is conditionally rendered beside it. This prevents viewport jumping when switching modes.
 - **Esc behavior**: Fullwindow Esc returns to `previousPreviewMode` (tracked in store), guards against looping back to fullwindow
 - **Borderless panels**: Resize handles `bg-transparent hover:bg-border`, no panel border classes
 - **Default layout**: Side panels at 12% minimum, simple 4-node default graph (Time → Noise → Color Ramp → Output), fit-to-view on init
@@ -305,15 +305,11 @@ Replicate the full spectra-pixel-bg experience as composable node-graph features
 **Sprint 3 — Fractal & Warp** ✅ Complete
 - FBM (with `noiseType` enum + `fractalMode` enum), Turbulence, Ridged, Domain Warp
 
-**Sprint 4 — Unified Noise Node + fnref + Cleanup** ✅ Complete
-- `fnref` port type: carries GLSL function names for higher-order composition
-- Unified **Noise** node (`noise.ts`) with `noiseType` dropdown (simplex/value/worley/box), dual outputs (value + fn)
-- Dynamic `functionKey`: `string | ((params) => string)` — fnref output adapts to selected noise type
-- Compiler: `glsl-generator.ts` resolves dynamic functionKey by calling it with source node params
-- FBM & Domain Warp accept `noiseFn` fnref input, register fallback GLSL when unconnected
+**Sprint 4 — Unified Noise Node + Cleanup** ✅ Complete
+- Unified **Noise** node (`noise.ts`) with `noiseType` dropdown (simplex/value/worley/box)
 - Turbulence & Ridged moved to Math category
 - `NodeParameter.showWhen` for conditional param visibility (boxFreq only shown for box noise)
-- fnref color (cyan `#22d3ee`) in handle/edge maps, right-aligned output labels
+- Right-aligned output labels
 
 **Sprint 4.5 — Connectable Parameters** ✅ Complete
 - `connectable?: boolean` flag on `NodeParameter` — inline handle + slider, dims when wired
@@ -510,7 +506,7 @@ The pull script (`scripts/figma-pull.ts`) uses version-check optimization: compa
 
 The app uses react-resizable-panels for the main layout:
 - Outer horizontal group: palette (12%) | center | properties (12%) — panels start at minimum width
-- When docked: inner split group (vertical or horizontal) with canvas + preview. Split sizes persisted per direction via `verticalSplitPct`/`horizontalSplitPct` in settings store. Panel group uses `key={splitDirection}` to remount on direction change.
+- When docked: inner split group (vertical or horizontal) with canvas + preview. Split sizes persisted per direction via `verticalSplitPct`/`horizontalSplitPct` in settings store. FlowCanvas always stays mounted at the same tree position — only the preview panel is conditionally rendered.
 - When floating/fullwindow: center is full-width canvas only; preview renders in separate overlay components
 - Panel resize handles are invisible by default (`bg-transparent`), visible on hover (`hover:bg-border`)
 - No visible borders between panels — clean seamless look

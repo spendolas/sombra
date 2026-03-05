@@ -206,9 +206,9 @@ The **GraphToolbar** in the top-left of the canvas provides Save (download) and 
 
 | Type | Label | Inputs | Outputs | Key Params |
 |---|---|---|---|---|
-| `noise` | Noise | `coords` (vec2, auto_uv), `phase` (float) | `value` (float), `fn` (fnref) | `scale` (connectable), `noiseType` (enum: simplex/value/worley/worley2d/box), `boxFreq` (connectable, shown for box), `seed` (connectable) |
-| `fbm` | FBM | `coords` (vec2, auto_uv), `phase` (float), `noiseFn` (fnref) | `value` (float) | `scale` (connectable), `octaves` (connectable), `lacunarity` (connectable), `gain` (connectable), `fractalMode` (enum: standard/turbulence/ridged) |
-| `domain_warp` | Domain Warp | `coords` (vec2, auto_uv), `phase` (float), `noiseFn` (fnref) | `warped` (vec2) | `strength` (connectable), `frequency` (connectable) |
+| `noise` | Noise | `coords` (vec2, auto_uv), `phase` (float) | `value` (float) | `scale` (connectable), `noiseType` (enum: simplex/value/worley/worley2d/box), `boxFreq` (connectable, shown for box), `seed` (connectable) |
+| `fbm` | FBM | `coords` (vec2, auto_uv), `phase` (float) | `value` (float) | `scale` (connectable), `noiseType` (enum: simplex/value/worley/worley2d/box), `octaves` (connectable), `lacunarity` (connectable), `gain` (connectable), `fractalMode` (enum: standard/turbulence/ridged) |
+| `domain_warp` | Domain Warp | `coords` (vec2, auto_uv), `phase` (float) | `warped` (vec2) | `noiseType` (enum: simplex/value/worley/worley2d/box), `strength` (connectable), `frequency` (connectable) |
 
 ### Color
 
@@ -242,7 +242,6 @@ The **GraphToolbar** in the top-left of the canvas provides Save (download) and 
 | `vec3` | `#60a5fa` (blue) | vec3, vec4, color |
 | `vec4` | `#a78bfa` (purple) | vec4 |
 | `color` | `#fbbf24` (amber) | color, vec3 |
-| `fnref` | `#22d3ee` (cyan) | fnref only |
 
 Type coercion is automatic. `float → vec3` becomes `vec3(v, v, v)`.
 
@@ -260,16 +259,6 @@ Params marked `connectable: true` appear as both a slider AND an input handle on
 
 ```js
 sombra.connect(timeId, noiseId, 'time', 'scale')  // animate noise scale
-```
-
-### fnref (Function References)
-
-The Noise node has an `fn` output of type `fnref` — it passes a GLSL function name (not a value). FBM and Domain Warp accept a `noiseFn` fnref input to use a custom noise function:
-
-```js
-const noise = sombra.createNode('noise', {x:0, y:0}, {noiseType: 'worley'})
-const fbm = sombra.createNode('fbm', {x:300, y:0})
-sombra.connect(noise, fbm, 'fn', 'noiseFn')  // FBM now uses Worley noise
 ```
 
 ### Dynamic Inputs
@@ -356,9 +345,8 @@ const fbm    = s.createNode('fbm',             {x: 500, y: 0},   {octaves: 4, la
 const ramp   = s.createNode('color_ramp',      {x: 750, y: 0})
 const output = s.createNode('fragment_output',  {x: 1000, y: 0})
 
-// Wire: Time → Noise.phase, Noise.fn → FBM.noiseFn, FBM.value → Ramp.t, Ramp.color → Output.color
+// Wire: Time → Noise.phase, FBM.value → Ramp.t, Ramp.color → Output.color
 s.connect(time,  noise,  'time',  'phase')
-s.connect(noise, fbm,    'fn',    'noiseFn')
 s.connect(fbm,   ramp,   'value', 't')
 s.connect(ramp,  output, 'color', 'color')
 
@@ -393,7 +381,7 @@ if (noiseNode) {
 }
 
 // Find and remove a specific edge
-const edgeToRemove = graph.edges.find(e => e.sourceHandle === 'fn')
+const edgeToRemove = graph.edges.find(e => e.sourceHandle === 'value')
 if (edgeToRemove) s.removeEdge(edgeToRemove.id)
 ```
 
@@ -410,7 +398,7 @@ console.table(s.listNodeTypes())
 // What does the FBM node accept?
 const fbm = s.describeNode('fbm')
 console.log('Inputs:', fbm.inputs)
-// → [{id:'coords', type:'vec2'}, {id:'phase', type:'float'}, {id:'noiseFn', type:'fnref'}]
+// → [{id:'coords', type:'vec2'}, {id:'phase', type:'float'}]
 console.log('Params:', fbm.params)
 // → [{id:'scale', connectable:true, min:0.1, max:50, default:5}, ...]
 ```
