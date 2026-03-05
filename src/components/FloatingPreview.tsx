@@ -114,6 +114,26 @@ export function FloatingPreview({ targetRef }: FloatingPreviewProps) {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Re-clamp when browser window resizes
+  useEffect(() => {
+    const onResize = () => {
+      const maxX = window.innerWidth - floatingSize.width
+      const maxY = window.innerHeight - floatingSize.height
+      const clampedX = Math.max(0, Math.min(pos.x, maxX))
+      const clampedY = Math.max(0, Math.min(pos.y, maxY))
+      const newW = Math.max(MIN_W, Math.min(floatingSize.width, window.innerWidth))
+      const newH = Math.max(MIN_H, Math.min(floatingSize.height, window.innerHeight))
+      if (clampedX !== pos.x || clampedY !== pos.y) {
+        setFloatingPosition({ x: clampedX, y: clampedY })
+      }
+      if (newW !== floatingSize.width || newH !== floatingSize.height) {
+        setFloatingSize({ width: newW, height: newH })
+      }
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [pos, floatingSize, setFloatingPosition, setFloatingSize])
+
   return (
     <div
       ref={panelRef}

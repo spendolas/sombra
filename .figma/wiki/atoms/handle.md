@@ -7,7 +7,7 @@
 | Figma ID | `17:161` |
 | Figma Page | Atoms |
 | Type | COMPONENT_SET |
-| Variants | 16: portType (8) x connected (true/false) |
+| Variants | 14: portType (7) x connected (true/false) |
 | React File | `src/components/base-handle.tsx` |
 | React Component | `<BaseHandle />` |
 | Figma URL | [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=17:161) |
@@ -15,8 +15,8 @@
 ## Figma Screenshot
 
 Shows 16 variants in 2 rows:
-- **Top row** (connected=true): 8 filled circles in port type colors (float/vec2/vec3/vec4/color/sampler2D/fnref/default)
-- **Bottom row** (connected=false): 8 outlined circles with `surface/elevated` fill and port-type-colored borders
+- **Top row** (connected=true): 7 filled circles in port type colors (float/vec2/vec3/vec4/color/sampler2D/default)
+- **Bottom row** (connected=false): 7 outlined circles with `surface/elevated` fill and port-type-colored borders
 
 ## Properties
 
@@ -62,4 +62,4 @@ None (atom — indivisible)
 
 ## Parity: ✅ Match
 
-All 16 variants match. Disconnected handles show `surface/elevated` fill with port-type border. Connected handles show solid port-type fill with port-type border. Both use inline `style` for dynamic port colors (justified exception to no-inline-style rule).
+All 14 variants match. Disconnected handles show `surface/elevated` fill with port-type border. Connected handles show solid port-type fill with port-type border. Both use inline `style` for dynamic port colors (justified exception to no-inline-style rule).

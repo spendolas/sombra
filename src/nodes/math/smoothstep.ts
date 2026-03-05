@@ -1,7 +1,7 @@
 /**
  * Smoothstep node - Smooth Hermite interpolation
- * Remaps input through a smooth S-curve between min and max.
- * Values below min → 0, above max → 1.
+ * Remaps input through a smooth S-curve between Low and High thresholds.
+ * Values below Low → 0, above High → 1.
  */
 
 import type { NodeDefinition } from '../types'
@@ -9,8 +9,8 @@ import type { NodeDefinition } from '../types'
 export const smoothstepNode: NodeDefinition = {
   type: 'smoothstep',
   label: 'Smoothstep',
-  category: 'Distort',
-  description: 'Remaps input through a smooth S-curve between min and max',
+  category: 'Math',
+  description: 'Soft clamp — smooth S-curve remap between Low and High thresholds',
 
   inputs: [
     { id: 'x', label: 'Value', type: 'float', default: 0.5 },
@@ -21,8 +21,8 @@ export const smoothstepNode: NodeDefinition = {
   ],
 
   params: [
-    { id: 'min', label: 'Min', type: 'float', default: 0.0, min: 0, max: 1, step: 0.01, connectable: true },
-    { id: 'max', label: 'Max', type: 'float', default: 1.0, min: 0, max: 1, step: 0.01, connectable: true },
+    { id: 'min', label: 'Low', type: 'float', default: 0.0, min: -0.5, max: 1.5, step: 0.01, connectable: true },
+    { id: 'max', label: 'High', type: 'float', default: 1.0, min: -0.5, max: 1.5, step: 0.01, connectable: true },
   ],
 
   glsl: (ctx) => {

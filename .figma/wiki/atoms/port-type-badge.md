@@ -7,14 +7,14 @@
 | Figma ID | `37:131` |
 | Figma Page | Atoms |
 | Type | COMPONENT_SET |
-| Variants | 8: portType (float/vec2/vec3/vec4/color/sampler2D/fnref/default) |
+| Variants | 7: portType (float/vec2/vec3/vec4/color/sampler2D/default) |
 | React File | `src/components/PropertiesPanel.tsx` |
 | React Component | (inline `<span>`) |
 | Figma URL | [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=37:131) |
 
 ## Figma Screenshot
 
-8 colored text labels in a row: "float", "vec2", "vec3", "vec4", "color", "sampler2D", "fnref", "default" — each colored with its port type color from the Port Types variable collection.
+7 colored text labels in a row: "float", "vec2", "vec3", "vec4", "color", "sampler2D", "default" — each colored with its port type color from the Port Types variable collection.
 
 ## Properties
 
@@ -28,7 +28,6 @@
 | vec4 | `#a78bfa` | Port Types/vec4 (`17:25`) | `'#a78bfa'` | ✅ |
 | color | `#fbbf24` | Port Types/color (`17:26`) | `'#fbbf24'` | ✅ |
 | sampler2D | `#f472b6` | Port Types/sampler2D (`17:27`) | `'#f472b6'` | ✅ |
-| fnref | `#22d3ee` | Port Types/fnref (`17:28`) | `'#22d3ee'` | ✅ |
 | default | `#6b7280` | Port Types/default (`17:29`) | `'#6b7280'` | ✅ |
 
 ### Typography

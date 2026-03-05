@@ -1,6 +1,5 @@
 /**
  * Domain Warp - Distorts coordinates using a selectable noise function.
- * Noise type selected via dropdown (no fnref).
  */
 
 import type { NodeDefinition } from '../types'

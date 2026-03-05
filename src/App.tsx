@@ -39,6 +39,7 @@ function App() {
   const setPreviewMode = useSettingsStore((s) => s.setPreviewMode)
   const splitPct = useSettingsStore((s) => splitDirection === 'vertical' ? s.verticalSplitPct : s.horizontalSplitPct)
   const setSplitPct = useSettingsStore((s) => s.setSplitPct)
+  const splitSwapped = useSettingsStore((s) => splitDirection === 'vertical' ? s.verticalSplitSwapped : s.horizontalSplitSwapped)
 
   // React Flow integration
   const nodes = useGraphStore((state) => state.nodes)
@@ -154,18 +155,26 @@ function App() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [undo, redo])
 
-  // Esc key exits fullwindow mode
+  // F toggles fullwindow, Esc exits fullwindow
   useEffect(() => {
-    if (previewMode !== 'fullwindow') return
-
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      // Don't trigger when typing in inputs
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+
+      if (e.key === 'f' || e.key === 'F') {
+        if (previewMode === 'fullwindow') {
+          setPreviewMode(previousPreviewMode === 'fullwindow' ? 'docked' : previousPreviewMode)
+        } else {
+          setPreviewMode('fullwindow')
+        }
+      } else if (e.key === 'Escape' && previewMode === 'fullwindow') {
         setPreviewMode(previousPreviewMode === 'fullwindow' ? 'docked' : previousPreviewMode)
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [previewMode, setPreviewMode])
+  }, [previewMode, previousPreviewMode, setPreviewMode])
 
   // Live compiler - updates shader when graph changes
   const handleCompile = useCallback((result: { success: boolean; fragmentShader: string }) => {
@@ -204,41 +213,30 @@ function App() {
 
           {/* Center — Canvas + Preview */}
           <ResizablePanel id="center" defaultSize="64%">
-            {isDocked ? (
-              <ResizablePanelGroup key={splitDirection} direction={splitDirection} onLayoutChanged={(layout) => { if (layout.preview != null) setSplitPct(splitDirection, layout.preview) }}>
-                <ResizablePanel id="canvas" defaultSize={`${100 - splitPct}%`} minSize="30%">
-                  <div className="relative w-full h-full">
-                    <FlowCanvas
-                      nodes={nodes}
-                      edges={edges}
-                      nodeTypes={nodeTypes}
-                      onNodesChange={onNodesChange}
-                      onEdgesChange={onEdgesChange}
-                      setEdges={setEdges}
-                      onConnect={onConnect}
-                      onAddNode={addNode}
-                    />
-                  </div>
-                </ResizablePanel>
-                <ResizableHandle />
-                <ResizablePanel id="preview" defaultSize={`${splitPct}%`} minSize="10%">
-                  <PreviewPanel targetRef={dockTargetRef} />
-                </ResizablePanel>
-              </ResizablePanelGroup>
-            ) : (
-              <div className="relative w-full h-full">
-                <FlowCanvas
-                  nodes={nodes}
-                  edges={edges}
-                  nodeTypes={nodeTypes}
-                  onNodesChange={onNodesChange}
-                  onEdgesChange={onEdgesChange}
-                  setEdges={setEdges}
-                  onConnect={onConnect}
-                  onAddNode={addNode}
-                />
-              </div>
-            )}
+            <ResizablePanelGroup direction={splitDirection} className={isDocked && splitSwapped ? (splitDirection === 'vertical' ? '!flex-col-reverse' : '!flex-row-reverse') : undefined} onLayoutChanged={(layout) => { if (layout.preview != null) setSplitPct(splitDirection, layout.preview) }}>
+              <ResizablePanel id="canvas" defaultSize={isDocked ? `${100 - splitPct}%` : '100%'} minSize="30%">
+                <div className="relative w-full h-full">
+                  <FlowCanvas
+                    nodes={nodes}
+                    edges={edges}
+                    nodeTypes={nodeTypes}
+                    onNodesChange={onNodesChange}
+                    onEdgesChange={onEdgesChange}
+                    setEdges={setEdges}
+                    onConnect={onConnect}
+                    onAddNode={addNode}
+                  />
+                </div>
+              </ResizablePanel>
+              {isDocked && (
+                <>
+                  <ResizableHandle />
+                  <ResizablePanel id="preview" defaultSize={`${splitPct}%`} minSize="10%">
+                    <PreviewPanel targetRef={dockTargetRef} />
+                  </ResizablePanel>
+                </>
+              )}
+            </ResizablePanelGroup>
           </ResizablePanel>
           <ResizableHandle />
 

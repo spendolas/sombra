@@ -7,7 +7,7 @@
 | Figma ID | — (code-only; edges in scene templates use port-type-colored strokes) |
 | Figma Page | — (visible in Scenes) |
 | Type | Code component |
-| Variants | 8 port type colors |
+| Variants | 7 port type colors |
 | React File | `src/components/TypedEdge.tsx` |
 | React Component | `<TypedEdge />` |
 | Figma URL | — |
@@ -28,7 +28,6 @@ A custom React Flow bezier edge that colors itself based on the source port's ty
 | vec4 | `#a78bfa` | `PORT_COLORS.vec4` | ✅ |
 | color | `#fbbf24` | `PORT_COLORS.color` | ✅ |
 | sampler2D | `#f472b6` | `PORT_COLORS.sampler2D` | ✅ |
-| fnref | `#22d3ee` | `PORT_COLORS.fnref` | ✅ |
 | default | `#6b7280` | `PORT_COLORS.default` | ✅ |
 
 ### Dimensions
