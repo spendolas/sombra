@@ -82,8 +82,19 @@ interface StrokeDef {
   weight?: number
 }
 
+interface StateDef {
+  fill?: string
+  textColor?: string
+  stroke?: string
+  cursor?: string
+  opacity?: number
+  ring?: string
+  shadow?: string
+}
+
 interface ComponentPart {
   figmaNodeId: string | null
+  // Layout
   layout?: 'horizontal' | 'vertical'
   fill?: string
   stroke?: StrokeDef
@@ -94,6 +105,28 @@ interface ComponentPart {
   justify?: string
   effects?: Array<{ type: string; class: string }>
   extra?: string
+  // Text
+  textStyle?: string
+  textColor?: string
+  // Interaction
+  cursor?: string
+  transition?: string
+  userSelect?: string
+  // Layout extras
+  position?: string
+  z?: number | string
+  overflow?: string
+  opacity?: number
+  inset?: string
+  width?: string
+  height?: string
+  minWidth?: string
+  pointerEvents?: string
+  // States
+  hover?: Partial<StateDef>
+  active?: Partial<StateDef>
+  disabled?: Partial<StateDef>
+  selected?: Partial<StateDef>
 }
 
 interface ComponentEntry {
@@ -422,6 +455,39 @@ function partToClassString(part: ComponentPart, colorMap: Record<string, string>
 
   // Gap
   if (part.gap) classes.push(...gapToClasses(part.gap))
+
+  // Text
+  if (part.textStyle) classes.push(part.textStyle)
+  if (part.textColor) classes.push(`text-${part.textColor}`)
+
+  // Interaction
+  if (part.cursor) classes.push(`cursor-${part.cursor}`)
+  if (part.transition) classes.push(`transition-${part.transition}`)
+  if (part.userSelect) classes.push(`select-${part.userSelect}`)
+
+  // Layout extras
+  if (part.position) classes.push(part.position)
+  if (part.z != null) classes.push(`z-${part.z}`)
+  if (part.overflow) classes.push(`overflow-${part.overflow}`)
+  if (part.opacity != null) classes.push(`opacity-${part.opacity}`)
+  if (part.inset) classes.push(`inset-${part.inset}`)
+  if (part.width) classes.push(`w-${part.width}`)
+  if (part.height) classes.push(`h-${part.height}`)
+  if (part.minWidth) classes.push(`min-w-${part.minWidth}`)
+  if (part.pointerEvents) classes.push(`pointer-events-${part.pointerEvents}`)
+
+  // States
+  for (const [prefix, state] of [['hover', part.hover], ['active', part.active], ['disabled', part.disabled], ['selected', part.selected]] as const) {
+    if (!state) continue
+    const s = state as Partial<StateDef>
+    if (s.fill) classes.push(`${prefix}:bg-${colorMap[s.fill] ?? s.fill.replace(/\//g, '-')}`)
+    if (s.textColor) classes.push(`${prefix}:text-${s.textColor}`)
+    if (s.stroke) classes.push(`${prefix}:border-${s.stroke}`)
+    if (s.cursor) classes.push(`${prefix}:cursor-${s.cursor}`)
+    if (s.opacity != null) classes.push(`${prefix}:opacity-${s.opacity}`)
+    if (s.ring) classes.push(`${prefix}:ring-${s.ring}`)
+    if (s.shadow) classes.push(`${prefix}:shadow-${s.shadow}`)
+  }
 
   // Effects
   if (part.effects) {

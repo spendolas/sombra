@@ -32,7 +32,8 @@ sombra/
 │   └── sombra.ds.json          # THE design system database (tokens + components)
 ├── scripts/
 │   ├── generate-tokens.ts      # DB → index.css + ds.ts + port-colors.ts generator
-│   └── figma-pull.ts           # Figma REST API → DB sync
+│   ├── figma-pull.ts           # Figma REST API → DB sync
+│   └── figma-audit.ts          # Figma↔DB parity comparison (tokens:audit)
 ├── src/
 │   ├── components/      # React components (panels, toolbar, UI widgets)
 │   │   ├── ui/          # shadcn/ui primitives (button, slider, input, etc.)
@@ -42,14 +43,15 @@ sombra/
 │   │   ├── PreviewToolbar.tsx  # Preview mode switcher (4 view modes)
 │   │   ├── PreviewPanel.tsx    # Docked preview container
 │   │   ├── FloatingPreview.tsx # Draggable/resizable floating preview window
-│   │   └── FullWindowOverlay.tsx # Fullscreen preview overlay
+│   │   ├── FullWindowOverlay.tsx # Fullscreen preview overlay
+│   │   └── GraphToolbar.tsx    # Save/Open .sombra file toolbar (top-left canvas pill)
 │   ├── generated/
 │   │   └── ds.ts               # Generated component Tailwind class strings
 │   ├── lib/             # Utility functions (cn helper, etc.)
 │   ├── nodes/           # Node type definitions (one file per category or node)
 │   ├── compiler/        # Graph-to-GLSL compiler logic
 │   ├── stores/          # Zustand stores for app state
-│   ├── utils/           # Graph layout (dagre auto-layout), test preset graphs, port-colors.ts (generated)
+│   ├── utils/           # Graph layout, test presets, port-colors.ts (generated), sombra-file.ts
 │   ├── webgl/           # WebGL renderer (fullscreen quad, offscreen preview)
 │   ├── App.tsx          # Root layout component
 │   ├── main.tsx         # Entry point (inits node library + dev bridge)
@@ -85,6 +87,7 @@ npm run tokens       # Generate CSS + ds.ts + port-colors from sombra.ds.json
 npm run tokens:pull  # Fetch latest values from Figma REST API → update DB
 npm run tokens:sync  # Pull from Figma + regenerate code (the main workflow)
 npm run tokens:check # CI guard: fail if generated files diverge from DB
+npm run tokens:audit # Compare DB component parts against Figma REST API (requires FIGMA_TOKEN)
 ```
 
 ## Architecture
@@ -173,6 +176,12 @@ Every non-trivial change should propagate across these layers. Check each that a
 - [ ] Connectable params / new port types: update `isValidConnection` in `FlowCanvas.tsx`
 - [ ] New port type: add to `src/utils/port-colors.ts` + update Figma Port Types variable collection
 
+### Design System Database
+- [ ] New UI component: add component entry to `sombra.ds.json` with `dsKey`, `parts`, `figmaNodeId`
+- [ ] Component parts: include all visual fields (textStyle, textColor, cursor, hover states, etc.) — not just structural
+- [ ] After DB changes: run `npm run tokens` to regenerate, then wire component to `ds.*` references
+- [ ] After Figma changes: run `npm run tokens:audit` to verify Figma↔DB parity
+
 ### Browser Automation (`BROWSER-AUTOMATION.md`)
 - [ ] New node type: add to Node Types tables (inputs, outputs, key params)
 - [ ] New port type: add to Port Types & Compatibility table
@@ -210,11 +219,15 @@ Every non-trivial change should propagate across these layers. Check each that a
 
 ✅ Complete — Scaffold, React Flow canvas, WebGL2 renderer, GitHub Pages deployment.
 
-## Next Steps (Phase 3)
+## Next Steps (Phase 3 — remaining)
 
-Phase 2 is complete — all 23 nodes delivered, all 4 spectra presets reproducible as node graphs.
+Save/Load is complete (`.sombra` file format + GraphToolbar). Remaining Phase 3 items:
 
-See `ROADMAP.md` for Phase 3 (Save/Load/Export): localStorage auto-save with schema versioning, JSON download/upload, "Copy GLSL" button, embed HTML snippet generator.
+- "Copy GLSL" button — exports the compiled fragment shader to clipboard
+- Embed HTML snippet generator
+- `/embed.html?material=<base64>` shareable URLs (still static, no backend)
+
+See `ROADMAP.md` for full Phase 3 checklist.
 
 ## Design Decisions (Why We Did It This Way)
 
@@ -259,6 +272,7 @@ Free, simple, integrates well with GitHub Actions. Custom domain can be added la
 **Phase 2** - ✅ Complete (Spectra Mode + UX Polish — 23 nodes, all spectra presets reproducible)
 **Phase 2.5** - ✅ Complete (Preview Mode System + UI Polish)
 **Dev Bridge** - ✅ Complete (`window.__sombra` API for browser automation)
+**Phase 3** - 🔄 In Progress (Save/Load .sombra files complete; Copy GLSL + Embed pending)
 
 ### Phase 2.5 — Preview Mode System + UI Polish ✅ Complete
 
@@ -430,9 +444,36 @@ The unified DS database contains:
 - **sizes** (10): Component size tokens
 - **computed** (1): Derived tokens (e.g., `handle-offset`)
 - **textStyles** (11): Typography utilities (keyed by Figma style key)
-- **components** (22): Component parts with structural design properties (fill, stroke, radius, padding, gap, layout)
+- **components** (22): Component parts with full visual properties (see ComponentPart below)
 - **nodeTemplates** (23): Node type reference data
 - **scenes** (5): Scene/layout reference data
+
+### ComponentPart Schema
+
+Each component part in the DB maps to a generated Tailwind class string in `ds.ts`. The generator converts structured fields to Tailwind utilities:
+
+| Field | Example | Output |
+|---|---|---|
+| `layout` | `"horizontal"` | `flex flex-row` |
+| `fill` | `"surface/raised"` | `bg-surface-raised` |
+| `stroke` | `{ color: "edge/default" }` | `border border-edge` |
+| `radius` | `"md"` | `rounded-md` |
+| `padding` | `{ x: "lg", y: "md" }` | `px-lg py-md` |
+| `gap` | `"sm"` | `gap-sm` |
+| `textStyle` | `"text-body"` | `text-body` |
+| `textColor` | `"fg-dim"` | `text-fg-dim` |
+| `cursor` | `"move"` | `cursor-move` |
+| `transition` | `"colors"` | `transition-colors` |
+| `userSelect` | `"none"` | `select-none` |
+| `position` | `"relative"` | `relative` |
+| `z` | `50` | `z-50` |
+| `overflow` | `"hidden"` | `overflow-hidden` |
+| `width` / `height` | `"full"` | `w-full` / `h-full` |
+| `hover.fill` | `"surface/elevated"` | `hover:bg-surface-elevated` |
+| `hover.textColor` | `"fg"` | `hover:text-fg` |
+| `extra` | `"nodrag nowheel"` | `nodrag nowheel` (passthrough) |
+
+Design classes (everything above) come from `ds.*`. Only runtime-dynamic classes (conditional on JS state, React Flow selectors) stay inline in component code.
 
 ### Generated Files
 
@@ -448,7 +489,7 @@ import { ds } from '@/generated/ds';
 <BaseNode className={cn(ds.nodeCard.root, "min-w-node")}>
 ```
 
-Design classes (fill, stroke, radius, spacing) come from `ds.*`. Behavioral classes (hover, cursor, transition, selection states) stay in component code.
+All visual classes (fill, stroke, radius, spacing, text styles, colors, hover states, cursors, transitions) come from `ds.*`. Only runtime-dynamic classes (conditional on JS state) stay inline.
 
 ### Figma Sync Workflow
 
@@ -461,6 +502,7 @@ The daily flow: **`npm run tokens:sync`** — pulls from Figma REST API, updates
 | New token added in Figma | `npm run tokens:sync` → auto-detected, needs manual DB entry |
 | DB edited manually | `npm run tokens` |
 | CI drift check | `npm run tokens:check` |
+| Figma↔DB parity audit | `npm run tokens:audit` (compares DB component parts against Figma REST API) |
 
 The pull script (`scripts/figma-pull.ts`) uses version-check optimization: compares Figma file version to `lastFigmaVersion` in DB. If unchanged, exits early (1 API call). Only does full scan when version bumps.
 

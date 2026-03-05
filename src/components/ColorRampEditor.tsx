@@ -345,7 +345,7 @@ export function ColorRampEditor({
           type="color"
           value={stopToHex(selectedStop)}
           onChange={(e) => handleColorChange(e.target.value)}
-          className={cn(ds.colorInput.input, "size-input-h cursor-pointer")}
+          className={cn(ds.colorInput.input, "size-input-h")}
         />
         <span className="text-param tabular-nums text-fg-dim">
           {Math.round(selectedStop.position * 100)}%
@@ -355,7 +355,7 @@ export function ColorRampEditor({
           onClick={handleAddStop}
           className={cn(
             ds.plusMinusButton.root,
-            "size-btn-sm flex items-center justify-center text-param text-fg cursor-pointer"
+            "text-fg cursor-pointer"
           )}
         >
           +
@@ -365,7 +365,6 @@ export function ColorRampEditor({
           disabled={stops.length <= 2}
           className={cn(
             ds.plusMinusButton.root,
-            "size-btn-sm flex items-center justify-center text-param",
             stops.length <= 2
               ? "text-fg-muted cursor-default"
               : "text-fg cursor-pointer"
@@ -379,13 +378,13 @@ export function ColorRampEditor({
       <Select onValueChange={handlePreset}>
         <SelectTrigger
           size="sm"
-          className={cn(ds.enumSelect.trigger, "w-full h-select-h text-body text-fg")}
+          className={ds.enumSelect.trigger}
         >
           <SelectValue placeholder="Preset" />
         </SelectTrigger>
         <SelectContent className={ds.enumSelect.content}>
           {PRESETS.map((preset) => (
-            <SelectItem key={preset.name} value={preset.name} className="text-body">
+            <SelectItem key={preset.name} value={preset.name} className={ds.enumSelect.item}>
               {preset.name}
             </SelectItem>
           ))}

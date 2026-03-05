@@ -14,7 +14,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
 
 export interface SourceInfo {
@@ -135,19 +134,19 @@ interface EnumSelectProps {
 function EnumSelect({ param, value, onChange }: EnumSelectProps) {
   return (
     <div className={ds.enumSelect.root}>
-      <Label className="text-param text-fg-subtle">
+      <Label className={ds.enumSelect.label}>
         {param.label}
       </Label>
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger
           size="sm"
-          className={cn(ds.enumSelect.trigger, "w-full h-select-h text-body text-fg")}
+          className={ds.enumSelect.trigger}
         >
           <SelectValue />
         </SelectTrigger>
         <SelectContent className={ds.enumSelect.content}>
           {param.options!.map((option) => (
-            <SelectItem key={option.value} value={option.value} className="text-body">
+            <SelectItem key={option.value} value={option.value} className={ds.enumSelect.item}>
               {option.label}
             </SelectItem>
           ))}
@@ -173,14 +172,14 @@ function ColorInput({ param, value, onChange }: ColorInputProps) {
 
   return (
     <div className={ds.colorInput.root}>
-      <Label className="text-param text-fg-subtle">
+      <Label className={ds.colorInput.label}>
         {param.label}
       </Label>
       <input
         type="color"
         value={hexColor}
         onChange={(e) => handleColorChange(e.target.value)}
-        className={cn(ds.colorInput.input, "w-full h-input-h cursor-pointer")}
+        className={ds.colorInput.input}
       />
     </div>
   )

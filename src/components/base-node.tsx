@@ -6,14 +6,7 @@ import { ds } from "@/generated/ds";
 export function BaseNode({ className, ...props }: ComponentProps<"div">) {
   return (
     <div
-      className={cn(
-        ds.nodeCard.root,
-        "relative",
-        "hover:ring-1",
-        "[.react-flow\\_\\_node.selected_&]:border-muted-foreground",
-        "[.react-flow\\_\\_node.selected_&]:shadow-lg",
-        className,
-      )}
+      className={cn(ds.nodeCard.root, className)}
       tabIndex={0}
       {...props}
     />
@@ -31,7 +24,7 @@ export function BaseNodeHeader({
   return (
     <header
       {...props}
-      className={cn(ds.nodeCard.header, "-mb-1", className)}
+      className={cn(ds.nodeCard.header, className)}
     />
   );
 }
@@ -47,7 +40,7 @@ export function BaseNodeHeaderTitle({
   return (
     <h3
       data-slot="base-node-title"
-      className={cn("user-select-none flex-1 text-node-title", className)}
+      className={cn(ds.nodeCard.title, className)}
       {...props}
     />
   );

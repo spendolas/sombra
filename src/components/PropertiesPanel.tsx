@@ -59,7 +59,7 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
 
   if (!selectedNode) {
     return (
-      <div>
+      <div className={ds.propertiesPanel.root}>
         <h2 className="text-section mb-lg text-fg-dim">
           Properties
         </h2>
@@ -74,7 +74,7 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
 
   if (!definition) {
     return (
-      <div>
+      <div className={ds.propertiesPanel.root}>
         <h2 className="text-section mb-lg text-fg-dim">
           Properties
         </h2>
@@ -107,7 +107,7 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
     : definition.inputs
 
   return (
-    <div>
+    <div className={ds.propertiesPanel.root}>
       <h2 className="text-section mb-lg text-fg-dim">
         Properties
       </h2>

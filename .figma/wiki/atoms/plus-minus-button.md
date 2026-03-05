@@ -7,7 +7,7 @@
 | Figma ID | `17:258` |
 | Figma Page | Atoms |
 | Type | COMPONENT_SET |
-| Variants | 4: type (plus/minus) x state (enabled/disabled) |
+| Variants | 12: Icon (plus/minus/shuffle/download/folder-open/rows/columns/pip/scan) x State (enabled/disabled) x Style (solid/ghost) |
 | React File | `src/components/ShaderNode.tsx` |
 | React Component | (inline `<button>`) |
 | Figma URL | [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=17:258) |
@@ -66,9 +66,21 @@
 | Corner radius | 4px | radius/sm (`17:922`) | `rounded` (4px) | ✅ |
 | Border width | 1px | (literal) | `border border-edge` | ✅ |
 
+## Style Variants
+
+### Solid (original)
+- 20x20, `surface/alt` fill, `edge` border, `sm/4` radius
+- Used by: ShaderNode +/- buttons, RandomDisplay shuffle button
+
+### Ghost (new)
+- 24x24, no fill, no border, `sm/4` radius
+- `fg/dim` text color
+- Matches shadcn `<Button variant="ghost" size="icon">`
+- Used by: GraphToolbar (download/folder-open), PreviewToolbar (rows/columns/pip/scan)
+
 ## Children
 
-None (atom — text symbol only: "+" or "-")
+None (atom — text symbol only: "+", "-", or icon character)
 
 ## Code Connect
 

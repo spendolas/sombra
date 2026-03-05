@@ -129,7 +129,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   return (
     <BaseNode className="min-w-node">
       <BaseNodeHeader>
-        <BaseNodeHeaderTitle className="text-fg">
+        <BaseNodeHeaderTitle>
           {definition.label}
         </BaseNodeHeaderTitle>
       </BaseNodeHeader>
@@ -143,7 +143,6 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
             position={Position.Right}
             id={output.id}
             title={output.label}
-            labelClassName="text-handle"
             handleColor={getPortColor(output.type)}
             connected={connectedOutputs.has(output.id)}
           />
@@ -157,7 +156,6 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
             position={Position.Left}
             id={input.id}
             title={input.label}
-            labelClassName="text-handle"
             handleColor={getPortColor(input.type)}
             connected={connectedInputs.has(input.id)}
           />
@@ -171,7 +169,6 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
               disabled={inputCount <= 2}
               className={cn(
                 ds.plusMinusButton.root,
-                "size-btn-sm flex items-center justify-center text-param",
                 inputCount <= 2
                   ? "text-fg-muted cursor-default"
                   : "text-fg cursor-pointer"
@@ -187,7 +184,6 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
               disabled={inputCount >= 8}
               className={cn(
                 ds.plusMinusButton.root,
-                "size-btn-sm flex items-center justify-center text-param",
                 inputCount >= 8
                   ? "text-fg-muted cursor-default"
                   : "text-fg cursor-pointer"
@@ -223,7 +219,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
           }
 
           return (
-            <div key={param.id} className={cn(ds.connectableParamRow.root, "relative")}>
+            <div key={param.id} className={ds.connectableParamRow.root}>
               <BaseHandle
                 type="target"
                 position={Position.Left}

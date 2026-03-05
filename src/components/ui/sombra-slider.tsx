@@ -13,6 +13,7 @@
 
 import { useRef, useState, useCallback, useEffect } from 'react'
 import { cn } from '@/lib/utils'
+import { ds } from '@/generated/ds'
 
 interface SombraSliderProps {
   label: string | [string, string]
@@ -263,8 +264,7 @@ function SombraSlider({
   return (
     <div
       className={cn(
-        // nokey: prevents React Flow's Shift+drag rectangle selection capture
-        'flex flex-col gap-2xs nodrag nowheel nokey select-none',
+        ds.floatSlider.root,
         disabled && 'opacity-60 pointer-events-none',
         className
       )}

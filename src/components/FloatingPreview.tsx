@@ -1,7 +1,6 @@
 import { useRef, useCallback, useEffect, useMemo, type RefObject } from 'react'
 import { PreviewToolbar } from './PreviewToolbar'
 import { useSettingsStore } from '@/stores/settingsStore'
-import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
 
 const MIN_W = 200
@@ -118,7 +117,7 @@ export function FloatingPreview({ targetRef }: FloatingPreviewProps) {
   return (
     <div
       ref={panelRef}
-      className={cn(ds.floatingPreview.root, "fixed z-40")}
+      className={ds.floatingPreview.root}
       style={{
         left: pos.x,
         top: pos.y,

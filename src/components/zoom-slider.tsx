@@ -31,7 +31,6 @@ export function ZoomSlider({
     <Panel
       className={cn(
         ds.zoomBar.root,
-        "text-fg",
         orientation === "horizontal" ? "flex-row" : "flex-col",
         className,
       )}

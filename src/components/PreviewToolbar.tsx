@@ -24,7 +24,6 @@ export function PreviewToolbar({ className }: PreviewToolbarProps) {
     <div
       className={cn(
         ds.previewToolbar.root,
-        'text-body text-fg-dim',
         className
       )}
     >
