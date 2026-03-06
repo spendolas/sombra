@@ -571,14 +571,14 @@
           "extra": "-mb-1"
         },
         "title": {
-          "figmaNodeId": "306:213",
+          "figmaNodeId": "111:487",
           "textStyle": "text-node-title",
           "textColor": "fg",
           "userSelect": "none",
           "extra": "flex-1"
         },
         "content": {
-          "figmaNodeId": "306:213",
+          "figmaNodeId": "106:356",
           "layout": "vertical",
           "padding": "lg",
           "gap": {
@@ -659,12 +659,10 @@
           "gap": "xs"
         },
         "categoryGroup": {
-          "figmaNodeId": "306:213",
           "layout": "vertical",
           "gap": "lg"
         },
         "itemList": {
-          "figmaNodeId": "306:213",
           "layout": "vertical",
           "gap": "xs"
         }
@@ -684,7 +682,6 @@
           "gap": "xl"
         },
         "nodeInfo": {
-          "figmaNodeId": "306:213",
           "padding": "lg",
           "radius": "lg",
           "fill": "surface/raised",
@@ -694,7 +691,6 @@
           }
         },
         "portRow": {
-          "figmaNodeId": "306:213",
           "layout": "horizontal",
           "justify": "between",
           "padding": {
@@ -705,7 +701,6 @@
           "fill": "surface/raised"
         },
         "paramSection": {
-          "figmaNodeId": "306:213",
           "padding": "lg",
           "radius": "lg",
           "fill": "surface/raised",
@@ -906,9 +901,9 @@
           "extra": "flex"
         },
         "label": {
-          "figmaNodeId": "306:213",
+          "figmaNodeId": "106:112",
           "textStyle": "text-handle",
-          "textColor": "foreground",
+          "textColor": "fg",
           "extra": "px-handle-offset flex-1"
         }
       }
@@ -978,12 +973,12 @@
           "gap": "sm"
         },
         "label": {
-          "figmaNodeId": "306:213",
+          "figmaNodeId": "106:284",
           "textStyle": "text-param",
           "textColor": "fg-subtle"
         },
         "trigger": {
-          "figmaNodeId": "306:213",
+          "figmaNodeId": "106:285",
           "fill": "surface/raised",
           "stroke": {
             "color": "edge/default"
@@ -994,14 +989,12 @@
           "textColor": "fg"
         },
         "content": {
-          "figmaNodeId": "306:213",
           "fill": "surface/elevated",
           "stroke": {
             "color": "edge/default"
           }
         },
         "item": {
-          "figmaNodeId": "306:213",
           "textStyle": "text-body"
         }
       }
@@ -1018,12 +1011,12 @@
           "gap": "sm"
         },
         "label": {
-          "figmaNodeId": "306:213",
+          "figmaNodeId": "106:290",
           "textStyle": "text-param",
           "textColor": "fg-subtle"
         },
         "input": {
-          "figmaNodeId": "306:213",
+          "figmaNodeId": "106:291",
           "radius": "sm",
           "fill": "surface/raised",
           "stroke": {
@@ -1049,7 +1042,7 @@
           "position": "relative"
         },
         "innerFrame": {
-          "figmaNodeId": "306:213",
+          "figmaNodeId": "106:296",
           "padding": {
             "left": "handle-offset",
             "right": "xs"
@@ -1089,7 +1082,7 @@
           "extra": "nodrag nowheel"
         },
         "value": {
-          "figmaNodeId": "306:213",
+          "figmaNodeId": "111:951",
           "textColor": "fg",
           "textStyle": "text-mono-value",
           "extra": "tabular-nums"
@@ -1113,7 +1106,7 @@
         }
       }
     },
-    "graph-toolbar": {
+    "268:1427": {
       "name": "Graph Toolbar",
       "type": "molecule",
       "dsKey": "graphToolbar",
@@ -1130,7 +1123,7 @@
         }
       }
     },
-    "preview-panel": {
+    "306:213": {
       "name": "Preview Panel",
       "type": "organism",
       "dsKey": "previewPanel",
