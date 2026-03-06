@@ -26,3 +26,5 @@ dist-ssr
 
 # Audit artifacts
 binding-audit.ndjson
+tokens/figma-components.json
+.figma-eval-tmp.*

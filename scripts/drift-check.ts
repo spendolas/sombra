@@ -3,8 +3,10 @@
  * between Figma, the DB (sombra.ds.json), and code.
  *
  * 1. Token drift (local only): stale var() refs, unused defined tokens
- * 2. Component drift (requires FIGMA_TOKEN): Figma vs DB component tracking
- * 3. Variant drift (requires FIGMA_TOKEN): Figma variant properties vs DB parts
+ * 2. Component drift (reads tokens/figma-components.json): Figma vs DB component tracking
+ * 3. Variant drift (reads tokens/figma-components.json): Figma variant properties vs DB parts
+ *
+ * Run `npm run drift:collect` first to generate the Figma snapshot.
  *
  * Usage:
  *   npx tsx scripts/drift-check.ts
@@ -16,33 +18,17 @@
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'fs'
 import { resolve, extname } from 'path'
 
-// ─── Load .env if present ────────────────────────────────────────────────────
-
-const ROOT = resolve(import.meta.dirname, '..')
-const ENV_PATH = resolve(ROOT, '.env')
-
-if (existsSync(ENV_PATH)) {
-  const envContent = readFileSync(ENV_PATH, 'utf-8')
-  for (const line of envContent.split('\n')) {
-    const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#')) continue
-    const eqIdx = trimmed.indexOf('=')
-    if (eqIdx === -1) continue
-    const key = trimmed.slice(0, eqIdx).trim()
-    const value = trimmed.slice(eqIdx + 1).trim().replace(/^["']|["']$/g, '')
-    if (!process.env[key]) process.env[key] = value
-  }
-}
-
 // ─── Config ──────────────────────────────────────────────────────────────────
 
+const ROOT = resolve(import.meta.dirname, '..')
 const DB_PATH = resolve(ROOT, 'tokens/sombra.ds.json')
+const SNAPSHOT_PATH = resolve(ROOT, 'tokens/figma-components.json')
 const INDEX_CSS_PATH = resolve(ROOT, 'src/index.css')
 const SRC_DIR = resolve(ROOT, 'src')
 const REPORT_PATH = resolve(ROOT, 'drift-report.md')
-const FIGMA_TOKEN = process.env.FIGMA_TOKEN
 
 const SCAN_EXTENSIONS = new Set(['.ts', '.tsx', '.css'])
+const STALENESS_MS = 24 * 60 * 60 * 1000 // 24 hours
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -65,12 +51,24 @@ interface DB {
   [key: string]: unknown
 }
 
-interface FigmaComponentMeta {
-  key: string
+interface FigmaSnapshotComponent {
+  id: string
   name: string
-  description: string
-  node_id: string
-  containing_frame: { name: string; nodeId: string; pageId: string; pageName: string }
+  type: 'COMPONENT' | 'COMPONENT_SET'
+  parentId: string | null
+  parentName: string | null
+  properties: Record<string, {
+    type: string
+    defaultValue: string | boolean
+    options: string[] | null
+  }>
+  variants?: Array<{ id: string; name: string }>
+}
+
+interface FigmaSnapshot {
+  generatedAt: string
+  fileKey: string
+  components: FigmaSnapshotComponent[]
 }
 
 interface StaleRef {
@@ -98,17 +96,23 @@ interface VariantDriftItem {
   dbParts: string[]
 }
 
-// ─── Figma API ───────────────────────────────────────────────────────────────
+// ─── Figma Snapshot Reader ──────────────────────────────────────────────────
 
-async function figmaGet(path: string): Promise<unknown> {
-  const url = `https://api.figma.com/v1${path}`
-  const res = await fetch(url, {
-    headers: { 'X-Figma-Token': FIGMA_TOKEN! },
-  })
-  if (!res.ok) {
-    throw new Error(`Figma API ${res.status}: ${res.statusText} — ${url}`)
+function readFigmaSnapshot(): FigmaSnapshot | null {
+  if (!existsSync(SNAPSHOT_PATH)) {
+    console.log('   Run `npm run drift:collect` first to generate Figma snapshot')
+    return null
   }
-  return res.json()
+
+  const snapshot: FigmaSnapshot = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf-8'))
+  const age = Date.now() - new Date(snapshot.generatedAt).getTime()
+
+  if (age > STALENESS_MS) {
+    const hours = Math.round(age / 3600000)
+    console.log(`   Warning: Snapshot is ${hours}h old — consider re-running drift:collect`)
+  }
+
+  return snapshot
 }
 
 // ─── File scanning ───────────────────────────────────────────────────────────
@@ -120,9 +124,7 @@ function collectSourceFiles(dir: string): string[] {
     if (!entry.isFile()) continue
     const ext = extname(entry.name)
     if (!SCAN_EXTENSIONS.has(ext)) continue
-    // entry.parentPath is the directory containing the entry (Node 20+)
     const fullPath = resolve(entry.parentPath ?? entry.path, entry.name)
-    // Skip generated marker regions (handled separately), node_modules, dist
     if (fullPath.includes('node_modules') || fullPath.includes('/dist/')) continue
     files.push(fullPath)
   }
@@ -140,21 +142,12 @@ function detectTokenDrift(): { staleRefs: StaleRef[]; unusedTokens: UnusedToken[
   let markerMatch: RegExpExecArray | null
   while ((markerMatch = markerRegex.exec(css)) !== null) {
     const block = markerMatch[1]
-    // Match CSS custom property definitions: --foo-bar: ...;
     const propRegex = /(--[\w-]+)\s*:/g
     let propMatch: RegExpExecArray | null
     while ((propMatch = propRegex.exec(block)) !== null) {
       definedVars.add(propMatch[1])
     }
   }
-
-  // Also extract Tailwind token keys that map to CSS vars.
-  // The @theme inline block defines --color-*, --spacing-*, --radius-* etc.
-  // We need the base CSS var names for matching, already captured above.
-
-  // Build a map from Tailwind utility token to CSS var for cross-referencing.
-  // e.g., bg-surface uses --color-surface which references var(--surface).
-  // For token drift, we track the raw CSS vars (--surface, --sp-md, etc.)
 
   // Scan source files for var(--*) references
   const sourceFiles = collectSourceFiles(SRC_DIR)
@@ -166,12 +159,9 @@ function detectTokenDrift(): { staleRefs: StaleRef[]; unusedTokens: UnusedToken[
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
-
-      // Skip comment-only lines
       const trimmed = line.trim()
       if (trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*')) continue
 
-      // Find var(--*) references
       const varRefRegex = /var\((--[\w-]+)\)/g
       let refMatch: RegExpExecArray | null
       while ((refMatch = varRefRegex.exec(line)) !== null) {
@@ -187,15 +177,11 @@ function detectTokenDrift(): { staleRefs: StaleRef[]; unusedTokens: UnusedToken[
     }
   }
 
-  // Stale refs: referenced but not defined in generated regions
+  // Stale refs: referenced but not defined
   const staleRefs: StaleRef[] = []
   for (const [varName, locations] of referencedVars) {
     if (!definedVars.has(varName)) {
-      // Only flag if not a standard CSS property or Tailwind internal
-      // Skip Tailwind v4 internals (--tw-*), standard browser vars, and
-      // vars defined in non-generated parts of index.css
       if (varName.startsWith('--tw-')) continue
-      // Check if it's defined anywhere in the full CSS (non-generated regions too)
       const definedAnywhere = new RegExp(`${varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*:`).test(css)
       if (definedAnywhere) continue
       for (const loc of locations) {
@@ -204,32 +190,14 @@ function detectTokenDrift(): { staleRefs: StaleRef[]; unusedTokens: UnusedToken[
     }
   }
 
-  // Unused tokens: defined in generated regions but never referenced anywhere in src
-  // A token is "used" if either:
-  //   a) var(--token) appears in source, OR
-  //   b) A Tailwind utility references it (e.g., bg-surface → --color-surface → var(--surface))
-  // For (b), the Tailwind @theme inline block creates --color-surface: var(--surface),
-  // which counts as a reference within index.css itself. So we check if the var
-  // appears anywhere in the full CSS or source files.
-  //
-  // Tailwind @theme inline variables (--color-*, --radius-*, --spacing-*, --size-*,
-  // --min-width-*) are consumed by Tailwind's class generation engine, not via
-  // explicit var() calls. Exclude them from unused detection.
+  // Unused tokens: defined but never referenced
   const TAILWIND_THEME_PREFIXES = ['--color-', '--radius-', '--spacing-', '--size-', '--min-width-']
-
   const unusedTokens: UnusedToken[] = []
   for (const varName of definedVars) {
-    // Skip Tailwind @theme inline intermediates — consumed by class engine
     if (TAILWIND_THEME_PREFIXES.some(prefix => varName.startsWith(prefix))) continue
-
-    // Check if referenced via var() in any source file
     if (referencedVars.has(varName)) continue
-
-    // Check if referenced in index.css itself outside generated regions
-    // (e.g., @theme inline block referencing var(--surface))
     const refInCssRegex = new RegExp(`var\\(${varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)`)
     if (refInCssRegex.test(css)) continue
-
     unusedTokens.push({ variable: varName })
   }
 
@@ -238,33 +206,22 @@ function detectTokenDrift(): { staleRefs: StaleRef[]; unusedTokens: UnusedToken[
 
 // ─── 2. Component Drift Detection ────────────────────────────────────────────
 
-async function detectComponentDrift(db: DB): Promise<ComponentDriftItem[]> {
-  const fileKey = db.figmaFileKey
+function detectComponentDrift(db: DB, snapshot: FigmaSnapshot): ComponentDriftItem[] {
   const drift: ComponentDriftItem[] = []
 
-  // Fetch all components from Figma
-  const data = await figmaGet(`/files/${fileKey}/components`) as {
-    meta: { components: FigmaComponentMeta[] }
-  }
+  // Build set of Figma component IDs from snapshot
+  const figmaNodeIds = new Set(snapshot.components.map(c => c.id))
+  const figmaComponentsByNodeId = new Map(snapshot.components.map(c => [c.id, c]))
 
-  const figmaComponents = data.meta.components
-  const figmaNodeIds = new Set(figmaComponents.map(c => c.node_id))
-
-  // Build set of DB-tracked Figma node IDs (from component entries, not parts)
-  // The component key in DB IS the Figma node ID of the top-level component
-  const dbComponentNodeIds = new Set<string>()
-  const dbComponentsByNodeId = new Map<string, ComponentEntry>()
-  for (const [nodeId, comp] of Object.entries(db.components)) {
-    dbComponentNodeIds.add(nodeId)
-    dbComponentsByNodeId.set(nodeId, comp)
-  }
+  // Build set of DB component node IDs
+  const dbComponentNodeIds = new Set(Object.keys(db.components))
 
   // In Figma but not in DB
-  for (const fc of figmaComponents) {
-    if (!dbComponentNodeIds.has(fc.node_id)) {
+  for (const fc of snapshot.components) {
+    if (!dbComponentNodeIds.has(fc.id)) {
       drift.push({
         name: fc.name,
-        nodeId: fc.node_id,
+        nodeId: fc.id,
         direction: 'figma-only',
       })
     }
@@ -287,52 +244,26 @@ async function detectComponentDrift(db: DB): Promise<ComponentDriftItem[]> {
 
 // ─── 3. Variant Drift Detection ──────────────────────────────────────────────
 
-async function detectVariantDrift(db: DB): Promise<VariantDriftItem[]> {
-  const fileKey = db.figmaFileKey
+function detectVariantDrift(db: DB, snapshot: FigmaSnapshot): VariantDriftItem[] {
   const drift: VariantDriftItem[] = []
 
-  // Collect all unique Figma node IDs from component entries (top-level)
-  const nodeIds: string[] = Object.keys(db.components)
-  if (nodeIds.length === 0) return drift
+  // Index snapshot COMPONENT_SET entries by ID
+  const componentSets = new Map(
+    snapshot.components
+      .filter(c => c.type === 'COMPONENT_SET')
+      .map(c => [c.id, c])
+  )
 
-  // Batch fetch node data (max 50 per request)
-  const BATCH_SIZE = 50
-  const allNodes = new Map<string, { document: Record<string, unknown> }>()
-
-  for (let i = 0; i < nodeIds.length; i += BATCH_SIZE) {
-    const batch = nodeIds.slice(i, i + BATCH_SIZE)
-    const idsParam = batch.join(',')
-
-    const data = await figmaGet(`/files/${fileKey}/nodes?ids=${idsParam}`) as {
-      nodes: Record<string, { document: Record<string, unknown> }>
-    }
-
-    for (const [nodeId, nodeData] of Object.entries(data.nodes)) {
-      if (nodeData?.document) {
-        allNodes.set(nodeId, nodeData)
-      }
-    }
-  }
-
-  // For each component, check if it has componentPropertyDefinitions (variant props)
+  // For each DB component, check if it's a COMPONENT_SET in the snapshot
   for (const [nodeId, comp] of Object.entries(db.components)) {
-    const nodeData = allNodes.get(nodeId)
-    if (!nodeData) continue
-
-    const doc = nodeData.document
-    const propDefs = doc.componentPropertyDefinitions as Record<string, {
-      type: string
-      defaultValue: string | boolean
-      variantOptions?: string[]
-    }> | undefined
-
-    if (!propDefs) continue
+    const figmaComp = componentSets.get(nodeId)
+    if (!figmaComp) continue
 
     // Extract variant property names and their options
     const figmaVariants: string[] = []
-    for (const [propName, propDef] of Object.entries(propDefs)) {
-      if (propDef.type === 'VARIANT' && propDef.variantOptions) {
-        for (const option of propDef.variantOptions) {
+    for (const [propName, propDef] of Object.entries(figmaComp.properties)) {
+      if (propDef.type === 'VARIANT' && propDef.options) {
+        for (const option of propDef.options) {
           figmaVariants.push(`${propName}=${option}`)
         }
       }
@@ -340,7 +271,6 @@ async function detectVariantDrift(db: DB): Promise<VariantDriftItem[]> {
 
     if (figmaVariants.length === 0) continue
 
-    // Compare against DB parts
     const dbParts = Object.keys(comp.parts)
 
     drift.push({
@@ -401,7 +331,7 @@ function generateReport(
   lines.push('')
 
   if (componentDrift === null) {
-    lines.push('Skipped (FIGMA_TOKEN not set)')
+    lines.push('Skipped (no Figma snapshot — run `npm run drift:collect`)')
     lines.push('')
   } else if (componentDrift.length === 0) {
     lines.push('No component drift detected.')
@@ -434,7 +364,7 @@ function generateReport(
   lines.push('')
 
   if (variantDrift === null) {
-    lines.push('Skipped (FIGMA_TOKEN not set)')
+    lines.push('Skipped (no Figma snapshot — run `npm run drift:collect`)')
     lines.push('')
   } else if (variantDrift.length === 0) {
     lines.push('No variant drift detected.')
@@ -461,14 +391,14 @@ function generateReport(
 
 // ─── Main ────────────────────────────────────────────────────────────────────
 
-async function main() {
+function main() {
   console.log('Sombra DS Drift Check')
   console.log('=====================\n')
 
   const db: DB = JSON.parse(readFileSync(DB_PATH, 'utf-8'))
   let hasDrift = false
 
-  // 1. Token drift (always runs, no API needed)
+  // 1. Token drift (always runs, local only)
   console.log('1. Checking token drift...')
   const tokenDrift = detectTokenDrift()
 
@@ -490,57 +420,52 @@ async function main() {
     console.log('   No token drift.')
   }
 
-  // 2 & 3. Figma drift (requires FIGMA_TOKEN)
+  // 2 & 3. Figma drift (reads from snapshot)
   let componentDrift: ComponentDriftItem[] | null = null
   let variantDrift: VariantDriftItem[] | null = null
 
-  if (!FIGMA_TOKEN) {
-    console.log('\n2. Skipping component drift (FIGMA_TOKEN not set)')
-    console.log('3. Skipping variant drift (FIGMA_TOKEN not set)')
+  console.log('\n2. Checking component drift...')
+  const snapshot = readFigmaSnapshot()
+
+  if (!snapshot) {
+    console.log('3. Skipping variant drift (no snapshot)')
   } else {
-    try {
-      // 2. Component drift
-      console.log('\n2. Checking component drift...')
-      componentDrift = await detectComponentDrift(db)
+    console.log(`   Snapshot from ${snapshot.generatedAt} (${snapshot.components.length} components)`)
 
-      const figmaOnly = componentDrift.filter(d => d.direction === 'figma-only')
-      const dbOnly = componentDrift.filter(d => d.direction === 'db-only')
+    componentDrift = detectComponentDrift(db, snapshot)
+    const figmaOnly = componentDrift.filter(d => d.direction === 'figma-only')
+    const dbOnly = componentDrift.filter(d => d.direction === 'db-only')
 
-      if (componentDrift.length > 0) {
-        hasDrift = true
-        if (figmaOnly.length > 0) {
-          console.log(`   ${figmaOnly.length} component(s) in Figma but not tracked in DB`)
-          for (const item of figmaOnly) {
-            console.log(`     "${item.name}" (${item.nodeId})`)
-          }
+    if (componentDrift.length > 0) {
+      hasDrift = true
+      if (figmaOnly.length > 0) {
+        console.log(`   ${figmaOnly.length} component(s) in Figma but not tracked in DB`)
+        for (const item of figmaOnly) {
+          console.log(`     "${item.name}" (${item.nodeId})`)
         }
-        if (dbOnly.length > 0) {
-          console.log(`   ${dbOnly.length} component(s) in DB but not found in Figma`)
-          for (const item of dbOnly) {
-            console.log(`     "${item.name}" (${item.dsKey}, ${item.nodeId})`)
-          }
-        }
-      } else {
-        console.log('   No component drift.')
       }
-
-      // 3. Variant drift
-      console.log('\n3. Checking variant drift...')
-      variantDrift = await detectVariantDrift(db)
-
-      if (variantDrift.length > 0) {
-        hasDrift = true
-        console.log(`   ${variantDrift.length} component(s) with variant properties to review`)
-        for (const item of variantDrift) {
-          console.log(`     ${item.component}: ${item.figmaVariants.length} Figma variant(s), ${item.dbParts.length} DB part(s)`)
+      if (dbOnly.length > 0) {
+        console.log(`   ${dbOnly.length} component(s) in DB but not found in Figma`)
+        for (const item of dbOnly) {
+          console.log(`     "${item.name}" (${item.dsKey}, ${item.nodeId})`)
         }
-      } else {
-        console.log('   No variant drift.')
       }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      console.log(`\n   Figma API error: ${msg}`)
-      console.log('   Skipping component and variant drift checks.')
+    } else {
+      console.log('   No component drift.')
+    }
+
+    // 3. Variant drift
+    console.log('\n3. Checking variant drift...')
+    variantDrift = detectVariantDrift(db, snapshot)
+
+    if (variantDrift.length > 0) {
+      hasDrift = true
+      console.log(`   ${variantDrift.length} component(s) with variant properties to review`)
+      for (const item of variantDrift) {
+        console.log(`     ${item.component}: ${item.figmaVariants.length} Figma variant(s), ${item.dbParts.length} DB part(s)`)
+      }
+    } else {
+      console.log('   No variant drift.')
     }
   }
 
@@ -560,7 +485,4 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error('Error:', err.message)
-  process.exit(1)
-})
+main()
