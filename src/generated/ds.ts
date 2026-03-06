@@ -50,6 +50,9 @@ export const ds = {
     textGhost: "text-mono-value text-fg-dim cursor-pointer transition-colors hover:bg-surface-elevated hover:text-fg",
     textGhostDisabled: "text-mono-value text-fg-muted cursor-default",
     textGhostActive: "bg-indigo text-mono-value text-fg cursor-default hover:bg-indigo",
+    solidHover: "bg-surface-raised border border-edge text-fg cursor-pointer",
+    ghostHover: "bg-surface-elevated text-fg cursor-pointer",
+    textGhostHover: "bg-surface-elevated text-mono-value text-fg cursor-pointer",
   },
   handle: {
     root: "rounded-full !h-3 !w-3 border-2 transition",
