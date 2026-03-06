@@ -40,13 +40,11 @@ export const randomNode: NodeDefinition = {
 
   glsl: (ctx) => {
     const { inputs, outputs } = ctx
-    const seed = Number(ctx.params.seed) || 0
     const decimals = Number(ctx.params.decimals) ?? 7
     const nodeHash = hashNodeId(ctx.nodeId).toFixed(6)
-    const seedStr = Number.isInteger(seed) ? `${seed}.0` : `${seed}`
     const decimalsStr = Number.isInteger(decimals) ? `${decimals}.0` : `${decimals}`
     return `float ${outputs.value}_step = pow(10.0, -${decimalsStr});
-float ${outputs.value}_raw = ${inputs.min} + fract(${seedStr} + ${nodeHash}) * (${inputs.max} - ${inputs.min});
+float ${outputs.value}_raw = ${inputs.min} + fract(${inputs.seed} + ${nodeHash}) * (${inputs.max} - ${inputs.min});
 float ${outputs.value} = floor(${outputs.value}_raw / ${outputs.value}_step + 0.5) * ${outputs.value}_step;`
   },
 }

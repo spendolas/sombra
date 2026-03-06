@@ -239,6 +239,11 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                   />
                 )}
               </div>
+              {param.warnAbove != null && !isConnected && displayValue > param.warnAbove && (
+                <span className="text-[10px] text-fg-muted px-sm pb-2xs">
+                  High value — may impact performance
+                </span>
+              )}
             </div>
           )
         })}

@@ -4,6 +4,7 @@
  */
 
 import type { NodeDefinition } from '../types'
+import { addFunction } from '../types'
 
 export const hsvToRgbNode: NodeDefinition = {
   type: 'hsv_to_rgb',
@@ -43,20 +44,15 @@ export const hsvToRgbNode: NodeDefinition = {
   params: [],
 
   glsl: (ctx) => {
-    const { inputs, outputs, nodeId, functions } = ctx
-    const sanitizedNodeId = nodeId.replace(/-/g, '_')
+    const { inputs, outputs } = ctx
 
-    // Add HSV to RGB conversion function
-    functions.push(`
-// HSV to RGB conversion for ${sanitizedNodeId}
-vec3 hsv2rgb_${sanitizedNodeId}(float h, float s, float v) {
+    addFunction(ctx, 'hsv2rgb', `vec3 hsv2rgb(float h, float s, float v) {
   vec3 c = vec3(h, s, v);
   vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
   vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
   return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-}
-`)
+}`)
 
-    return `vec3 ${outputs.rgb} = hsv2rgb_${sanitizedNodeId}(${inputs.h}, ${inputs.s}, ${inputs.v});`
+    return `vec3 ${outputs.rgb} = hsv2rgb(${inputs.h}, ${inputs.s}, ${inputs.v});`
   },
 }

@@ -11,6 +11,7 @@ export const NOISE_FUNCTION_MAP: Record<string, string> = {
   simplex: 'snoise3d_01',
   value: 'vnoise3d',
   worley: 'worley3d',
+  worley_fast: 'worley3d_fast',
   worley2d: 'worley2d',
   box: 'boxnoise3d',
 }
@@ -20,6 +21,7 @@ export const NOISE_TYPE_OPTIONS = [
   { value: 'simplex', label: 'Simplex' },
   { value: 'value', label: 'Value' },
   { value: 'worley', label: 'Worley 3D' },
+  { value: 'worley_fast', label: 'Worley Fast' },
   { value: 'worley2d', label: 'Worley 2D' },
   { value: 'box', label: 'Box' },
 ]
@@ -40,6 +42,9 @@ export function registerNoiseType(ctx: GLSLContext, noiseType: string): void {
       break
     case 'worley':
       registerWorley(ctx)
+      break
+    case 'worley_fast':
+      registerWorleyFast(ctx)
       break
     case 'worley2d':
       registerWorley2d(ctx)
@@ -148,6 +153,31 @@ function registerWorley(ctx: GLSLContext) {
   for (int z = -1; z <= 1; z++)
   for (int y = -1; y <= 1; y++)
   for (int x = -1; x <= 1; x++) {
+    vec3 neighbor = vec3(float(x), float(y), float(z));
+    vec3 point = hash3to3(i + neighbor);
+    vec3 diff = neighbor + point - f;
+    float dist = dot(diff, diff);
+    minDist = min(minDist, dist);
+  }
+  return sqrt(minDist);
+}`)
+}
+
+// --- Worley Fast (8-cell) ---
+function registerWorleyFast(ctx: GLSLContext) {
+  addFunction(ctx, 'hash3to3', `vec3 hash3to3(vec3 p) {
+  p = vec3(dot(p, vec3(127.1, 311.7, 74.7)),
+           dot(p, vec3(269.5, 183.3, 246.1)),
+           dot(p, vec3(113.5, 271.9, 124.6)));
+  return fract(sin(p) * 43758.5453123);
+}`)
+  addFunction(ctx, 'worley3d_fast', `float worley3d_fast(vec3 p) {
+  vec3 i = floor(p);
+  vec3 f = fract(p);
+  float minDist = 1.0;
+  for (int z = 0; z <= 1; z++)
+  for (int y = 0; y <= 1; y++)
+  for (int x = 0; x <= 1; x++) {
     vec3 neighbor = vec3(float(x), float(y), float(z));
     vec3 point = hash3to3(i + neighbor);
     vec3 diff = neighbor + point - f;

@@ -4,11 +4,6 @@
 
 import type { NodeDefinition } from '../types'
 
-function formatFloat(v: unknown): string {
-  const n = typeof v === 'number' ? v : 0.0
-  return Number.isInteger(n) ? `${n}.0` : `${n}`
-}
-
 export const vec2ConstantNode: NodeDefinition = {
   type: 'vec2_constant',
   label: 'Vec2',
@@ -31,9 +26,7 @@ export const vec2ConstantNode: NodeDefinition = {
   ],
 
   glsl: (ctx) => {
-    const { outputs, params } = ctx
-    const x = params.x !== undefined ? params.x : 0.0
-    const y = params.y !== undefined ? params.y : 0.0
-    return `vec2 ${outputs.value} = vec2(${formatFloat(x)}, ${formatFloat(y)});`
+    const { inputs, outputs } = ctx
+    return `vec2 ${outputs.value} = vec2(${inputs.x}, ${inputs.y});`
   },
 }

@@ -31,8 +31,7 @@ export const colorConstantNode: NodeDefinition = {
   ],
 
   glsl: (ctx) => {
-    const { outputs, params } = ctx
-    const color = params.color as [number, number, number]
-    return `vec3 ${outputs.color} = vec3(${color[0]}, ${color[1]}, ${color[2]});`
+    const { inputs, outputs } = ctx
+    return `vec3 ${outputs.color} = ${inputs.color};`
   },
 }

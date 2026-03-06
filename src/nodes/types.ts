@@ -38,6 +38,7 @@ export interface NodeParameter {
   showWhen?: Record<string, string>                  // Only show when other params match these values
   connectable?: boolean                              // If true, renders as wirable handle + inline slider
   hidden?: boolean                                   // If true, param is not rendered in UI (internal state)
+  warnAbove?: number                                  // Show performance hint when unwired value exceeds this
   /**
    * Controls how a parameter change is handled by the compiler and renderer.
    *
@@ -45,8 +46,8 @@ export interface NodeParameter {
    *   Any change requires full shader recompilation.
    *   Use for: enum modes, structural counts, branch-shaping params.
    *
-   * - 'uniform': value will become a GLSL uniform in Phase 2.
-   *   Currently still baked as a literal (recompile on change).
+   * - 'uniform': value is emitted as a GLSL uniform and uploaded at runtime.
+   *   Changes require only a uniform upload — no recompile.
    *   Use for: scale, strength, offset, frequency, amplitude, numeric multipliers.
    */
   updateMode: 'recompile' | 'uniform'
@@ -120,6 +121,23 @@ export type CoercionRule = {
   from: PortType
   to: PortType
   glsl: (varName: string) => string  // GLSL conversion expression
+}
+
+/**
+ * Describes a user-defined GLSL uniform extracted during codegen.
+ * One per unwired 'uniform'-mode param per active node.
+ */
+export interface UniformSpec {
+  /** GLSL uniform name, e.g. "u_abc123_scale" */
+  name: string
+  /** GLSL type — determines which gl.uniform* call to use */
+  glslType: 'float' | 'vec2' | 'vec3' | 'vec4'
+  /** Current value at compile time — used for initial upload after updateShader() */
+  value: number | number[]
+  /** React Flow node ID (unsanitized) */
+  nodeId: string
+  /** NodeParameter.id */
+  paramId: string
 }
 
 /**

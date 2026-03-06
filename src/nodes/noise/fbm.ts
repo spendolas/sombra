@@ -38,7 +38,7 @@ export const fbmNode: NodeDefinition = {
     },
     // Phase 2 candidate: currently baked as loop bound literal. To promote to uniform,
     // rewrite FBM loop with compile-time MAX_OCTAVES and uniform-driven early break.
-    { id: 'octaves', label: 'Octaves', type: 'float', default: 4, min: 1, max: 8, step: 1, connectable: true, updateMode: 'recompile' },
+    { id: 'octaves', label: 'Octaves', type: 'float', default: 4, min: 1, max: 8, step: 1, connectable: true, updateMode: 'recompile', warnAbove: 6 },
     { id: 'lacunarity', label: 'Lacunarity', type: 'float', default: 2.0, min: 1.0, max: 4.0, step: 0.1, connectable: true, updateMode: 'uniform' },
     { id: 'gain', label: 'Gain', type: 'float', default: 0.5, min: 0.1, max: 0.9, step: 0.05, connectable: true, updateMode: 'uniform' },
     { id: 'seed', label: 'Seed', type: 'float', default: 12345, min: 0, max: 99999, step: 1, connectable: true, updateMode: 'uniform' },
@@ -53,9 +53,9 @@ export const fbmNode: NodeDefinition = {
     // Register GLSL functions for the selected noise type
     registerNoiseType(ctx, noiseType)
 
-    // Unique FBM function per node instance
+    // Content-addressed key: instances with same fractalMode+noiseType share one function
     const sanitizedId = ctx.nodeId.replace(/-/g, '_')
-    const fbmKey = `fbm_${sanitizedId}`
+    const fbmKey = `fbm_${fractalMode}_${noiseType}`
 
     let loopBody: string
     if (fractalMode === 'turbulence') {
