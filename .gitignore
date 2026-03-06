@@ -23,3 +23,6 @@ dist-ssr
 
 # Logs
 *.log
+
+# Audit artifacts
+binding-audit.ndjson

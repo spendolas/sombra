@@ -28,6 +28,8 @@
   --indigo-hover: #818cf8;
   --indigo-active: #4f46e5;
 
+  --overlay-scrim: #000000;
+
   /* ── Sombra spacing tokens (Figma: Spacing collection) ── */
   --sp-2xs: 2px;   /* spacing/2xs  VariableID:216:1079 */
   --sp-xs: 4px;   /* spacing/xs  VariableID:106:27 */
@@ -142,6 +144,7 @@ html, body, #root {
 
 @theme inline {
   /* === GENERATED:START theme-radius === */
+  --radius-xs: 2px;
   --radius-sm: 4px;  /* Figma radius/sm (VariableID:106:34) */
   --radius-md: 8px;
   --radius-lg: 10px;
@@ -198,6 +201,7 @@ html, body, #root {
   --color-indigo: var(--indigo);
   --color-indigo-hover: var(--indigo-hover);
   --color-indigo-active: var(--indigo-active);
+  --color-overlay-scrim: var(--overlay-scrim);
 
   /* ── Sombra spacing → Tailwind utilities ── */
   --spacing-2xs: var(--sp-2xs);

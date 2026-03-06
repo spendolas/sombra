@@ -128,6 +128,15 @@
         "namespace": "color",
         "key": "indigo-active"
       }
+    },
+    "VariableID:336:8": {
+      "figmaName": "overlay/scrim",
+      "cssVar": "--overlay-scrim",
+      "value": "#000000",
+      "tailwind": {
+        "namespace": "color",
+        "key": "overlay-scrim"
+      }
     }
   },
   "portColors": {
@@ -243,6 +252,15 @@
     }
   },
   "radius": {
+    "VariableID:336:7": {
+      "figmaName": "xs/2",
+      "value": 2,
+      "unit": "px",
+      "tailwind": {
+        "namespace": "radius",
+        "key": "xs"
+      }
+    },
     "VariableID:106:34": {
       "figmaName": "sm/4",
       "value": 4,
