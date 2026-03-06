@@ -53,7 +53,7 @@ export const ds = {
   },
   labeledHandle: {
     root: "items-center relative flex",
-    label: "text-handle text-foreground px-handle-offset flex-1",
+    label: "text-handle text-fg px-handle-offset flex-1",
   },
   floatSlider: {
     root: "flex flex-col gap-2xs select-none nodrag nowheel nokey",
