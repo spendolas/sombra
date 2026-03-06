@@ -889,6 +889,29 @@
           "hover": {
             "fill": "indigo/default"
           }
+        },
+        "solidHover": {
+          "figmaNodeId": "329:2",
+          "fill": "surface/raised",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "textColor": "fg",
+          "cursor": "pointer"
+        },
+        "ghostHover": {
+          "figmaNodeId": "329:5",
+          "fill": "surface/elevated",
+          "textColor": "fg",
+          "cursor": "pointer"
+        },
+        "textGhostHover": {
+          "figmaNodeId": "329:7",
+          "textStyle": "text-mono-value",
+          "fill": "surface/elevated",
+          "textColor": "fg",
+          "cursor": "pointer"
         }
       }
     },
