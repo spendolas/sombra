@@ -2,6 +2,10 @@ import type { ComponentProps } from "react";
 import { Handle, type HandleProps } from "@xyflow/react";
 
 import { cn } from "@/lib/utils";
+import { ds } from "@/generated/ds";
+import { PORT_COLORS } from "@/utils/port-colors";
+
+const fallback = PORT_COLORS.default;
 
 export type BaseHandleProps = HandleProps & {
   handleColor?: string;
@@ -18,13 +22,10 @@ export function BaseHandle({
   return (
     <Handle
       {...props}
-      className={cn(
-        "rounded-full border-2 transition",
-        className,
-      )}
+      className={cn(ds.handle.root, className)}
       style={{
-        borderColor: handleColor ?? '#6b7280',
-        backgroundColor: connected ? (handleColor ?? '#6b7280') : 'var(--surface-elevated)',
+        borderColor: handleColor ?? fallback,
+        backgroundColor: connected ? (handleColor ?? fallback) : 'var(--surface-elevated)',
         ...props.style,
       }}
     >

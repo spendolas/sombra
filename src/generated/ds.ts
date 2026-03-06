@@ -48,6 +48,9 @@ export const ds = {
     ghostDisabled: "text-fg-muted cursor-default",
     ghostActive: "bg-indigo text-fg cursor-default hover:bg-indigo",
   },
+  handle: {
+    root: "rounded-full !h-3 !w-3 border-2 transition",
+  },
   separator: {
     root: "bg-edge shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px",
   },
