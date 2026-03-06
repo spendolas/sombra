@@ -2,7 +2,7 @@
  * Node library - imports and registers all available nodes
  */
 
-import { registerNodes } from './registry'
+import { registerNodes, nodeRegistry } from './registry'
 
 // Input nodes
 import { uvCoordsNode } from './input/uv-coords'
@@ -88,12 +88,28 @@ export const ALL_NODES = [
 ]
 
 /**
- * Initialize the node library by registering all nodes
- * Call this once at app startup
+ * Initialize the node library by registering all nodes.
+ * Safe to call in both main thread and Web Worker contexts.
  */
 export function initializeNodeLibrary(): void {
   registerNodes(ALL_NODES)
   console.log(`[Sombra] Registered ${ALL_NODES.length} node types`)
+}
+
+/**
+ * Attach React component references to node definitions that have custom UI.
+ * Must be called on the main thread only (after initializeNodeLibrary).
+ * Worker contexts skip this — they only need the glsl() functions.
+ */
+export async function bindNodeComponents(): Promise<void> {
+  const { ColorRampEditor } = await import('@/components/ColorRampEditor')
+  const { RandomDisplay } = await import('../components/RandomDisplay')
+
+  const colorRamp = nodeRegistry.get('color_ramp')
+  if (colorRamp) colorRamp.component = ColorRampEditor
+
+  const random = nodeRegistry.get('random')
+  if (random) random.component = RandomDisplay
 }
 
 // Re-export for convenience

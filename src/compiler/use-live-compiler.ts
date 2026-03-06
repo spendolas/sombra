@@ -1,18 +1,22 @@
 /**
- * Live compiler hook - watches graph changes and auto-compiles
+ * Live compiler hook - watches graph changes and auto-compiles via Web Worker.
+ * Structural changes dispatch to an off-thread worker; uniform slider changes
+ * take a synchronous fast path on the main thread (no recompile).
  */
 
 import { useEffect, useMemo, useRef } from 'react'
 import { useGraphStore } from '../stores/graphStore'
 import { useCompilerStore } from '../stores/compilerStore'
 import { useSettingsStore } from '../stores/settingsStore'
-import { compileGraph } from './glsl-generator'
 import { nodeRegistry } from '../nodes/registry'
 import type { UniformSpec } from '../nodes/types'
+import type { CompileResponse } from './compiler.worker'
+import CompilerWorker from './compiler.worker?worker'
 
 /**
  * Hook that automatically compiles the shader graph when it changes.
- * Separates structural changes (recompile) from uniform slider changes (fast upload).
+ * Separates structural changes (recompile via Worker) from uniform slider
+ * changes (fast upload on main thread).
  *
  * @param onCompile Callback when full recompilation completes
  * @param onUniformUpdate Callback when only uniform values change (no recompile)
@@ -31,7 +35,7 @@ export function useLiveCompiler(
   const nodes = useGraphStore((state) => state.nodes)
   const edges = useGraphStore((state) => state.edges)
   const autoCompile = useSettingsStore((state) => state.autoCompile)
-  const debounceMs = useSettingsStore((state) => state.compileDebounceMs)
+  const initialDebounceMs = useSettingsStore((state) => state.compileDebounceMs)
 
   const setShaders = useCompilerStore((state) => state.setShaders)
   const setErrors = useCompilerStore((state) => state.setErrors)
@@ -39,6 +43,8 @@ export function useLiveCompiler(
   const markCompileSuccess = useCompilerStore((state) => state.markCompileSuccess)
 
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const workerRef = useRef<Worker | null>(null)
+  const currentCompileId = useRef<string | null>(null)
 
   // Keep latest nodes/edges in refs so they're accessible without triggering the effect
   const nodesRef = useRef(nodes)
@@ -49,6 +55,77 @@ export function useLiveCompiler(
   // Track last compiled uniform specs for the fast path
   const lastUniformsRef = useRef<UniformSpec[]>([])
   const lastSemanticKeyRef = useRef('')
+
+  // Dynamic debounce — adapts to actual compile duration
+  const lastCompileDuration = useRef(initialDebounceMs)
+
+  // Stable callback refs — avoid effect re-triggers when callback identity changes
+  const onCompileRef = useRef(onCompile)
+  const onUniformUpdateRef = useRef(onUniformUpdate)
+  onCompileRef.current = onCompile
+  onUniformUpdateRef.current = onUniformUpdate
+
+  // --- Worker lifecycle: create once on mount, terminate on unmount ---
+  useEffect(() => {
+    const worker = new CompilerWorker()
+    workerRef.current = worker
+
+    worker.onmessage = (event: MessageEvent<CompileResponse>) => {
+      const { id, result, error, durationMs } = event.data
+
+      // Discard stale results — a newer compile was dispatched
+      if (id !== currentCompileId.current) return
+
+      lastCompileDuration.current = durationMs
+
+      if (error) {
+        setErrors([
+          {
+            message: `Unexpected compilation error: ${error}`,
+            severity: 'error' as const,
+          },
+        ])
+        setCompiling(false)
+        onCompileRef.current?.({ success: false, fragmentShader: '' })
+        return
+      }
+
+      if (result?.success) {
+        setShaders(result.vertexShader, result.fragmentShader)
+        markCompileSuccess()
+        lastUniformsRef.current = result.userUniforms
+
+        onCompileRef.current?.({
+          success: true,
+          fragmentShader: result.fragmentShader,
+          userUniforms: result.userUniforms,
+          isTimeLiveAtOutput: result.isTimeLiveAtOutput,
+        })
+      } else {
+        setErrors(
+          (result?.errors ?? []).map((err) => ({
+            message: err.message,
+            nodeId: err.nodeId,
+            severity: 'error' as const,
+          }))
+        )
+
+        onCompileRef.current?.({ success: false, fragmentShader: '' })
+      }
+
+      setCompiling(false)
+    }
+
+    worker.onerror = (event) => {
+      console.error('[Sombra] Compiler worker error:', event.message, event)
+      setCompiling(false)
+    }
+
+    return () => {
+      worker.terminate()
+      workerRef.current = null
+    }
+  }, [setShaders, setErrors, setCompiling, markCompileSuccess])
 
   // Derive semantic key from only structural (recompile-mode) data
   const semanticKey = useMemo(() => {
@@ -92,6 +169,7 @@ export function useLiveCompiler(
       .join('|')
   }, [nodes])
 
+  // --- Dispatch effect: compile via Worker or fast-path uniform upload ---
   useEffect(() => {
     if (!autoCompile) return
 
@@ -102,61 +180,31 @@ export function useLiveCompiler(
 
     const semanticChanged = semanticKey !== lastSemanticKeyRef.current
 
+    // Dynamic debounce: clamp(lastDuration * 0.8, 50, 300)
+    const delay = Math.min(
+      300,
+      Math.max(50, lastCompileDuration.current * 0.8)
+    )
+
     if (semanticChanged) {
-      // Full recompile path
+      // Full recompile path — dispatch to Worker
       setCompiling(true)
 
       timeoutRef.current = setTimeout(() => {
-        try {
-          const result = compileGraph(nodesRef.current, edgesRef.current)
-
-          if (result.success) {
-            setShaders(result.vertexShader, result.fragmentShader)
-            markCompileSuccess()
-            lastUniformsRef.current = result.userUniforms
-            lastSemanticKeyRef.current = semanticKey
-
-            onCompile?.({
-              success: true,
-              fragmentShader: result.fragmentShader,
-              userUniforms: result.userUniforms,
-              isTimeLiveAtOutput: result.isTimeLiveAtOutput,
-            })
-          } else {
-            setErrors(
-              result.errors.map((err) => ({
-                message: err.message,
-                nodeId: err.nodeId,
-                severity: 'error' as const,
-              }))
-            )
-
-            onCompile?.({
-              success: false,
-              fragmentShader: '',
-            })
-          }
-        } catch (error) {
-          setErrors([
-            {
-              message: `Unexpected compilation error: ${error instanceof Error ? error.message : String(error)}`,
-              severity: 'error' as const,
-            },
-          ])
-
-          onCompile?.({
-            success: false,
-            fragmentShader: '',
-          })
-        } finally {
-          setCompiling(false)
-        }
-      }, debounceMs)
+        const id = crypto.randomUUID()
+        currentCompileId.current = id
+        lastSemanticKeyRef.current = semanticKey
+        workerRef.current?.postMessage({
+          id,
+          nodes: nodesRef.current,
+          edges: edgesRef.current,
+        })
+      }, delay)
     } else {
-      // Fast uniform-only path — no recompile
+      // Fast uniform-only path — no recompile, stays on main thread
       timeoutRef.current = setTimeout(() => {
         const specs = lastUniformsRef.current
-        if (!specs.length || !onUniformUpdate) return
+        if (!specs.length || !onUniformUpdateRef.current) return
 
         // Build current edge set for wired-param detection
         const currentEdges = edgesRef.current
@@ -184,9 +232,9 @@ export function useLiveCompiler(
         }
 
         if (values.length > 0) {
-          onUniformUpdate(values)
+          onUniformUpdateRef.current(values)
         }
-      }, debounceMs)
+      }, delay)
     }
 
     return () => {
@@ -199,12 +247,6 @@ export function useLiveCompiler(
     semanticKey,
     uniformKey,
     autoCompile,
-    debounceMs,
-    setShaders,
-    setErrors,
     setCompiling,
-    markCompileSuccess,
-    onCompile,
-    onUniformUpdate,
   ])
 }
