@@ -3,7 +3,7 @@
 
 export const ds = {
   nodeCard: {
-    root: "flex flex-col bg-surface-elevated rounded-md border border-edge-card relative hover:ring-1 [.react-flow__node.selected_&]:border-muted-foreground [.react-flow__node.selected_&]:shadow-lg",
+    root: "flex flex-col bg-surface-elevated rounded-md border border-edge-card relative hover:ring-1 [.react-flow__node.selected_&]:shadow-lg",
     header: "flex flex-row items-center justify-between bg-surface-raised rounded-t-md border-b border-edge-subtle px-lg py-md gap-md -mb-1",
     title: "text-node-title text-fg select-none flex-1",
     content: "flex flex-col p-lg gap-y-md",
