@@ -137,6 +137,15 @@
         "namespace": "color",
         "key": "overlay-scrim"
       }
+    },
+    "VariableID:364:2": {
+      "figmaName": "color/error",
+      "cssVar": "--error",
+      "value": "#ef4444",
+      "tailwind": {
+        "namespace": "color",
+        "key": "error"
+      }
     }
   },
   "portColors": {
@@ -564,7 +573,7 @@
           "hover": {
             "ring": "1"
           },
-          "extra": "[.react-flow__node.selected_&]:border-muted-foreground [.react-flow__node.selected_&]:shadow-lg"
+          "extra": "[.react-flow__node.selected_&]:shadow-lg"
         },
         "header": {
           "figmaNodeId": "111:488",
