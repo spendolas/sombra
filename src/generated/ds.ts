@@ -39,7 +39,7 @@ export const ds = {
   categoryHeader: {
     root: "pb-md text-category text-fg-subtle",
   },
-  iconButton: {
+  button: {
     root: "flex flex-col items-center justify-center rounded-sm size-btn-md",
     solid: "bg-surface-alt border border-edge text-fg-dim cursor-pointer transition-colors hover:bg-surface-raised hover:text-fg",
     solidDisabled: "text-fg-muted cursor-default",
@@ -47,6 +47,9 @@ export const ds = {
     ghost: "text-fg-dim cursor-pointer transition-colors hover:bg-surface-elevated hover:text-fg",
     ghostDisabled: "text-fg-muted cursor-default",
     ghostActive: "bg-indigo text-fg cursor-default hover:bg-indigo",
+    textGhost: "text-mono-value text-fg-dim cursor-pointer transition-colors hover:bg-surface-elevated hover:text-fg",
+    textGhostDisabled: "text-mono-value text-fg-muted cursor-default",
+    textGhostActive: "bg-indigo text-mono-value text-fg cursor-default hover:bg-indigo",
   },
   handle: {
     root: "rounded-full !h-3 !w-3 border-2 transition",

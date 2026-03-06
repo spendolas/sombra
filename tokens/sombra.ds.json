@@ -800,9 +800,9 @@
       }
     },
     "106:108": {
-      "name": "Icon Button",
+      "name": "Button",
       "type": "atom",
-      "dsKey": "iconButton",
+      "dsKey": "button",
       "codeFile": "src/components/IconButton.tsx",
       "parts": {
         "root": {
@@ -856,6 +856,33 @@
         },
         "ghostActive": {
           "figmaNodeId": "306:252",
+          "fill": "indigo/default",
+          "textColor": "fg",
+          "cursor": "default",
+          "hover": {
+            "fill": "indigo/default"
+          }
+        },
+        "textGhost": {
+          "figmaNodeId": "326:40",
+          "textStyle": "text-mono-value",
+          "textColor": "fg-dim",
+          "cursor": "pointer",
+          "transition": "colors",
+          "hover": {
+            "fill": "surface/elevated",
+            "textColor": "fg"
+          }
+        },
+        "textGhostDisabled": {
+          "figmaNodeId": "326:44",
+          "textStyle": "text-mono-value",
+          "textColor": "fg-muted",
+          "cursor": "default"
+        },
+        "textGhostActive": {
+          "figmaNodeId": "326:48",
+          "textStyle": "text-mono-value",
           "fill": "indigo/default",
           "textColor": "fg",
           "cursor": "default",

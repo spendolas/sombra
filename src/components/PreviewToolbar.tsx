@@ -18,8 +18,8 @@ export function PreviewToolbar({ className }: PreviewToolbarProps) {
   const isDockedH = previewMode === 'docked' && splitDirection === 'horizontal'
   const isDockedV = previewMode === 'docked' && splitDirection === 'vertical'
 
-  const active = ds.iconButton.ghostActive
-  const inactive = ds.iconButton.ghost
+  const active = ds.button.ghostActive
+  const inactive = ds.button.ghost
 
   // In fullwindow mode, only show a collapse button
   if (previewMode === 'fullwindow') {

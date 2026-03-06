@@ -170,8 +170,8 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
               onClick={handleRemoveInput}
               disabled={inputCount <= 2}
               className={inputCount <= 2
-                ? ds.iconButton.solidDisabled
-                : ds.iconButton.solid}
+                ? ds.button.solidDisabled
+                : ds.button.solid}
             />
             <span className="text-param text-fg-muted">
               {inputCount}
@@ -181,8 +181,8 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
               onClick={handleAddInput}
               disabled={inputCount >= 8}
               className={inputCount >= 8
-                ? ds.iconButton.solidDisabled
-                : ds.iconButton.solid}
+                ? ds.button.solidDisabled
+                : ds.button.solid}
             />
           </div>
         )}

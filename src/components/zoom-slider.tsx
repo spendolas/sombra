@@ -9,7 +9,6 @@ import {
 } from "@xyflow/react";
 
 import { Slider } from "@/components/ui/slider";
-import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/IconButton";
 import { cn } from "@/lib/utils";
 import { ds } from "@/generated/ds";
@@ -61,18 +60,17 @@ export function ZoomSlider({
           onClick={() => zoomIn({ duration: 300 })}
         />
       </div>
-      <Button
+      <IconButton
+        label={`${(100 * zoom).toFixed(0)}%`}
         className={cn(
+          ds.button.textGhost,
           "tabular-nums",
           orientation === "horizontal"
             ? "w-[140px] min-w-10"
             : "h-[40px] w-[40px]",
         )}
-        variant="ghost"
         onClick={() => zoomTo(1, { duration: 300 })}
-      >
-        {(100 * zoom).toFixed(0)}%
-      </Button>
+      />
       <IconButton
         icon="maximize"
         onClick={() => fitView({ duration: 300 })}

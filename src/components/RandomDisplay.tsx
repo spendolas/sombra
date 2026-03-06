@@ -48,7 +48,7 @@ export function RandomDisplay({
       <IconButton
         icon="shuffle"
         onClick={handleRandomise}
-        className={ds.iconButton.solid}
+        className={ds.button.solid}
         title="Randomise"
       />
     </div>
