@@ -271,7 +271,7 @@ function SombraSlider({
     >
       {/* Label + value row */}
       <div
-        className="flex justify-between items-center cursor-ew-resize"
+        className={ds.floatSlider.labelRow}
         onDoubleClick={() => handleDoubleClick(isRange ? 'lo' : 'single')}
       >
         {isRange ? (
@@ -283,11 +283,11 @@ function SombraSlider({
               onPointerMove={handleLabelPointerMove}
               onPointerUp={handleLabelPointerUp}
             >
-              <span className="text-param text-fg-subtle">{labels[0]}</span>
+              <span className={ds.floatSlider.label}>{labels[0]}</span>
               {editingField === 'lo' ? (
                 <input
                   autoFocus
-                  className="w-10 bg-transparent text-param text-fg text-right tabular-nums outline-none border-b border-indigo nodrag nowheel"
+                  className={cn("w-10", ds.floatSlider.input)}
                   value={editText}
                   onChange={(e) => setEditText(e.target.value)}
                   onBlur={() => commitEdit('lo')}
@@ -296,7 +296,7 @@ function SombraSlider({
                 />
               ) : (
                 <span
-                  className="text-param text-fg tabular-nums cursor-text"
+                  className={ds.floatSlider.value}
                   onClick={(e) => handleValueClick(e, 'lo')}
                 >
                   {formatValue(vals[0], step)}
@@ -314,7 +314,7 @@ function SombraSlider({
               {editingField === 'hi' ? (
                 <input
                   autoFocus
-                  className="w-10 bg-transparent text-param text-fg text-right tabular-nums outline-none border-b border-indigo nodrag nowheel"
+                  className={cn("w-10", ds.floatSlider.input)}
                   value={editText}
                   onChange={(e) => setEditText(e.target.value)}
                   onBlur={() => commitEdit('hi')}
@@ -323,13 +323,13 @@ function SombraSlider({
                 />
               ) : (
                 <span
-                  className="text-param text-fg tabular-nums cursor-text"
+                  className={ds.floatSlider.value}
                   onClick={(e) => handleValueClick(e, 'hi')}
                 >
                   {formatValue(vals[isRange ? 1 : 0], step)}
                 </span>
               )}
-              <span className="text-param text-fg-subtle">{labels[1] || labels[0]}</span>
+              <span className={ds.floatSlider.label}>{labels[1] || labels[0]}</span>
             </div>
           </>
         ) : (
@@ -339,11 +339,11 @@ function SombraSlider({
             onPointerMove={handleLabelPointerMove}
             onPointerUp={handleLabelPointerUp}
           >
-            <span className="text-param text-fg-subtle">{labels[0]}</span>
+            <span className={ds.floatSlider.label}>{labels[0]}</span>
             {editingField === 'single' ? (
               <input
                 autoFocus
-                className="w-12 bg-transparent text-param text-fg text-right tabular-nums outline-none border-b border-indigo nodrag nowheel"
+                className={cn("w-12", ds.floatSlider.input)}
                 value={editText}
                 onChange={(e) => setEditText(e.target.value)}
                 onBlur={() => commitEdit('single')}
@@ -352,7 +352,7 @@ function SombraSlider({
               />
             ) : (
               <span
-                className="text-param text-fg tabular-nums cursor-text"
+                className={ds.floatSlider.value}
                 onClick={(e) => handleValueClick(e, 'single')}
               >
                 {formatValue(vals[0], step)}
@@ -365,7 +365,7 @@ function SombraSlider({
       {/* Track */}
       <div
         ref={trackRef}
-        className="relative w-full h-slider-track rounded-full bg-surface-raised overflow-hidden cursor-ew-resize"
+        className={ds.floatSlider.track}
         onPointerDown={handleTrackPointerDown}
         onPointerMove={handleTrackPointerMove}
         onPointerUp={handleTrackPointerUp}
@@ -373,7 +373,7 @@ function SombraSlider({
         {isRange ? (
           // Range fill between lo and hi (clamped to track visually)
           <div
-            className="absolute top-0 bottom-0 bg-indigo rounded-full"
+            className={ds.floatSlider.fill}
             style={{
               left: `${valueToX(vals[0]) * 100}%`,
               width: `${(valueToX(vals[1]) - valueToX(vals[0])) * 100}%`,
@@ -382,7 +382,7 @@ function SombraSlider({
         ) : (
           // Single fill from left (clamped to track visually)
           <div
-            className="absolute top-0 bottom-0 left-0 bg-indigo rounded-full"
+            className={cn(ds.floatSlider.fill, "left-0")}
             style={{ width: `${valueToX(vals[0]) * 100}%` }}
           />
         )}
