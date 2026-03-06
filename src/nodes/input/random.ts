@@ -5,7 +5,6 @@
  */
 
 import type { NodeDefinition } from '../types'
-import { RandomDisplay } from '../../components/RandomDisplay'
 
 /** Simple string hash → float 0-1 */
 export function hashNodeId(id: string): number {
@@ -36,7 +35,7 @@ export const randomNode: NodeDefinition = {
     { id: 'seed', label: 'Seed', type: 'float', default: 0, hidden: true, updateMode: 'uniform' },
   ],
 
-  component: RandomDisplay,
+
 
   glsl: (ctx) => {
     const { inputs, outputs } = ctx

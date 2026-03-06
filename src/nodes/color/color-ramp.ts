@@ -3,7 +3,6 @@
  */
 
 import type { NodeDefinition } from '../types'
-import { ColorRampEditor } from '@/components/ColorRampEditor'
 
 /** Format number as GLSL float literal */
 function flt(n: number): string {
@@ -52,7 +51,7 @@ export const colorRampNode: NodeDefinition = {
     },
   ],
 
-  component: ColorRampEditor,
+
 
   glsl: (ctx) => {
     const { inputs, outputs, params } = ctx
