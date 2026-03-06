@@ -93,6 +93,12 @@ export const ds = {
   },
   gradientEditor: {
     root: "flex flex-col gap-md",
+    bar: "rounded-md border border-edge cursor-crosshair relative h-input-h",
+    stopMarkers: "relative h-icon-sm",
+    stopHandle: "rounded-full border-2 border-surface-elevated cursor-pointer absolute w-handle h-handle",
+    stopHandleSelected: "shadow-[0_0_4px_1px_rgba(99,102,241,0.8)]",
+    controlsRow: "flex flex-row items-center gap-md",
+    positionText: "text-param text-fg-dim tabular-nums",
   },
   randomDisplay: {
     root: "flex flex-row items-center justify-between px-xs gap-md nodrag nowheel",
