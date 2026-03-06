@@ -354,23 +354,16 @@ export function ColorRampEditor({
         <div className="flex-1" />
         <IconButton
           icon="plus"
-          variant="unstyled"
-          size="icon-node"
           onClick={handleAddStop}
-          className={cn(ds.iconButton.root, ds.iconButton.solid)}
+          className={ds.iconButton.solid}
         />
         <IconButton
           icon="minus"
-          variant="unstyled"
-          size="icon-node"
           onClick={handleRemoveStop}
           disabled={stops.length <= 2}
-          className={cn(
-            ds.iconButton.root,
-            stops.length <= 2
-              ? ds.iconButton.solidDisabled
-              : ds.iconButton.solid
-          )}
+          className={stops.length <= 2
+            ? ds.iconButton.solidDisabled
+            : ds.iconButton.solid}
         />
       </div>
 

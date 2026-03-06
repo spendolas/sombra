@@ -167,32 +167,22 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
           <div className="flex items-center justify-center gap-md py-xs">
             <IconButton
               icon="minus"
-              variant="unstyled"
-              size="icon-node"
               onClick={handleRemoveInput}
               disabled={inputCount <= 2}
-              className={cn(
-                ds.iconButton.root,
-                inputCount <= 2
-                  ? ds.iconButton.solidDisabled
-                  : ds.iconButton.solid
-              )}
+              className={inputCount <= 2
+                ? ds.iconButton.solidDisabled
+                : ds.iconButton.solid}
             />
             <span className="text-param text-fg-muted">
               {inputCount}
             </span>
             <IconButton
               icon="plus"
-              variant="unstyled"
-              size="icon-node"
               onClick={handleAddInput}
               disabled={inputCount >= 8}
-              className={cn(
-                ds.iconButton.root,
-                inputCount >= 8
-                  ? ds.iconButton.solidDisabled
-                  : ds.iconButton.solid
-              )}
+              className={inputCount >= 8
+                ? ds.iconButton.solidDisabled
+                : ds.iconButton.solid}
             />
           </div>
         )}

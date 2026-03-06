@@ -287,16 +287,14 @@ html, body, #root {
   text-transform: uppercase;
   line-height: 1.5;
 }
-@utility text-mono-value {                 /* mono/value: 12px, Regular, mono */
+@utility text-mono-value {                 /* mono/value: 12px, Regular */
   font-size: 12px;
   font-weight: 400;
-  font-family: ui-monospace, SFMono-Regular, monospace;
   line-height: 1.5;
 }
-@utility text-mono-id {                    /* mono/id: 10px, Regular, mono */
+@utility text-mono-id {                    /* mono/id: 10px, Regular */
   font-size: 10px;
   font-weight: 400;
-  font-family: ui-monospace, SFMono-Regular, monospace;
   line-height: 1.5;
 }
 @utility text-port-type {                  /* port-row/type: 11px, Regular */
