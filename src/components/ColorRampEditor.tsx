@@ -317,19 +317,20 @@ export function ColorRampEditor({
       {/* Gradient bar */}
       <div
         ref={barRef}
-        className="relative h-input-h rounded-md border border-edge cursor-crosshair"
+        className={ds.gradientEditor.bar}
         style={{ background: `linear-gradient(to right, ${gradientCSS})` }}
         onClick={handleBarClick}
       />
 
       {/* Stop markers */}
-      <div className="relative h-icon-sm">
+      <div className={ds.gradientEditor.stopMarkers}>
         {stops.map((stop, i) => (
           <button
             key={i}
             className={cn(
-              'absolute top-0 -translate-x-1/2 size-handle rounded-full border-2 border-surface-elevated',
-              i === safeIndex && 'ring-2 ring-indigo'
+              ds.gradientEditor.stopHandle,
+              'top-0 -translate-x-1/2',
+              i === safeIndex && ds.gradientEditor.stopHandleSelected
             )}
             style={{
               left: `${stop.position * 100}%`,
@@ -341,14 +342,14 @@ export function ColorRampEditor({
       </div>
 
       {/* Controls row */}
-      <div className="flex items-center gap-md">
+      <div className={ds.gradientEditor.controlsRow}>
         <input
           type="color"
           value={stopToHex(selectedStop)}
           onChange={(e) => handleColorChange(e.target.value)}
           className={cn(ds.colorInput.input, "size-input-h")}
         />
-        <span className="text-param tabular-nums text-fg-dim">
+        <span className={ds.gradientEditor.positionText}>
           {Math.round(selectedStop.position * 100)}%
         </span>
         <div className="flex-1" />

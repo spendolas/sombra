@@ -1148,6 +1148,44 @@
           "figmaNodeId": "111:949",
           "layout": "vertical",
           "gap": "md"
+        },
+        "bar": {
+          "figmaNodeId": "111:932",
+          "position": "relative",
+          "height": "input-h",
+          "radius": "md",
+          "stroke": { "color": "edge/default" },
+          "cursor": "crosshair"
+        },
+        "stopMarkers": {
+          "figmaNodeId": "111:933",
+          "position": "relative",
+          "height": "icon-sm"
+        },
+        "stopHandle": {
+          "figmaNodeId": "111:934",
+          "position": "absolute",
+          "width": "handle",
+          "height": "handle",
+          "radius": "full",
+          "stroke": { "color": "surface/elevated", "weight": 2 },
+          "cursor": "pointer"
+        },
+        "stopHandleSelected": {
+          "figmaNodeId": "111:935",
+          "effects": [{ "type": "shadow", "class": "shadow-[0_0_4px_1px_rgba(99,102,241,0.8)]" }]
+        },
+        "controlsRow": {
+          "figmaNodeId": "111:938",
+          "layout": "horizontal",
+          "gap": "md",
+          "align": "center"
+        },
+        "positionText": {
+          "figmaNodeId": "111:940",
+          "textStyle": "text-param",
+          "textColor": "fg-dim",
+          "extra": "tabular-nums"
         }
       }
     },

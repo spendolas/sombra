@@ -366,11 +366,12 @@ function fillToClass(fill: string, colorMap: Record<string, string>): string {
 function strokeToClasses(stroke: StrokeDef, colorMap: Record<string, string>): string[] {
   const classes: string[] = []
 
-  if (stroke.side === 'bottom') classes.push('border-b')
-  else if (stroke.side === 'top') classes.push('border-t')
-  else if (stroke.side === 'left') classes.push('border-l')
-  else if (stroke.side === 'right') classes.push('border-r')
-  else classes.push('border')
+  const widthSuffix = stroke.weight && stroke.weight !== 1 ? `-${stroke.weight}` : ''
+  if (stroke.side === 'bottom') classes.push(`border-b${widthSuffix}`)
+  else if (stroke.side === 'top') classes.push(`border-t${widthSuffix}`)
+  else if (stroke.side === 'left') classes.push(`border-l${widthSuffix}`)
+  else if (stroke.side === 'right') classes.push(`border-r${widthSuffix}`)
+  else classes.push(`border${widthSuffix}`)
 
   if (stroke.color) {
     const key = colorMap[stroke.color]
