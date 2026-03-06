@@ -16,6 +16,11 @@ export interface CompilationResult {
   vertexShader: string
   fragmentShader: string
   errors: Array<{ message: string; nodeId?: string }>
+  /** True when u_time has a live dependency path to fragment output.
+   *  Topological sort prunes unreachable nodes, so uniforms.has('u_time')
+   *  after codegen is the correct signal. Used by renderer (Phase 3)
+   *  to choose continuous RAF loop vs render-on-demand. */
+  isTimeLiveAtOutput: boolean
 }
 
 /**
@@ -54,6 +59,7 @@ export function compileGraph(
         vertexShader: '',
         fragmentShader: '',
         errors: [{ message: 'Graph contains cycles. Remove circular dependencies.' }],
+        isTimeLiveAtOutput: false,
       }
     }
 
@@ -233,6 +239,7 @@ export function compileGraph(
         vertexShader: '',
         fragmentShader: '',
         errors,
+        isTimeLiveAtOutput: false,
       }
     }
 
@@ -248,6 +255,7 @@ export function compileGraph(
       vertexShader: VERTEX_SHADER,
       fragmentShader,
       errors: [],
+      isTimeLiveAtOutput: uniforms.has('u_time'),
     }
   } catch (error) {
     return {
@@ -259,6 +267,7 @@ export function compileGraph(
           message: `Compilation failed: ${error instanceof Error ? error.message : String(error)}`,
         },
       ],
+      isTimeLiveAtOutput: false,
     }
   }
 }

@@ -37,6 +37,7 @@ export const brightnessContrastNode: NodeDefinition = {
       max: 1.0,
       step: 0.01,
       connectable: true,
+      updateMode: 'uniform',
     },
     {
       id: 'contrast',
@@ -47,6 +48,7 @@ export const brightnessContrastNode: NodeDefinition = {
       max: 1.0,
       step: 0.01,
       connectable: true,
+      updateMode: 'uniform',
     },
   ],
 

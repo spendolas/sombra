@@ -22,10 +22,10 @@ export const fbmNode: NodeDefinition = {
   ],
 
   params: [
-    { id: 'scale', label: 'Scale', type: 'float', default: 5.0, min: 0.1, max: 20.0, step: 0.1, connectable: true },
+    { id: 'scale', label: 'Scale', type: 'float', default: 5.0, min: 0.1, max: 20.0, step: 0.1, connectable: true, updateMode: 'uniform' },
     {
       id: 'noiseType', label: 'Noise Type', type: 'enum', default: 'simplex',
-      options: NOISE_TYPE_OPTIONS,
+      options: NOISE_TYPE_OPTIONS, updateMode: 'recompile',
     },
     {
       id: 'fractalMode', label: 'Fractal Mode', type: 'enum', default: 'standard',
@@ -34,11 +34,14 @@ export const fbmNode: NodeDefinition = {
         { value: 'turbulence', label: 'Turbulence' },
         { value: 'ridged', label: 'Ridged' },
       ],
+      updateMode: 'recompile',
     },
-    { id: 'octaves', label: 'Octaves', type: 'float', default: 4, min: 1, max: 8, step: 1, connectable: true },
-    { id: 'lacunarity', label: 'Lacunarity', type: 'float', default: 2.0, min: 1.0, max: 4.0, step: 0.1, connectable: true },
-    { id: 'gain', label: 'Gain', type: 'float', default: 0.5, min: 0.1, max: 0.9, step: 0.05, connectable: true },
-    { id: 'seed', label: 'Seed', type: 'float', default: 12345, min: 0, max: 99999, step: 1, connectable: true },
+    // Phase 2 candidate: currently baked as loop bound literal. To promote to uniform,
+    // rewrite FBM loop with compile-time MAX_OCTAVES and uniform-driven early break.
+    { id: 'octaves', label: 'Octaves', type: 'float', default: 4, min: 1, max: 8, step: 1, connectable: true, updateMode: 'recompile' },
+    { id: 'lacunarity', label: 'Lacunarity', type: 'float', default: 2.0, min: 1.0, max: 4.0, step: 0.1, connectable: true, updateMode: 'uniform' },
+    { id: 'gain', label: 'Gain', type: 'float', default: 0.5, min: 0.1, max: 0.9, step: 0.05, connectable: true, updateMode: 'uniform' },
+    { id: 'seed', label: 'Seed', type: 'float', default: 12345, min: 0, max: 99999, step: 1, connectable: true, updateMode: 'uniform' },
   ],
 
   glsl: (ctx) => {

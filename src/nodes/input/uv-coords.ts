@@ -25,11 +25,11 @@ export const uvCoordsNode: NodeDefinition = {
   ],
 
   params: [
-    { id: 'scaleX', label: 'Scale X', type: 'float', default: 1.0, min: 0.01, max: 10.0, step: 0.01, connectable: true },
-    { id: 'scaleY', label: 'Scale Y', type: 'float', default: 1.0, min: 0.01, max: 10.0, step: 0.01, connectable: true },
-    { id: 'rotate', label: 'Rotate', type: 'float', default: 0.0, min: -6.2832, max: 6.2832, step: 0.01, connectable: true },
-    { id: 'offsetX', label: 'Offset X', type: 'float', default: 0.0, min: -10.0, max: 10.0, step: 0.01, connectable: true },
-    { id: 'offsetY', label: 'Offset Y', type: 'float', default: 0.0, min: -10.0, max: 10.0, step: 0.01, connectable: true },
+    { id: 'scaleX', label: 'Scale X', type: 'float', default: 1.0, min: 0.01, max: 10.0, step: 0.01, connectable: true, updateMode: 'uniform' },
+    { id: 'scaleY', label: 'Scale Y', type: 'float', default: 1.0, min: 0.01, max: 10.0, step: 0.01, connectable: true, updateMode: 'uniform' },
+    { id: 'rotate', label: 'Rotate', type: 'float', default: 0.0, min: -6.2832, max: 6.2832, step: 0.01, connectable: true, updateMode: 'uniform' },
+    { id: 'offsetX', label: 'Offset X', type: 'float', default: 0.0, min: -10.0, max: 10.0, step: 0.01, connectable: true, updateMode: 'uniform' },
+    { id: 'offsetY', label: 'Offset Y', type: 'float', default: 0.0, min: -10.0, max: 10.0, step: 0.01, connectable: true, updateMode: 'uniform' },
   ],
 
   glsl: (ctx) => {

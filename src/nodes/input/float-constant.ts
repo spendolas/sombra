@@ -29,6 +29,7 @@ export const floatConstantNode: NodeDefinition = {
       min: -10.0,
       max: 10.0,
       step: 0.01,
+      updateMode: 'uniform',
     },
   ],
 

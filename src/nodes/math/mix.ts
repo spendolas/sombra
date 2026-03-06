@@ -43,6 +43,7 @@ export const mixNode: NodeDefinition = {
       max: 1.0,
       step: 0.01,
       connectable: true,
+      updateMode: 'uniform',
     },
   ],
 

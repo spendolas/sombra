@@ -40,6 +40,7 @@ export const colorRampNode: NodeDefinition = {
         { value: 'linear', label: 'Linear' },
         { value: 'constant', label: 'Constant' },
       ],
+      updateMode: 'recompile',
     },
     {
       id: 'stops',
@@ -47,6 +48,7 @@ export const colorRampNode: NodeDefinition = {
       type: 'float',
       default: 0,
       hidden: true,
+      updateMode: 'recompile',
     },
   ],
 

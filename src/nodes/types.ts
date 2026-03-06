@@ -38,6 +38,18 @@ export interface NodeParameter {
   showWhen?: Record<string, string>                  // Only show when other params match these values
   connectable?: boolean                              // If true, renders as wirable handle + inline slider
   hidden?: boolean                                   // If true, param is not rendered in UI (internal state)
+  /**
+   * Controls how a parameter change is handled by the compiler and renderer.
+   *
+   * - 'recompile': value is baked into GLSL source at codegen time.
+   *   Any change requires full shader recompilation.
+   *   Use for: enum modes, structural counts, branch-shaping params.
+   *
+   * - 'uniform': value will become a GLSL uniform in Phase 2.
+   *   Currently still baked as a literal (recompile on change).
+   *   Use for: scale, strength, offset, frequency, amplitude, numeric multipliers.
+   */
+  updateMode: 'recompile' | 'uniform'
 }
 
 /**
