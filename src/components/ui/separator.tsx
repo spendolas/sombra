@@ -1,20 +1,22 @@
-import * as React from "react"
-import { Separator as SeparatorPrimitive } from "radix-ui"
-
 import { cn } from "@/lib/utils"
 import { ds } from "@/generated/ds"
+
+interface SeparatorProps extends React.ComponentProps<"div"> {
+  orientation?: "horizontal" | "vertical"
+  decorative?: boolean
+}
 
 function Separator({
   className,
   orientation = "horizontal",
   decorative = true,
   ...props
-}: React.ComponentProps<typeof SeparatorPrimitive.Root>) {
+}: SeparatorProps) {
   return (
-    <SeparatorPrimitive.Root
-      data-slot="separator"
-      decorative={decorative}
-      orientation={orientation}
+    <div
+      role={decorative ? "none" : "separator"}
+      aria-orientation={decorative ? undefined : orientation}
+      data-orientation={orientation}
       className={cn(ds.separator.root, className)}
       {...props}
     />
