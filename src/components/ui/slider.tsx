@@ -1,63 +1,102 @@
-import * as React from "react"
-import { Slider as SliderPrimitive } from "radix-ui"
+/**
+ * Slider — thin native range input styled with DS tokens.
+ * Used only by ZoomSlider for viewport zoom control.
+ */
 
+import { useRef, useCallback } from "react"
 import { cn } from "@/lib/utils"
 import { ds } from "@/generated/ds"
 
+interface SliderProps {
+  className?: string
+  value?: number[]
+  min?: number
+  max?: number
+  step?: number
+  orientation?: "horizontal" | "vertical"
+  onValueChange?: (values: number[]) => void
+}
+
 function Slider({
   className,
-  defaultValue,
   value,
   min = 0,
   max = 100,
-  ...props
-}: React.ComponentProps<typeof SliderPrimitive.Root>) {
-  const _values = React.useMemo(
-    () =>
-      Array.isArray(value)
-        ? value
-        : Array.isArray(defaultValue)
-          ? defaultValue
-          : [min, max],
-    [value, defaultValue, min, max]
+  step = 1,
+  orientation = "horizontal",
+  onValueChange,
+}: SliderProps) {
+  const trackRef = useRef<HTMLDivElement>(null)
+  const currentValue = value?.[0] ?? min
+  const fraction = max === min ? 0 : (currentValue - min) / (max - min)
+
+  const handlePointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const track = trackRef.current
+      if (!track) return
+
+      const update = (clientX: number, clientY: number) => {
+        const rect = track.getBoundingClientRect()
+        let frac: number
+        if (orientation === "vertical") {
+          frac = 1 - Math.max(0, Math.min(1, (clientY - rect.top) / rect.height))
+        } else {
+          frac = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+        }
+        const raw = min + frac * (max - min)
+        const snapped = Math.round(raw / step) * step
+        const clamped = Math.max(min, Math.min(max, snapped))
+        onValueChange?.([clamped])
+      }
+
+      update(e.clientX, e.clientY)
+      ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+
+      const onMove = (ev: PointerEvent) => update(ev.clientX, ev.clientY)
+      const onUp = () => {
+        document.removeEventListener("pointermove", onMove)
+        document.removeEventListener("pointerup", onUp)
+      }
+      document.addEventListener("pointermove", onMove)
+      document.addEventListener("pointerup", onUp)
+    },
+    [min, max, step, orientation, onValueChange]
   )
 
+  const isVertical = orientation === "vertical"
+
   return (
-    <SliderPrimitive.Root
-      data-slot="slider"
-      defaultValue={defaultValue}
-      value={value}
-      min={min}
-      max={max}
+    <div
       className={cn(
-        "relative flex w-full touch-none items-center select-none data-[disabled]:opacity-50 data-[orientation=vertical]:h-full data-[orientation=vertical]:min-h-44 data-[orientation=vertical]:w-auto data-[orientation=vertical]:flex-col",
+        "relative flex touch-none items-center select-none",
+        isVertical ? "flex-col h-full w-auto" : "w-full",
         className
       )}
-      {...props}
     >
-      <SliderPrimitive.Track
-        data-slot="slider-track"
+      <div
+        ref={trackRef}
         className={cn(
           ds.sliderTrack.track,
-          "grow overflow-hidden data-[orientation=horizontal]:h-slider-track data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-slider-track"
+          "cursor-pointer overflow-hidden",
+          isVertical ? "!h-full !w-slider-track" : "!h-slider-track !w-full"
         )}
+        onPointerDown={handlePointerDown}
       >
-        <SliderPrimitive.Range
-          data-slot="slider-range"
+        <div
           className={cn(
             ds.sliderTrack.fill,
-            "data-[orientation=horizontal]:h-full data-[orientation=vertical]:w-full"
+            isVertical ? "!w-full !h-auto left-0 right-0 bottom-0" : "!h-full left-0"
           )}
+          style={
+            isVertical
+              ? { height: `${fraction * 100}%` }
+              : { width: `${fraction * 100}%` }
+          }
         />
-      </SliderPrimitive.Track>
-      {Array.from({ length: _values.length }, (_, index) => (
-        <SliderPrimitive.Thumb
-          data-slot="slider-thumb"
-          key={index}
-          className="border-indigo ring-ring/50 block size-slider-thumb shrink-0 rounded-full border bg-white shadow-sm transition-[color,box-shadow] hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
-        />
-      ))}
-    </SliderPrimitive.Root>
+      </div>
+    </div>
   )
 }
 
