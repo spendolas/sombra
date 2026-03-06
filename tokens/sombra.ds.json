@@ -872,7 +872,9 @@
       "codeFile": "src/components/base-handle.tsx",
       "parts": {
         "root": {
-          "figmaNodeId": "106:84"
+          "figmaNodeId": "106:84",
+          "radius": "full",
+          "extra": "!h-3 !w-3 border-2 transition"
         }
       }
     },
