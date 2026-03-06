@@ -26,6 +26,7 @@ export const colorConstantNode: NodeDefinition = {
       label: 'Color',
       type: 'color',
       default: [1.0, 0.0, 1.0], // Magenta default
+      updateMode: 'uniform',
     },
   ],
 

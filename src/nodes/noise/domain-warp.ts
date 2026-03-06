@@ -24,11 +24,11 @@ export const domainWarpNode: NodeDefinition = {
   params: [
     {
       id: 'noiseType', label: 'Noise Type', type: 'enum', default: 'value',
-      options: NOISE_TYPE_OPTIONS,
+      options: NOISE_TYPE_OPTIONS, updateMode: 'recompile',
     },
-    { id: 'strength', label: 'Strength', type: 'float', default: 0.3, min: 0.0, max: 10.0, step: 0.01, connectable: true },
-    { id: 'frequency', label: 'Frequency', type: 'float', default: 4.0, min: 0.1, max: 20.0, step: 0.1, connectable: true },
-    { id: 'seed', label: 'Seed', type: 'float', default: 12345, min: 0, max: 99999, step: 1, connectable: true },
+    { id: 'strength', label: 'Strength', type: 'float', default: 0.3, min: 0.0, max: 10.0, step: 0.01, connectable: true, updateMode: 'uniform' },
+    { id: 'frequency', label: 'Frequency', type: 'float', default: 4.0, min: 0.1, max: 20.0, step: 0.1, connectable: true, updateMode: 'uniform' },
+    { id: 'seed', label: 'Seed', type: 'float', default: 12345, min: 0, max: 99999, step: 1, connectable: true, updateMode: 'uniform' },
   ],
 
   glsl: (ctx) => {

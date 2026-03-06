@@ -73,6 +73,7 @@ export const ditherNode: NodeDefinition = {
       max: 64,
       step: 1,
       connectable: true,
+      updateMode: 'uniform',
     },
     {
       id: 'shape',
@@ -85,6 +86,7 @@ export const ditherNode: NodeDefinition = {
         { value: 'diamond', label: 'Diamond' },
         { value: 'triangle', label: 'Triangle' },
       ],
+      updateMode: 'recompile',
     },
     {
       id: 'threshold',
@@ -95,6 +97,7 @@ export const ditherNode: NodeDefinition = {
       max: 1,
       step: 0.01,
       connectable: true,
+      updateMode: 'uniform',
     },
     {
       id: 'dither',
@@ -106,6 +109,7 @@ export const ditherNode: NodeDefinition = {
       step: 0.01,
       connectable: true,
       showWhen: { shape: 'circle' },
+      updateMode: 'uniform',
     },
   ],
 

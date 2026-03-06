@@ -30,10 +30,10 @@ export const randomNode: NodeDefinition = {
   ],
 
   params: [
-    { id: 'min', label: 'Min', type: 'float', default: 0, min: -99999, max: 99999, step: 1, connectable: true },
-    { id: 'max', label: 'Max', type: 'float', default: 1, min: -99999, max: 99999, step: 1, connectable: true },
-    { id: 'decimals', label: 'Decimals', type: 'float', default: 7, min: 0, max: 7, step: 1 },
-    { id: 'seed', label: 'Seed', type: 'float', default: 0, hidden: true },
+    { id: 'min', label: 'Min', type: 'float', default: 0, min: -99999, max: 99999, step: 1, connectable: true, updateMode: 'uniform' },
+    { id: 'max', label: 'Max', type: 'float', default: 1, min: -99999, max: 99999, step: 1, connectable: true, updateMode: 'uniform' },
+    { id: 'decimals', label: 'Decimals', type: 'float', default: 7, min: 0, max: 7, step: 1, updateMode: 'recompile' },
+    { id: 'seed', label: 'Seed', type: 'float', default: 0, hidden: true, updateMode: 'uniform' },
   ],
 
   component: RandomDisplay,

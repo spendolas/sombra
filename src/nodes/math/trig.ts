@@ -39,6 +39,7 @@ export const trigNode: NodeDefinition = {
       type: 'enum',
       default: 'sin',
       options: FUNCTIONS,
+      updateMode: 'recompile',
     },
     {
       id: 'frequency',
@@ -49,6 +50,7 @@ export const trigNode: NodeDefinition = {
       max: 10.0,
       step: 0.1,
       connectable: true,
+      updateMode: 'uniform',
     },
     {
       id: 'amplitude',
@@ -59,6 +61,7 @@ export const trigNode: NodeDefinition = {
       max: 5.0,
       step: 0.1,
       connectable: true,
+      updateMode: 'uniform',
     },
   ],
 

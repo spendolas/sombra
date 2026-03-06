@@ -61,6 +61,7 @@ export const arithmeticNode: NodeDefinition = {
       type: 'enum',
       default: 'add',
       options: OPERATIONS,
+      updateMode: 'recompile',
     },
     {
       id: 'inputCount',
@@ -71,6 +72,7 @@ export const arithmeticNode: NodeDefinition = {
       max: 8,
       step: 1,
       hidden: true,
+      updateMode: 'recompile',
     },
   ],
 

@@ -30,6 +30,7 @@ export const timeNode: NodeDefinition = {
       max: 2,
       step: 0.001,
       connectable: true,
+      updateMode: 'uniform',
     },
   ],
 

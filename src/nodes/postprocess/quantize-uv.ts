@@ -30,6 +30,7 @@ export const quantizeUvNode: NodeDefinition = {
       max: 256,
       step: 1,
       connectable: true,
+      updateMode: 'uniform',
     },
   ],
 

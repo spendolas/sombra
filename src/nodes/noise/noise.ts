@@ -22,13 +22,13 @@ export const noiseNode: NodeDefinition = {
   ],
 
   params: [
-    { id: 'scale', label: 'Scale', type: 'float', default: 5.0, min: 0.1, max: 20.0, step: 0.1, connectable: true },
+    { id: 'scale', label: 'Scale', type: 'float', default: 5.0, min: 0.1, max: 20.0, step: 0.1, connectable: true, updateMode: 'uniform' },
     {
       id: 'noiseType', label: 'Type', type: 'enum', default: 'simplex',
-      options: NOISE_TYPE_OPTIONS,
+      options: NOISE_TYPE_OPTIONS, updateMode: 'recompile',
     },
-    { id: 'boxFreq', label: 'Box Freq', type: 'float', default: 1.0, min: 0.5, max: 256.0, step: 0.5, connectable: true, showWhen: { noiseType: 'box' } },
-    { id: 'seed', label: 'Seed', type: 'float', default: 12345, min: 0, max: 99999, step: 1, connectable: true },
+    { id: 'boxFreq', label: 'Box Freq', type: 'float', default: 1.0, min: 0.5, max: 256.0, step: 0.5, connectable: true, showWhen: { noiseType: 'box' }, updateMode: 'uniform' },
+    { id: 'seed', label: 'Seed', type: 'float', default: 12345, min: 0, max: 99999, step: 1, connectable: true, updateMode: 'uniform' },
   ],
 
   glsl: (ctx) => {

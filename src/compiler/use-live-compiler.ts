@@ -36,6 +36,10 @@ export function useLiveCompiler(
   edgesRef.current = edges
 
   // Derive semantic key from only shader-relevant data (skip selection, position, measured state)
+  // PHASE2_TODO: Narrow to structural params only once uniform pipeline exists.
+  // Currently includes all params because uniform-mode params are still baked as
+  // GLSL literals. Phase 2: filter to `p.updateMode === 'recompile'` params only,
+  // add renderer.updateUniforms() for the rest. See docs/param-classification.md.
   const semanticKey = useMemo(() => {
     const nk = nodes.map(n => `${n.id}:${JSON.stringify(n.data)}`).join('|')
     const ek = edges.map(e => `${e.source}:${e.sourceHandle}->${e.target}:${e.targetHandle}`).join('|')
