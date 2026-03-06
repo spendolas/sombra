@@ -3,10 +3,21 @@
  */
 
 import type { Node, Edge } from '@xyflow/react'
-import type { NodeData, EdgeData, GLSLContext } from '../nodes/types'
+import type { NodeData, EdgeData, GLSLContext, UniformSpec } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { topologicalSort, hasCycles } from './topological-sort'
 import { coerceType } from '../nodes/type-coercion'
+
+function uniformName(sanitizedNodeId: string, paramId: string): string {
+  return `u_${sanitizedNodeId}_${paramId}`
+}
+
+function paramGlslType(paramType: string): 'float' | 'vec2' | 'vec3' | 'vec4' {
+  if (paramType === 'vec2') return 'vec2'
+  if (paramType === 'vec3' || paramType === 'color') return 'vec3'
+  if (paramType === 'vec4') return 'vec4'
+  return 'float'
+}
 
 /**
  * Compilation result
@@ -21,6 +32,8 @@ export interface CompilationResult {
    *  after codegen is the correct signal. Used by renderer (Phase 3)
    *  to choose continuous RAF loop vs render-on-demand. */
   isTimeLiveAtOutput: boolean
+  /** User-defined uniforms from uniform-mode params (unwired only) */
+  userUniforms: UniformSpec[]
 }
 
 /**
@@ -60,6 +73,7 @@ export function compileGraph(
         fragmentShader: '',
         errors: [{ message: 'Graph contains cycles. Remove circular dependencies.' }],
         isTimeLiveAtOutput: false,
+        userUniforms: [],
       }
     }
 
@@ -79,6 +93,7 @@ export function compileGraph(
     const uniforms = new Set<string>()
     const functions: string[] = []
     const functionRegistry = new Map<string, string>()
+    const userUniforms: UniformSpec[] = []
 
     // Generate GLSL code for each node
     const glslLines: string[] = []
@@ -196,8 +211,37 @@ export function compileGraph(
           } else {
             // Not wired: use param value from node data
             const paramValue = node.data.params?.[param.id] ?? param.default
-            inputs[param.id] = formatDefaultValue(paramValue, param.type)
+            if (param.updateMode === 'uniform') {
+              const uName = uniformName(sanitizedNodeId, param.id)
+              userUniforms.push({
+                name: uName,
+                glslType: paramGlslType(param.type),
+                value: paramValue as number | number[],
+                nodeId: node.id,
+                paramId: param.id,
+              })
+              inputs[param.id] = uName
+            } else {
+              inputs[param.id] = formatDefaultValue(paramValue, param.type)
+            }
           }
+        }
+      }
+
+      // Non-connectable uniform params → inject into inputs for node glsl()
+      if (definition.params) {
+        for (const param of definition.params) {
+          if (param.connectable || param.updateMode !== 'uniform') continue
+          const uName = uniformName(sanitizedNodeId, param.id)
+          const paramValue = node.data.params?.[param.id] ?? param.default
+          userUniforms.push({
+            name: uName,
+            glslType: paramGlslType(param.type),
+            value: paramValue as number | number[],
+            nodeId: node.id,
+            paramId: param.id,
+          })
+          inputs[param.id] = uName
         }
       }
 
@@ -240,11 +284,12 @@ export function compileGraph(
         fragmentShader: '',
         errors,
         isTimeLiveAtOutput: false,
+        userUniforms: [],
       }
     }
 
     // Assemble complete fragment shader
-    const fragmentShader = assembleFragmentShader(uniforms, functions, functionRegistry, glslLines)
+    const fragmentShader = assembleFragmentShader(uniforms, functions, functionRegistry, glslLines, userUniforms)
 
     // Debug: Log generated shader
     console.log('[Sombra] Generated Fragment Shader:')
@@ -256,6 +301,7 @@ export function compileGraph(
       fragmentShader,
       errors: [],
       isTimeLiveAtOutput: uniforms.has('u_time'),
+      userUniforms,
     }
   } catch (error) {
     return {
@@ -268,6 +314,7 @@ export function compileGraph(
         },
       ],
       isTimeLiveAtOutput: false,
+      userUniforms: [],
     }
   }
 }
@@ -303,7 +350,8 @@ function assembleFragmentShader(
   uniforms: Set<string>,
   functions: string[],
   functionRegistry: Map<string, string>,
-  glslLines: string[]
+  glslLines: string[],
+  userUniforms: UniformSpec[]
 ): string {
   const uniformDeclarations: string[] = []
 
@@ -322,6 +370,11 @@ function assembleFragmentShader(
   }
   if (uniforms.has('u_dpr')) {
     uniformDeclarations.push('uniform float u_dpr;')
+  }
+
+  // Add user-defined uniforms from uniform-mode params
+  for (const spec of userUniforms) {
+    uniformDeclarations.push(`uniform ${spec.glslType} ${spec.name};`)
   }
 
   return `#version 300 es

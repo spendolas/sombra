@@ -35,6 +35,9 @@ export class WebGLRenderer {
   private startTime: number = Date.now()
   private animationFrameId: number | null = null
   private refSize: number | null = null
+  private animated = true
+  private renderRequested = false
+  private resizeObserver: ResizeObserver | null = null
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -46,6 +49,11 @@ export class WebGLRenderer {
 
     this.initQuad()
     this.updateShader(DEFAULT_FRAGMENT_SHADER)
+
+    this.resizeObserver = new ResizeObserver(() => {
+      this.requestRender()
+    })
+    this.resizeObserver.observe(canvas)
   }
 
   private initQuad() {
@@ -148,13 +156,54 @@ export class WebGLRenderer {
     }
   }
 
+  updateUniforms(uniforms: Array<{ name: string; value: number | number[] }>) {
+    const gl = this.gl
+    if (!this.program || gl.isContextLost()) return
+    gl.useProgram(this.program)
+
+    for (const { name, value } of uniforms) {
+      const loc = this.uniforms.get(name)
+      if (!loc) continue
+
+      if (typeof value === 'number') {
+        gl.uniform1f(loc, value)
+      } else if (Array.isArray(value)) {
+        if (value.length === 2) gl.uniform2f(loc, value[0], value[1])
+        else if (value.length === 3) gl.uniform3f(loc, value[0], value[1], value[2])
+        else if (value.length === 4) gl.uniform4f(loc, value[0], value[1], value[2], value[3])
+      }
+    }
+
+    this.requestRender()
+  }
+
+  setAnimated(animated: boolean) {
+    if (this.animated === animated) return
+    this.animated = animated
+    if (animated) {
+      this.startAnimation()
+    } else {
+      this.stopAnimation()
+      this.requestRender()
+    }
+  }
+
+  requestRender() {
+    if (this.animated || this.renderRequested) return
+    this.renderRequested = true
+    requestAnimationFrame(() => {
+      this.renderRequested = false
+      this.render()
+    })
+  }
+
   render() {
     const gl = this.gl
     if (!this.program || !this.vao) return
     if (gl.isContextLost()) return
 
     // Update canvas size (account for device pixel ratio for crisp rendering)
-    const dpr = window.devicePixelRatio || 1
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
     const displayWidth = Math.floor(this.canvas.clientWidth * dpr)
     const displayHeight = Math.floor(this.canvas.clientHeight * dpr)
     if (this.canvas.width !== displayWidth || this.canvas.height !== displayHeight) {
@@ -214,6 +263,7 @@ export class WebGLRenderer {
 
   destroy() {
     this.stopAnimation()
+    this.resizeObserver?.disconnect()
     const gl = this.gl
     if (this.program) {
       gl.deleteProgram(this.program)

@@ -175,16 +175,40 @@ function App() {
   }, [previewMode, previousPreviewMode, setPreviewMode])
 
   // Live compiler - updates shader when graph changes
-  const handleCompile = useCallback((result: { success: boolean; fragmentShader: string }) => {
-    if (result.success && rendererRef.current) {
-      const updateResult = rendererRef.current.updateShader(result.fragmentShader)
-      if (!updateResult.success) {
-        console.error('WebGL shader update failed:', updateResult.error)
+  const handleCompile = useCallback(
+    (result: {
+      success: boolean
+      fragmentShader: string
+      userUniforms?: Array<{ name: string; value: number | number[] }>
+      isTimeLiveAtOutput?: boolean
+    }) => {
+      if (result.success && rendererRef.current) {
+        const updateResult = rendererRef.current.updateShader(result.fragmentShader)
+        if (!updateResult.success) {
+          console.error('WebGL shader update failed:', updateResult.error)
+        } else {
+          if (result.userUniforms?.length) {
+            rendererRef.current.updateUniforms(
+              result.userUniforms.map((u) => ({ name: u.name, value: u.value }))
+            )
+          }
+          rendererRef.current.setAnimated(result.isTimeLiveAtOutput ?? false)
+        }
       }
-    }
-  }, [])
+    },
+    []
+  )
 
-  useLiveCompiler(handleCompile)
+  const handleUniformUpdate = useCallback(
+    (uniforms: Array<{ name: string; value: number | number[] }>) => {
+      if (rendererRef.current) {
+        rendererRef.current.updateUniforms(uniforms)
+      }
+    },
+    []
+  )
+
+  useLiveCompiler(handleCompile, handleUniformUpdate)
 
   // Determine center split direction based on mode
   const isDocked = previewMode === 'docked'

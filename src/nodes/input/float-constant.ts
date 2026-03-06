@@ -34,14 +34,7 @@ export const floatConstantNode: NodeDefinition = {
   ],
 
   glsl: (ctx) => {
-    const { outputs, params } = ctx
-    const value = params.value !== undefined ? params.value : 1.0
-
-    // Format as float literal
-    const valueStr = typeof value === 'number'
-      ? (Number.isInteger(value) ? `${value}.0` : `${value}`)
-      : `${value}`
-
-    return `float ${outputs.value} = ${valueStr};`
+    const { inputs, outputs } = ctx
+    return `float ${outputs.value} = ${inputs.value};`
   },
 }
