@@ -355,15 +355,15 @@ export function ColorRampEditor({
         <IconButton
           icon="plus"
           onClick={handleAddStop}
-          className={ds.iconButton.solid}
+          className={ds.button.solid}
         />
         <IconButton
           icon="minus"
           onClick={handleRemoveStop}
           disabled={stops.length <= 2}
           className={stops.length <= 2
-            ? ds.iconButton.solidDisabled
-            : ds.iconButton.solid}
+            ? ds.button.solidDisabled
+            : ds.button.solid}
         />
       </div>
 
