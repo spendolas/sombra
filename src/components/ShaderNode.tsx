@@ -89,7 +89,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
 
   if (!definition) {
     return (
-      <div className="px-4 py-2 bg-surface-raised border border-edge rounded-sm text-destructive">
+      <div className="px-4 py-2 bg-surface-raised border border-edge rounded-sm text-error">
         Unknown node: {nodeData.type}
       </div>
     )
