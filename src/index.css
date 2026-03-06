@@ -36,6 +36,7 @@
   --sp-lg: 12px;   /* spacing/lg  VariableID:106:30 */
   --sp-xl: 16px;   /* spacing/xl  VariableID:106:31 */
   --sp-2xl: 24px;   /* spacing/2xl  VariableID:106:32 */
+  --handle-offset: 10px;   /* spacing/--handle-offset  VariableID:317:186 */
 
   /* ── Sombra size tokens (Figma: Sizes collection) ── */
   --sz-handle:        12px;  /* size/handle       VariableID:106:39 */
@@ -51,7 +52,6 @@
   --sz-input-w:       64px;  /* size/size-input-w VariableID:216:1080 */
 
   /* ── Computed ── */
-  --handle-offset: calc(var(--sz-handle) / 2 + var(--sp-sm));
   /* === GENERATED:END root-vars === */
 
   /* shadcn variables — dark by default */
