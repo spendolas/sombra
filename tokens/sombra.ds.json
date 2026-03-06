@@ -230,6 +230,16 @@
         "namespace": "spacing",
         "key": "2xl"
       }
+    },
+    "VariableID:317:186": {
+      "figmaName": "handle-offset/10",
+      "cssVar": "--handle-offset",
+      "value": 10,
+      "unit": "px",
+      "tailwind": {
+        "namespace": "spacing",
+        "key": "handle-offset"
+      }
     }
   },
   "radius": {
@@ -408,16 +418,7 @@
       ]
     }
   },
-  "computed": {
-    "handle-offset": {
-      "cssVar": "--handle-offset",
-      "expression": "calc(var(--sz-handle) / 2 + var(--sp-sm))",
-      "tailwind": {
-        "namespace": "spacing",
-        "key": "handle-offset"
-      }
-    }
-  },
+  "computed": {},
   "textStyles": {
     "S:ae1da69bb6e4f63f683fb1463dfc6bac4c6a9c33,": {
       "figmaName": "heading/node-title",
