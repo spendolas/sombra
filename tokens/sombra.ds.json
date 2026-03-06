@@ -925,6 +925,44 @@
           "gap": "2xs",
           "userSelect": "none",
           "extra": "nodrag nowheel nokey"
+        },
+        "labelRow": {
+          "figmaNodeId": "106:277",
+          "layout": "horizontal",
+          "justify": "between",
+          "align": "center",
+          "cursor": "ew-resize"
+        },
+        "label": {
+          "figmaNodeId": "106:278",
+          "textStyle": "text-param",
+          "textColor": "fg-subtle"
+        },
+        "value": {
+          "figmaNodeId": "106:280",
+          "textStyle": "text-param",
+          "textColor": "fg",
+          "cursor": "text",
+          "extra": "tabular-nums"
+        },
+        "input": {
+          "textStyle": "text-param",
+          "textColor": "fg",
+          "extra": "bg-transparent text-right tabular-nums outline-none border-b border-indigo nodrag nowheel"
+        },
+        "track": {
+          "figmaNodeId": "122:1596",
+          "fill": "surface/raised",
+          "radius": "full",
+          "overflow": "hidden",
+          "cursor": "ew-resize",
+          "extra": "relative w-full h-slider-track"
+        },
+        "fill": {
+          "figmaNodeId": "122:1597",
+          "fill": "indigo",
+          "radius": "full",
+          "extra": "absolute top-0 bottom-0"
         }
       }
     },

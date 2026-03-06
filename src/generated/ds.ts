@@ -57,6 +57,12 @@ export const ds = {
   },
   floatSlider: {
     root: "flex flex-col gap-2xs select-none nodrag nowheel nokey",
+    labelRow: "flex flex-row items-center justify-between cursor-ew-resize",
+    label: "text-param text-fg-subtle",
+    value: "text-param text-fg cursor-text tabular-nums",
+    input: "text-param text-fg bg-transparent text-right tabular-nums outline-none border-b border-indigo nodrag nowheel",
+    track: "bg-surface-raised rounded-full cursor-ew-resize overflow-hidden relative w-full h-slider-track",
+    fill: "bg-indigo rounded-full absolute top-0 bottom-0",
   },
   enumSelect: {
     root: "flex flex-col gap-sm",
