@@ -1,14 +1,17 @@
 /**
  * IconButton — unified icon button component.
- * Wraps shadcn Button with a swappable icon from the icons registry.
+ * Wraps shadcn Button (unstyled) with ds.iconButton.* classes from the DS.
  *
- * Toolbar context:  <IconButton icon="download" />                    (defaults: ghost + icon)
- * Node context:     <IconButton icon="plus" variant="unstyled" size="icon-node" className={ds...} />
+ * Always applies ds.iconButton.root for layout/sizing.
+ * Pass a state class via className: ds.iconButton.ghost, .solid, .ghostActive, etc.
+ * Defaults to ghost styling when no className is provided.
  */
 
 import { forwardRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { icons, type IconName } from '@/components/icons'
+import { cn } from '@/lib/utils'
+import { ds } from '@/generated/ds'
 
 interface IconButtonProps extends React.ComponentProps<typeof Button> {
   icon: IconName
@@ -16,10 +19,16 @@ interface IconButtonProps extends React.ComponentProps<typeof Button> {
 }
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
-  ({ icon, iconClassName, variant = 'ghost', size = 'icon', ...props }, ref) => {
+  ({ icon, iconClassName, className, variant = 'unstyled', size = 'icon-node', ...props }, ref) => {
     const Icon = icons[icon]
     return (
-      <Button ref={ref} variant={variant} size={size} {...props}>
+      <Button
+        ref={ref}
+        variant={variant}
+        size={size}
+        className={cn(ds.iconButton.root, className || ds.iconButton.ghost)}
+        {...props}
+      >
         <Icon className={iconClassName} />
       </Button>
     )

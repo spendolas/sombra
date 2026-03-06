@@ -7,7 +7,7 @@ export const ds = {
     header: "flex flex-row items-center justify-between bg-surface-raised rounded-t-md border-b border-edge-subtle px-lg py-md gap-md -mb-1",
     title: "text-node-title text-fg select-none flex-1",
     content: "flex flex-col p-lg gap-y-md",
-    footer: "flex flex-col items-center border-t px-lg pt-md pb-lg gap-y-md",
+    footer: "flex flex-col items-center border-t border-edge px-lg pt-md pb-lg gap-y-md",
   },
   floatingPreview: {
     root: "flex flex-col bg-black rounded-md border border-edge fixed z-40 overflow-hidden shadow-2xl",
@@ -52,7 +52,7 @@ export const ds = {
     root: "rounded-full !h-3 !w-3 border-2 transition",
   },
   separator: {
-    root: "bg-edge shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px",
+    root: "bg-edge-subtle shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px",
   },
   labeledHandle: {
     root: "items-center relative flex",
@@ -62,15 +62,15 @@ export const ds = {
     root: "flex flex-col gap-2xs select-none nodrag nowheel nokey",
     labelRow: "flex flex-row items-center justify-between cursor-ew-resize",
     label: "text-param text-fg-subtle",
-    value: "text-param text-fg cursor-text tabular-nums",
-    input: "text-param text-fg bg-transparent text-right tabular-nums outline-none border-b border-indigo nodrag nowheel",
+    value: "text-body text-fg cursor-text tabular-nums",
+    input: "text-body text-fg bg-transparent text-right tabular-nums outline-none border-b border-indigo nodrag nowheel",
     track: "bg-surface-raised rounded-full cursor-ew-resize overflow-hidden relative w-full h-slider-track",
     fill: "bg-indigo rounded-full absolute top-0 bottom-0",
   },
   enumSelect: {
     root: "flex flex-col gap-sm",
     label: "text-param text-fg-subtle",
-    trigger: "bg-surface-raised border border-edge text-body text-fg w-full h-select-h",
+    trigger: "bg-surface-raised rounded-sm border border-edge text-body text-fg w-full h-select-h",
     content: "bg-surface-elevated border border-edge",
     item: "text-body",
   },

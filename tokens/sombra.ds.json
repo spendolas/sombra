@@ -504,7 +504,6 @@
       "properties": {
         "fontSize": "12px",
         "fontWeight": 400,
-        "fontFamily": "ui-monospace, SFMono-Regular, monospace",
         "lineHeight": 1.5
       }
     },
@@ -514,7 +513,6 @@
       "properties": {
         "fontSize": "10px",
         "fontWeight": 400,
-        "fontFamily": "ui-monospace, SFMono-Regular, monospace",
         "lineHeight": 1.5
       }
     },
@@ -590,7 +588,9 @@
           "figmaNodeId": "111:491",
           "layout": "vertical",
           "stroke": {
-            "side": "top"
+            "side": "top",
+            "color": "edge/default",
+            "weight": 1
           },
           "padding": {
             "x": "lg",
@@ -886,7 +886,7 @@
       "parts": {
         "root": {
           "figmaNodeId": "106:89",
-          "fill": "edge/default",
+          "fill": "edge/subtle",
           "extra": "shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px"
         }
       }
@@ -938,13 +938,13 @@
         },
         "value": {
           "figmaNodeId": "106:280",
-          "textStyle": "text-param",
+          "textStyle": "text-body",
           "textColor": "fg",
           "cursor": "text",
           "extra": "tabular-nums"
         },
         "input": {
-          "textStyle": "text-param",
+          "textStyle": "text-body",
           "textColor": "fg",
           "extra": "bg-transparent text-right tabular-nums outline-none border-b border-indigo nodrag nowheel"
         },
@@ -986,6 +986,7 @@
           "stroke": {
             "color": "edge/default"
           },
+          "radius": "sm",
           "width": "full",
           "height": "select-h",
           "textStyle": "text-body",
