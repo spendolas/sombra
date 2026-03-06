@@ -54,6 +54,10 @@ export const ds = {
   separator: {
     root: "bg-edge-subtle shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px",
   },
+  sliderTrack: {
+    track: "bg-surface-raised rounded-full relative w-full h-slider-track",
+    fill: "bg-indigo rounded-full absolute top-0 bottom-0",
+  },
   labeledHandle: {
     root: "items-center relative flex",
     label: "text-handle text-fg px-handle-offset flex-1",
@@ -64,8 +68,6 @@ export const ds = {
     label: "text-param text-fg-subtle",
     value: "text-body text-fg cursor-text tabular-nums",
     input: "text-body text-fg bg-transparent text-right tabular-nums outline-none border-b border-indigo nodrag nowheel",
-    track: "bg-surface-raised rounded-full cursor-ew-resize overflow-hidden relative w-full h-slider-track",
-    fill: "bg-indigo rounded-full absolute top-0 bottom-0",
   },
   enumSelect: {
     root: "flex flex-col gap-sm",

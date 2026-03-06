@@ -891,6 +891,26 @@
         }
       }
     },
+    "325:22": {
+      "name": "Slider Track",
+      "type": "atom",
+      "dsKey": "sliderTrack",
+      "codeFile": "src/components/ui/slider.tsx",
+      "parts": {
+        "track": {
+          "figmaNodeId": "325:23",
+          "fill": "surface/raised",
+          "radius": "full",
+          "extra": "relative w-full h-slider-track"
+        },
+        "fill": {
+          "figmaNodeId": "325:24",
+          "fill": "indigo",
+          "radius": "full",
+          "extra": "absolute top-0 bottom-0"
+        }
+      }
+    },
     "106:269": {
       "name": "Labeled Handle",
       "type": "molecule",
@@ -947,20 +967,6 @@
           "textStyle": "text-body",
           "textColor": "fg",
           "extra": "bg-transparent text-right tabular-nums outline-none border-b border-indigo nodrag nowheel"
-        },
-        "track": {
-          "figmaNodeId": "122:1596",
-          "fill": "surface/raised",
-          "radius": "full",
-          "overflow": "hidden",
-          "cursor": "ew-resize",
-          "extra": "relative w-full h-slider-track"
-        },
-        "fill": {
-          "figmaNodeId": "122:1597",
-          "fill": "indigo",
-          "radius": "full",
-          "extra": "absolute top-0 bottom-0"
         }
       }
     },
