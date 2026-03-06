@@ -2,6 +2,7 @@ import * as React from "react"
 import { Slider as SliderPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
+import { ds } from "@/generated/ds"
 
 function Slider({
   className,
@@ -37,13 +38,15 @@ function Slider({
       <SliderPrimitive.Track
         data-slot="slider-track"
         className={cn(
-          "bg-surface-raised relative grow overflow-hidden rounded-full data-[orientation=horizontal]:h-slider-track data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-slider-track"
+          ds.sliderTrack.track,
+          "grow overflow-hidden data-[orientation=horizontal]:h-slider-track data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-slider-track"
         )}
       >
         <SliderPrimitive.Range
           data-slot="slider-range"
           className={cn(
-            "bg-indigo absolute data-[orientation=horizontal]:h-full data-[orientation=vertical]:w-full"
+            ds.sliderTrack.fill,
+            "data-[orientation=horizontal]:h-full data-[orientation=vertical]:w-full"
           )}
         />
       </SliderPrimitive.Track>

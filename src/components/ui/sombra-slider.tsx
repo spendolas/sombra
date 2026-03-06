@@ -365,7 +365,7 @@ function SombraSlider({
       {/* Track */}
       <div
         ref={trackRef}
-        className={ds.floatSlider.track}
+        className={cn(ds.sliderTrack.track, "cursor-ew-resize overflow-hidden")}
         onPointerDown={handleTrackPointerDown}
         onPointerMove={handleTrackPointerMove}
         onPointerUp={handleTrackPointerUp}
@@ -373,7 +373,7 @@ function SombraSlider({
         {isRange ? (
           // Range fill between lo and hi (clamped to track visually)
           <div
-            className={ds.floatSlider.fill}
+            className={ds.sliderTrack.fill}
             style={{
               left: `${valueToX(vals[0]) * 100}%`,
               width: `${(valueToX(vals[1]) - valueToX(vals[0])) * 100}%`,
@@ -382,7 +382,7 @@ function SombraSlider({
         ) : (
           // Single fill from left (clamped to track visually)
           <div
-            className={cn(ds.floatSlider.fill, "left-0")}
+            className={cn(ds.sliderTrack.fill, "left-0")}
             style={{ width: `${valueToX(vals[0]) * 100}%` }}
           />
         )}
