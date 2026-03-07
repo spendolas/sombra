@@ -573,7 +573,7 @@
           "hover": {
             "ring": "1"
           },
-          "extra": "[.react-flow__node.selected_&]:shadow-lg"
+          "extra": "[.react-flow__node.selected_&]:shadow-[0_0_8px_2px_rgba(99,102,241,0.4)]"
         },
         "header": {
           "figmaNodeId": "111:488",
@@ -640,7 +640,7 @@
         "root": {
           "figmaNodeId": "106:498",
           "layout": "vertical",
-          "fill": "black",
+          "fill": "overlay/scrim",
           "stroke": {
             "color": "edge/default",
             "weight": 1
@@ -652,7 +652,7 @@
           "effects": [
             {
               "type": "shadow",
-              "class": "shadow-2xl"
+              "class": "shadow-[0_8px_24px_0px_rgba(0,0,0,0.5)]"
             }
           ]
         }
@@ -666,7 +666,7 @@
       "parts": {
         "root": {
           "figmaNodeId": "106:511",
-          "fill": "black",
+          "fill": "overlay/scrim",
           "position": "fixed",
           "inset": "0",
           "z": 50
@@ -710,7 +710,9 @@
           "gap": "xl"
         },
         "nodeInfo": {
+          "layout": "vertical",
           "padding": "lg",
+          "gap": "md",
           "radius": "md",
           "fill": "surface/raised",
           "stroke": {
@@ -729,7 +731,9 @@
           "fill": "surface/raised"
         },
         "paramSection": {
+          "layout": "vertical",
           "padding": "lg",
+          "gap": "lg",
           "radius": "md",
           "fill": "surface/raised",
           "stroke": {
@@ -752,6 +756,7 @@
           "radius": "md",
           "padding": "xs",
           "gap": "xs",
+          "align": "center",
           "textColor": "fg-dim"
         }
       }
@@ -1114,7 +1119,7 @@
         "input": {
           "figmaNodeId": "106:291",
           "radius": "sm",
-          "fill": "surface/raised",
+          "fill": "surface/alt",
           "stroke": {
             "color": "edge/default",
             "weight": 1
@@ -1253,6 +1258,7 @@
           "radius": "md",
           "padding": "xs",
           "gap": "xs",
+          "align": "center",
           "textColor": "fg-dim"
         }
       }
@@ -1268,7 +1274,7 @@
           "position": "relative",
           "width": "full",
           "height": "full",
-          "fill": "black"
+          "fill": "overlay/scrim"
         }
       }
     },

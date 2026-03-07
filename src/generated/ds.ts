@@ -3,17 +3,17 @@
 
 export const ds = {
   nodeCard: {
-    root: "flex flex-col bg-surface-elevated rounded-md border border-edge-card relative hover:ring-1 [.react-flow__node.selected_&]:shadow-lg",
+    root: "flex flex-col bg-surface-elevated rounded-md border border-edge-card relative hover:ring-1 [.react-flow__node.selected_&]:shadow-[0_0_8px_2px_rgba(99,102,241,0.4)]",
     header: "flex flex-row items-center justify-between bg-surface-raised rounded-t-md border-b border-edge-subtle px-lg py-md gap-md -mb-1",
     title: "text-node-title text-fg select-none flex-1",
     content: "flex flex-col p-lg gap-y-md",
     footer: "flex flex-col items-center border-t border-edge px-lg pt-md pb-lg gap-y-md",
   },
   floatingPreview: {
-    root: "flex flex-col bg-black rounded-md border border-edge fixed z-40 overflow-hidden shadow-2xl",
+    root: "flex flex-col bg-overlay-scrim rounded-md border border-edge fixed z-40 overflow-hidden shadow-[0_8px_24px_0px_rgba(0,0,0,0.5)]",
   },
   fullWindowOverlay: {
-    root: "bg-black fixed z-50 inset-0",
+    root: "bg-overlay-scrim fixed z-50 inset-0",
   },
   nodePalette: {
     root: "flex flex-col bg-surface-alt p-xl gap-xs",
@@ -22,12 +22,12 @@ export const ds = {
   },
   propertiesPanel: {
     root: "flex flex-col bg-surface-alt p-xl gap-xl",
-    nodeInfo: "bg-surface-raised rounded-md border border-edge p-lg",
+    nodeInfo: "flex flex-col bg-surface-raised rounded-md border border-edge p-lg gap-md",
     portRow: "flex flex-row justify-between bg-surface-raised rounded-sm px-md py-xs",
-    paramSection: "bg-surface-raised rounded-md border border-edge p-lg",
+    paramSection: "flex flex-col bg-surface-raised rounded-md border border-edge p-lg gap-lg",
   },
   zoomBar: {
-    root: "flex flex-row bg-surface-alt rounded-md p-xs gap-xs text-fg-dim",
+    root: "flex flex-row items-center bg-surface-alt rounded-md p-xs gap-xs text-fg-dim",
   },
   previewToolbar: {
     root: "flex flex-row items-center bg-surface-alt rounded-md p-xs gap-xs text-body text-fg-dim",
@@ -85,7 +85,7 @@ export const ds = {
   colorInput: {
     root: "flex flex-col gap-sm",
     label: "text-param text-fg-subtle",
-    input: "bg-surface-raised rounded-sm border border-edge cursor-pointer w-full h-input-h",
+    input: "bg-surface-alt rounded-sm border border-edge cursor-pointer w-full h-input-h",
   },
   connectableParamRow: {
     root: "flex flex-row items-center relative",
@@ -108,10 +108,10 @@ export const ds = {
     root: "bg-surface-alt rounded-md border border-edge-subtle",
   },
   graphToolbar: {
-    root: "flex flex-row bg-surface-alt rounded-md p-xs gap-xs text-fg-dim",
+    root: "flex flex-row items-center bg-surface-alt rounded-md p-xs gap-xs text-fg-dim",
   },
   previewPanel: {
-    root: "bg-black relative w-full h-full",
+    root: "bg-overlay-scrim relative w-full h-full",
   },
   textGhostButton: {
     root: "rounded-sm",
