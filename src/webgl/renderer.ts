@@ -31,6 +31,7 @@ export class WebGLRenderer {
   private gl: WebGL2RenderingContext
   private program: WebGLProgram | null = null
   private vao: WebGLVertexArrayObject | null = null
+  private buffer: WebGLBuffer | null = null
   private uniforms: Map<string, WebGLUniformLocation> = new Map()
   private startTime: number = Date.now()
   private animationFrameId: number | null = null
@@ -81,8 +82,8 @@ export class WebGLRenderer {
        1,  1,
     ])
 
-    const buffer = gl.createBuffer()
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
+    this.buffer = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer)
     gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW)
 
     gl.enableVertexAttribArray(0)
@@ -110,12 +111,15 @@ export class WebGLRenderer {
 
   updateShader(fragmentSource: string): { success: boolean; error?: string } {
     const gl = this.gl
+    let vertexShader: WebGLShader | null = null
+    let fragmentShader: WebGLShader | null = null
+    let program: WebGLProgram | null = null
 
     try {
-      const vertexShader = this.createShader(gl.VERTEX_SHADER, VERTEX_SHADER)
-      const fragmentShader = this.createShader(gl.FRAGMENT_SHADER, fragmentSource)
+      vertexShader = this.createShader(gl.VERTEX_SHADER, VERTEX_SHADER)
+      fragmentShader = this.createShader(gl.FRAGMENT_SHADER, fragmentSource)
 
-      const program = gl.createProgram()
+      program = gl.createProgram()
       if (!program) throw new Error('Failed to create program')
 
       gl.attachShader(program, vertexShader)
@@ -125,37 +129,36 @@ export class WebGLRenderer {
 
       if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
         const info = gl.getProgramInfoLog(program)
-        gl.deleteProgram(program)
         throw new Error('Program linking failed: ' + info)
       }
 
-      // Clean up old program
-      if (this.program) {
-        gl.deleteProgram(this.program)
-      }
-
+      // Success — clean up old program, install new one
+      if (this.program) gl.deleteProgram(this.program)
       this.program = program
       gl.useProgram(program)
 
-      // Cache uniform locations
+      // Shaders can be deleted after successful link
+      gl.deleteShader(vertexShader)
+      gl.deleteShader(fragmentShader)
+
+      // Rebuild uniform cache
       this.uniforms.clear()
       const uniformCount = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS)
       for (let i = 0; i < uniformCount; i++) {
         const info = gl.getActiveUniform(program, i)
         if (info) {
           const location = gl.getUniformLocation(program, info.name)
-          if (location) {
-            this.uniforms.set(info.name, location)
-          }
+          if (location) this.uniforms.set(info.name, location)
         }
       }
 
-      // Clean up shaders
-      gl.deleteShader(vertexShader)
-      gl.deleteShader(fragmentShader)
-
       return { success: true }
     } catch (error) {
+      // Clean up any resources created before the failure
+      if (vertexShader) gl.deleteShader(vertexShader)
+      if (fragmentShader) gl.deleteShader(fragmentShader)
+      if (program) gl.deleteProgram(program)
+
       const errorMsg = error instanceof Error ? error.message : String(error)
       console.error('Failed to update shader:', errorMsg)
       return { success: false, error: errorMsg }
@@ -304,11 +307,8 @@ export class WebGLRenderer {
     if (this.snapTimer) { clearTimeout(this.snapTimer); this.snapTimer = null }
     this.resizeObserver?.disconnect()
     const gl = this.gl
-    if (this.program) {
-      gl.deleteProgram(this.program)
-    }
-    if (this.vao) {
-      gl.deleteVertexArray(this.vao)
-    }
+    if (this.program) gl.deleteProgram(this.program)
+    if (this.vao) gl.deleteVertexArray(this.vao)
+    if (this.buffer) gl.deleteBuffer(this.buffer)
   }
 }
