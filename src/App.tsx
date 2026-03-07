@@ -192,7 +192,14 @@ function App() {
               result.userUniforms.map((u) => ({ name: u.name, value: u.value }))
             )
           }
-          rendererRef.current.setAnimated(result.isTimeLiveAtOutput ?? false)
+          const isAnimated = result.isTimeLiveAtOutput ?? false
+          rendererRef.current.setAnimated(isAnimated)
+          if (isAnimated) {
+            const timeNode = useGraphStore.getState().nodes.find(n => n.data.type === 'time')
+            const speed = (timeNode?.data.params?.speed as number) ?? 1.0
+            rendererRef.current.setAnimationSpeed(speed)
+          }
+          rendererRef.current.notifyChange()
         }
       }
     },
@@ -203,6 +210,12 @@ function App() {
     (uniforms: Array<{ name: string; value: number | number[] }>) => {
       if (rendererRef.current) {
         rendererRef.current.updateUniforms(uniforms)
+        rendererRef.current.notifyChange()
+        const timeNode = useGraphStore.getState().nodes.find(n => n.data.type === 'time')
+        if (timeNode) {
+          const speed = (timeNode.data.params?.speed as number) ?? 1.0
+          rendererRef.current.setAnimationSpeed(speed)
+        }
       }
     },
     []
