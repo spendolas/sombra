@@ -1273,6 +1273,50 @@
           "figmaNodeId": "306:236"
         }
       }
+    },
+    "326:36": {
+      "name": "Text Ghost Button",
+      "type": "atom",
+      "dsKey": "textGhostButton",
+      "codeFile": null,
+      "parts": {
+        "root": {
+          "figmaNodeId": "326:36",
+          "radius": "sm"
+        }
+      }
+    },
+    "354:3": {
+      "name": "Select Frame",
+      "type": "atom",
+      "dsKey": "selectFrame",
+      "codeFile": null,
+      "parts": {
+        "root": {
+          "figmaNodeId": "354:3",
+          "layout": "horizontal",
+          "fill": "surface/raised",
+          "stroke": { "color": "edge/default" },
+          "radius": "sm",
+          "padding": { "x": "md", "y": "md" }
+        }
+      }
+    },
+    "354:12": {
+      "name": "Color Swatch",
+      "type": "atom",
+      "dsKey": "colorSwatch",
+      "codeFile": "src/components/ColorRampEditor.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "354:12",
+          "fill": "surface/alt",
+          "stroke": { "color": "edge/default" },
+          "radius": "sm",
+          "width": "6",
+          "height": "6"
+        }
+      }
     }
   },
   "nodeTemplates": {
