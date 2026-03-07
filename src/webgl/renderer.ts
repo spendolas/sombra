@@ -38,6 +38,12 @@ export class WebGLRenderer {
   private animated = true
   private renderRequested = false
   private resizeObserver: ResizeObserver | null = null
+  private targetFps = 60
+  private lastFrameTime = 0
+  private readonly ANIMATED_DPR_SCALE = 0.75
+  private readonly STATIC_DPR_SCALE = 1.0
+  private currentDprScale = 1.0
+  private snapTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -181,11 +187,35 @@ export class WebGLRenderer {
     if (this.animated === animated) return
     this.animated = animated
     if (animated) {
+      this.currentDprScale = this.ANIMATED_DPR_SCALE
       this.startAnimation()
     } else {
       this.stopAnimation()
+      this.currentDprScale = this.STATIC_DPR_SCALE
+      if (this.snapTimer) { clearTimeout(this.snapTimer); this.snapTimer = null }
       this.requestRender()
     }
+  }
+
+  setAnimationSpeed(speed: number): void {
+    if (speed < 0.05) this.targetFps = 30
+    else if (speed < 0.15) this.targetFps = 45
+    else this.targetFps = 60
+  }
+
+  notifyChange(): void {
+    if (!this.animated) return
+    if (this.currentDprScale !== this.ANIMATED_DPR_SCALE) {
+      this.currentDprScale = this.ANIMATED_DPR_SCALE
+    }
+    if (this.snapTimer) clearTimeout(this.snapTimer)
+    this.snapTimer = setTimeout(() => {
+      if (this.animated) {
+        this.currentDprScale = this.STATIC_DPR_SCALE
+        this.render()
+        this.currentDprScale = this.ANIMATED_DPR_SCALE
+      }
+    }, 2000)
   }
 
   requestRender() {
@@ -202,8 +232,8 @@ export class WebGLRenderer {
     if (!this.program || !this.vao) return
     if (gl.isContextLost()) return
 
-    // Update canvas size (account for device pixel ratio for crisp rendering)
-    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    // Update canvas size (account for device pixel ratio, scaled for animation)
+    const dpr = Math.min(window.devicePixelRatio || 1, 2) * this.currentDprScale
     const displayWidth = Math.floor(this.canvas.clientWidth * dpr)
     const displayHeight = Math.floor(this.canvas.clientHeight * dpr)
     if (this.canvas.width !== displayWidth || this.canvas.height !== displayHeight) {
@@ -247,11 +277,19 @@ export class WebGLRenderer {
   }
 
   startAnimation() {
-    const animate = () => {
-      this.render()
+    this.lastFrameTime = performance.now()
+    const animate = (timestamp: number) => {
+      const elapsed = timestamp - this.lastFrameTime
+      const interval = 1000 / this.targetFps
+
+      if (elapsed >= interval) {
+        this.lastFrameTime = timestamp - (elapsed % interval)
+        this.render()
+      }
+
       this.animationFrameId = requestAnimationFrame(animate)
     }
-    animate()
+    this.animationFrameId = requestAnimationFrame(animate)
   }
 
   stopAnimation() {
@@ -263,6 +301,7 @@ export class WebGLRenderer {
 
   destroy() {
     this.stopAnimation()
+    if (this.snapTimer) { clearTimeout(this.snapTimer); this.snapTimer = null }
     this.resizeObserver?.disconnect()
     const gl = this.gl
     if (this.program) {
