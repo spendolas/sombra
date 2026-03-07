@@ -211,14 +211,38 @@ function detectComponentDrift(db: DB, snapshot: FigmaSnapshot): ComponentDriftIt
 
   // Build set of Figma component IDs from snapshot
   const figmaNodeIds = new Set(snapshot.components.map(c => c.id))
-  const figmaComponentsByNodeId = new Map(snapshot.components.map(c => [c.id, c]))
 
-  // Build set of DB component node IDs
-  const dbComponentNodeIds = new Set(Object.keys(db.components))
+  // Build comprehensive set of all DB-tracked node IDs:
+  // 1. Top-level component keys
+  // 2. figmaNodeId values from all component parts
+  // 3. nodeTemplate keys (node type Figma IDs tracked separately)
+  // 4. Variant child IDs from tracked COMPONENT_SETs
+  const trackedNodeIds = new Set(Object.keys(db.components))
 
-  // In Figma but not in DB
+  for (const comp of Object.values(db.components) as ComponentEntry[]) {
+    for (const part of Object.values(comp.parts)) {
+      if (part.figmaNodeId) trackedNodeIds.add(part.figmaNodeId)
+    }
+  }
+
+  if (db.nodeTemplates) {
+    for (const key of Object.keys(db.nodeTemplates as Record<string, unknown>)) {
+      if (key !== '_shared') trackedNodeIds.add(key)
+    }
+  }
+
+  // Add variant child IDs from tracked COMPONENT_SETs
   for (const fc of snapshot.components) {
-    if (!dbComponentNodeIds.has(fc.id)) {
+    if (fc.type === 'COMPONENT_SET' && trackedNodeIds.has(fc.id) && fc.variants) {
+      for (const v of fc.variants) {
+        trackedNodeIds.add(v.id)
+      }
+    }
+  }
+
+  // In Figma but not tracked anywhere in DB
+  for (const fc of snapshot.components) {
+    if (!trackedNodeIds.has(fc.id)) {
       drift.push({
         name: fc.name,
         nodeId: fc.id,
@@ -227,7 +251,8 @@ function detectComponentDrift(db: DB, snapshot: FigmaSnapshot): ComponentDriftIt
     }
   }
 
-  // In DB but not in Figma
+  // In DB (top-level) but not in Figma
+  const dbComponentNodeIds = new Set(Object.keys(db.components))
   for (const [nodeId, comp] of Object.entries(db.components)) {
     if (!figmaNodeIds.has(nodeId)) {
       drift.push({

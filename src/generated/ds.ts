@@ -113,6 +113,15 @@ export const ds = {
   previewPanel: {
     root: "bg-black relative w-full h-full",
   },
+  textGhostButton: {
+    root: "rounded-sm",
+  },
+  selectFrame: {
+    root: "flex flex-row bg-surface-raised rounded-sm border border-edge px-md py-md",
+  },
+  colorSwatch: {
+    root: "bg-surface-alt rounded-sm border border-edge w-6 h-6",
+  },
 } as const;
 
 export type DSComponent = keyof typeof ds;
