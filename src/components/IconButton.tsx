@@ -28,7 +28,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         className={cn(ds.button.root, className || (label ? ds.button.textGhost : ds.button.ghost))}
         {...props}
       >
-        {Icon ? <Icon className={iconClassName} /> : label}
+        {Icon ? <Icon className={cn("size-icon-sm", iconClassName)} /> : label}
       </button>
     )
   },
