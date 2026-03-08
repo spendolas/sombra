@@ -48,7 +48,7 @@ export function NodeParameters({ nodeId, parameters, currentValues, connectedInp
   const visibleParams = parameters.filter((p) => !p.hidden)
 
   return (
-    <div className="flex flex-col gap-lg">
+    <div className={ds.nodeParameters.root}>
       {visibleParams.map((param) => {
         const isConnected = connectedInputs?.has(param.id) ?? false
         const source = connectedSources?.get(param.id)
@@ -60,10 +60,10 @@ export function NodeParameters({ nodeId, parameters, currentValues, connectedInp
                   return <FloatSlider param={param} value={source.value} onChange={() => {}} disabled />
                 }
                 return (
-                  <div className="flex flex-col gap-sm">
-                    <div className="flex justify-between items-center">
-                      <Label className="text-param text-fg-subtle">{param.label}</Label>
-                      <span className="text-param text-fg-muted">{'← ' + source.sourceLabel}</span>
+                  <div className={ds.nodeParameters.connectedRow}>
+                    <div className={ds.nodeParameters.connectedHeader}>
+                      <Label className={ds.floatSlider.label}>{param.label}</Label>
+                      <span className={ds.shaderNode.connectedSource}>{'← ' + source.sourceLabel}</span>
                     </div>
                   </div>
                 )

@@ -89,7 +89,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
 
   if (!definition) {
     return (
-      <div className="px-4 py-2 bg-surface-raised border border-edge rounded-sm text-error">
+      <div className={ds.shaderNode.errorState}>
         Unknown node: {nodeData.type}
       </div>
     )
@@ -164,7 +164,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
 
         {/* +/- buttons for dynamic input nodes */}
         {hasDynamicInputs && (
-          <div className="flex items-center justify-center gap-md py-xs">
+          <div className={ds.shaderNode.dynamicInputRow}>
             <IconButton
               icon="minus"
               onClick={handleRemoveInput}
@@ -173,7 +173,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                 ? ds.button.solidDisabled
                 : ds.button.solid}
             />
-            <span className="text-param text-fg-muted">
+            <span className={ds.shaderNode.dynamicInputCount}>
               {inputCount}
             </span>
             <IconButton
@@ -222,11 +222,11 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
               />
               <div className={ds.connectableParamRow.innerFrame}>
                 {isConnected && !hasResolvedValue ? (
-                  <div className="flex justify-between items-center py-2xs">
-                    <span className="text-param text-fg-subtle">
+                  <div className={cn(ds.nodeParameters.connectedHeader, "py-2xs")}>
+                    <span className={ds.shaderNode.connectedLabel}>
                       {param.label}
                     </span>
-                    <span className="text-param text-fg-muted">
+                    <span className={ds.shaderNode.connectedSource}>
                       {'← ' + sourceLabel}
                     </span>
                   </div>
@@ -240,7 +240,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                 )}
               </div>
               {param.warnAbove != null && !isConnected && displayValue > param.warnAbove && (
-                <span className="text-[10px] text-fg-muted px-sm pb-2xs">
+                <span className={cn(ds.shaderNode.warnText, "px-sm pb-2xs")}>
                   High value — may impact performance
                 </span>
               )}
@@ -250,7 +250,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
 
         {/* Non-connectable params (enums, sliders without handles) */}
         {regularParams.length > 0 && (
-          <div className="mt-xs pt-md w-full border-t border-edge-subtle">
+          <div className={cn(ds.shaderNode.paramDivider, "mt-xs pt-md")}>
             <NodeParameters
               nodeId={id}
               parameters={regularParams}
@@ -261,7 +261,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
 
         {/* Custom component (if provided) */}
         {definition.component && (
-          <div className={cn("mt-xs pt-md w-full", regularParams.length === 0 && "border-t border-edge-subtle")}>
+          <div className={cn("mt-xs pt-md w-full", regularParams.length === 0 && ds.shaderNode.paramDivider)}>
             <definition.component nodeId={id} data={currentValues} />
           </div>
         )}

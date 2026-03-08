@@ -1,4 +1,6 @@
+@layer third-party;
 @import "tailwindcss";
+@import "@xyflow/react/dist/style.css" layer(third-party);
 
 :root {
   font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
@@ -117,9 +119,9 @@ html, body, #root {
 }
 
 .react-flow__handle {
-  border-width: 2px !important;
-  width: var(--sz-handle) !important;
-  height: var(--sz-handle) !important;
+  border-width: 2px;
+  width: var(--sz-handle);
+  height: var(--sz-handle);
 }
 
 .react-flow__node.selected > div {
@@ -132,7 +134,7 @@ html, body, #root {
 }
 
 .react-flow__panel {
-  margin: var(--sp-xl) !important;
+  margin: var(--sp-xl);
 }
 
 .react-flow .react-flow__edge.updating .react-flow__edge-path {

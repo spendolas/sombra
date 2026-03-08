@@ -28,7 +28,7 @@ function SelectTrigger({
       )}
       {...props}
     >
-      <span className="flex w-full items-center justify-between gap-md text-body">
+      <span className="flex w-full items-center justify-between gap-md">
         {children}
         <SelectPrimitive.Icon>
           <ChevronDownIcon className="size-4 opacity-50" />
@@ -72,7 +72,7 @@ function SelectItem({
   return (
     <SelectPrimitive.Item
       className={cn(
-        "relative flex w-full cursor-default items-center rounded-sm py-1.5 pr-8 pl-2 text-sm outline-hidden select-none data-[highlighted]:bg-surface-elevated data-[highlighted]:text-fg data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        ds.enumSelect.item,
         className
       )}
       {...props}
