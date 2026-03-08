@@ -49,8 +49,12 @@ export interface NodeParameter {
    * - 'uniform': value is emitted as a GLSL uniform and uploaded at runtime.
    *   Changes require only a uniform upload — no recompile.
    *   Use for: scale, strength, offset, frequency, amplitude, numeric multipliers.
+   *
+   * - 'renderer': value controls renderer settings (FPS, DPR) only.
+   *   Changes require no recompile or uniform upload — just renderer state.
+   *   Use for: quality tiers, render mode switches.
    */
-  updateMode: 'recompile' | 'uniform'
+  updateMode: 'recompile' | 'uniform' | 'renderer'
 }
 
 /**

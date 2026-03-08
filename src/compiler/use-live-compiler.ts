@@ -16,10 +16,11 @@ import CompilerWorker from './compiler.worker?worker'
 /**
  * Hook that automatically compiles the shader graph when it changes.
  * Separates structural changes (recompile via Worker) from uniform slider
- * changes (fast upload on main thread).
+ * changes (fast upload on main thread) from renderer-only changes (no GPU work).
  *
  * @param onCompile Callback when full recompilation completes
  * @param onUniformUpdate Callback when only uniform values change (no recompile)
+ * @param onRendererUpdate Callback when only renderer settings change (no recompile or uniform upload)
  */
 export function useLiveCompiler(
   onCompile?: (result: {
@@ -27,10 +28,12 @@ export function useLiveCompiler(
     fragmentShader: string
     userUniforms?: UniformSpec[]
     isTimeLiveAtOutput?: boolean
+    qualityTier?: string
   }) => void,
   onUniformUpdate?: (
     uniforms: Array<{ name: string; value: number | number[] }>
-  ) => void
+  ) => void,
+  onRendererUpdate?: (update: { qualityTier: string }) => void
 ) {
   const nodes = useGraphStore((state) => state.nodes)
   const edges = useGraphStore((state) => state.edges)
@@ -55,6 +58,7 @@ export function useLiveCompiler(
   // Track last compiled uniform specs for the fast path
   const lastUniformsRef = useRef<UniformSpec[]>([])
   const lastSemanticKeyRef = useRef('')
+  const lastRendererKeyRef = useRef('')
 
   // Dynamic debounce — adapts to actual compile duration
   const lastCompileDuration = useRef(initialDebounceMs)
@@ -62,8 +66,10 @@ export function useLiveCompiler(
   // Stable callback refs — avoid effect re-triggers when callback identity changes
   const onCompileRef = useRef(onCompile)
   const onUniformUpdateRef = useRef(onUniformUpdate)
+  const onRendererUpdateRef = useRef(onRendererUpdate)
   onCompileRef.current = onCompile
   onUniformUpdateRef.current = onUniformUpdate
+  onRendererUpdateRef.current = onRendererUpdate
 
   // --- Worker lifecycle: create once on mount, terminate on unmount ---
   useEffect(() => {
@@ -100,6 +106,7 @@ export function useLiveCompiler(
           fragmentShader: result.fragmentShader,
           userUniforms: result.userUniforms,
           isTimeLiveAtOutput: result.isTimeLiveAtOutput,
+          qualityTier: result.qualityTier,
         })
       } else {
         setErrors(
@@ -169,6 +176,24 @@ export function useLiveCompiler(
       .join('|')
   }, [nodes])
 
+  // Derive renderer key from renderer-mode param values only
+  const rendererKey = useMemo(() => {
+    return nodes
+      .map((n) => {
+        const def = nodeRegistry.get(n.data.type)
+        if (!def?.params) return ''
+        return def.params
+          .filter((p) => p.updateMode === 'renderer')
+          .map(
+            (p) =>
+              `${n.id}:${p.id}:${JSON.stringify(n.data.params?.[p.id] ?? p.default)}`
+          )
+          .join(',')
+      })
+      .filter(Boolean)
+      .join('|')
+  }, [nodes])
+
   // --- Dispatch effect: compile via Worker or fast-path uniform upload ---
   useEffect(() => {
     if (!autoCompile) return
@@ -178,7 +203,17 @@ export function useLiveCompiler(
       clearTimeout(timeoutRef.current)
     }
 
+    const rendererChanged = rendererKey !== lastRendererKeyRef.current
     const semanticChanged = semanticKey !== lastSemanticKeyRef.current
+
+    // Renderer-only path — no debounce, no recompile, no uniform upload
+    if (rendererChanged && !semanticChanged) {
+      lastRendererKeyRef.current = rendererKey
+      const outputNode = nodesRef.current.find((n) => n.data.type === 'fragment_output')
+      const qualityTier = (outputNode?.data.params?.quality as string) ?? 'adaptive'
+      onRendererUpdateRef.current?.({ qualityTier })
+      return
+    }
 
     // Dynamic debounce: clamp(lastDuration * 0.8, 50, 300)
     const delay = Math.min(
@@ -242,10 +277,10 @@ export function useLiveCompiler(
         clearTimeout(timeoutRef.current)
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     semanticKey,
     uniformKey,
+    rendererKey,
     autoCompile,
     setCompiling,
   ])

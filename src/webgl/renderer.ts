@@ -26,6 +26,8 @@ void main() {
 }
 `
 
+export type QualityTier = 'adaptive' | 'low' | 'medium' | 'high'
+
 export class WebGLRenderer {
   private canvas: HTMLCanvasElement
   private gl: WebGL2RenderingContext
@@ -41,10 +43,12 @@ export class WebGLRenderer {
   private resizeObserver: ResizeObserver | null = null
   private targetFps = 60
   private lastFrameTime = 0
-  private readonly ANIMATED_DPR_SCALE = 0.75
-  private readonly STATIC_DPR_SCALE = 1.0
+  private ANIMATED_DPR_SCALE = 0.75
+  private STATIC_DPR_SCALE = 1.0
   private currentDprScale = 1.0
   private snapTimer: ReturnType<typeof setTimeout> | null = null
+  private currentTier: QualityTier = 'adaptive'
+  private lastAnimationSpeed = 1.0
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -201,9 +205,46 @@ export class WebGLRenderer {
   }
 
   setAnimationSpeed(speed: number): void {
+    this.lastAnimationSpeed = speed
+    // Fixed tiers override speed-based FPS
+    if (this.currentTier !== 'adaptive') return
     if (speed < 0.05) this.targetFps = 30
     else if (speed < 0.15) this.targetFps = 45
     else this.targetFps = 60
+  }
+
+  setQualityTier(tier: QualityTier): void {
+    if (this.currentTier === tier) return
+    this.currentTier = tier
+    this.applyTier()
+  }
+
+  private applyTier(): void {
+    switch (this.currentTier) {
+      case 'adaptive':
+        this.ANIMATED_DPR_SCALE = 0.75
+        this.STATIC_DPR_SCALE = 1.0
+        // Restore speed-based FPS
+        this.setAnimationSpeed(this.lastAnimationSpeed)
+        break
+      case 'low':
+        this.ANIMATED_DPR_SCALE = 0.5
+        this.STATIC_DPR_SCALE = 0.5
+        this.targetFps = 30
+        break
+      case 'medium':
+        this.ANIMATED_DPR_SCALE = 0.75
+        this.STATIC_DPR_SCALE = 0.75
+        this.targetFps = 45
+        break
+      case 'high':
+        this.ANIMATED_DPR_SCALE = 1.0
+        this.STATIC_DPR_SCALE = 1.0
+        this.targetFps = 60
+        break
+    }
+    this.currentDprScale = this.animated ? this.ANIMATED_DPR_SCALE : this.STATIC_DPR_SCALE
+    this.requestRender()
   }
 
   notifyChange(): void {
