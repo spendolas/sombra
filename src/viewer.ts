@@ -8,6 +8,7 @@ import { initializeNodeLibrary } from './nodes'
 import { compileGraph } from './compiler/glsl-generator'
 import { decodeGraphFromHash } from './utils/sombra-file'
 import { WebGLRenderer } from './webgl/renderer'
+import type { QualityTier } from './webgl/renderer'
 
 function showError(message: string) {
   const el = document.getElementById('error')!
@@ -45,6 +46,13 @@ function main() {
     return
   }
 
+  // Re-seed random nodes so each viewer load is unique
+  for (const node of nodes) {
+    if (node.data.type === 'random') {
+      node.data.params = { ...node.data.params, seed: Math.random() }
+    }
+  }
+
   // Compile to GLSL
   const result = compileGraph(nodes, edges)
   if (!result.success) {
@@ -62,7 +70,23 @@ function main() {
       showError(`WebGL shader error:\n\n${shaderResult.error}`)
       return
     }
-    renderer.startAnimation()
+
+    // Upload user uniforms (slider values baked into the shared graph)
+    if (result.userUniforms.length) {
+      renderer.updateUniforms(
+        result.userUniforms.map((u) => ({ name: u.name, value: u.value }))
+      )
+    }
+
+    // Apply quality tier and animation state
+    const isAnimated = result.isTimeLiveAtOutput
+    renderer.setAnimated(isAnimated)
+    renderer.setQualityTier((result.qualityTier ?? 'adaptive') as QualityTier)
+    if (isAnimated) {
+      renderer.startAnimation()
+    } else {
+      renderer.notifyChange()
+    }
   } catch (err) {
     showError(`WebGL error:\n\n${err instanceof Error ? err.message : String(err)}`)
   }
