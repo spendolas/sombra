@@ -11,6 +11,7 @@ import { areTypesCompatible } from '../nodes/type-coercion'
 import { ZoomSlider } from '@/components/zoom-slider'
 import { GraphToolbar } from '@/components/GraphToolbar'
 import { TypedEdge } from './TypedEdge'
+import { ds } from '@/generated/ds'
 
 interface FlowCanvasProps {
   nodes: Node<NodeData>[]
@@ -175,10 +176,13 @@ export function FlowCanvas({
       <GraphToolbar />
       <ZoomSlider position="bottom-left" />
       <MiniMap
+        className={ds.miniMap.root}
         nodeColor="var(--indigo)"
-        maskColor="rgba(15, 15, 26, 0.85)"
-        bgColor="var(--surface)"
-        style={{ backgroundColor: 'var(--surface-alt)' }}
+        nodeBorderRadius={2}
+        maskColor="rgba(26, 26, 46, 0.7)"
+        maskStrokeColor="var(--indigo)"
+        maskStrokeWidth={1}
+        bgColor="var(--surface-alt)"
       />
     </ReactFlow>
   )

@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "lastSync": "2026-03-05T12:00:00Z",
+  "lastSync": "2026-03-08T00:13:22.360Z",
   "figmaFileKey": "gq5i0l617YkXy0GzAZPtqz",
   "colors": {
     "VariableID:106:3": {
@@ -573,7 +573,7 @@
           "hover": {
             "ring": "1"
           },
-          "extra": "[.react-flow__node.selected_&]:shadow-[0_0_8px_2px_rgba(99,102,241,0.4)]"
+          "extra": "[.react-flow\\_\\_node.selected_&]:shadow-[0_0_8px_2px_rgba(99,102,241,0.4)]"
         },
         "header": {
           "figmaNodeId": "111:488",
@@ -593,7 +593,6 @@
           },
           "gap": "md",
           "align": "center",
-          "justify": "between",
           "extra": "-mb-1"
         },
         "title": {
@@ -774,15 +773,15 @@
           "radius": "md",
           "padding": "xs",
           "gap": "xs",
-          "align": "center",
           "textStyle": "text-body",
-          "textColor": "fg-dim"
+          "textColor": "fg-dim",
+          "align": "start"
         },
         "wrapper": {
           "figmaNodeId": "106:321",
           "layout": "horizontal",
-          "align": "center",
-          "gap": "md"
+          "gap": "md",
+          "align": "start"
         }
       }
     },
@@ -1038,7 +1037,6 @@
         "labelRow": {
           "figmaNodeId": "106:277",
           "layout": "horizontal",
-          "justify": "between",
           "align": "center",
           "cursor": "ew-resize"
         },
@@ -1078,7 +1076,7 @@
           "textColor": "fg-subtle"
         },
         "trigger": {
-          "figmaNodeId": "106:285",
+          "figmaNodeId": "354:6",
           "fill": "surface/raised",
           "stroke": {
             "color": "edge/default"
@@ -1117,7 +1115,7 @@
           "textColor": "fg-subtle"
         },
         "input": {
-          "figmaNodeId": "106:291",
+          "figmaNodeId": "354:13",
           "radius": "sm",
           "fill": "surface/alt",
           "stroke": {
@@ -1168,7 +1166,9 @@
           "position": "relative",
           "height": "input-h",
           "radius": "md",
-          "stroke": { "color": "edge/default" },
+          "stroke": {
+            "color": "edge/default"
+          },
           "cursor": "crosshair"
         },
         "stopMarkers": {
@@ -1182,12 +1182,20 @@
           "width": "handle",
           "height": "handle",
           "radius": "full",
-          "stroke": { "color": "surface/elevated", "weight": 2 },
+          "stroke": {
+            "color": "surface/elevated",
+            "weight": 2
+          },
           "cursor": "pointer"
         },
         "stopHandleSelected": {
           "figmaNodeId": "111:935",
-          "effects": [{ "type": "shadow", "class": "shadow-[0_0_4px_1px_rgba(99,102,241,0.8)]" }]
+          "effects": [
+            {
+              "type": "shadow",
+              "class": "shadow-[0_0_4px_1px_rgba(99,102,241,0.8)]"
+            }
+          ]
         },
         "controlsRow": {
           "figmaNodeId": "111:938",
@@ -1217,14 +1225,13 @@
           },
           "gap": "md",
           "align": "center",
-          "justify": "between",
           "extra": "nodrag nowheel"
         },
         "value": {
           "figmaNodeId": "111:951",
           "textColor": "fg",
           "textStyle": "text-mono-value",
-          "extra": "tabular-nums"
+          "extra": "tabular-nums flex-1"
         }
       }
     },
@@ -1241,7 +1248,8 @@
             "color": "edge/subtle",
             "weight": 1
           },
-          "radius": "md"
+          "radius": "md",
+          "overflow": "hidden"
         }
       }
     },
@@ -1311,9 +1319,14 @@
           "figmaNodeId": "354:3",
           "layout": "horizontal",
           "fill": "surface/raised",
-          "stroke": { "color": "edge/default" },
+          "stroke": {
+            "color": "edge/default"
+          },
           "radius": "sm",
-          "padding": { "x": "md", "y": "md" }
+          "padding": {
+            "x": "md",
+            "y": "md"
+          }
         }
       }
     },
@@ -1326,7 +1339,9 @@
         "root": {
           "figmaNodeId": "354:12",
           "fill": "surface/alt",
-          "stroke": { "color": "edge/default" },
+          "stroke": {
+            "color": "edge/default"
+          },
           "radius": "sm",
           "width": "6",
           "height": "6"
@@ -1492,5 +1507,6 @@
         971
       ]
     }
-  }
+  },
+  "lastFigmaVersion": 2328334598792182000
 }

@@ -68,23 +68,56 @@ html, body, #root {
   box-sizing: border-box;
 }
 
-/* React Flow custom styling */
+/* React Flow theming — map RF CSS custom properties to Sombra tokens */
+.react-flow {
+  /* Edges */
+  --xy-edge-stroke: var(--edge);
+  --xy-edge-stroke-width: 2;
+  --xy-edge-stroke-selected: var(--indigo);
+
+  /* Connection line (dragging new edge) */
+  --xy-connectionline-stroke: var(--indigo-hover);
+  --xy-connectionline-stroke-width: 2;
+
+  /* Handles */
+  --xy-handle-background-color: var(--surface-elevated);
+  --xy-handle-border-color: var(--surface-alt);
+
+  /* Node defaults (safety net) */
+  --xy-node-color: var(--fg);
+  --xy-node-border: 1px solid var(--edge-card);
+  --xy-node-background-color: var(--surface-elevated);
+  --xy-node-border-radius: var(--radius-md);
+  --xy-node-boxshadow-hover: none;
+  --xy-node-boxshadow-selected: 0 0 0 2px var(--indigo);
+
+  /* Minimap */
+  --xy-minimap-background-color: var(--surface-alt);
+  --xy-minimap-mask-background-color: var(--surface);
+  --xy-minimap-mask-stroke-color: var(--indigo);
+  --xy-minimap-mask-stroke-width: 1;
+  --xy-minimap-node-background-color: var(--indigo);
+  --xy-minimap-node-stroke-color: transparent;
+
+  /* Background canvas */
+  --xy-background-color: var(--surface);
+
+  /* Selection rectangle */
+  --xy-selection-background-color: rgba(99, 102, 241, 0.08);
+  --xy-selection-border: 1px dotted rgba(99, 102, 241, 0.5);
+
+  /* Attribution (hidden via proOptions, safety net) */
+  --xy-attribution-background-color: transparent;
+}
+
+/* Direct overrides for properties without CSS variable support */
+
 .react-flow__node {
   font-size: 13px;
 }
 
-.react-flow__edge-path {
-  stroke: var(--edge);
-  stroke-width: 2;
-}
-
-.react-flow__edge.selected .react-flow__edge-path {
-  stroke: var(--indigo);
-  stroke-width: 2.5;
-}
-
 .react-flow__handle {
-  border: 2px solid var(--surface-alt);
+  border-width: 2px !important;
   width: var(--sz-handle) !important;
   height: var(--sz-handle) !important;
 }
@@ -95,16 +128,15 @@ html, body, #root {
 }
 
 .react-flow__minimap {
-  background: var(--surface-alt);
-  border: 1px solid var(--edge);
-}
-
-.react-flow__background {
-  background-color: var(--surface);
+  border: 1px solid var(--edge-subtle);
 }
 
 .react-flow__panel {
   margin: var(--sp-xl) !important;
+}
+
+.react-flow .react-flow__edge.updating .react-flow__edge-path {
+  stroke: var(--indigo-hover);
 }
 
 @theme inline {
@@ -149,6 +181,12 @@ html, body, #root {
   --spacing-select-h: var(--sz-select-h);
   --spacing-slider-track: var(--sz-slider-track);
   --spacing-input-w: var(--sz-input-w);
+  --spacing-handle: var(--sz-handle);
+  --spacing-icon-sm: var(--sz-icon-sm);
+  --spacing-icon-md: var(--sz-icon-md);
+  --spacing-btn-sm: var(--sz-btn-sm);
+  --spacing-btn-md: var(--sz-btn-md);
+  --spacing-slider-thumb: var(--sz-slider-thumb);
 
   /* ── Sombra sizes → Tailwind size-* utilities ── */
   --size-handle: var(--sz-handle);

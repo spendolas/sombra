@@ -244,12 +244,24 @@ function generateThemeSombra(): string {
   // Sizes registered as spacing
   lines.push('')
   lines.push('  /* Sizes registered as spacing (for h-*, w-* utilities) */')
+  const spacingSizeRegs = new Map<string, string>()
   for (const entry of Object.values(db.sizes)) {
     for (const tw of entry.tailwind) {
       if (tw.namespace === 'spacing') {
-        lines.push(`  --spacing-${tw.key}:${' '.repeat(Math.max(1, 6 - tw.key.length))}var(${entry.cssVar});`)
+        spacingSizeRegs.set(tw.key, entry.cssVar)
       }
     }
+  }
+  // Mirror size-* tokens into spacing-* so h-*/w-* classes work for size keys.
+  for (const entry of Object.values(db.sizes)) {
+    for (const tw of entry.tailwind) {
+      if (tw.namespace === 'size' && !spacingSizeRegs.has(tw.key)) {
+        spacingSizeRegs.set(tw.key, entry.cssVar)
+      }
+    }
+  }
+  for (const [key, cssVar] of spacingSizeRegs) {
+    lines.push(`  --spacing-${key}:${' '.repeat(Math.max(1, 6 - key.length))}var(${cssVar});`)
   }
 
   // Sizes registered as size

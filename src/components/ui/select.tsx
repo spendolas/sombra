@@ -1,6 +1,7 @@
 import { Select as SelectPrimitive } from "radix-ui"
 import { ChevronDownIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { ds } from "@/generated/ds"
 
 function Select(props: React.ComponentProps<typeof SelectPrimitive.Root>) {
   return <SelectPrimitive.Root {...props} />
@@ -21,15 +22,18 @@ function SelectTrigger({
   return (
     <SelectPrimitive.Trigger
       className={cn(
-        "flex w-fit items-center justify-between gap-2 text-sm outline-none",
+        ds.selectFrame.root,
+        ds.enumSelect.trigger,
         className
       )}
       {...props}
     >
-      {children}
-      <SelectPrimitive.Icon>
-        <ChevronDownIcon className="size-4 opacity-50" />
-      </SelectPrimitive.Icon>
+      <span className="flex w-full items-center justify-between gap-md text-body">
+        {children}
+        <SelectPrimitive.Icon>
+          <ChevronDownIcon className="size-4 opacity-50" />
+        </SelectPrimitive.Icon>
+      </span>
     </SelectPrimitive.Trigger>
   )
 }
