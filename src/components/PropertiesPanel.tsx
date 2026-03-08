@@ -60,10 +60,10 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
   if (!selectedNode) {
     return (
       <div className={ds.propertiesPanel.root}>
-        <h2 className="text-section mb-lg text-fg-dim">
+        <h2 className={cn(ds.propertiesPanel.sectionHeader, "mb-lg")}>
           Properties
         </h2>
-        <p className="text-body text-fg-muted">
+        <p className={ds.propertiesPanel.emptyText}>
           Select a node to edit properties...
         </p>
       </div>
@@ -75,10 +75,10 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
   if (!definition) {
     return (
       <div className={ds.propertiesPanel.root}>
-        <h2 className="text-section mb-lg text-fg-dim">
+        <h2 className={cn(ds.propertiesPanel.sectionHeader, "mb-lg")}>
           Properties
         </h2>
-        <p className="text-body text-red-400">
+        <p className={ds.propertiesPanel.errorText}>
           Unknown node type: {selectedNode.data.type}
         </p>
       </div>
@@ -108,25 +108,25 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
 
   return (
     <div className={ds.propertiesPanel.root}>
-      <h2 className="text-section mb-lg text-fg-dim">
+      <h2 className={cn(ds.propertiesPanel.sectionHeader, "mb-lg")}>
         Properties
       </h2>
 
       {/* Node Info */}
       <div className={cn(ds.propertiesPanel.nodeInfo, "mb-xl")}>
-        <div className="text-category-meta mb-xs text-fg-subtle">
+        <div className={cn(ds.propertiesPanel.categoryMeta, "mb-xs")}>
           {definition.category}
         </div>
-        <div className="text-node-title mb-md text-fg">
+        <div className={cn(ds.propertiesPanel.nodeTitle, "mb-md")}>
           {definition.label}
         </div>
         {definition.description && (
-          <div className="text-description text-fg-dim">
+          <div className={ds.propertiesPanel.description}>
             {definition.description}
           </div>
         )}
         <Separator className="my-md" />
-        <div className="text-mono-id text-fg-muted">
+        <div className={ds.propertiesPanel.nodeIdText}>
           ID: {selectedNode.id}
         </div>
       </div>
@@ -134,17 +134,17 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
       {/* Inputs */}
       {resolvedInputs.length > 0 && (
         <div className="mb-xl">
-          <Label className="text-section mb-md block text-fg-dim">
+          <Label className={cn(ds.propertiesPanel.sectionHeader, "mb-md block")}>
             Inputs
           </Label>
-          <div className="flex flex-col gap-xs">
+          <div className={ds.propertiesPanel.portList}>
             {resolvedInputs.map((input) => (
               <div
                 key={input.id}
                 className={cn(ds.propertiesPanel.portRow, "text-port-type")}
               >
-                <span className="text-fg-dim">{input.label}</span>
-                <span className="text-mono-value text-fg-muted">
+                <span className={ds.propertiesPanel.portLabel}>{input.label}</span>
+                <span className={ds.propertiesPanel.portTypeText}>
                   {input.type}
                 </span>
               </div>
@@ -156,17 +156,17 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
       {/* Outputs */}
       {definition.outputs.length > 0 && (
         <div className="mb-xl">
-          <Label className="text-section mb-md block text-fg-dim">
+          <Label className={cn(ds.propertiesPanel.sectionHeader, "mb-md block")}>
             Outputs
           </Label>
-          <div className="flex flex-col gap-xs">
+          <div className={ds.propertiesPanel.portList}>
             {definition.outputs.map((output) => (
               <div
                 key={output.id}
                 className={cn(ds.propertiesPanel.portRow, "text-port-type")}
               >
-                <span className="text-fg-dim">{output.label}</span>
-                <span className="text-mono-value text-fg-muted">
+                <span className={ds.propertiesPanel.portLabel}>{output.label}</span>
+                <span className={ds.propertiesPanel.portTypeText}>
                   {output.type}
                 </span>
               </div>
@@ -178,7 +178,7 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
       {/* Parameters */}
       {hasParameters && (
         <div className="mb-xl">
-          <Label className="text-section mb-lg block text-fg-dim">
+          <Label className={cn(ds.propertiesPanel.sectionHeader, "mb-lg block")}>
             Parameters
           </Label>
           <div className={ds.propertiesPanel.paramSection}>
@@ -196,7 +196,7 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
       {/* Custom Component */}
       {definition.component && (
         <div className="mb-xl">
-          <Label className="text-section mb-lg block text-fg-dim">
+          <Label className={cn(ds.propertiesPanel.sectionHeader, "mb-lg block")}>
             Custom Controls
           </Label>
           <div className={ds.propertiesPanel.paramSection}>
