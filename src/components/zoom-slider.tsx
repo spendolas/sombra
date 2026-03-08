@@ -64,9 +64,8 @@ export function ZoomSlider({
         label={`${(100 * zoom).toFixed(0)}%`}
         className={cn(
           ds.button.textGhost,
-          "tabular-nums",
           orientation === "horizontal"
-            ? "w-[140px] min-w-10"
+            ? undefined
             : "h-[40px] w-[40px]",
         )}
         onClick={() => zoomTo(1, { duration: 300 })}

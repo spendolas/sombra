@@ -3,8 +3,8 @@
 
 export const ds = {
   nodeCard: {
-    root: "flex flex-col bg-surface-elevated rounded-md border border-edge-card relative hover:ring-1 [.react-flow__node.selected_&]:shadow-[0_0_8px_2px_rgba(99,102,241,0.4)]",
-    header: "flex flex-row items-center justify-between bg-surface-raised rounded-t-md border-b border-edge-subtle px-lg py-md gap-md -mb-1",
+    root: "flex flex-col bg-surface-elevated rounded-md border border-edge-card relative hover:ring-1 [.react-flow\_\_node.selected_&]:shadow-[0_0_8px_2px_rgba(99,102,241,0.4)]",
+    header: "flex flex-row items-center bg-surface-raised rounded-t-md border-b border-edge-subtle px-lg py-md gap-md -mb-1",
     title: "text-node-title text-fg select-none flex-1",
     content: "flex flex-col p-lg gap-y-md",
     footer: "flex flex-col items-center border-t border-edge px-lg pt-md pb-lg gap-y-md",
@@ -30,8 +30,8 @@ export const ds = {
     root: "flex flex-row items-center bg-surface-alt rounded-md p-xs gap-xs text-fg-dim",
   },
   previewToolbar: {
-    root: "flex flex-row items-center bg-surface-alt rounded-md p-xs gap-xs text-body text-fg-dim",
-    wrapper: "flex flex-row items-center gap-md",
+    root: "flex flex-row items-start bg-surface-alt rounded-md p-xs gap-xs text-body text-fg-dim",
+    wrapper: "flex flex-row items-start gap-md",
   },
   paletteItem: {
     root: "bg-surface-raised rounded-sm border border-edge-subtle px-md py-sm text-body text-fg-dim cursor-move transition-colors hover:bg-surface-elevated hover:text-fg",
@@ -70,7 +70,7 @@ export const ds = {
   },
   floatSlider: {
     root: "flex flex-col gap-2xs select-none nodrag nowheel nokey",
-    labelRow: "flex flex-row items-center justify-between cursor-ew-resize",
+    labelRow: "flex flex-row items-center cursor-ew-resize",
     label: "text-param text-fg-subtle",
     value: "text-body text-fg cursor-text tabular-nums",
     input: "text-body text-fg bg-transparent text-right tabular-nums outline-none border-b border-indigo nodrag nowheel",
@@ -101,11 +101,11 @@ export const ds = {
     positionText: "text-param text-fg-dim tabular-nums",
   },
   randomDisplay: {
-    root: "flex flex-row items-center justify-between px-xs gap-md nodrag nowheel",
-    value: "text-mono-value text-fg tabular-nums",
+    root: "flex flex-row items-center px-xs gap-md nodrag nowheel",
+    value: "text-mono-value text-fg tabular-nums flex-1",
   },
   miniMap: {
-    root: "bg-surface-alt rounded-md border border-edge-subtle",
+    root: "bg-surface-alt rounded-md border border-edge-subtle overflow-hidden",
   },
   graphToolbar: {
     root: "flex flex-row items-center bg-surface-alt rounded-md p-xs gap-xs text-fg-dim",

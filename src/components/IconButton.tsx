@@ -22,13 +22,18 @@ type IconButtonProps = React.ComponentProps<"button"> & (
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
   ({ icon, label, iconClassName, className, ...props }, ref) => {
     const Icon = icon ? icons[icon] : null
+    const stateClass = className || (label ? ds.button.textGhost : ds.button.ghost)
     return (
       <button
         ref={ref}
-        className={cn(ds.button.root, className || (label ? ds.button.textGhost : ds.button.ghost))}
+        className={cn(ds.button.root, label && ds.textGhostButton.root, stateClass)}
         {...props}
       >
-        {Icon ? <Icon className={cn("size-icon-sm", iconClassName)} /> : label}
+        {Icon ? (
+          <Icon className={cn("size-icon-sm", iconClassName)} />
+        ) : (
+          <span className="tabular-nums">{label}</span>
+        )}
       </button>
     )
   },

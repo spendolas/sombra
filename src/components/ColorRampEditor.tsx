@@ -347,7 +347,7 @@ export function ColorRampEditor({
           type="color"
           value={stopToHex(selectedStop)}
           onChange={(e) => handleColorChange(e.target.value)}
-          className={cn(ds.colorInput.input, "size-input-h")}
+          className={cn(ds.colorSwatch.root, "cursor-pointer")}
         />
         <span className={ds.gradientEditor.positionText}>
           {Math.round(selectedStop.position * 100)}%

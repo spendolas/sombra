@@ -11,6 +11,7 @@
     "tokens:check": "tsx scripts/generate-tokens.ts --check",
     "tokens:sync": "npm run tokens:pull && npm run tokens",
     "tokens:audit": "tsx scripts/figma-audit.ts",
+    "tokens:dump": "echo 'Run scripts/figma-dump-vars.js in the Figma dev console or via Claude Chrome extension.\nThen: cp ~/Downloads/figma-vars-cache.json tokens/.figma-vars-cache.json'",
     "drift:collect": "tsx scripts/drift-collect.ts",
     "drift:check": "tsx scripts/drift-check.ts",
     "predev": "npm run check-deps && npm run tokens",
