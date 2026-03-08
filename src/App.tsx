@@ -1,8 +1,8 @@
 import { useEffect, useRef, useCallback, useMemo } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import type { Connection } from '@xyflow/react'
-import '@xyflow/react/dist/style.css'
 import { WebGLRenderer } from './webgl/renderer'
+import type { QualityTier } from './webgl/renderer'
 import { useLiveCompiler } from './compiler'
 import { useGraphStore } from './stores/graphStore'
 import { useSettingsStore } from './stores/settingsStore'
@@ -181,6 +181,7 @@ function App() {
       fragmentShader: string
       userUniforms?: Array<{ name: string; value: number | number[] }>
       isTimeLiveAtOutput?: boolean
+      qualityTier?: string
     }) => {
       if (result.success && rendererRef.current) {
         const updateResult = rendererRef.current.updateShader(result.fragmentShader)
@@ -199,6 +200,7 @@ function App() {
             const speed = (timeNode?.data.params?.speed as number) ?? 1.0
             rendererRef.current.setAnimationSpeed(speed)
           }
+          rendererRef.current.setQualityTier((result.qualityTier ?? 'adaptive') as QualityTier)
           rendererRef.current.notifyChange()
         }
       }
@@ -221,7 +223,14 @@ function App() {
     []
   )
 
-  useLiveCompiler(handleCompile, handleUniformUpdate)
+  const handleRendererUpdate = useCallback(
+    (update: { qualityTier: string }) => {
+      rendererRef.current?.setQualityTier(update.qualityTier as QualityTier)
+    },
+    []
+  )
+
+  useLiveCompiler(handleCompile, handleUniformUpdate, handleRendererUpdate)
 
   // Determine center split direction based on mode
   const isDocked = previewMode === 'docked'

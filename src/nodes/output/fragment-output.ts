@@ -21,6 +21,22 @@ export const fragmentOutputNode: NodeDefinition = {
 
   outputs: [],
 
+  params: [
+    {
+      id: 'quality',
+      label: 'Render Quality',
+      type: 'enum',
+      default: 'adaptive',
+      options: [
+        { value: 'adaptive', label: 'Adaptive' },
+        { value: 'low', label: 'Low' },
+        { value: 'medium', label: 'Medium' },
+        { value: 'high', label: 'High' },
+      ],
+      updateMode: 'renderer',
+    },
+  ],
+
   glsl: (ctx) => {
     const { inputs } = ctx
     return `fragColor = vec4(${inputs.color}, 1.0);`

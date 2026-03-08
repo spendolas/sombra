@@ -34,6 +34,8 @@ export interface CompilationResult {
   isTimeLiveAtOutput: boolean
   /** User-defined uniforms from uniform-mode params (unwired only) */
   userUniforms: UniformSpec[]
+  /** Quality tier from fragment_output node ('adaptive' | 'low' | 'medium' | 'high') */
+  qualityTier: string
 }
 
 /**
@@ -74,6 +76,7 @@ export function compileGraph(
         errors: [{ message: 'Graph contains cycles. Remove circular dependencies.' }],
         isTimeLiveAtOutput: false,
         userUniforms: [],
+        qualityTier: 'adaptive',
       }
     }
 
@@ -285,6 +288,7 @@ export function compileGraph(
         errors,
         isTimeLiveAtOutput: false,
         userUniforms: [],
+        qualityTier: 'adaptive',
       }
     }
 
@@ -295,6 +299,10 @@ export function compileGraph(
     console.log('[Sombra] Generated Fragment Shader:')
     console.log(fragmentShader)
 
+    // Read quality tier from fragment_output node
+    const outputNode = nodes.find((n) => n.data.type === 'fragment_output')
+    const qualityTier = (outputNode?.data.params?.quality as string) ?? 'adaptive'
+
     return {
       success: true,
       vertexShader: VERTEX_SHADER,
@@ -302,6 +310,7 @@ export function compileGraph(
       errors: [],
       isTimeLiveAtOutput: uniforms.has('u_time'),
       userUniforms,
+      qualityTier,
     }
   } catch (error) {
     return {
@@ -315,6 +324,7 @@ export function compileGraph(
       ],
       isTimeLiveAtOutput: false,
       userUniforms: [],
+      qualityTier: 'adaptive',
     }
   }
 }
