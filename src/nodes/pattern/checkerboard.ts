@@ -1,0 +1,35 @@
+/**
+ * Checkerboard — alternating black/white grid pattern.
+ * Output is 0.0 or 1.0 (hard edges).
+ */
+
+import type { NodeDefinition } from '../types'
+
+export const checkerboardNode: NodeDefinition = {
+  type: 'checkerboard',
+  label: 'Checkerboard',
+  category: 'Pattern',
+  description: 'Alternating grid pattern — outputs 0 or 1',
+
+  inputs: [
+    { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },
+  ],
+
+  outputs: [
+    { id: 'value', label: 'Value', type: 'float' },
+  ],
+
+  params: [
+    { id: 'scale', label: 'Scale', type: 'float', default: 8.0, min: 1.0, max: 64.0, step: 0.5, connectable: true, updateMode: 'uniform' },
+  ],
+
+  glsl: (ctx) => {
+    const { inputs, outputs } = ctx
+    const id = ctx.nodeId.replace(/-/g, '_')
+    const c = `cb_c_${id}`
+    return [
+      `vec2 ${c} = floor(${inputs.coords} * ${inputs.scale});`,
+      `float ${outputs.value} = mod(${c}.x + ${c}.y, 2.0);`,
+    ].join('\n  ')
+  },
+}

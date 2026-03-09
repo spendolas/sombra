@@ -37,6 +37,12 @@ import { hsvToRgbNode } from './color/hsv-to-rgb'
 import { brightnessContrastNode } from './color/brightness-contrast'
 import { colorRampNode } from './color/color-ramp'
 
+// Pattern nodes
+import { checkerboardNode } from './pattern/checkerboard'
+import { stripesNode } from './pattern/stripes'
+import { dotsNode } from './pattern/dots'
+import { gradientNode } from './pattern/gradient'
+
 // Effect nodes
 import { ditherNode } from './postprocess/pixel-grid'
 
@@ -79,6 +85,12 @@ export const ALL_NODES = [
   hsvToRgbNode,
   brightnessContrastNode,
   colorRampNode,
+
+  // Pattern
+  checkerboardNode,
+  stripesNode,
+  dotsNode,
+  gradientNode,
 
   // Effect
   ditherNode,
