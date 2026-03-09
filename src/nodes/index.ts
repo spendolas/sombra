@@ -18,6 +18,9 @@ import { arithmeticNode } from './math/arithmetic'
 import { trigNode } from './math/trig'
 import { mixNode } from './math/mix'
 import { remapNode } from './math/remap'
+import { clampNode } from './math/clamp'
+import { powerNode } from './math/power'
+import { roundNode } from './math/round'
 
 // Distort nodes
 import { smoothstepNode } from './math/smoothstep'
@@ -75,6 +78,9 @@ export const ALL_NODES = [
   trigNode,
   mixNode,
   remapNode,
+  clampNode,
+  powerNode,
+  roundNode,
 
   // Distort
   smoothstepNode,

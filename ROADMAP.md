@@ -404,10 +404,10 @@ Expanded the DS database to capture ALL visual properties per component, elimina
 - [x] Polar Coordinates — cartesian ↔ polar conversion with center params
 - [x] Tile — repeat + optional mirror with countX/countY params
 
-### Sprint 4 — Math Expansion (3 nodes, `Math` category)
-- [ ] Clamp — value + min + max → clamped float
-- [ ] Power — base + exponent → float
-- [ ] Round — value → float with mode enum (floor/ceil/fract/round/sign)
+### Sprint 4 — Math Expansion (3 nodes, `Math` category) ✅ Complete
+- [x] Clamp — value + min + max → clamped float
+- [x] Power — base + exponent → float
+- [x] Round — value → float with mode enum (floor/ceil/fract/round/sign)
 
 ### Sprint 5 — Color Expansion (3 nodes, `Color` category)
 - [ ] Invert — vec3(1.0) - color
