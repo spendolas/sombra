@@ -1816,6 +1816,21 @@
       "name": "Round",
       "category": "Math",
       "nodeFile": "src/nodes/math/round.ts"
+    },
+    "450:876": {
+      "name": "Invert",
+      "category": "Color",
+      "nodeFile": "src/nodes/color/invert.ts"
+    },
+    "450:890": {
+      "name": "Grayscale",
+      "category": "Color",
+      "nodeFile": "src/nodes/color/grayscale.ts"
+    },
+    "450:911": {
+      "name": "Posterize",
+      "category": "Color",
+      "nodeFile": "src/nodes/color/posterize.ts"
     }
   },
   "scenes": {
