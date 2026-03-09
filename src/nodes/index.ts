@@ -31,6 +31,8 @@ import { fbmNode } from './noise/fbm'
 // Transform nodes
 import { domainWarpNode } from './noise/domain-warp'
 import { quantizeUvNode } from './postprocess/quantize-uv'
+import { polarCoordsNode } from './transform/polar-coords'
+import { tileNode } from './transform/tile'
 
 // Color nodes
 import { hsvToRgbNode } from './color/hsv-to-rgb'
@@ -42,6 +44,12 @@ import { checkerboardNode } from './pattern/checkerboard'
 import { stripesNode } from './pattern/stripes'
 import { dotsNode } from './pattern/dots'
 import { gradientNode } from './pattern/gradient'
+
+// Vector nodes
+import { splitVec3Node } from './vector/split-vec3'
+import { combineVec3Node } from './vector/combine-vec3'
+import { splitVec2Node } from './vector/split-vec2'
+import { combineVec2Node } from './vector/combine-vec2'
 
 // Effect nodes
 import { ditherNode } from './postprocess/pixel-grid'
@@ -80,6 +88,8 @@ export const ALL_NODES = [
   // Transform
   domainWarpNode,
   quantizeUvNode,
+  polarCoordsNode,
+  tileNode,
 
   // Color
   hsvToRgbNode,
@@ -91,6 +101,12 @@ export const ALL_NODES = [
   stripesNode,
   dotsNode,
   gradientNode,
+
+  // Vector
+  splitVec3Node,
+  combineVec3Node,
+  splitVec2Node,
+  combineVec2Node,
 
   // Effect
   ditherNode,

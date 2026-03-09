@@ -388,21 +388,21 @@ Expanded the DS database to capture ALL visual properties per component, elimina
 
 **Goal:** Grow from 23 to ~39 nodes with patterns, vector operations, coordinate transforms, math utilities, and color tools. Add Cmd+K search palette for discoverability.
 
-### Sprint 1 — Pattern Generators (4 nodes, new `Pattern` category)
-- [ ] Checkerboard — coords + scale → float (XOR grid pattern)
-- [ ] Stripes — coords + scale + angle + softness → float (rotated band pattern)
-- [ ] Dots — coords + scale + radius + softness → float (grid of circles)
-- [ ] Gradient — coords + type enum (linear/radial/angular/diamond) → float
+### Sprint 1 — Pattern Generators (4 nodes, new `Pattern` category) ✅ Complete
+- [x] Checkerboard — coords + scale → float (XOR grid pattern)
+- [x] Stripes — coords + scale + angle + softness → float (rotated band pattern)
+- [x] Dots — coords + scale + radius + softness → float (grid of circles)
+- [x] Gradient — coords + type enum (linear/radial/angular/diamond) → float
 
-### Sprint 2 — Vector Operations (4 nodes, new `Vector` category)
-- [ ] Split Vec3 — vec3 → x, y, z floats (swizzle)
-- [ ] Combine Vec3 — x, y, z floats → vec3
-- [ ] Split Vec2 — vec2 → x, y floats (swizzle)
-- [ ] Combine Vec2 — x, y floats → vec2
+### Sprint 2 — Vector Operations (4 nodes, new `Vector` category) ✅ Complete
+- [x] Split Vec3 — vec3 → x, y, z floats (swizzle)
+- [x] Combine Vec3 — x, y, z floats → vec3
+- [x] Split Vec2 — vec2 → x, y floats (swizzle)
+- [x] Combine Vec2 — x, y floats → vec2
 
-### Sprint 3 — Coordinate Transforms (2 nodes, `Transform` category)
-- [ ] Polar Coordinates — cartesian ↔ polar conversion with center params
-- [ ] Tile — repeat + optional mirror with countX/countY params
+### Sprint 3 — Coordinate Transforms (2 nodes, `Transform` category) ✅ Complete
+- [x] Polar Coordinates — cartesian ↔ polar conversion with center params
+- [x] Tile — repeat + optional mirror with countX/countY params
 
 ### Sprint 4 — Math Expansion (3 nodes, `Math` category)
 - [ ] Clamp — value + min + max → clamped float
