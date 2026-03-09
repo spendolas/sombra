@@ -1801,6 +1801,21 @@
       "name": "Tile",
       "category": "Transform",
       "nodeFile": "src/nodes/transform/tile.ts"
+    },
+    "445:814": {
+      "name": "Clamp",
+      "category": "Math",
+      "nodeFile": "src/nodes/math/clamp.ts"
+    },
+    "445:854": {
+      "name": "Power",
+      "category": "Math",
+      "nodeFile": "src/nodes/math/power.ts"
+    },
+    "445:882": {
+      "name": "Round",
+      "category": "Math",
+      "nodeFile": "src/nodes/math/round.ts"
     }
   },
   "scenes": {
