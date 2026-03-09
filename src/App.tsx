@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import type { Connection } from '@xyflow/react'
 import { WebGLRenderer } from './webgl/renderer'
@@ -15,6 +15,7 @@ import { PropertiesPanel } from './components/PropertiesPanel'
 import { PreviewPanel } from './components/PreviewPanel'
 import { FloatingPreview } from './components/FloatingPreview'
 import { FullWindowOverlay } from './components/FullWindowOverlay'
+import { CommandPalette } from './components/CommandPalette'
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -38,6 +39,11 @@ function App() {
   const splitPct = useSettingsStore((s) => splitDirection === 'vertical' ? s.verticalSplitPct : s.horizontalSplitPct)
   const setSplitPct = useSettingsStore((s) => s.setSplitPct)
   const splitSwapped = useSettingsStore((s) => splitDirection === 'vertical' ? s.verticalSplitSwapped : s.horizontalSplitSwapped)
+
+  // Command palette state (ephemeral UI — not persisted)
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+  const mousePositionRef = useRef({ x: 0, y: 0 })
+  const [paletteMousePos, setPaletteMousePos] = useState({ x: 0, y: 0 })
 
   // React Flow integration
   const nodes = useGraphStore((state) => state.nodes)
@@ -152,6 +158,33 @@ function App() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [undo, redo])
+
+  // Track mouse position for command palette node placement
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      mousePositionRef.current = { x: e.clientX, y: e.clientY }
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    return () => window.removeEventListener('mousemove', onMouseMove)
+  }, [])
+
+  // Cmd+K / Cmd+/ opens command palette
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === '/')) {
+        // Don't trigger when typing in inputs
+        const tag = (e.target as HTMLElement)?.tagName
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+        e.preventDefault()
+        setCommandPaletteOpen((prev) => {
+          if (!prev) setPaletteMousePos({ ...mousePositionRef.current })
+          return !prev
+        })
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   // F toggles fullwindow, Esc exits fullwindow
   useEffect(() => {
@@ -306,6 +339,11 @@ function App() {
         {/* Full window overlay — covers everything */}
         {previewMode === 'fullwindow' && (
           <FullWindowOverlay targetRef={fullTargetRef} />
+        )}
+
+        {/* Command palette overlay */}
+        {commandPaletteOpen && (
+          <CommandPalette onClose={() => setCommandPaletteOpen(false)} mousePosition={paletteMousePos} />
         )}
       </div>
     </ReactFlowProvider>
