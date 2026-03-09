@@ -384,7 +384,7 @@ Expanded the DS database to capture ALL visual properties per component, elimina
 
 ---
 
-## Phase 4 — Node Library Expansion 🔄 IN PROGRESS
+## Phase 4 — Node Library Expansion ✅ Complete
 
 **Goal:** Grow from 23 to ~39 nodes with patterns, vector operations, coordinate transforms, math utilities, and color tools. Add Cmd+K search palette for discoverability.
 
@@ -414,11 +414,12 @@ Expanded the DS database to capture ALL visual properties per component, elimina
 - [x] Grayscale — color → float with mode enum (luminance/average/lightness)
 - [x] Posterize — quantize color to N levels
 
-### Sprint 6 — Cmd+K Node Search Palette
-- [ ] Command palette overlay with fuzzy search over node types
-- [ ] Keyboard: Cmd+K or `/` opens, arrows navigate, Enter places, Escape closes
+### Sprint 6 — Cmd+K Node Search Palette ✅ Complete
+- [x] Command palette overlay with fuzzy search over node types
+- [x] Keyboard: Cmd+K / Cmd+/ opens, arrows navigate, Enter places, Escape closes
+- Files: `src/components/CommandPalette.tsx` (new), `src/utils/fuzzy-search.ts` (new), `src/App.tsx` (modified)
 
-**Milestone:** Rich enough node library to recreate complex shaders entirely in the editor.
+**Milestone:** Rich enough node library to recreate complex shaders entirely in the editor. **Phase 4 complete: 39 nodes + Cmd+K search.**
 
 ---
 
