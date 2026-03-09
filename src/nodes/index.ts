@@ -41,6 +41,9 @@ import { tileNode } from './transform/tile'
 import { hsvToRgbNode } from './color/hsv-to-rgb'
 import { brightnessContrastNode } from './color/brightness-contrast'
 import { colorRampNode } from './color/color-ramp'
+import { invertNode } from './color/invert'
+import { grayscaleNode } from './color/grayscale'
+import { posterizeNode } from './color/posterize'
 
 // Pattern nodes
 import { checkerboardNode } from './pattern/checkerboard'
@@ -101,6 +104,9 @@ export const ALL_NODES = [
   hsvToRgbNode,
   brightnessContrastNode,
   colorRampNode,
+  invertNode,
+  grayscaleNode,
+  posterizeNode,
 
   // Pattern
   checkerboardNode,

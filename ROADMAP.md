@@ -409,10 +409,10 @@ Expanded the DS database to capture ALL visual properties per component, elimina
 - [x] Power — base + exponent → float
 - [x] Round — value → float with mode enum (floor/ceil/fract/round/sign)
 
-### Sprint 5 — Color Expansion (3 nodes, `Color` category)
-- [ ] Invert — vec3(1.0) - color
-- [ ] Grayscale — color → float with mode enum (luminance/average/lightness)
-- [ ] Posterize — quantize color to N levels
+### Sprint 5 — Color Expansion (3 nodes, `Color` category) ✅ Complete
+- [x] Invert — vec3(1.0) - color
+- [x] Grayscale — color → float with mode enum (luminance/average/lightness)
+- [x] Posterize — quantize color to N levels
 
 ### Sprint 6 — Cmd+K Node Search Palette
 - [ ] Command palette overlay with fuzzy search over node types
