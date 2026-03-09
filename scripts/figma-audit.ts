@@ -5,16 +5,19 @@
  * then compares against sombra.ds.json. No early returns, no skipping.
  *
  * Properties checked: layout, padding (4 sides), gap, radius (4 corners),
- * fill + opacity, stroke color + weight, sizing modes + dimensions,
- * alignment, overflow, opacity, text style (fontSize, fontWeight,
- * lineHeight, letterSpacing), text color.
+ * fill + opacity + blend mode, stroke color + weight + per-side weights + style,
+ * sizing modes + dimensions, alignment, overflow, opacity (node + compound),
+ * blend mode, effects (shadows), text style (fontSize, fontWeight, lineHeight,
+ * letterSpacing, alignment, decoration, case), text color.
  *
  * Requires FIGMA_TOKEN env var.
  *
  * Usage:
- *   npx tsx scripts/figma-audit.ts              # report diffs
- *   npx tsx scripts/figma-audit.ts --json out   # write JSON report to file
- *   npx tsx scripts/figma-audit.ts --fix        # auto-patch DB from Figma
+ *   npx tsx scripts/figma-audit.ts                # report diffs
+ *   npx tsx scripts/figma-audit.ts --json out     # write JSON report to file
+ *   npx tsx scripts/figma-audit.ts --fix          # auto-patch DB from Figma
+ *   npx tsx scripts/figma-audit.ts --fix-dry-run  # compute patches, print what would change, don't write
+ *   npx tsx scripts/figma-audit.ts --strict       # exit 1 on unresolved vars, missing text styles, bad node types
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'fs'
@@ -48,9 +51,22 @@ if (!FIGMA_TOKEN) {
   process.exit(1)
 }
 
-const FIX_MODE = process.argv.includes('--fix')
+const FIX_DRY_RUN = process.argv.includes('--fix-dry-run')
+const FIX_MODE = process.argv.includes('--fix') || FIX_DRY_RUN
+const STRICT_MODE = process.argv.includes('--strict')
 const JSON_IDX = process.argv.indexOf('--json')
 const JSON_PATH = JSON_IDX !== -1 ? process.argv[JSON_IDX + 1] : null
+
+// Module-level counter for unresolved variable warnings
+let unresolvedVarCount = 0
+
+// Module-level cache for text style identity resolution
+// Maps Figma text style node ID → style name (e.g. "118:1545" → "mono/value")
+// Populated from .figma-vars-cache.json if available
+const textStyleNodeIdToName = new Map<string, string>()
+
+// Cache path
+const CACHE_PATH = resolve(ROOT, 'tokens/.figma-vars-cache.json')
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -58,6 +74,11 @@ interface StrokeDef {
   side?: string
   color?: string
   weight?: number
+  topWeight?: number
+  rightWeight?: number
+  bottomWeight?: number
+  leftWeight?: number
+  style?: 'solid' | 'dashed'
 }
 
 interface ComponentPart {
@@ -74,6 +95,11 @@ interface ComponentPart {
   extra?: string
   textStyle?: string
   textColor?: string
+  textAlign?: string
+  textAlignVertical?: string
+  textDecoration?: string
+  textCase?: string
+  blendMode?: string
   overflow?: string
   opacity?: number
   height?: string
@@ -126,21 +152,23 @@ interface FigmaNode {
   cornerRadius?: number
   // Fill / Stroke
   fills?: Array<{ type: string; color?: { r: number; g: number; b: number; a: number }; opacity?: number; blendMode?: string; visible?: boolean }>
-  strokes?: Array<{ type: string; color?: { r: number; g: number; b: number; a: number }; opacity?: number; visible?: boolean }>
+  strokes?: Array<{ type: string; color?: { r: number; g: number; b: number; a: number }; opacity?: number; blendMode?: string; visible?: boolean }>
   strokeWeight?: number
   strokeTopWeight?: number
   strokeBottomWeight?: number
   strokeLeftWeight?: number
   strokeRightWeight?: number
   strokeAlign?: 'INSIDE' | 'CENTER' | 'OUTSIDE'
+  strokeDashes?: number[]
   // Sizing
   layoutSizingVertical?: 'FIXED' | 'HUG' | 'FILL'
   layoutSizingHorizontal?: 'FIXED' | 'HUG' | 'FILL'
   absoluteBoundingBox?: { x: number; y: number; width: number; height: number }
   // Clipping
   clipsContent?: boolean
-  // Node-level opacity
+  // Node-level opacity + blend mode
   opacity?: number
+  blendMode?: string
   // Effects
   effects?: Array<{
     type: string; visible?: boolean; radius?: number
@@ -149,7 +177,10 @@ interface FigmaNode {
   }>
   // Bound variables
   boundVariables?: Record<string, BoundVariable | BoundVariable[]>
-  // Text
+  // Text (node-level for TEXT nodes)
+  textAlignHorizontal?: string
+  textAlignVertical?: string
+  textDecoration?: string
   style?: {
     fontFamily?: string
     fontPostScriptName?: string
@@ -158,6 +189,10 @@ interface FigmaNode {
     lineHeightPx?: number
     letterSpacing?: number
     textCase?: string
+    textDecoration?: string
+    textAlignHorizontal?: string
+    textAlignVertical?: string
+    opentypeFlags?: Record<string, number>
   }
   styles?: Record<string, string>
 }
@@ -171,9 +206,10 @@ type PropMap = Record<string, string | number | null>
 
 interface Diff {
   key: string
-  type: 'MISMATCH' | 'MISSING' | 'EXTRA'
+  type: 'MISMATCH' | 'MISSING' | 'EXTRA' | 'INFO'
   figma: string | number | null
   db: string | number | null
+  note?: string
 }
 
 interface PartReport {
@@ -192,6 +228,11 @@ const CODE_ONLY_KEYS = new Set([
   'pointerEvents', 'extra', 'minWidth',
   'hover', 'active', 'disabled', 'selected',
   'effects', // DB effects are pre-formatted Tailwind shadow strings
+])
+
+// Fields that are code-only (not auditable) for variable resolution warnings
+const CODE_ONLY_FIELDS = new Set([
+  'cursor', 'transition', 'userSelect', 'position', 'z', 'inset', 'pointerEvents',
 ])
 
 // ─── Figma API ───────────────────────────────────────────────────────────────
@@ -295,7 +336,12 @@ function resolveBoundVar(
   if (!binding) return null
   const bv = Array.isArray(binding) ? binding[0] : binding
   if (!bv?.id) return null
-  return varToKey.get(bv.id) ?? null
+  const resolved = varToKey.get(bv.id)
+  if (resolved === undefined && !CODE_ONLY_FIELDS.has(field)) {
+    console.warn(`  ⚠ Unresolved variable: field="${field}", varId="${bv.id}"`)
+    unresolvedVarCount++
+  }
+  return resolved ?? null
 }
 
 function resolvePaintBoundVar(
@@ -310,7 +356,12 @@ function resolvePaintBoundVar(
   if (arr.length === 0) return null
   const bv = arr[0]
   if (!bv?.id) return null
-  return varToKey.get(bv.id) ?? null
+  const resolved = varToKey.get(bv.id)
+  if (resolved === undefined) {
+    console.warn(`  ⚠ Unresolved paint variable: field="${field}", varId="${bv.id}"`)
+    unresolvedVarCount++
+  }
+  return resolved ?? null
 }
 
 function findTextChildren(node: FigmaNode): FigmaNode[] {
@@ -350,29 +401,53 @@ function resolveRadius(
     ?? (val === 0 ? null : `${val}px`)
 }
 
+interface ResolvedColor {
+  color: string | null
+  opacity: number | null
+  blendMode: string | null
+}
+
 function resolveColor(
-  bv: Record<string, BoundVariable | BoundVariable[]>,
+  bv: Record<string, BoundVariable | BoundVariable[]> | undefined,
   paintField: string,
-  paints: Array<{ type: string; color?: { r: number; g: number; b: number; a: number }; opacity?: number; visible?: boolean }> | undefined,
+  paints: Array<{ type: string; color?: { r: number; g: number; b: number; a: number }; opacity?: number; blendMode?: string; visible?: boolean }> | undefined,
   maps: Maps,
-): { color: string | null; opacity: number | null } {
+): ResolvedColor {
   // Try bound variable first
   let colorKey = resolvePaintBoundVar(bv, paintField, maps.colorVarToKey)
 
   let paintOpacity: number | null = null
+  let paintBlendMode: string | null = null
 
   if (!colorKey && paints?.length) {
-    const paint = paints.find(p => p.visible !== false && p.type === 'SOLID' && p.color)
-    if (paint?.color) {
-      const hex = figmaColorToHex(paint.color).toLowerCase()
-      colorKey = maps.colorHexToKey.get(hex) ?? hex
-      if (paint.opacity != null && paint.opacity < 1) {
-        paintOpacity = Math.round(paint.opacity * 100) / 100
+    const visiblePaints = paints.filter(p => p.visible !== false)
+
+    // All paints hidden — return hidden marker
+    if (visiblePaints.length === 0 && paints.length > 0) {
+      return { color: '__hidden__', opacity: null, blendMode: null }
+    }
+
+    const first = visiblePaints[0]
+    if (first) {
+      if (first.type === 'SOLID' && first.color) {
+        const hex = figmaColorToHex(first.color).toLowerCase()
+        colorKey = maps.colorHexToKey.get(hex) ?? hex
+        if (first.opacity != null && first.opacity < 1) {
+          paintOpacity = Math.round(first.opacity * 100) / 100
+        }
+      } else if (first.type.startsWith('GRADIENT_')) {
+        colorKey = `gradient:${first.type.replace('GRADIENT_', '').toLowerCase()}`
+      }
+      // IMAGE and other fill types: no resolution, skip
+
+      // Blend mode
+      if (first.blendMode && first.blendMode !== 'NORMAL' && first.blendMode !== 'PASS_THROUGH') {
+        paintBlendMode = first.blendMode.toLowerCase()
       }
     }
   }
 
-  return { color: colorKey ?? null, opacity: paintOpacity }
+  return { color: colorKey ?? null, opacity: paintOpacity, blendMode: paintBlendMode }
 }
 
 // ─── Figma Property Extraction ──────────────────────────────────────────────
@@ -411,14 +486,25 @@ function extractFigmaProps(node: FigmaNode, maps: Maps, dbPart: ComponentPart): 
   }
 
   // ── Radius (4 corners) ──
+  // Figma binds corner radii via compound `rectangleCornerRadii` bound variable,
+  // NOT via individual `topLeftRadius` etc. bound variables.
+  const rcr = bv.rectangleCornerRadii as Record<string, BoundVariable> | undefined
   const cornerFields = [
-    ['topLeftRadius', 'radius.tl', node.topLeftRadius ?? node.cornerRadius],
-    ['topRightRadius', 'radius.tr', node.topRightRadius ?? node.cornerRadius],
-    ['bottomLeftRadius', 'radius.bl', node.bottomLeftRadius ?? node.cornerRadius],
-    ['bottomRightRadius', 'radius.br', node.bottomRightRadius ?? node.cornerRadius],
+    ['topLeftRadius', 'RECTANGLE_TOP_LEFT_CORNER_RADIUS', 'radius.tl', node.topLeftRadius ?? node.cornerRadius],
+    ['topRightRadius', 'RECTANGLE_TOP_RIGHT_CORNER_RADIUS', 'radius.tr', node.topRightRadius ?? node.cornerRadius],
+    ['bottomLeftRadius', 'RECTANGLE_BOTTOM_LEFT_CORNER_RADIUS', 'radius.bl', node.bottomLeftRadius ?? node.cornerRadius],
+    ['bottomRightRadius', 'RECTANGLE_BOTTOM_RIGHT_CORNER_RADIUS', 'radius.br', node.bottomRightRadius ?? node.cornerRadius],
   ] as const
-  for (const [figmaField, propKey, rawVal] of cornerFields) {
-    const resolved = resolveRadius(bv, figmaField, rawVal, maps)
+  for (const [figmaField, rcrField, propKey, rawVal] of cornerFields) {
+    // Try compound bound variable first, then direct field, then raw value
+    const rcrBinding = rcr?.[rcrField]
+    let resolved: string | null = null
+    if (rcrBinding?.id) {
+      resolved = maps.radiusVarToKey.get(rcrBinding.id) ?? null
+    }
+    if (!resolved) {
+      resolved = resolveRadius(bv, figmaField, rawVal, maps)
+    }
     if (resolved) props[propKey] = resolved
   }
 
@@ -429,6 +515,7 @@ function extractFigmaProps(node: FigmaNode, maps: Maps, dbPart: ComponentPart): 
     const fill = resolveColor(bv, 'fills', node.fills, maps)
     if (fill.color) props['fill'] = fill.color
     if (fill.opacity != null) props['fill.opacity'] = fill.opacity
+    if (fill.blendMode) props['fill.blendMode'] = fill.blendMode
   }
 
   // ── Stroke ──
@@ -438,6 +525,24 @@ function extractFigmaProps(node: FigmaNode, maps: Maps, dbPart: ComponentPart): 
     const weight = node.strokeWeight ?? 0
     if (weight > 0) props['stroke.weight'] = weight
     if (stroke.opacity != null) props['stroke.opacity'] = stroke.opacity
+
+    // Per-side stroke weights (only when they differ from uniform)
+    const perSide = [
+      ['stroke.topWeight', node.strokeTopWeight],
+      ['stroke.rightWeight', node.strokeRightWeight],
+      ['stroke.bottomWeight', node.strokeBottomWeight],
+      ['stroke.leftWeight', node.strokeLeftWeight],
+    ] as const
+    for (const [key, sideWeight] of perSide) {
+      if (sideWeight != null && sideWeight !== weight) {
+        props[key] = sideWeight
+      }
+    }
+  }
+
+  // ── Stroke style (dashed) ──
+  if (node.strokeDashes && node.strokeDashes.length > 0) {
+    props['stroke.style'] = 'dashed'
   }
 
   // ── Sizing ──
@@ -478,6 +583,40 @@ function extractFigmaProps(node: FigmaNode, maps: Maps, dbPart: ComponentPart): 
     props['opacity'] = Math.round(node.opacity * 100) / 100
   }
 
+  // ── Node-level blend mode ──
+  if (node.blendMode && node.blendMode !== 'NORMAL' && node.blendMode !== 'PASS_THROUGH') {
+    props['blendMode'] = node.blendMode.toLowerCase()
+  }
+
+  // ── Compound opacity (node × fill paint) ──
+  const nodeOpacity = node.opacity ?? 1
+  const fillPaint = (node.type !== 'TEXT' && node.fills)
+    ? node.fills.find(p => p.visible !== false && p.type === 'SOLID')
+    : undefined
+  const fillPaintOpacity = fillPaint?.opacity ?? 1
+  const compound = Math.round(nodeOpacity * fillPaintOpacity * 100) / 100
+  if (compound < 1 && compound !== Math.round(nodeOpacity * 100) / 100) {
+    props['opacity.compound'] = compound
+  }
+
+  // ── Effects (shadows, blur) — informational ──
+  if (node.effects?.length) {
+    const visibleEffects = node.effects.filter(e => e.visible !== false)
+    for (let i = 0; i < visibleEffects.length; i++) {
+      const eff = visibleEffects[i]
+      props[`effect.${i}.type`] = eff.type.toLowerCase()
+      if (eff.color) {
+        props[`effect.${i}.color`] = figmaColorToHex(eff.color).toLowerCase()
+      }
+      if (eff.offset) {
+        props[`effect.${i}.offset.x`] = eff.offset.x
+        props[`effect.${i}.offset.y`] = eff.offset.y
+      }
+      if (eff.radius != null) props[`effect.${i}.radius`] = eff.radius
+      if (eff.spread != null) props[`effect.${i}.spread`] = eff.spread
+    }
+  }
+
   // ── Text properties ──
   // Only extract text when the DB part declares textStyle or textColor,
   // meaning this part "owns" text properties. Otherwise container frames
@@ -502,6 +641,40 @@ function extractFigmaProps(node: FigmaNode, maps: Maps, dbPart: ComponentPart): 
       const textBv = textNode.boundVariables ?? {}
       const textFill = resolveColor(textBv, 'fills', textNode.fills, maps)
       if (textFill.color) props['textColor'] = textFill.color
+
+      // Text alignment
+      const textAlignH = textNode.textAlignHorizontal ?? textNode.style?.textAlignHorizontal
+      if (textAlignH && textAlignH !== 'LEFT') {
+        props['text.alignHorizontal'] = textAlignH.toLowerCase()
+      }
+      const textAlignV = textNode.textAlignVertical ?? textNode.style?.textAlignVertical
+      if (textAlignV && textAlignV !== 'TOP') {
+        props['text.alignVertical'] = textAlignV.toLowerCase()
+      }
+
+      // Text decoration
+      const textDeco = textNode.textDecoration ?? textNode.style?.textDecoration
+      if (textDeco && textDeco !== 'NONE') {
+        props['text.decoration'] = textDeco.toLowerCase()
+      }
+
+      // Text case
+      const textCase = textNode.style?.textCase
+      if (textCase && textCase !== 'ORIGINAL' && textCase !== 'NONE') {
+        props['text.case'] = textCase.toLowerCase()
+      }
+
+      // OpenType features (REST API exposes as opentypeFlags on style)
+      const otFlags = textNode.style?.opentypeFlags
+      if (otFlags && Object.keys(otFlags).length > 0) {
+        props['text.opentypeFlags'] = Object.keys(otFlags).sort().join(',')
+      }
+
+      // Text style reference (Figma style node ID)
+      const textStyleRef = textNode.styles?.text
+      if (textStyleRef) {
+        props['text.styleRef'] = textStyleRef
+      }
     }
   }
 
@@ -524,13 +697,12 @@ function extractDbProps(part: ComponentPart, db: DB, maps: Maps): PropMap {
       props['padding.top'] = part.padding
       props['padding.bottom'] = part.padding
     } else {
-      const p = part.padding
-      if (p.x) { props['padding.left'] = p.x; props['padding.right'] = p.x }
-      if (p.y) { props['padding.top'] = p.y; props['padding.bottom'] = p.y }
-      if (p.left) props['padding.left'] = p.left
-      if (p.right) props['padding.right'] = p.right
-      if (p.top) props['padding.top'] = p.top
-      if (p.bottom) props['padding.bottom'] = p.bottom
+      if (part.padding.x) { props['padding.left'] = part.padding.x; props['padding.right'] = part.padding.x }
+      if (part.padding.y) { props['padding.top'] = part.padding.y; props['padding.bottom'] = part.padding.y }
+      if (part.padding.left) props['padding.left'] = part.padding.left
+      if (part.padding.right) props['padding.right'] = part.padding.right
+      if (part.padding.top) props['padding.top'] = part.padding.top
+      if (part.padding.bottom) props['padding.bottom'] = part.padding.bottom
     }
   }
 
@@ -539,13 +711,12 @@ function extractDbProps(part: ComponentPart, db: DB, maps: Maps): PropMap {
     if (typeof part.gap === 'string') {
       props['gap'] = part.gap
     } else {
-      // DB uses x/y; Figma uses itemSpacing (primary) / counterAxisSpacing (cross)
-      // Map based on layout direction
+      // Map x/y to primary/counter based on layout direction
       const isHorizontal = part.layout === 'horizontal'
-      const primaryKey = isHorizontal ? 'x' : 'y'
-      const crossKey = isHorizontal ? 'y' : 'x'
-      if (part.gap[primaryKey]) props['gap'] = part.gap[primaryKey]
-      if (part.gap[crossKey]) props['gap.counter'] = part.gap[crossKey]
+      const primaryGapKey = isHorizontal ? 'x' : 'y'
+      const crossGapKey = isHorizontal ? 'y' : 'x'
+      if (part.gap[primaryGapKey]) props['gap'] = part.gap[primaryGapKey]
+      if (part.gap[crossGapKey]) props['gap.counter'] = part.gap[crossGapKey]
     }
   }
 
@@ -557,24 +728,24 @@ function extractDbProps(part: ComponentPart, db: DB, maps: Maps): PropMap {
       props['radius.bl'] = part.radius
       props['radius.br'] = part.radius
     } else {
-      const r = part.radius
-      // Support top/bottom shorthand and individual corners
-      if (r.top) { props['radius.tl'] = r.top; props['radius.tr'] = r.top }
-      if (r.bottom) { props['radius.bl'] = r.bottom; props['radius.br'] = r.bottom }
-      if (r.tl) props['radius.tl'] = r.tl
-      if (r.tr) props['radius.tr'] = r.tr
-      if (r.bl) props['radius.bl'] = r.bl
-      if (r.br) props['radius.br'] = r.br
+      // top/bottom shorthand
+      if (part.radius.top) { props['radius.tl'] = part.radius.top; props['radius.tr'] = part.radius.top }
+      if (part.radius.bottom) { props['radius.bl'] = part.radius.bottom; props['radius.br'] = part.radius.bottom }
+      // Individual corners override
+      if (part.radius.tl) props['radius.tl'] = part.radius.tl
+      if (part.radius.tr) props['radius.tr'] = part.radius.tr
+      if (part.radius.bl) props['radius.bl'] = part.radius.bl
+      if (part.radius.br) props['radius.br'] = part.radius.br
     }
   }
 
   // ── Fill ──
   if (part.fill) {
-    const CSS_COLORS: Record<string, string> = { black: '#000000', white: '#ffffff' }
-    const dbFillKey = maps.figmaNameToKey.get(part.fill)
-      ?? CSS_COLORS[part.fill]
+    const fillKey = maps.figmaNameToKey.get(part.fill)
+      ?? (part.fill === 'black' ? 'black' : null)
+      ?? (part.fill === 'white' ? 'white' : null)
       ?? part.fill.replace(/\//g, '-')
-    props['fill'] = dbFillKey
+    props['fill'] = fillKey
   }
 
   // ── Stroke ──
@@ -587,33 +758,39 @@ function extractDbProps(part: ComponentPart, db: DB, maps: Maps): PropMap {
     if (part.stroke.weight != null) {
       props['stroke.weight'] = part.stroke.weight
     }
+    // Per-side stroke weights
+    if (part.stroke.topWeight != null) props['stroke.topWeight'] = part.stroke.topWeight
+    if (part.stroke.rightWeight != null) props['stroke.rightWeight'] = part.stroke.rightWeight
+    if (part.stroke.bottomWeight != null) props['stroke.bottomWeight'] = part.stroke.bottomWeight
+    if (part.stroke.leftWeight != null) props['stroke.leftWeight'] = part.stroke.leftWeight
+    // Stroke style
+    if (part.stroke.style) props['stroke.style'] = part.stroke.style
   }
 
   // ── Sizing ──
   for (const axis of ['height', 'width'] as const) {
-    const dbValue = part[axis] as string | undefined
-    if (!dbValue) continue
-
-    if (dbValue === 'full') {
+    const val = part[axis]
+    if (!val) continue
+    if (val === 'full') {
       props[`${axis}.mode`] = 'FILL'
-    } else {
-      // Parse "[32px]" bracket notation
-      const bracketMatch = dbValue.match(/^\[(\d+(?:\.\d+)?)px\]$/)
+    } else if (typeof val === 'string') {
+      // Try as size token → px
+      const bracketMatch = val.match(/^\[(\d+(?:\.\d+)?)px\]$/)
       if (bracketMatch) {
         props[`${axis}.mode`] = 'FIXED'
         props[`${axis}.px`] = parseFloat(bracketMatch[1])
       } else {
-        // Try resolving as size token
-        const tokenPx = maps.sizeTokenToPx.get(dbValue)
-        if (tokenPx != null) {
+        // Try as size token key
+        const px = maps.sizeTokenToPx.get(val)
+        if (px != null) {
           props[`${axis}.mode`] = 'FIXED'
-          props[`${axis}.px`] = tokenPx
+          props[`${axis}.px`] = px
         } else {
-          // Tailwind numeric (e.g. "6" → 24px)
-          const twNum = parseFloat(dbValue)
-          if (!isNaN(twNum) && String(twNum) === dbValue) {
+          // Try as Tailwind numeric (6 = 24px, 8 = 32px, etc.)
+          const num = parseFloat(val)
+          if (!isNaN(num) && num > 0) {
             props[`${axis}.mode`] = 'FIXED'
-            props[`${axis}.px`] = twNum * 4
+            props[`${axis}.px`] = num * 4
           }
           // else: unresolvable token, leave unset
         }
@@ -631,6 +808,11 @@ function extractDbProps(part: ComponentPart, db: DB, maps: Maps): PropMap {
   // ── Opacity ──
   if (part.opacity != null && part.opacity < 1) {
     props['opacity'] = part.opacity
+  }
+
+  // ── Blend mode ──
+  if (part.blendMode) {
+    props['blendMode'] = part.blendMode
   }
 
   // ── Text (resolve from textStyle) ──
@@ -663,25 +845,65 @@ function extractDbProps(part: ComponentPart, db: DB, maps: Maps): PropMap {
     }
   }
 
+  // ── Text style OT features + style name ──
+  if (part.textStyle) {
+    const styleEntry = Object.values(db.textStyles).find(ts => ts.utility === part.textStyle)
+    if (styleEntry) {
+      // OpenType features — derive from fontVariantNumeric + fontFeatureSettings
+      const otKeys: string[] = []
+      const fvn = String(styleEntry.properties['fontVariantNumeric'] ?? '')
+      if (fvn.includes('tabular-nums')) otKeys.push('TNUM')
+      if (fvn.includes('lining-nums')) otKeys.push('LNUM')
+      if (fvn.includes('slashed-zero')) otKeys.push('ZERO')
+      const ffs = String(styleEntry.properties['fontFeatureSettings'] ?? '')
+      if (ffs.includes('"salt"')) otKeys.push('SALT')
+      if (ffs.includes('"ss01"')) otKeys.push('SS01')
+      if (otKeys.length > 0) {
+        props['text.opentypeFlags'] = otKeys.sort().join(',')
+      }
+      // Store the Figma style name for identity check
+      props['text.styleName'] = styleEntry.figmaName
+    }
+  }
+
   // ── Text color ──
   if (part.textColor) props['textColor'] = part.textColor
+
+  // ── Text alignment, decoration, case ──
+  if (part.textAlign) props['text.alignHorizontal'] = part.textAlign
+  if (part.textAlignVertical) props['text.alignVertical'] = part.textAlignVertical
+  if (part.textDecoration) props['text.decoration'] = part.textDecoration
+  if (part.textCase) props['text.case'] = part.textCase
 
   return props
 }
 
-// ─── Diff ────────────────────────────────────────────────────────────────────
+// ─── Diff ───────────────────────────────────────────────────────────────────
 
 function diffProps(
   figma: PropMap,
   db: PropMap,
-  isTopLevelComponent: boolean,
+  nodeType: string,
   auditIgnore?: string[],
+  drilledFromSet?: boolean,
 ): Diff[] {
   const diffs: Diff[] = []
   const allKeys = new Set([...Object.keys(figma), ...Object.keys(db)])
   const ignoreSet = auditIgnore ? new Set(auditIgnore) : null
+  const isComponent = nodeType === 'COMPONENT'
+  const isComponentSet = nodeType === 'COMPONENT_SET'
+  const isEllipse = nodeType === 'ELLIPSE'
+
+  // Prefixes that produce INFO-only diffs (displayed but not counted)
+  const infoOnlyPrefixes = ['effect.', 'opacity.compound']
+
+  // Keys used only for cache-based identity checks, not direct property comparison
+  const identityOnlyKeys = new Set(['text.styleRef', 'text.styleName'])
 
   for (const key of allKeys) {
+    // Skip identity-only keys (real comparison done via cache-based text.styleIdentity check)
+    if (identityOnlyKeys.has(key)) continue
+
     // Skip code-only DB fields
     const rootKey = key.split('.')[0]
     if (CODE_ONLY_KEYS.has(rootKey)) continue
@@ -689,9 +911,31 @@ function diffProps(
     // Skip per-part auditIgnore fields (intentional code overrides)
     if (ignoreSet && (ignoreSet.has(rootKey) || ignoreSet.has(key))) continue
 
-    // COMPONENT nodes: skip sizing (arbitrary canvas dims) and overflow
-    // (Figma auto-sets clipsContent on master components of component sets)
-    if (isTopLevelComponent && (key.startsWith('width') || key.startsWith('height') || key === 'overflow')) {
+    // COMPONENT_SET roots (drilled to default variant): visual props belong to
+    // variants, not the set itself. Skip all visual diffs — the drilled variant's
+    // props don't represent the root. Root visual props are intentional base styles
+    // maintained by convention (e.g. nodeCard.root radius/fill/stroke).
+    const isSetRoot = drilledFromSet || isComponentSet
+    if (isSetRoot && (
+      key.startsWith('width') || key.startsWith('height') || key === 'overflow' ||
+      key.startsWith('stroke') || key === 'textColor' || key.startsWith('text.') ||
+      key.startsWith('radius') || key === 'fill' || key.startsWith('fill.')
+    )) {
+      continue
+    }
+
+    // COMPONENT variant nodes: skip width/height (Figma uses FIXED canvas dims,
+    // code uses size tokens like h-btn-md). All other properties are audited.
+    if (isComponent && (
+      key.startsWith('width') || key.startsWith('height')
+    )) {
+      continue
+    }
+
+    // ELLIPSE nodes: radius and sizing are implicit (always circular)
+    if (isEllipse && (
+      key.startsWith('radius') || key.startsWith('width') || key.startsWith('height')
+    )) {
       continue
     }
 
@@ -700,10 +944,30 @@ function diffProps(
 
     if (fVal === null && dVal === null) continue
 
+    // INFO-only keys: log but don't treat as actionable diffs
+    const isInfoOnly = infoOnlyPrefixes.some(p => key.startsWith(p))
+    if (isInfoOnly) {
+      if (fVal !== null) {
+        diffs.push({ key, type: 'INFO', figma: fVal, db: dVal, note: 'informational — not compared against DB' })
+      }
+      continue
+    }
+
+    // Hidden fill detection
+    if (key === 'fill' && fVal === '__hidden__' && dVal !== null) {
+      diffs.push({ key, type: 'MISMATCH', figma: fVal, db: dVal, note: 'fill is hidden in Figma but DB expects a visible fill' })
+      continue
+    }
+
     if (fVal !== null && dVal === null) {
       diffs.push({ key, type: 'MISSING', figma: fVal, db: null })
     } else if (fVal === null && dVal !== null) {
       diffs.push({ key, type: 'EXTRA', figma: null, db: dVal })
+    } else if (typeof fVal === 'number' && typeof dVal === 'number') {
+      // Numeric comparison with tolerance
+      if (Math.abs(fVal - dVal) > 0.01) {
+        diffs.push({ key, type: 'MISMATCH', figma: fVal, db: dVal })
+      }
     } else if (String(fVal) !== String(dVal)) {
       diffs.push({ key, type: 'MISMATCH', figma: fVal, db: dVal })
     }
@@ -731,8 +995,22 @@ function patchDb(
     if (!part) continue
 
     for (const diff of report.diffs) {
-      if (diff.type === 'EXTRA') continue // Don't remove DB-only fields
+      // Skip INFO diffs
+      if (diff.type === 'INFO') continue
+
+      // For EXTRA (DB has, Figma doesn't): only handle specific removals
+      if (diff.type === 'EXTRA') {
+        // Remove stale strokes when Figma has no stroke but DB does
+        if (diff.key.startsWith('stroke') && part.stroke) {
+          delete part.stroke
+          patchCount++
+        }
+        continue
+      }
+
       if (diff.figma === null) continue
+      // Skip __hidden__ fill values — don't write synthetic marker to DB
+      if (diff.key === 'fill' && diff.figma === '__hidden__') continue
 
       const val = diff.figma
 
@@ -751,6 +1029,15 @@ function patchDb(
         if (!part.stroke) part.stroke = {}
         part.stroke.weight = Number(val)
         patchCount++
+      } else if (diff.key === 'stroke.style') {
+        if (!part.stroke) part.stroke = {}
+        part.stroke.style = String(val) as 'solid' | 'dashed'
+        patchCount++
+      } else if (diff.key.match(/^stroke\.(top|right|bottom|left)Weight$/)) {
+        if (!part.stroke) part.stroke = {}
+        const sideKey = diff.key.split('.')[1] as keyof StrokeDef
+        ;(part.stroke as Record<string, unknown>)[sideKey] = Number(val)
+        patchCount++
       } else if (diff.key === 'textColor') {
         part.textColor = String(val)
         patchCount++
@@ -764,7 +1051,22 @@ function patchDb(
         part.overflow = String(val)
         patchCount++
       } else if (diff.key === 'opacity') {
-        part.opacity = Number(val)
+        part.opacity = Math.round(Number(val) * 100) / 100
+        patchCount++
+      } else if (diff.key === 'blendMode') {
+        part.blendMode = String(val)
+        patchCount++
+      } else if (diff.key === 'text.alignHorizontal') {
+        part.textAlign = String(val)
+        patchCount++
+      } else if (diff.key === 'text.alignVertical') {
+        part.textAlignVertical = String(val)
+        patchCount++
+      } else if (diff.key === 'text.decoration') {
+        part.textDecoration = String(val)
+        patchCount++
+      } else if (diff.key === 'text.case') {
+        part.textCase = String(val)
         patchCount++
       }
       // Padding, gap, radius, sizing, and textStyle are more complex — collected below
@@ -776,25 +1078,56 @@ function patchDb(
       const figmaFontSize = report.figmaProps['text.fontSize'] as number | null
       const figmaFontWeight = report.figmaProps['text.fontWeight'] as number | null
       const figmaLineHeight = report.figmaProps['text.lineHeight'] as number | null
+      const figmaLetterSpacing = report.figmaProps['text.letterSpacing'] as number | null
 
       if (figmaFontSize != null && figmaFontWeight != null) {
-        // Find a matching textStyle
+        // Collect all candidates, pick best match
+        type Candidate = { utility: string; lineHeightDelta: number; letterSpacingMatch: boolean }
+        const candidates: Candidate[] = []
+
         for (const ts of Object.values(db.textStyles)) {
           const p = ts.properties
           const tsFontSize = p['fontSize'] ? parseFloat(String(p['fontSize'])) : null
           const tsFontWeight = p['fontWeight'] ? Number(p['fontWeight']) : null
           const tsLineHeight = p['lineHeight'] ? parseFloat(String(p['lineHeight'])) : null
 
-          if (tsFontSize === figmaFontSize && tsFontWeight === figmaFontWeight) {
-            // Check line-height (ratio × fontSize should match Figma px)
-            if (tsLineHeight != null && figmaLineHeight != null) {
-              const expectedPx = Math.round(tsLineHeight * tsFontSize * 100) / 100
-              if (Math.abs(expectedPx - figmaLineHeight) > 0.5) continue
-            }
-            part.textStyle = ts.utility
-            patchCount++
-            break
+          if (tsFontSize !== figmaFontSize || tsFontWeight !== figmaFontWeight) continue
+
+          let lineHeightDelta = 0
+          if (tsLineHeight != null && figmaLineHeight != null) {
+            const expectedPx = Math.round(tsLineHeight * tsFontSize * 100) / 100
+            lineHeightDelta = Math.abs(expectedPx - figmaLineHeight)
+            if (lineHeightDelta > 0.5) continue
           }
+
+          let letterSpacingMatch = true
+          if (figmaLetterSpacing != null && figmaLetterSpacing !== 0) {
+            const tsLS = p['letterSpacing'] ? String(p['letterSpacing']) : null
+            if (tsLS) {
+              let tsLSPx: number
+              if (tsLS.endsWith('em')) {
+                tsLSPx = parseFloat(tsLS) * figmaFontSize
+              } else {
+                tsLSPx = parseFloat(tsLS)
+              }
+              letterSpacingMatch = Math.abs(tsLSPx - figmaLetterSpacing) < 0.1
+            } else {
+              letterSpacingMatch = false
+            }
+          }
+
+          candidates.push({ utility: ts.utility, lineHeightDelta, letterSpacingMatch })
+        }
+
+        // Sort: prefer letterSpacing match, then closest lineHeight
+        candidates.sort((a, b) => {
+          if (a.letterSpacingMatch !== b.letterSpacingMatch) return a.letterSpacingMatch ? -1 : 1
+          return a.lineHeightDelta - b.lineHeightDelta
+        })
+
+        if (candidates.length > 0) {
+          part.textStyle = candidates[0].utility
+          patchCount++
         }
       }
     }
@@ -918,6 +1251,32 @@ async function main() {
   const fileKey = db.figmaFileKey
   const maps = buildReverseMaps(db)
 
+  // ── Load Plugin API cache (for text style identity + OT features) ──
+  let cacheLoaded = false
+  if (existsSync(CACHE_PATH)) {
+    try {
+      const cache = JSON.parse(readFileSync(CACHE_PATH, 'utf-8'))
+      if (cache.textStyles && Array.isArray(cache.textStyles)) {
+        // Build a mapping from text style Figma ID (S:key,) to name
+        // The REST API uses node IDs (like "118:1545") in styles.text
+        // We need to resolve these — fetch the style nodes to get their names
+        // For now, store the style key → name mapping from cache
+        for (const ts of cache.textStyles) {
+          // The cache stores Plugin API style IDs (e.g. "S:abc123,")
+          // but the REST API returns style node IDs (e.g. "118:1545")
+          // We need both mappings — store the name keyed by the Plugin API ID
+          if (ts.id && ts.name) {
+            textStyleNodeIdToName.set(ts.id, ts.name)
+          }
+        }
+        cacheLoaded = true
+        console.log(`Loaded Plugin API cache: ${cache.textStyles.length} text styles, ${cache.variables?.length ?? 0} variables`)
+      }
+    } catch (err) {
+      console.warn(`Warning: Could not load cache at ${CACHE_PATH}: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
   // Collect all figmaNodeIds
   const nodeIdMap = new Map<string, { compKey: string; partKey: string; part: ComponentPart }>()
 
@@ -959,8 +1318,10 @@ async function main() {
         let node = nodeData.document
 
         // Handle COMPONENT_SET: drill into first child (default variant)
+        // Tag the drilled node so diffProps knows the root was a COMPONENT_SET
         if (node.type === 'COMPONENT_SET' && node.children?.length) {
           node = node.children[0]
+          ;(node as FigmaNode & { _drilledFromSet?: boolean })._drilledFromSet = true
         }
 
         allNodes.set(nodeId, node)
@@ -984,7 +1345,8 @@ async function main() {
     checked++
     const figmaProps = extractFigmaProps(figmaNode, maps, info.part)
     const dbProps = extractDbProps(info.part, db, maps)
-    const diffs = diffProps(figmaProps, dbProps, figmaNode.type === 'COMPONENT', info.part.auditIgnore as string[] | undefined)
+    const isDrilled = !!(figmaNode as FigmaNode & { _drilledFromSet?: boolean })._drilledFromSet
+    const diffs = diffProps(figmaProps, dbProps, figmaNode.type, info.part.auditIgnore as string[] | undefined, isDrilled)
 
     reports.push({
       component: info.compKey,
@@ -997,11 +1359,67 @@ async function main() {
     })
   }
 
-  // Tallies
-  const totalDiffs = reports.reduce((n, r) => n + r.diffs.length, 0)
+  // ── Cache-based text style identity check ──
+  // Uses componentTextMap from .figma-vars-cache.json to verify that
+  // the Figma text style matches the DB's textStyle utility name
+  let textStyleMismatches = 0
+  if (cacheLoaded) {
+    try {
+      const cache = JSON.parse(readFileSync(CACHE_PATH, 'utf-8'))
+      const compTextMap = cache.componentTextMap as Record<string, { name: string; texts: Array<{ name: string; textStyle: string | null; opentypeFeatures?: string[] }> }> | undefined
+
+      if (compTextMap) {
+        // Build utility → figmaName lookup
+        const utilToFigmaName = new Map<string, string>()
+        for (const ts of Object.values(db.textStyles)) {
+          utilToFigmaName.set(ts.utility, ts.figmaName)
+        }
+
+        for (const [nodeId, info] of nodeIdMap) {
+          const dbPart = info.part
+          if (!dbPart.textStyle) continue
+
+          // Find this component in the cache (match by figmaNodeId → component ID)
+          // The cache keys are component IDs, but we have part node IDs.
+          // Walk up: find the component that contains this part's figmaNodeId
+          let cacheEntry = compTextMap[nodeId]
+          if (!cacheEntry) {
+            // The part nodeId might be inside a component set; try to find it
+            // by checking all cache entries for a matching nodeId
+            for (const [cid, entry] of Object.entries(compTextMap)) {
+              if (cid === nodeId) { cacheEntry = entry; break }
+            }
+          }
+          if (!cacheEntry || !cacheEntry.texts?.length) continue
+
+          // The first text child's style should match the DB's textStyle
+          const firstText = cacheEntry.texts[0]
+          const dbFigmaName = utilToFigmaName.get(dbPart.textStyle)
+          if (dbFigmaName && firstText.textStyle && firstText.textStyle !== dbFigmaName) {
+            textStyleMismatches++
+            // Inject a MISMATCH diff into the report
+            const report = reports.find(r => r.nodeId === nodeId)
+            if (report) {
+              report.diffs.push({
+                key: 'text.styleIdentity',
+                type: 'MISMATCH',
+                figma: firstText.textStyle,
+                db: `${dbPart.textStyle} (${dbFigmaName})`,
+                note: 'Figma text node uses a different named style than DB claims',
+              })
+            }
+          }
+        }
+      }
+    } catch { /* cache read error — skip identity check */ }
+  }
+
+  // Tallies (exclude INFO from actionable counts)
+  const totalDiffs = reports.reduce((n, r) => n + r.diffs.filter(d => d.type !== 'INFO').length, 0)
   const mismatches = reports.reduce((n, r) => n + r.diffs.filter(d => d.type === 'MISMATCH').length, 0)
   const missing = reports.reduce((n, r) => n + r.diffs.filter(d => d.type === 'MISSING').length, 0)
   const extra = reports.reduce((n, r) => n + r.diffs.filter(d => d.type === 'EXTRA').length, 0)
+  const infoCount = reports.reduce((n, r) => n + r.diffs.filter(d => d.type === 'INFO').length, 0)
 
   // ── Report ──
   console.log('─────────────────────────────────────')
@@ -1009,11 +1427,17 @@ async function main() {
   console.log(`  ${mismatches} mismatches`)
   console.log(`  ${missing} missing in DB`)
   console.log(`  ${extra} extra in DB`)
+  if (infoCount > 0) console.log(`  ${infoCount} informational`)
+  if (unresolvedVarCount > 0) console.log(`  ${unresolvedVarCount} unresolved variable(s)`)
   console.log('─────────────────────────────────────\n')
 
-  if (totalDiffs === 0) {
+  if (totalDiffs === 0 && infoCount === 0) {
     console.log('✅ All Figma-designable properties match the DB!')
-  } else {
+  } else if (totalDiffs === 0) {
+    console.log('✅ All Figma-designable properties match the DB!')
+  }
+
+  if (totalDiffs > 0) {
     // Group by type
     for (const [label, dtype] of [['MISMATCHES', 'MISMATCH'], ['MISSING in DB', 'MISSING'], ['EXTRA in DB (DB has, Figma does not)', 'EXTRA']] as const) {
       const filtered = reports.flatMap(r => r.diffs.filter(d => d.type === dtype).map(d => ({ comp: r.component, ...d })))
@@ -1026,15 +1450,31 @@ async function main() {
         else console.log(`    DB:    (none)`)
         if (d.figma !== null) console.log(`    Figma: ${d.figma}`)
         else console.log(`    Figma: (none)`)
+        if (d.note) console.log(`    Note:  ${d.note}`)
         console.log()
       }
     }
   }
 
+  // ── Effects summary (informational) ──
+  const effectReports = reports.filter(r =>
+    Object.keys(r.figmaProps).some(k => k.startsWith('effect.'))
+  )
+  if (effectReports.length > 0) {
+    console.log('EFFECTS DETECTED (informational):\n')
+    for (const r of effectReports) {
+      const effectTypes = Object.entries(r.figmaProps)
+        .filter(([k]) => k.endsWith('.type') && k.startsWith('effect.'))
+        .map(([, v]) => v)
+      console.log(`  ${r.component} → ${effectTypes.join(', ')}`)
+    }
+    console.log()
+  }
+
   // ── --json output ──
   if (JSON_PATH) {
     const jsonReport = {
-      summary: { checked, mismatches, missing, extra, total: totalDiffs },
+      summary: { checked, mismatches, missing, extra, info: infoCount, total: totalDiffs },
       parts: reports.map(r => ({
         component: r.component,
         part: r.part,
@@ -1049,12 +1489,58 @@ async function main() {
     console.log(`JSON report written to ${JSON_PATH}`)
   }
 
-  // ── --fix mode ──
+  // ── --fix / --fix-dry-run mode ──
   if (FIX_MODE && totalDiffs > 0) {
-    const patchCount = patchDb(reports, db, maps)
-    writeFileSync(DB_PATH, JSON.stringify(db, null, 2) + '\n')
-    console.log(`\n🔧 Patched ${patchCount} properties in ${DB_PATH}`)
-    console.log('   Run `npm run tokens` to regenerate code from the updated DB.')
+    const dbTarget = FIX_DRY_RUN ? JSON.parse(JSON.stringify(db)) as DB : db
+    const patchCount = patchDb(reports, dbTarget, maps)
+
+    if (FIX_DRY_RUN) {
+      console.log(`\n🔍 Dry run: would patch ${patchCount} properties in ${DB_PATH}`)
+      console.log('   (No files were modified. Remove --fix-dry-run and use --fix to apply.)')
+    } else {
+      writeFileSync(DB_PATH, JSON.stringify(db, null, 2) + '\n')
+      console.log(`\n🔧 Patched ${patchCount} properties in ${DB_PATH}`)
+      console.log('   Run `npm run tokens` to regenerate code from the updated DB.')
+    }
+  }
+
+  // ── --strict mode checks ──
+  if (STRICT_MODE) {
+    let strictFailures = 0
+
+    if (unresolvedVarCount > 0) {
+      console.log(`\n❌ STRICT: ${unresolvedVarCount} unresolved variable binding(s)`)
+      strictFailures += unresolvedVarCount
+    }
+
+    // Missing text style references
+    for (const [_compId, comp] of Object.entries(db.components)) {
+      for (const [partKey, part] of Object.entries(comp.parts)) {
+        if (part.textStyle) {
+          const found = Object.values(db.textStyles).find(ts => ts.utility === part.textStyle)
+          if (!found) {
+            console.log(`  ❌ STRICT: Missing textStyle "${part.textStyle}" in ${comp.dsKey}.${partKey}`)
+            strictFailures++
+          }
+        }
+      }
+    }
+
+    // Node type validation
+    const expectedTypes = new Set(['COMPONENT', 'COMPONENT_SET', 'FRAME', 'TEXT', 'GROUP', 'INSTANCE', 'ELLIPSE', 'RECTANGLE', 'VECTOR', 'BOOLEAN_OPERATION'])
+    for (const [nodeId, info] of nodeIdMap) {
+      const figmaNode = allNodes.get(nodeId)
+      if (!figmaNode) continue
+      if (!expectedTypes.has(figmaNode.type)) {
+        console.log(`  ❌ STRICT: ${info.compKey} → node ${nodeId} is unexpected type "${figmaNode.type}"`)
+        strictFailures++
+      }
+    }
+
+    if (strictFailures > 0) {
+      console.log()
+      process.exit(1)
+    }
   }
 
   process.exit(totalDiffs > 0 && !FIX_MODE ? 1 : 0)

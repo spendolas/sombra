@@ -80,6 +80,11 @@ interface StrokeDef {
   side?: string
   color?: string
   weight?: number
+  topWeight?: number
+  rightWeight?: number
+  bottomWeight?: number
+  leftWeight?: number
+  style?: 'solid' | 'dashed'
 }
 
 interface StateDef {
@@ -108,6 +113,12 @@ interface ComponentPart {
   // Text
   textStyle?: string
   textColor?: string
+  textAlign?: string
+  textAlignVertical?: string
+  textDecoration?: string
+  textCase?: string
+  // Visual
+  blendMode?: string
   // Interaction
   cursor?: string
   transition?: string
@@ -306,6 +317,8 @@ function generateUtilities(): string {
     if (props.fontFamily) lines.push(`  font-family: ${props.fontFamily};`)
     if (props.letterSpacing) lines.push(`  letter-spacing: ${props.letterSpacing};`)
     if (props.textTransform) lines.push(`  text-transform: ${props.textTransform};`)
+    if (props.fontVariantNumeric) lines.push(`  font-variant-numeric: ${props.fontVariantNumeric};`)
+    if (props.fontFeatureSettings) lines.push(`  font-feature-settings: ${props.fontFeatureSettings};`)
     lines.push(`  line-height: ${props.lineHeight};`)
     lines.push('}')
     // No blank line after last utility
@@ -321,6 +334,7 @@ function describeTextStyle(props: Record<string, string | number>): string {
   if (props.letterSpacing) parts.push(`${props.letterSpacing} ls`)
   if (props.textTransform === 'uppercase') parts.push('UPPER')
   if (props.fontFamily) parts.push('mono')
+  if (props.fontVariantNumeric) parts.push('numeric')
   if (props.lineHeight && props.lineHeight !== 1.5) {
     parts.push(`LH ${Number(props.lineHeight) * 100}%`)
   }
@@ -472,6 +486,12 @@ function partToClassString(part: ComponentPart, colorMap: Record<string, string>
   // Text
   if (part.textStyle) classes.push(part.textStyle)
   if (part.textColor) classes.push(`text-${part.textColor}`)
+  if (part.textAlign) classes.push(`text-${part.textAlign}`)
+  if (part.textCase === 'upper') classes.push('uppercase')
+  else if (part.textCase === 'lower') classes.push('lowercase')
+  else if (part.textCase === 'title') classes.push('capitalize')
+  if (part.textDecoration === 'underline') classes.push('underline')
+  else if (part.textDecoration === 'line-through') classes.push('line-through')
 
   // Interaction
   if (part.cursor) classes.push(`cursor-${part.cursor}`)

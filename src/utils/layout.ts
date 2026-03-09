@@ -20,7 +20,7 @@ const NODE_PADDING = 16
 /**
  * Estimate a node's rendered dimensions from its definition.
  */
-function estimateNodeSize(data: NodeData): { width: number; height: number } {
+export function estimateNodeSize(data: NodeData): { width: number; height: number } {
   const def = nodeRegistry.get(data.type)
   if (!def) return { width: NODE_MIN_W, height: 80 }
 

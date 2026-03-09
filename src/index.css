@@ -70,6 +70,20 @@ html, body, #root {
   box-sizing: border-box;
 }
 
+/* Strip browser chrome from native color inputs — render as flat swatch */
+input[type="color"] {
+  appearance: none;
+  padding: 0;
+  cursor: pointer;
+}
+input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: inherit;
+}
+
 /* React Flow theming — map RF CSS custom properties to Sombra tokens */
 .react-flow {
   /* Edges */
@@ -253,9 +267,11 @@ html, body, #root {
   text-transform: uppercase;
   line-height: 1.5;
 }
-@utility text-mono-value {                 /* mono/value: 12px, Regular */
+@utility text-mono-value {                 /* mono/value: 12px, Regular, numeric */
   font-size: 12px;
   font-weight: 400;
+  font-variant-numeric: tabular-nums lining-nums slashed-zero;
+  font-feature-settings: "salt" 1, "ss01" 1;
   line-height: 1.5;
 }
 @utility text-mono-id {                    /* mono/id: 10px, Regular */

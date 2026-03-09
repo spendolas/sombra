@@ -25,6 +25,7 @@ dist-ssr
 *.log
 
 # Audit artifacts
+artifacts/visual-audit/
 binding-audit.ndjson
 tokens/figma-components.json
 tokens/.figma-vars-cache.json
