@@ -1,4 +1,4 @@
-# Sombra - Project Guide for Claude Code
+# Sombra - Project Guide for Codex
 
 ## Project Overview
 
@@ -62,7 +62,7 @@ sombra/
 ├── public/              # Static assets
 ├── ROADMAP.md           # Detailed roadmap (Phases 0-5)
 ├── BROWSER-AUTOMATION.md # Full API reference for window.__sombra
-├── CLAUDE.md            # This file
+├── AGENTS.md            # This file
 └── package.json
 ```
 
@@ -88,8 +88,6 @@ npm run tokens:pull  # Fetch latest values from Figma REST API → update DB
 npm run tokens:sync  # Pull from Figma + regenerate code (the main workflow)
 npm run tokens:check # CI guard: fail if generated files diverge from DB
 npm run tokens:audit # Compare DB component parts against Figma REST API (requires FIGMA_TOKEN)
-npm run tokens:audit -- --fix-dry-run  # Preview --fix patches without writing to disk
-npm run tokens:audit -- --strict       # Exit code 1 on unresolved vars, missing textStyles, unexpected node types
 ```
 
 ## Architecture
@@ -128,7 +126,7 @@ Canvas reparenting: A single `<canvas>` element is moved between target refs (`d
 
 ### Dev Bridge (`window.__sombra`)
 
-At startup, `main.tsx` calls `installDevBridge()` which mounts a programmatic API on `window.__sombra`. This allows the Claude Chrome extension, browser console, or any automation tool to create, wire, and manipulate nodes via JavaScript injection.
+At startup, `main.tsx` calls `installDevBridge()` which mounts a programmatic API on `window.__sombra`. This allows the Codex Chrome extension, browser console, or any automation tool to create, wire, and manipulate nodes via JavaScript injection.
 
 Key methods: `createNode()`, `connect()`, `setParams()`, `moveNode()`, `removeNode()`, `clearGraph()`, `compile()`, `describeGraph()`, `describeNode()`, `listNodeTypes()`, `exportGraph()`, `importGraph()`, `getFragmentShader()`.
 
@@ -182,7 +180,7 @@ Every non-trivial change should propagate across these layers. Check each that a
 - [ ] Component parts: include all visual fields (textStyle, textColor, cursor, hover states, etc.) — not just structural
 - [ ] After DB changes: run `npm run tokens` to regenerate, then wire component to `ds.*` references
 - [ ] After Figma changes: run `npm run tokens:audit` to verify Figma↔DB parity
-- [ ] Inline visual classes: if adding visual Tailwind classes directly (not from `ds.*`), append a task to `.claude/ds-queue.md` for DS migration
+- [ ] Inline visual classes: if adding visual Tailwind classes directly (not from `ds.*`), append a task to `.Codex/ds-queue.md` for DS migration
 
 ### Browser Automation (`BROWSER-AUTOMATION.md`)
 - [ ] New node type: add to Node Types tables (inputs, outputs, key params)
@@ -203,7 +201,7 @@ Every non-trivial change should propagate across these layers. Check each that a
 - [ ] Update `.figma/IMPLEMENTATION_GUIDE.md` Section 4 Code Connect table if new named React component
 
 ### Project Documentation
-- [ ] Update node count in CLAUDE.md and ROADMAP.md
+- [ ] Update node count in AGENTS.md and ROADMAP.md
 - [ ] Update phase status / sprint notes if delivering a tracked feature
 - [ ] Add new node to test graph presets in `src/utils/test-graph.ts` if it demonstrates a key capability
 

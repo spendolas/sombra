@@ -4,7 +4,7 @@
 export const ds = {
   nodeCard: {
     root: "flex flex-col bg-surface-elevated rounded-md border border-edge-card relative hover:ring-1 [.react-flow\_\_node.selected_&]:shadow-[0_0_8px_2px_rgba(99,102,241,0.4)]",
-    header: "flex flex-row items-center bg-surface-raised rounded-t-md border-b border-edge-subtle px-lg py-md gap-md overflow-hidden -mb-1",
+    header: "flex flex-row items-center bg-surface-raised rounded-t-md border-b border-edge-subtle px-lg py-md gap-md overflow-hidden h-[32px] -mb-1",
     title: "text-node-title text-fg select-none flex-1",
     content: "flex flex-col p-lg gap-y-md",
     footer: "flex flex-col items-center border-t border-edge px-lg pt-md pb-lg gap-y-md overflow-hidden",
@@ -37,7 +37,7 @@ export const ds = {
     portTypeText: "text-mono-value text-fg-muted",
   },
   zoomBar: {
-    root: "flex flex-row items-center bg-surface-alt rounded-md p-xs gap-xs text-body text-fg-dim overflow-hidden",
+    root: "flex flex-row items-center bg-surface-alt rounded-md p-xs gap-xs text-mono-value text-fg-dim overflow-hidden",
   },
   previewToolbar: {
     root: "flex flex-row items-start bg-surface-alt rounded-md p-xs gap-xs text-body text-fg-dim overflow-hidden",
@@ -47,12 +47,12 @@ export const ds = {
     root: "flex flex-row items-center bg-surface-raised rounded-sm border border-edge-subtle px-md py-sm text-body text-fg-dim cursor-move transition-colors overflow-hidden hover:bg-surface-elevated hover:text-fg",
   },
   categoryHeader: {
-    root: "flex flex-row items-center pb-md text-category text-fg-subtle overflow-hidden",
+    root: "flex flex-row items-center pb-md text-category text-fg-subtle uppercase overflow-hidden",
   },
   button: {
-    root: "flex flex-col items-center justify-center bg-surface-alt rounded-sm border border-edge size-btn-md",
-    solid: "flex flex-col items-center justify-center bg-surface-alt rounded-sm border border-edge text-fg-dim cursor-pointer transition-colors hover:bg-surface-raised hover:text-fg",
-    solidDisabled: "flex flex-col items-center justify-center bg-surface-alt rounded-sm border border-edge text-fg-muted cursor-default",
+    root: "flex flex-col items-center justify-center rounded-sm size-btn-md",
+    solid: "flex flex-col items-center justify-center bg-surface-alt rounded-sm text-fg-dim cursor-pointer transition-colors hover:bg-surface-raised hover:text-fg",
+    solidDisabled: "flex flex-col items-center justify-center bg-surface-alt rounded-sm text-fg-muted cursor-default",
     solidActive: "flex flex-col items-center justify-center bg-indigo rounded-sm text-fg cursor-default",
     ghost: "flex flex-col items-center justify-center rounded-sm text-fg-dim cursor-pointer transition-colors hover:bg-surface-elevated hover:text-fg",
     ghostDisabled: "flex flex-col items-center justify-center rounded-sm text-fg-muted cursor-default",
@@ -60,7 +60,7 @@ export const ds = {
     textGhost: "flex flex-col items-center justify-center rounded-sm px-sm text-mono-value text-fg-dim cursor-pointer transition-colors hover:bg-surface-elevated hover:text-fg h-btn-md w-auto px-sm",
     textGhostDisabled: "flex flex-col items-center justify-center rounded-sm px-sm text-mono-value text-fg-muted cursor-default h-btn-md w-auto px-sm",
     textGhostActive: "flex flex-col items-center justify-center bg-indigo rounded-sm px-sm text-mono-value text-fg cursor-default hover:bg-indigo h-btn-md w-auto px-sm",
-    solidHover: "flex flex-col items-center justify-center bg-surface-raised rounded-sm border border-edge text-fg cursor-pointer",
+    solidHover: "flex flex-col items-center justify-center bg-surface-raised rounded-sm text-fg cursor-pointer",
     ghostHover: "flex flex-col items-center justify-center bg-surface-elevated rounded-sm text-fg cursor-pointer",
     textGhostHover: "flex flex-col items-center justify-center bg-surface-elevated rounded-sm px-sm text-mono-value text-fg cursor-pointer h-btn-md w-auto px-sm",
   },
@@ -82,8 +82,8 @@ export const ds = {
     root: "flex flex-col gap-2xs select-none overflow-hidden nodrag nowheel nokey",
     labelRow: "flex flex-row items-center gap-xs cursor-ew-resize overflow-hidden",
     label: "text-param text-fg-subtle",
-    value: "text-body text-fg cursor-text tabular-nums",
-    input: "text-body text-fg bg-transparent text-right tabular-nums outline-none border-b border-indigo nodrag nowheel",
+    value: "text-mono-value text-fg text-center cursor-text",
+    input: "text-mono-value text-fg bg-transparent text-right outline-none border-b border-indigo nodrag nowheel",
   },
   enumSelect: {
     root: "flex flex-col gap-sm overflow-hidden",
@@ -95,7 +95,7 @@ export const ds = {
   colorInput: {
     root: "flex flex-col gap-sm overflow-hidden",
     label: "text-param text-fg-subtle",
-    input: "bg-surface-alt rounded-sm border border-edge cursor-pointer w-full h-input-h",
+    input: "bg-surface-alt rounded-sm border border-edge cursor-pointer w-6 h-6",
   },
   connectableParamRow: {
     root: "flex flex-row items-center relative",
@@ -103,16 +103,16 @@ export const ds = {
   },
   gradientEditor: {
     root: "flex flex-col gap-md",
-    bar: "rounded-md border border-edge cursor-crosshair relative h-input-h",
+    bar: "bg-gradient:linear rounded-md border border-edge cursor-crosshair relative h-input-h",
     stopMarkers: "relative h-icon-sm",
     stopHandle: "bg-overlay-scrim rounded-full border-2 border-surface-elevated cursor-pointer absolute w-handle h-handle",
     stopHandleSelected: "bg-fg border-2 border-surface-elevated shadow-[0_0_4px_1px_rgba(99,102,241,0.8)]",
     controlsRow: "flex flex-row items-center gap-md overflow-hidden",
-    positionText: "text-param text-fg-dim tabular-nums",
+    positionText: "text-mono-value text-fg text-center",
   },
   randomDisplay: {
     root: "flex flex-row items-center px-xs gap-md overflow-hidden nodrag nowheel",
-    value: "text-mono-value text-fg tabular-nums flex-1",
+    value: "text-mono-value text-fg flex-1",
   },
   miniMap: {
     root: "bg-surface-alt rounded-md border border-edge-subtle overflow-hidden",

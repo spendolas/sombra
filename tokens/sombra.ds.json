@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "lastSync": "2026-03-08T21:56:41.475Z",
+  "lastSync": "2026-03-09T01:56:56.798Z",
   "figmaFileKey": "gq5i0l617YkXy0GzAZPtqz",
   "colors": {
     "VariableID:106:3": {
@@ -531,7 +531,9 @@
       "properties": {
         "fontSize": "12px",
         "fontWeight": 400,
-        "lineHeight": 1.5
+        "lineHeight": 1.5,
+        "fontVariantNumeric": "tabular-nums lining-nums slashed-zero",
+        "fontFeatureSettings": "\"salt\" 1, \"ss01\" 1"
       }
     },
     "S:1181640d2c3fd5f4a7bc505ecd6f710e0ce5b517,": {
@@ -584,17 +586,18 @@
             "color": "edge/subtle",
             "weight": 1
           },
-          "radius": {
-            "top": "md"
-          },
           "padding": {
             "x": "lg",
             "y": "md"
           },
           "gap": "md",
           "align": "center",
+          "height": "[32px]",
           "extra": "-mb-1",
-          "overflow": "hidden"
+          "overflow": "hidden",
+          "radius": {
+            "top": "md"
+          }
         },
         "title": {
           "figmaNodeId": "111:487",
@@ -813,7 +816,8 @@
           "align": "center",
           "textColor": "fg-dim",
           "overflow": "hidden",
-          "textStyle": "text-body"
+          "textStyle": "text-mono-value",
+          "auditIgnore": ["overflow"]
         }
       }
     },
@@ -833,7 +837,11 @@
           "textStyle": "text-body",
           "textColor": "fg-dim",
           "align": "start",
-          "overflow": "hidden"
+          "overflow": "hidden",
+          "auditIgnore": [
+            "textColor",
+            "text"
+          ]
         },
         "wrapper": {
           "figmaNodeId": "106:321",
@@ -890,7 +898,8 @@
           "textColor": "fg-subtle",
           "layout": "horizontal",
           "align": "center",
-          "overflow": "hidden"
+          "overflow": "hidden",
+          "textCase": "upper"
         }
       }
     },
@@ -906,20 +915,11 @@
           "align": "center",
           "justify": "center",
           "radius": "sm",
-          "extra": "size-btn-md",
-          "fill": "surface/alt",
-          "stroke": {
-            "color": "edge/default",
-            "weight": 1
-          }
+          "extra": "size-btn-md"
         },
         "solid": {
           "figmaNodeId": "306:237",
           "fill": "surface/alt",
-          "stroke": {
-            "color": "edge/default",
-            "weight": 1
-          },
           "textColor": "fg-dim",
           "cursor": "pointer",
           "transition": "colors",
@@ -930,21 +930,23 @@
           "layout": "vertical",
           "justify": "center",
           "align": "center",
-          "radius": "sm"
+          "radius": "sm",
+          "auditIgnore": [
+            "textColor"
+          ]
         },
         "solidDisabled": {
           "figmaNodeId": "306:240",
           "fill": "surface/alt",
-          "stroke": {
-            "color": "edge/default",
-            "weight": 1
-          },
           "textColor": "fg-muted",
           "cursor": "default",
           "layout": "vertical",
           "justify": "center",
           "align": "center",
-          "radius": "sm"
+          "radius": "sm",
+          "auditIgnore": [
+            "textColor"
+          ]
         },
         "solidActive": {
           "figmaNodeId": "306:243",
@@ -954,7 +956,10 @@
           "layout": "vertical",
           "justify": "center",
           "align": "center",
-          "radius": "sm"
+          "radius": "sm",
+          "auditIgnore": [
+            "textColor"
+          ]
         },
         "ghost": {
           "figmaNodeId": "306:246",
@@ -968,7 +973,10 @@
           "layout": "vertical",
           "justify": "center",
           "align": "center",
-          "radius": "sm"
+          "radius": "sm",
+          "auditIgnore": [
+            "textColor"
+          ]
         },
         "ghostDisabled": {
           "figmaNodeId": "306:249",
@@ -977,7 +985,10 @@
           "layout": "vertical",
           "justify": "center",
           "align": "center",
-          "radius": "sm"
+          "radius": "sm",
+          "auditIgnore": [
+            "textColor"
+          ]
         },
         "ghostActive": {
           "figmaNodeId": "306:252",
@@ -990,7 +1001,10 @@
           "layout": "vertical",
           "justify": "center",
           "align": "center",
-          "radius": "sm"
+          "radius": "sm",
+          "auditIgnore": [
+            "textColor"
+          ]
         },
         "textGhost": {
           "figmaNodeId": "326:40",
@@ -1046,16 +1060,15 @@
         "solidHover": {
           "figmaNodeId": "329:2",
           "fill": "surface/raised",
-          "stroke": {
-            "color": "edge/default",
-            "weight": 1
-          },
           "textColor": "fg",
           "cursor": "pointer",
           "layout": "vertical",
           "justify": "center",
           "align": "center",
-          "radius": "sm"
+          "radius": "sm",
+          "auditIgnore": [
+            "textColor"
+          ]
         },
         "ghostHover": {
           "figmaNodeId": "329:5",
@@ -1065,7 +1078,10 @@
           "layout": "vertical",
           "justify": "center",
           "align": "center",
-          "radius": "sm"
+          "radius": "sm",
+          "auditIgnore": [
+            "textColor"
+          ]
         },
         "textGhostHover": {
           "figmaNodeId": "329:7",
@@ -1093,7 +1109,10 @@
         "root": {
           "figmaNodeId": "106:84",
           "radius": "full",
-          "extra": "!h-3 !w-3 border-2 transition"
+          "extra": "!h-3 !w-3 border-2 transition",
+          "auditIgnore": [
+            "radius"
+          ]
         }
       }
     },
@@ -1106,7 +1125,10 @@
         "root": {
           "figmaNodeId": "106:89",
           "fill": "edge/subtle",
-          "extra": "shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px"
+          "extra": "shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px",
+          "auditIgnore": [
+            "fill"
+          ]
         }
       }
     },
@@ -1184,15 +1206,15 @@
         },
         "value": {
           "figmaNodeId": "106:280",
-          "textStyle": "text-body",
+          "textStyle": "text-mono-value",
           "textColor": "fg",
           "cursor": "text",
-          "extra": "tabular-nums"
+          "textAlign": "center"
         },
         "input": {
-          "textStyle": "text-body",
+          "textStyle": "text-mono-value",
           "textColor": "fg",
-          "extra": "bg-transparent text-right tabular-nums outline-none border-b border-indigo nodrag nowheel"
+          "extra": "bg-transparent text-right outline-none border-b border-indigo nodrag nowheel"
         }
       }
     },
@@ -1266,12 +1288,9 @@
             "color": "edge/default",
             "weight": 1
           },
-          "width": "full",
-          "height": "input-h",
-          "cursor": "pointer",
-          "auditIgnore": [
-            "width"
-          ]
+          "width": "6",
+          "height": "6",
+          "cursor": "pointer"
         }
       }
     },
@@ -1285,7 +1304,8 @@
           "figmaNodeId": "106:311",
           "layout": "horizontal",
           "align": "center",
-          "position": "relative"
+          "position": "relative",
+          "auditIgnore": ["overflow"]
         },
         "innerFrame": {
           "figmaNodeId": "106:296",
@@ -1321,7 +1341,8 @@
             "color": "edge/default",
             "weight": 1
           },
-          "cursor": "crosshair"
+          "cursor": "crosshair",
+          "fill": "gradient:linear"
         },
         "stopMarkers": {
           "figmaNodeId": "111:933",
@@ -1364,9 +1385,9 @@
         },
         "positionText": {
           "figmaNodeId": "111:940",
-          "textStyle": "text-param",
-          "textColor": "fg-dim",
-          "extra": "tabular-nums"
+          "textStyle": "text-mono-value",
+          "textColor": "fg",
+          "textAlign": "center"
         }
       }
     },
@@ -1385,13 +1406,14 @@
           "gap": "md",
           "align": "center",
           "extra": "nodrag nowheel",
-          "overflow": "hidden"
+          "overflow": "hidden",
+          "auditIgnore": ["overflow"]
         },
         "value": {
           "figmaNodeId": "111:951",
           "textColor": "fg",
           "textStyle": "text-mono-value",
-          "extra": "tabular-nums flex-1"
+          "extra": "flex-1"
         }
       }
     },
@@ -1428,7 +1450,10 @@
           "gap": "xs",
           "align": "center",
           "textColor": "fg-dim",
-          "justify": "center"
+          "justify": "center",
+          "auditIgnore": [
+            "textColor"
+          ]
         }
       }
     },
@@ -1765,5 +1790,5 @@
       ]
     }
   },
-  "lastFigmaVersion": 2328680458429896700
+  "lastFigmaVersion": 2328705468572919300
 }
