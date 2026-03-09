@@ -274,7 +274,7 @@ Free, simple, integrates well with GitHub Actions. Custom domain can be added la
 **Phase 2** - ✅ Complete (Spectra Mode + UX Polish — 23 nodes, all spectra presets reproducible)
 **Phase 2.5** - ✅ Complete (Preview Mode System + UI Polish)
 **Dev Bridge** - ✅ Complete (`window.__sombra` API for browser automation)
-**Phase 3** - 🔄 In Progress (Save/Load .sombra files complete; Copy GLSL + Embed pending)
+**Phase 3** - ✅ Complete (Save/Load .sombra files, viewer URLs)
 **Phase 4** - ✅ Complete (Node Library Expansion — 39 nodes + Cmd+K search palette)
 **Phase 5** - ✅ Complete (Compact URLs + Per-Node Mini-Previews)
 
