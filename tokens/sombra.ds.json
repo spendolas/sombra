@@ -1771,6 +1771,36 @@
       "name": "Gradient",
       "category": "Pattern",
       "nodeFile": "src/nodes/pattern/gradient.ts"
+    },
+    "443:903": {
+      "name": "Split Vec3",
+      "category": "Vector",
+      "nodeFile": "src/nodes/vector/split-vec3.ts"
+    },
+    "443:925": {
+      "name": "Combine Vec3",
+      "category": "Vector",
+      "nodeFile": "src/nodes/vector/combine-vec3.ts"
+    },
+    "443:947": {
+      "name": "Split Vec2",
+      "category": "Vector",
+      "nodeFile": "src/nodes/vector/split-vec2.ts"
+    },
+    "443:965": {
+      "name": "Combine Vec2",
+      "category": "Vector",
+      "nodeFile": "src/nodes/vector/combine-vec2.ts"
+    },
+    "443:1025": {
+      "name": "Polar Coordinates",
+      "category": "Transform",
+      "nodeFile": "src/nodes/transform/polar-coords.ts"
+    },
+    "443:1070": {
+      "name": "Tile",
+      "category": "Transform",
+      "nodeFile": "src/nodes/transform/tile.ts"
     }
   },
   "scenes": {
