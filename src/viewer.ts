@@ -6,7 +6,7 @@
 
 import { initializeNodeLibrary } from './nodes'
 import { compileGraph } from './compiler/glsl-generator'
-import { decodeGraphFromHash } from './utils/sombra-file'
+import { decodeGraphFromHash, decodeCompactHash } from './utils/sombra-file'
 import { WebGLRenderer } from './webgl/renderer'
 import type { QualityTier } from './webgl/renderer'
 
@@ -18,27 +18,36 @@ function showError(message: string) {
 }
 
 function main() {
-  // Parse hash — expect #graph=<compressed>
+  // Parse hash — accept #g=<compact> or #graph=<full> (legacy)
   const hash = window.location.hash.slice(1) // remove leading #
-  const prefix = 'graph='
-  if (!hash.startsWith(prefix)) {
+
+  let encoded: string
+  let useCompact: boolean
+  if (hash.startsWith('g=')) {
+    encoded = hash.slice(2)
+    useCompact = true
+  } else if (hash.startsWith('graph=')) {
+    encoded = hash.slice(6)
+    useCompact = false
+  } else {
     showError('No graph data in URL.\n\nShare a shader from the Sombra editor to get a viewer link.')
     return
   }
 
-  const encoded = hash.slice(prefix.length)
   if (!encoded) {
     showError('Empty graph data in URL.')
     return
   }
 
-  // Initialize the node registry (needed for importFromFile validation + compileGraph)
+  // Initialize the node registry (needed for decode validation + compileGraph)
   initializeNodeLibrary()
 
   // Decode and validate
   let nodes, edges
   try {
-    const result = decodeGraphFromHash(encoded)
+    const result = useCompact
+      ? decodeCompactHash(encoded)
+      : decodeGraphFromHash(encoded)
     nodes = result.nodes
     edges = result.edges
   } catch (err) {

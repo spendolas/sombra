@@ -276,6 +276,7 @@ Free, simple, integrates well with GitHub Actions. Custom domain can be added la
 **Dev Bridge** - ✅ Complete (`window.__sombra` API for browser automation)
 **Phase 3** - 🔄 In Progress (Save/Load .sombra files complete; Copy GLSL + Embed pending)
 **Phase 4** - ✅ Complete (Node Library Expansion — 39 nodes + Cmd+K search palette)
+**Phase 5** - ✅ Complete (Compact URLs + Per-Node Mini-Previews)
 
 ### Phase 2.5 — Preview Mode System + UI Polish ✅ Complete
 

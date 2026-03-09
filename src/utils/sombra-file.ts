@@ -123,7 +123,7 @@ export function downloadSombraFile(
  * Returns the parsed JSON content.
  */
 /**
- * Compress a graph into a URL-safe base64url string.
+ * Compress a graph into a URL-safe base64url string (legacy full format).
  */
 export function encodeGraphToHash(
   nodes: Node<NodeData>[],
@@ -141,7 +141,7 @@ export function encodeGraphToHash(
 }
 
 /**
- * Decode a base64url-compressed graph hash back into nodes and edges.
+ * Decode a base64url-compressed graph hash back into nodes and edges (legacy full format).
  */
 export function decodeGraphFromHash(hash: string): {
   nodes: Node<NodeData>[]
@@ -157,6 +157,165 @@ export function decodeGraphFromHash(hash: string): {
   const json = new TextDecoder().decode(pako.inflate(bytes))
   const parsed = JSON.parse(json)
   return importFromFile(parsed)
+}
+
+/* ------------------------------------------------------------------ */
+/*  Compact URL format — strips positions, RF metadata, default params */
+/* ------------------------------------------------------------------ */
+
+interface CompactNode {
+  i: string                     // id
+  t: string                     // node type (e.g. 'noise')
+  p?: Record<string, unknown>   // non-default params (omitted if empty)
+}
+
+interface CompactEdge {
+  s: string   // source node id
+  sh: string  // source handle
+  t: string   // target node id
+  th: string  // target handle
+}
+
+interface CompactGraph {
+  v: 1
+  n: CompactNode[]
+  e: CompactEdge[]
+}
+
+/** Deep equality for param values (numbers, strings, arrays, plain objects) */
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true
+  if (a == null || b == null) return false
+  if (typeof a !== typeof b) return false
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false
+    return a.every((v, i) => deepEqual(v, b[i]))
+  }
+  if (typeof a === 'object' && typeof b === 'object') {
+    const ka = Object.keys(a as Record<string, unknown>)
+    const kb = Object.keys(b as Record<string, unknown>)
+    if (ka.length !== kb.length) return false
+    return ka.every(k => deepEqual(
+      (a as Record<string, unknown>)[k],
+      (b as Record<string, unknown>)[k],
+    ))
+  }
+  return false
+}
+
+/**
+ * Encode a graph into a compact URL-safe base64url string.
+ * Strips positions, RF metadata, and params that match definition defaults.
+ */
+export function encodeCompactHash(
+  nodes: Node<NodeData>[],
+  edges: Edge<EdgeData>[],
+): string {
+  const compactNodes: CompactNode[] = nodes.map(node => {
+    const cn: CompactNode = { i: node.id, t: node.data.type }
+    const params = node.data.params
+    if (params && Object.keys(params).length > 0) {
+      // Strip params that match definition defaults
+      const def = nodeRegistry.get(node.data.type)
+      const nonDefault: Record<string, unknown> = {}
+      for (const [key, value] of Object.entries(params)) {
+        const paramDef = def?.params?.find(p => p.id === key)
+        if (!paramDef || !deepEqual(value, paramDef.default)) {
+          nonDefault[key] = value
+        }
+      }
+      if (Object.keys(nonDefault).length > 0) {
+        cn.p = nonDefault
+      }
+    }
+    return cn
+  })
+
+  const compactEdges: CompactEdge[] = edges.map(edge => ({
+    s: edge.source,
+    sh: edge.sourceHandle!,
+    t: edge.target,
+    th: edge.targetHandle!,
+  }))
+
+  const compact: CompactGraph = { v: 1, n: compactNodes, e: compactEdges }
+  const json = JSON.stringify(compact)
+  const compressed = pako.deflate(new TextEncoder().encode(json))
+  const base64 = btoa(String.fromCharCode(...compressed))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
+  return base64
+}
+
+/**
+ * Decode a compact base64url hash back into full React Flow nodes and edges.
+ */
+export function decodeCompactHash(hash: string): {
+  nodes: Node<NodeData>[]
+  edges: Edge<EdgeData>[]
+} {
+  let base64 = hash.replace(/-/g, '+').replace(/_/g, '/')
+  while (base64.length % 4 !== 0) base64 += '='
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  const json = new TextDecoder().decode(pako.inflate(bytes))
+  const compact = JSON.parse(json) as CompactGraph
+
+  if (compact.v !== 1) {
+    throw new Error(`Unsupported compact format version: ${compact.v}`)
+  }
+
+  // Reconstruct full nodes
+  const nodes: Node<NodeData>[] = compact.n.map(cn => {
+    const def = nodeRegistry.get(cn.t)
+    if (!def) throw new Error(`Unknown node type "${cn.t}"`)
+
+    // Merge definition defaults with stored non-default params
+    const params: Record<string, unknown> = {}
+    if (def.params) {
+      for (const p of def.params) {
+        if (p.default !== undefined) params[p.id] = p.default
+      }
+    }
+    if (cn.p) Object.assign(params, cn.p)
+
+    return {
+      id: cn.i,
+      type: 'shaderNode',
+      position: { x: 0, y: 0 },
+      data: { type: cn.t, params },
+    }
+  })
+
+  // Reconstruct full edges
+  const edges: Edge<EdgeData>[] = compact.e.map(ce => {
+    // Resolve source port type for edge coloring
+    const sourceNode = nodes.find(n => n.id === ce.s)
+    let sourcePortType: string | undefined
+    if (sourceNode) {
+      const def = nodeRegistry.get(sourceNode.data.type)
+      const port = def?.outputs.find(p => p.id === ce.sh)
+      sourcePortType = port?.type
+    }
+
+    return {
+      id: `${ce.s}-${ce.sh}-${ce.t}-${ce.th}`,
+      source: ce.s,
+      target: ce.t,
+      sourceHandle: ce.sh,
+      targetHandle: ce.th,
+      type: 'typed',
+      data: {
+        sourcePort: ce.sh,
+        targetPort: ce.th,
+        sourcePortType,
+      },
+    }
+  })
+
+  return { nodes, edges }
 }
 
 export function openSombraFile(): Promise<unknown> {

@@ -13,7 +13,7 @@ import { nodeRegistry } from './nodes/registry'
 import { compileGraph } from './compiler/glsl-generator'
 import type { NodeData, EdgeData, PortType } from './nodes/types'
 import type { Node, Edge } from '@xyflow/react'
-import { exportToFile, importFromFile, encodeGraphToHash } from './utils/sombra-file'
+import { exportToFile, importFromFile, encodeCompactHash } from './utils/sombra-file'
 
 /* ------------------------------------------------------------------ */
 /*  Helper: unique ID generator                                       */
@@ -231,8 +231,8 @@ function importGraph(graph: unknown): void {
  */
 function shareGraph(): string {
   const { nodes, edges } = useGraphStore.getState()
-  const hash = encodeGraphToHash(nodes, edges)
-  return `${location.origin}/sombra/viewer.html#graph=${hash}`
+  const hash = encodeCompactHash(nodes, edges)
+  return `${location.origin}/sombra/viewer.html#g=${hash}`
 }
 
 /**

@@ -8,11 +8,11 @@ import { nodeRegistry } from '../nodes/registry'
 import { topologicalSort, hasCycles } from './topological-sort'
 import { coerceType } from '../nodes/type-coercion'
 
-function uniformName(sanitizedNodeId: string, paramId: string): string {
+export function uniformName(sanitizedNodeId: string, paramId: string): string {
   return `u_${sanitizedNodeId}_${paramId}`
 }
 
-function paramGlslType(paramType: string): 'float' | 'vec2' | 'vec3' | 'vec4' {
+export function paramGlslType(paramType: string): 'float' | 'vec2' | 'vec3' | 'vec4' {
   if (paramType === 'vec2') return 'vec2'
   if (paramType === 'vec3' || paramType === 'color') return 'vec3'
   if (paramType === 'vec4') return 'vec4'
@@ -370,7 +370,7 @@ function safeFloat(v: unknown): string {
 /**
  * Format a default value as GLSL
  */
-function formatDefaultValue(value: unknown, type: string): string {
+export function formatDefaultValue(value: unknown, type: string): string {
   if (type === 'float') return safeFloat(value)
   if (type === 'vec2' && Array.isArray(value)) {
     return `vec2(${safeFloat(value[0])}, ${safeFloat(value[1])})`
@@ -387,7 +387,7 @@ function formatDefaultValue(value: unknown, type: string): string {
 /**
  * Assemble the complete fragment shader
  */
-function assembleFragmentShader(
+export function assembleFragmentShader(
   uniforms: Set<string>,
   functions: string[],
   functionRegistry: Map<string, string>,

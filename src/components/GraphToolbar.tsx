@@ -11,7 +11,7 @@ import {
   importFromFile,
   downloadSombraFile,
   openSombraFile,
-  encodeGraphToHash,
+  encodeCompactHash,
 } from '@/utils/sombra-file'
 import { ds } from '@/generated/ds'
 
@@ -39,8 +39,8 @@ export function GraphToolbar() {
 
   const handleShare = useCallback(async () => {
     const { nodes, edges } = useGraphStore.getState()
-    const hash = encodeGraphToHash(nodes, edges)
-    const url = `${location.origin}/sombra/viewer.html#graph=${hash}`
+    const hash = encodeCompactHash(nodes, edges)
+    const url = `${location.origin}/sombra/viewer.html#g=${hash}`
     try {
       await navigator.clipboard.writeText(url)
       setCopied(true)
