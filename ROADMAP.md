@@ -423,15 +423,38 @@ Expanded the DS database to capture ALL visual properties per component, elimina
 
 ---
 
-## Phase 5 — Polish & Performance
+## Phase 5 — Compact URLs + Per-Node Mini-Previews ✅ Complete
 
-- Final visual design (Figma-driven), dark/light themes, responsive layout
-- Lazy compilation, FPS throttling, React Flow virtualization for large graphs
-- Spectra preset example graphs (the 4 presets as loadable node graphs)
-- Example materials library, onboarding flow / tutorial
-- Per-node mini-previews via single offscreen WebGL context
+### Sprint 1 — Compact Viewer URLs ✅
+- `CompactGraph` format: strips positions, RF metadata, default params, uses short keys (`i`, `t`, `p`, `s`, `sh`, `th`)
+- New `#g=` hash prefix (50-70% shorter URLs). Old `#graph=` still works (backwards compat)
+- `encodeCompactHash()` / `decodeCompactHash()` in `sombra-file.ts`
+- GraphToolbar + dev-bridge switched to compact format
 
-**Milestone:** Polished, performant, with built-in examples that showcase what's possible.
+### Sprint 2 — Subgraph Compiler ✅
+- `compileNodePreview(nodes, edges, targetNodeId)` in `subgraph-compiler.ts`
+- Generalized `topologicalSort` with optional `startNodeId` parameter
+- Output type → fragColor mapping: float→grayscale, vec2→RG, vec3/color→RGB, vec4→pass-through
+- Exported `assembleFragmentShader`, `formatDefaultValue` from `glsl-generator.ts`
+- Worker handles `'preview'` message type alongside `'compile'`
+
+### Sprint 3 — Offscreen Preview Renderer ✅
+- `PreviewRenderer` class: single offscreen WebGL2 context (80×80), FBO, readPixels → data URL
+- Shader program LRU cache (64 entries), built-in + user uniform upload
+- No extra DOM elements — fully offscreen
+
+### Sprint 4 — Preview Store + Scheduler ✅
+- `PreviewScheduler`: Worker-based compilation, one stale node per RAF tick
+- Dependency tracking via BFS forward adjacency (marks downstream nodes stale)
+- Time-dependent nodes re-render at 10 FPS (100ms interval)
+- `previewStore` (Zustand): ephemeral `nodeId → dataUrl` map
+
+### Sprint 5 — UI Integration ✅
+- 80×80 preview thumbnail at bottom of each ShaderNode (except fragment_output)
+- Scheduler initialized in App.tsx, wired to graph store changes
+- Previews update reactively when params or connections change
+
+**Milestone:** Viewer URLs are 50-70% shorter. Every node shows a live preview thumbnail of its output.
 
 ---
 
@@ -449,6 +472,7 @@ These happen when specific conditions are met, not on a timeline:
 
 ### Backlog (moved from earlier phases)
 
+- Refactor node previews — v1 works but needs polish (rendering quality, layout/sizing, performance tuning, visual integration with node cards)
 - "Copy GLSL" button — exports the compiled fragment shader to clipboard
 - Embed HTML snippet generator
 - Viewer page branded landing — show Sombra branding when opened without graph data

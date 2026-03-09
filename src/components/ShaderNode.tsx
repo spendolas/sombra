@@ -8,6 +8,7 @@ import type { NodeData, NodeParameter } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { NodeParameters, FloatSlider } from './NodeParameters'
 import { useGraphStore } from '../stores/graphStore'
+import { usePreviewStore } from '../stores/previewStore'
 import { BaseNode, BaseNodeHeader, BaseNodeHeaderTitle, BaseNodeContent } from '@/components/base-node'
 import { LabeledHandle } from '@/components/labeled-handle'
 import { BaseHandle } from '@/components/base-handle'
@@ -46,6 +47,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   const definition = nodeRegistry.get(nodeData.type)
   const updateNodeData = useGraphStore((state) => state.updateNodeData)
   const onEdgesChange = useGraphStore((state) => state.onEdgesChange)
+  const previewUrl = usePreviewStore((s) => s.previews[id])
 
   const currentValues = nodeData.params || ({} as Record<string, unknown>)
 
@@ -264,6 +266,15 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
           <div className={cn("mt-xs pt-md w-full", regularParams.length === 0 && ds.shaderNode.paramDivider)}>
             <definition.component nodeId={id} data={currentValues} />
           </div>
+        )}
+
+        {/* Node preview thumbnail */}
+        {previewUrl && nodeData.type !== 'fragment_output' && (
+          <img
+            src={previewUrl}
+            className="w-20 h-20 rounded-sm mx-auto mt-2 nodrag nowheel"
+            alt=""
+          />
         )}
       </BaseNodeContent>
     </BaseNode>

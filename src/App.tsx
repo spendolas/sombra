@@ -3,6 +3,8 @@ import { ReactFlowProvider } from '@xyflow/react'
 import type { Connection } from '@xyflow/react'
 import { WebGLRenderer } from './webgl/renderer'
 import type { QualityTier } from './webgl/renderer'
+import { PreviewRenderer } from './webgl/preview-renderer'
+import { PreviewScheduler } from './webgl/preview-scheduler'
 import { useLiveCompiler } from './compiler'
 import { useGraphStore } from './stores/graphStore'
 import { useSettingsStore } from './stores/settingsStore'
@@ -127,6 +129,24 @@ function App() {
       renderer.destroy()
     }
   }, [])
+
+  // Initialize preview scheduler for per-node thumbnails
+  const schedulerRef = useRef<PreviewScheduler | null>(null)
+  useEffect(() => {
+    const previewRenderer = new PreviewRenderer()
+    const scheduler = new PreviewScheduler(previewRenderer)
+    schedulerRef.current = scheduler
+    scheduler.start()
+    return () => {
+      scheduler.destroy()
+      previewRenderer.destroy()
+    }
+  }, [])
+
+  // Feed graph changes to the preview scheduler
+  useEffect(() => {
+    schedulerRef.current?.onGraphChange(nodes, edges)
+  }, [nodes, edges])
 
   // Reparent canvas into the active target container
   useEffect(() => {

@@ -17,20 +17,30 @@ import type { NodeData, EdgeData } from '../nodes/types'
  */
 export function topologicalSort(
   nodes: Node<NodeData>[],
-  edges: Edge<EdgeData>[]
+  edges: Edge<EdgeData>[],
+  startNodeId?: string,
 ): string[] {
-  // Find the Fragment Output node (should be exactly one)
-  const outputNodes = nodes.filter((node) => node.data.type === 'fragment_output')
+  let startId: string
 
-  if (outputNodes.length === 0) {
-    throw new Error('No Fragment Output node found. Add one to complete the graph.')
+  if (startNodeId) {
+    // Start from the specified node
+    const node = nodes.find(n => n.id === startNodeId)
+    if (!node) throw new Error(`Start node "${startNodeId}" not found.`)
+    startId = node.id
+  } else {
+    // Find the Fragment Output node (should be exactly one)
+    const outputNodes = nodes.filter((node) => node.data.type === 'fragment_output')
+
+    if (outputNodes.length === 0) {
+      throw new Error('No Fragment Output node found. Add one to complete the graph.')
+    }
+
+    if (outputNodes.length > 1) {
+      throw new Error('Multiple Fragment Output nodes found. Only one is allowed.')
+    }
+
+    startId = outputNodes[0].id
   }
-
-  if (outputNodes.length > 1) {
-    throw new Error('Multiple Fragment Output nodes found. Only one is allowed.')
-  }
-
-  const outputNode = outputNodes[0]
 
   // Build adjacency lists for reverse traversal (target -> sources)
   const incomingEdges = new Map<string, string[]>()
@@ -61,7 +71,7 @@ export function topologicalSort(
     result.push(nodeId)
   }
 
-  visit(outputNode.id)
+  visit(startId)
 
   return result
 }
