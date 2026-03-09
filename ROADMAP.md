@@ -340,25 +340,27 @@ Dagre-based auto-layout for node positioning (`src/utils/layout.ts`, dependency:
 
 ---
 
-## Phase 3 — Save/Load/Export 🔄 IN PROGRESS
+## Phase 3 — Save/Load/Share ✅ COMPLETE
 
-**Status:** Save/Load delivered March 2026. Copy GLSL + Embed pending.
+**Status:** ✅ Delivered March 2026
 
 - [x] localStorage auto-save with schema versioning (Zustand persist, `GRAPH_SCHEMA_VERSION`)
 - [x] `.sombra` file download/upload for sharing graph files
-- [ ] "Copy GLSL" button — exports the compiled fragment shader
-- [ ] Embed HTML snippet generator
-- [ ] Viewer page placeholder — show branded landing when opened without graph data instead of error message
+- [x] Shareable viewer URLs — `viewer.html#graph=<compressed>` with full uniform/quality/animation support
+- [x] Render Quality Tier — `quality` dropdown on Fragment Output (adaptive/low/medium/high), `updateMode: 'renderer'` bypasses recompilation
+- [x] Random node viewer re-seeding — each viewer load produces unique output
 
 ### Delivered Features
 
 - **`.sombra` file format** — versioned JSON envelope (`{ sombra: 1, nodes, edges }`), validates structure + node types on import
-- **GraphToolbar** — floating pill at top-left of canvas with Download (save) and FolderOpen (open) icon buttons
+- **GraphToolbar** — floating pill at top-left of canvas with Download (save), FolderOpen (open), and Share icon buttons
 - **`loadGraph()` store action** — undoable graph replacement (pushes previous state to undo stack)
+- **Viewer page** — standalone page decodes compressed graph from URL hash, compiles, uploads uniforms, applies quality tier, conditionally animates
+- **Render Quality Tier** — 4 tiers controlling FPS cap + DPR scale. Third update mode (`renderer`) bypasses shader recompilation and uniform uploads
 - **Dev bridge updated** — `exportGraph()` returns versioned envelope, `importGraph()` accepts both versioned and bare formats
-- New files: `src/utils/sombra-file.ts`, `src/components/GraphToolbar.tsx`
+- New files: `src/utils/sombra-file.ts`, `src/components/GraphToolbar.tsx`, `src/viewer.ts`
 
-**Milestone:** Save your work, share a link, copy the shader code.
+**Milestone:** ✅ Save your work, share a viewer link, render at configurable quality.
 
 ---
 
@@ -382,16 +384,39 @@ Expanded the DS database to capture ALL visual properties per component, elimina
 
 ---
 
-## Phase 4 — Node Library Expansion
+## Phase 4 — Node Library Expansion 🔄 IN PROGRESS
 
-- **Patterns:** Checkerboard, Stripes, Dots, Voronoi
-- **Distortion:** Polar Coordinates
-- **More Math/Vector/Color nodes** as needed
-- **Subgraphs:** Group nodes into reusable compound nodes
-- **Custom GLSL Node:** Paste arbitrary GLSL with user-defined ports
-- **Shadertoy/GLSL Sandbox import adapters**
-- Cmd+K node search palette
-- Undo/redo, keyboard shortcuts
+**Goal:** Grow from 23 to ~39 nodes with patterns, vector operations, coordinate transforms, math utilities, and color tools. Add Cmd+K search palette for discoverability.
+
+### Sprint 1 — Pattern Generators (4 nodes, new `Pattern` category)
+- [ ] Checkerboard — coords + scale → float (XOR grid pattern)
+- [ ] Stripes — coords + scale + angle + softness → float (rotated band pattern)
+- [ ] Dots — coords + scale + radius + softness → float (grid of circles)
+- [ ] Gradient — coords + type enum (linear/radial/angular/diamond) → float
+
+### Sprint 2 — Vector Operations (4 nodes, new `Vector` category)
+- [ ] Split Vec3 — vec3 → x, y, z floats (swizzle)
+- [ ] Combine Vec3 — x, y, z floats → vec3
+- [ ] Split Vec2 — vec2 → x, y floats (swizzle)
+- [ ] Combine Vec2 — x, y floats → vec2
+
+### Sprint 3 — Coordinate Transforms (2 nodes, `Transform` category)
+- [ ] Polar Coordinates — cartesian ↔ polar conversion with center params
+- [ ] Tile — repeat + optional mirror with countX/countY params
+
+### Sprint 4 — Math Expansion (3 nodes, `Math` category)
+- [ ] Clamp — value + min + max → clamped float
+- [ ] Power — base + exponent → float
+- [ ] Round — value → float with mode enum (floor/ceil/fract/round/sign)
+
+### Sprint 5 — Color Expansion (3 nodes, `Color` category)
+- [ ] Invert — vec3(1.0) - color
+- [ ] Grayscale — color → float with mode enum (luminance/average/lightness)
+- [ ] Posterize — quantize color to N levels
+
+### Sprint 6 — Cmd+K Node Search Palette
+- [ ] Command palette overlay with fuzzy search over node types
+- [ ] Keyboard: Cmd+K or `/` opens, arrows navigate, Enter places, Escape closes
 
 **Milestone:** Rich enough node library to recreate complex shaders entirely in the editor.
 
@@ -420,6 +445,15 @@ These happen when specific conditions are met, not on a timeline:
 - Real-time collaboration
 - WebGPU compute backend
 - MaterialX / glTF export
+
+### Backlog (moved from earlier phases)
+
+- "Copy GLSL" button — exports the compiled fragment shader to clipboard
+- Embed HTML snippet generator
+- Viewer page branded landing — show Sombra branding when opened without graph data
+- Subgraphs — group nodes into reusable compound nodes
+- Custom GLSL Node — paste arbitrary GLSL with user-defined ports
+- Shadertoy/GLSL Sandbox import adapters
 
 ---
 

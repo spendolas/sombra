@@ -154,6 +154,21 @@ export function compileGraph(
                 }
               }
             }
+          } else {
+            // Source node was deleted but edge lingers — fall back to default
+            if (inputPort.default === 'auto_uv' && inputPort.type === 'vec2') {
+              const autoUvVar = `node_${sanitizedNodeId}_auto_uv`
+              preambleLines.push(`vec2 ${autoUvVar} = (v_uv - 0.5) * u_resolution / u_ref_size + 0.5;`)
+              uniforms.add('u_resolution')
+              uniforms.add('u_ref_size')
+              inputs[inputPort.id] = autoUvVar
+            } else if (inputPort.default === 'auto_fragcoord' && inputPort.type === 'vec2') {
+              const autoFcVar = `node_${sanitizedNodeId}_auto_fc`
+              preambleLines.push(`vec2 ${autoFcVar} = gl_FragCoord.xy;`)
+              inputs[inputPort.id] = autoFcVar
+            } else if (inputPort.default !== undefined) {
+              inputs[inputPort.id] = formatDefaultValue(inputPort.default, inputPort.type)
+            }
           }
         } else {
           // Input is not connected - use default value
@@ -209,6 +224,22 @@ export function compileGraph(
                     inputs[param.id] = sourceVarName
                   }
                 }
+              }
+            } else {
+              // Source node was deleted but edge lingers — fall back to param value
+              const paramValue = node.data.params?.[param.id] ?? param.default
+              if (param.updateMode === 'uniform') {
+                const uName = uniformName(sanitizedNodeId, param.id)
+                userUniforms.push({
+                  name: uName,
+                  glslType: paramGlslType(param.type),
+                  value: paramValue as number | number[],
+                  nodeId: node.id,
+                  paramId: param.id,
+                })
+                inputs[param.id] = uName
+              } else {
+                inputs[param.id] = formatDefaultValue(paramValue, param.type)
               }
             }
           } else {

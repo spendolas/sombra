@@ -1751,6 +1751,26 @@
       "name": "Fragment Output",
       "category": "Output",
       "nodeFile": "src/nodes/output/fragment-output.ts"
+    },
+    "441:754": {
+      "name": "Checkerboard",
+      "category": "Pattern",
+      "nodeFile": "src/nodes/pattern/checkerboard.ts"
+    },
+    "441:780": {
+      "name": "Stripes",
+      "category": "Pattern",
+      "nodeFile": "src/nodes/pattern/stripes.ts"
+    },
+    "441:830": {
+      "name": "Dots",
+      "category": "Pattern",
+      "nodeFile": "src/nodes/pattern/dots.ts"
+    },
+    "441:880": {
+      "name": "Gradient",
+      "category": "Pattern",
+      "nodeFile": "src/nodes/pattern/gradient.ts"
     }
   },
   "scenes": {

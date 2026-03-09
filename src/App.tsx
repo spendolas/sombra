@@ -202,6 +202,12 @@ function App() {
           }
           rendererRef.current.setQualityTier((result.qualityTier ?? 'adaptive') as QualityTier)
           rendererRef.current.notifyChange()
+          // Static shaders need an explicit render — setAnimated(false) only
+          // calls requestRender() on the animated→static transition, not when
+          // the shader was already static.
+          if (!isAnimated) {
+            rendererRef.current.requestRender()
+          }
         }
       }
     },
