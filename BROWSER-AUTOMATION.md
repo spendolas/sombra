@@ -218,6 +218,14 @@ The **GraphToolbar** in the top-left of the canvas provides Save (download) and 
 | `brightness_contrast` | Brightness/Contrast | `color` (vec3) | `color` (vec3) | `brightness` (connectable), `contrast` (connectable) |
 | `color_ramp` | Color Ramp | `t` (float) | `color` (vec3) | `interpolation` (enum: smooth/linear/constant), `stops` (hidden, array of `{position, color}`) |
 
+### Transform
+
+| Type | Label | Inputs | Outputs | Key Params |
+|---|---|---|---|---|
+| `polar_coords` | Polar Coordinates | `coords` (vec2, auto_uv) | `polar` (vec2) | `mode` (enum: forward/inverse), `centerX` (connectable), `centerY` (connectable) |
+| `tile` | Tile | `coords` (vec2, auto_uv) | `uv` (vec2) | `countX` (connectable), `countY` (connectable), `mirror` (enum: none/x/y/xy) |
+| `reeded_glass` | Reeded Glass | `coords` (vec2, auto_uv) | `coords` (vec2) | `slices` (connectable), `strength` (connectable), `edge` (connectable), `direction` (enum: vertical/horizontal), `ribType` (enum: straight/wave/circular/noise), `waveShape` (enum: sine/triangle/square/sawtooth/chevron/u_shape, shown for wave), `noiseType` (enum: simplex/value/worley, shown for noise), `amplitude` (connectable, hidden for straight), `frequency` (connectable, hidden for straight) |
+
 ### Effect
 
 | Type | Label | Inputs | Outputs | Key Params |

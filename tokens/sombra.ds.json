@@ -1831,6 +1831,11 @@
       "name": "Posterize",
       "category": "Color",
       "nodeFile": "src/nodes/color/posterize.ts"
+    },
+    "518:93": {
+      "name": "Reeded Glass",
+      "category": "Transform",
+      "nodeFile": "src/nodes/transform/reeded-glass.ts"
     }
   },
   "scenes": {

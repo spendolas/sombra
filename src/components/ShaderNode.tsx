@@ -25,7 +25,10 @@ function isParamVisible(param: NodeParameter, currentValues: Record<string, unkn
   if (param.hidden) return false
   if (!param.showWhen) return true
   return Object.entries(param.showWhen).every(
-    ([key, val]) => (currentValues[key] ?? allParams.find((p) => p.id === key)?.default) === val
+    ([key, val]) => {
+      const current = currentValues[key] ?? allParams.find((p) => p.id === key)?.default
+      return Array.isArray(val) ? val.includes(current as string) : current === val
+    }
   )
 }
 
