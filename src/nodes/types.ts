@@ -35,7 +35,7 @@ export interface NodeParameter {
   max?: number                  // For numeric types
   step?: number                 // Step increment for sliders
   options?: Array<{ value: string; label: string }>  // For enum type
-  showWhen?: Record<string, string>                  // Only show when other params match these values
+  showWhen?: Record<string, string | string[]>        // Only show when other params match (array = any of)
   connectable?: boolean                              // If true, renders as wirable handle + inline slider
   hidden?: boolean                                   // If true, param is not rendered in UI (internal state)
   warnAbove?: number                                  // Show performance hint when unwired value exceeds this

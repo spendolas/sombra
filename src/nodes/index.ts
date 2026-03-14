@@ -36,6 +36,7 @@ import { domainWarpNode } from './noise/domain-warp'
 import { quantizeUvNode } from './postprocess/quantize-uv'
 import { polarCoordsNode } from './transform/polar-coords'
 import { tileNode } from './transform/tile'
+import { reededGlassNode } from './transform/reeded-glass'
 
 // Color nodes
 import { hsvToRgbNode } from './color/hsv-to-rgb'
@@ -99,6 +100,7 @@ export const ALL_NODES = [
   quantizeUvNode,
   polarCoordsNode,
   tileNode,
+  reededGlassNode,
 
   // Color
   hsvToRgbNode,

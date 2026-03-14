@@ -1,0 +1,195 @@
+/**
+ * Reeded Glass — cylindrical lens distortion through ribbed glass.
+ * Divides UV space into parallel ribs and applies a lens remap within each rib.
+ *
+ * Two-level hierarchy:
+ *   ribType: Straight | Wave | Circular | Noise
+ *     Wave    → waveShape sub-select (Sine, Triangle, Square, Sawtooth, Chevron)
+ *     Noise   → noiseType sub-select (Simplex, Value, Worley)
+ *     Circular / Straight → no sub-select
+ */
+
+import type { NodeDefinition, GLSLContext } from '../types'
+import { addFunction } from '../types'
+import { registerNoiseType, resolveNoiseFn } from '../noise/noise-functions'
+
+const RIB_TYPE_OPTIONS = [
+  { value: 'straight', label: 'Straight' },
+  { value: 'wave', label: 'Wave' },
+  { value: 'circular', label: 'Circular' },
+  { value: 'noise', label: 'Noise' },
+]
+
+const WAVE_SHAPE_OPTIONS = [
+  { value: 'sine', label: 'Sine' },
+  { value: 'triangle', label: 'Triangle' },
+  { value: 'square', label: 'Square' },
+  { value: 'sawtooth', label: 'Sawtooth' },
+  { value: 'chevron', label: 'Chevron' },
+  { value: 'u_shape', label: 'U-Shape' },
+]
+
+const NOISE_TYPE_OPTIONS = [
+  { value: 'simplex', label: 'Simplex' },
+  { value: 'value', label: 'Value' },
+  { value: 'worley', label: 'Worley' },
+]
+
+const DIRECTION_OPTIONS = [
+  { value: 'vertical', label: 'Vertical' },
+  { value: 'horizontal', label: 'Horizontal' },
+]
+
+/**
+ * Register the reeded glass lens function.
+ * Takes the main-axis coordinate, slices, strength, and edge sharpness.
+ * Returns the displaced main-axis coordinate.
+ */
+function registerLensFn(ctx: GLSLContext): void {
+  addFunction(ctx, 'reedLens', `float reedLens(float coord, float slices, float strength, float edge) {
+  float ribW = 1.0 / slices;
+  float local = mod(coord, ribW) / ribW;
+  float compressed = 0.5 + (local - 0.5) * (1.0 - edge);
+  float curved = 0.5 - cos(compressed * 3.14159265) * 0.5;
+  float lensed = mix(compressed, curved, strength);
+  return (floor(coord / ribW) + lensed) * ribW;
+}`)
+}
+
+export const reededGlassNode: NodeDefinition = {
+  type: 'reeded_glass',
+  label: 'Reeded Glass',
+  category: 'Transform',
+  description: 'Cylindrical lens distortion through ribbed glass',
+
+  inputs: [
+    { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },
+  ],
+
+  outputs: [
+    { id: 'coords', label: 'Coords', type: 'vec2' },
+  ],
+
+  params: [
+    {
+      id: 'slices', label: 'Slices', type: 'float', default: 12,
+      min: 2, max: 64, step: 1,
+      connectable: true, updateMode: 'uniform',
+    },
+    {
+      id: 'strength', label: 'Strength', type: 'float', default: 0.5,
+      min: 0, max: 1, step: 0.01,
+      connectable: true, updateMode: 'uniform',
+    },
+    {
+      id: 'edge', label: 'Edge', type: 'float', default: 0.3,
+      min: 0, max: 1, step: 0.01,
+      connectable: true, updateMode: 'uniform',
+    },
+    {
+      id: 'direction', label: 'Direction', type: 'enum', default: 'vertical',
+      options: DIRECTION_OPTIONS,
+      updateMode: 'recompile',
+    },
+    {
+      id: 'ribType', label: 'Rib Type', type: 'enum', default: 'straight',
+      options: RIB_TYPE_OPTIONS,
+      updateMode: 'recompile',
+    },
+    {
+      id: 'waveShape', label: 'Wave Shape', type: 'enum', default: 'sine',
+      options: WAVE_SHAPE_OPTIONS,
+      showWhen: { ribType: 'wave' },
+      updateMode: 'recompile',
+    },
+    {
+      id: 'noiseType', label: 'Noise Type', type: 'enum', default: 'simplex',
+      options: NOISE_TYPE_OPTIONS,
+      showWhen: { ribType: 'noise' },
+      updateMode: 'recompile',
+    },
+    {
+      id: 'amplitude', label: 'Amplitude', type: 'float', default: 0.3,
+      min: 0, max: 1, step: 0.01,
+      connectable: true, updateMode: 'uniform',
+      showWhen: { ribType: ['wave', 'circular', 'noise'] },
+    },
+    {
+      id: 'frequency', label: 'Frequency', type: 'float', default: 4.0,
+      min: 0.1, max: 20, step: 0.1,
+      connectable: true, updateMode: 'uniform',
+      showWhen: { ribType: ['wave', 'circular', 'noise'] },
+    },
+  ],
+
+  glsl: (ctx) => {
+    const { inputs, outputs, params } = ctx
+    const direction = (params.direction as string) || 'vertical'
+    const ribType = (params.ribType as string) || 'straight'
+    const id = ctx.nodeId.replace(/-/g, '_')
+
+    registerLensFn(ctx)
+
+    // main = axis being sliced, perp = perpendicular axis
+    const isVert = direction === 'vertical'
+    const main = isVert ? `${inputs.coords}.x` : `${inputs.coords}.y`
+    const perp = isVert ? `${inputs.coords}.y` : `${inputs.coords}.x`
+
+    const lines: string[] = []
+    const warpedMain = `rg_wm_${id}`
+
+    if (ribType === 'straight') {
+      // No wave offset — lens directly on main axis
+      lines.push(`float ${warpedMain} = ${main};`)
+    } else {
+      // Compute wave offset based on rib type + sub-shape
+      const waveVal = `rg_wv_${id}`
+
+      if (ribType === 'wave') {
+        const waveShape = (params.waveShape as string) || 'sine'
+        switch (waveShape) {
+          case 'sine':
+            lines.push(`float ${waveVal} = sin(${perp} * ${inputs.frequency} * 6.28318) * ${inputs.amplitude};`)
+            break
+          case 'triangle':
+            lines.push(`float ${waveVal} = (abs(fract(${perp} * ${inputs.frequency}) - 0.5) * 4.0 - 1.0) * ${inputs.amplitude};`)
+            break
+          case 'square':
+            lines.push(`float ${waveVal} = (step(0.5, fract(${perp} * ${inputs.frequency})) * 2.0 - 1.0) * ${inputs.amplitude};`)
+            break
+          case 'sawtooth':
+            lines.push(`float ${waveVal} = (fract(${perp} * ${inputs.frequency}) * 2.0 - 1.0) * ${inputs.amplitude};`)
+            break
+          case 'chevron':
+            lines.push(`float ${waveVal} = (abs(${perp} * 2.0 - 1.0)) * ${inputs.amplitude} * sin(${perp} * ${inputs.frequency} * 6.28318);`)
+            break
+          case 'u_shape':
+            lines.push(`float ${waveVal} = (pow(abs(fract(${perp} * ${inputs.frequency}) * 2.0 - 1.0), 2.0) * 2.0 - 1.0) * ${inputs.amplitude};`)
+            break
+        }
+      } else if (ribType === 'circular') {
+        lines.push(`float ${waveVal} = sin(length(${inputs.coords} - 0.5) * ${inputs.frequency} * 6.28318) * ${inputs.amplitude};`)
+      } else if (ribType === 'noise') {
+        const noiseType = (params.noiseType as string) || 'simplex'
+        registerNoiseType(ctx, noiseType)
+        const noiseFn = resolveNoiseFn(noiseType)
+        lines.push(`float ${waveVal} = (${noiseFn}(vec3(${perp} * ${inputs.frequency}, ${main} * 2.0, 0.0)) * 2.0 - 1.0) * ${inputs.amplitude};`)
+      }
+
+      lines.push(`float ${warpedMain} = ${main} + ${waveVal};`)
+    }
+
+    // Apply cylindrical lens remap
+    const lensed = `rg_lensed_${id}`
+    lines.push(`float ${lensed} = reedLens(${warpedMain}, ${inputs.slices}, ${inputs.strength}, ${inputs.edge});`)
+
+    // Reconstruct output vec2
+    if (isVert) {
+      lines.push(`vec2 ${outputs.coords} = vec2(${lensed}, ${inputs.coords}.y);`)
+    } else {
+      lines.push(`vec2 ${outputs.coords} = vec2(${inputs.coords}.x, ${lensed});`)
+    }
+
+    return lines.join('\n  ')
+  },
+}

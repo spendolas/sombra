@@ -93,8 +93,10 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
     if (p.hidden) return false
     if (p.showWhen) {
       return Object.entries(p.showWhen).every(
-        ([key, val]: [string, string]) =>
-          (currentValues[key] ?? allParams.find((pp: NodeParameter) => pp.id === key)?.default) === val
+        ([key, val]) => {
+          const current = currentValues[key] ?? allParams.find((pp: NodeParameter) => pp.id === key)?.default
+          return Array.isArray(val) ? val.includes(current as string) : current === val
+        }
       )
     }
     return true
