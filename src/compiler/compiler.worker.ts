@@ -4,6 +4,7 @@
  */
 
 import { compileGraph } from './glsl-generator'
+import type { RenderPlan } from './glsl-generator'
 import { compileNodePreview } from './subgraph-compiler'
 import { initializeNodeLibrary } from '../nodes'
 import type { Node, Edge } from '@xyflow/react'
@@ -29,7 +30,7 @@ export interface PreviewRequest {
 
 export interface CompileResponse {
   id: string
-  result?: ReturnType<typeof compileGraph>
+  result?: RenderPlan
   error?: string
   durationMs: number
 }
