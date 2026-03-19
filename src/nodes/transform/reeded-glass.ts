@@ -208,7 +208,7 @@ export const reededGlassNode: NodeDefinition = {
       ctx.uniforms.add('u_resolution')
       ctx.uniforms.add('u_ref_size')
       const sampleUV = `rg_sampleUV_${id}`
-      lines.push(`vec2 ${sampleUV} = clamp((${distorted} - 0.5) * u_ref_size / u_resolution + 0.5, vec2(0.0), vec2(1.0));`)
+      lines.push(`vec2 ${sampleUV} = (${distorted} - 0.5) * u_ref_size / u_resolution + 0.5;`)
       lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${sampleUV}).rgb;`)
     } else {
       lines.push(`vec3 ${outputs.color} = ${inputs.source};`)
