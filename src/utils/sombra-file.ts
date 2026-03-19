@@ -72,7 +72,7 @@ function migrateV1ToV2(nodes: Node<NodeData>[]): Node<NodeData>[] {
         delete params.scale
       }
       if ('angle' in params) {
-        params.srt_rotate = Number(params.angle) * Math.PI / 180
+        params.srt_rotate = Number(params.angle)  // already degrees, new SRT rotate is also degrees
         delete params.angle
       }
     }
@@ -90,7 +90,7 @@ function migrateV1ToV2(nodes: Node<NodeData>[]): Node<NodeData>[] {
         delete params.scaleY
       }
       if ('rotate' in params) {
-        params.srt_rotate = params.rotate
+        params.srt_rotate = Math.round(Number(params.rotate) * 180 / Math.PI)  // radians → degrees
         delete params.rotate
       }
       if ('offsetX' in params) {
@@ -104,11 +104,12 @@ function migrateV1ToV2(nodes: Node<NodeData>[]): Node<NodeData>[] {
       }
     }
 
-    // Reeded Glass: slices → ribWidth (1/slices)
+    // Reeded Glass: slices → ribWidth in pixels (assume ~1000px canvas)
     if (type === 'reeded_glass') {
       if ('slices' in params) {
         const old = Number(params.slices) || 12
-        params.ribWidth = old > 0 ? 1 / old : 0.08
+        // Approximate: old slices were count in 0-1 UV range → pixel width ≈ 1000 / slices
+        params.ribWidth = old > 0 ? Math.round(1000 / old) : 20
         delete params.slices
       }
     }

@@ -75,8 +75,8 @@ export const reededGlassNode: NodeDefinition = {
   params: [
     ...getSpatialParams({ transforms: ['scale', 'rotate', 'translate'] }),
     {
-      id: 'ribWidth', label: 'Rib Width', type: 'float', default: 0.08,
-      min: 0.01, max: 0.5, step: 0.005,
+      id: 'ribWidth', label: 'Rib Width', type: 'float', default: 20,
+      min: 2, max: 200, step: 1,
       connectable: true, updateMode: 'uniform',
     },
     {
@@ -184,7 +184,11 @@ export const reededGlassNode: NodeDefinition = {
 
     // Apply cylindrical lens remap
     const lensed = `rg_lensed_${id}`
-    lines.push(`float ${lensed} = reedLens(${warpedMain}, ${inputs.ribWidth}, ${inputs.strength}, ${inputs.edge});`)
+    // Convert rib width from pixels to UV space
+    ctx.uniforms.add('u_resolution')
+    const ribUV = `rg_ribUV_${id}`
+    lines.push(`float ${ribUV} = ${inputs.ribWidth} / u_resolution.${isVert ? 'x' : 'y'};`)
+    lines.push(`float ${lensed} = reedLens(${warpedMain}, ${ribUV}, ${inputs.strength}, ${inputs.edge});`)
 
     // Reconstruct distorted vec2
     const distorted = `rg_distorted_${id}`
@@ -204,7 +208,7 @@ export const reededGlassNode: NodeDefinition = {
       ctx.uniforms.add('u_resolution')
       ctx.uniforms.add('u_ref_size')
       const sampleUV = `rg_sampleUV_${id}`
-      lines.push(`vec2 ${sampleUV} = (${distorted} - 0.5) * u_ref_size / u_resolution + 0.5;`)
+      lines.push(`vec2 ${sampleUV} = clamp((${distorted} - 0.5) * u_ref_size / u_resolution + 0.5, vec2(0.0), vec2(1.0));`)
       lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${sampleUV}).rgb;`)
     } else {
       lines.push(`vec3 ${outputs.color} = ${inputs.source};`)
