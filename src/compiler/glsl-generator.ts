@@ -354,6 +354,9 @@ export function generateNodeGlsl(
   const boundariesForNode = textureBoundaries?.filter(b => b.consumerId === nodeId) || []
   const texturePortIds = new Set(boundariesForNode.map(b => b.consumingPortId))
 
+  // Texture mode: node has at least one wired textureInput
+  const isTextureMode = boundariesForNode.length > 0
+
   // Resolve inputs
   const resolvedInputs = definition.dynamicInputs
     ? definition.dynamicInputs(node.data.params || {})
@@ -389,12 +392,14 @@ export function generateNodeGlsl(
           }
         }
       } else {
-        // Source node deleted — fall back to default
         resolveInputDefault(inputPort, sanitizedNodeId, preambleLines, inputs, uniforms)
       }
     } else {
-      // Not connected — use default or report error
-      if (!resolveInputDefault(inputPort, sanitizedNodeId, preambleLines, inputs, uniforms)) {
+      // In texture mode, use v_uv (screen space 0-1) instead of auto_uv
+      // so texture sampling stays within FBO bounds — no wrapping, no seam
+      if (isTextureMode && inputPort.default === 'auto_uv' && inputPort.type === 'vec2') {
+        inputs[inputPort.id] = 'v_uv'
+      } else if (!resolveInputDefault(inputPort, sanitizedNodeId, preambleLines, inputs, uniforms)) {
         errors.push({
           message: `Input "${inputPort.label}" on ${definition.label} has no connection and no default`,
           nodeId: node.id,
