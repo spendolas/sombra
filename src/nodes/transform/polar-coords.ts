@@ -55,11 +55,7 @@ export const polarCoordsNode: NodeDefinition = {
       ]
       const samplerName = ctx.textureSamplers?.source
       if (samplerName) {
-        ctx.uniforms.add('u_resolution')
-        ctx.uniforms.add('u_ref_size')
-        const sampleUV = `pc_isuv_${id}`
-        lines.push(`vec2 ${sampleUV} = (${outputs.polar} - 0.5) * u_ref_size / u_resolution + 0.5;`)
-        lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${sampleUV}).rgb;`)
+        lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${outputs.polar}).rgb;`)
       } else {
         lines.push(`vec3 ${outputs.color} = ${inputs.source};`)
       }
@@ -75,11 +71,7 @@ export const polarCoordsNode: NodeDefinition = {
     ]
     const samplerName = ctx.textureSamplers?.source
     if (samplerName) {
-      ctx.uniforms.add('u_resolution')
-      ctx.uniforms.add('u_ref_size')
-      const sampleUV = `pc_fsuv_${id}`
-      lines.push(`vec2 ${sampleUV} = (${outputs.polar} - 0.5) * u_ref_size / u_resolution + 0.5;`)
-      lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${sampleUV}).rgb;`)
+      lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${outputs.polar}).rgb;`)
     } else {
       lines.push(`vec3 ${outputs.color} = ${inputs.source};`)
     }

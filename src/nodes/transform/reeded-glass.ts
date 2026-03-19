@@ -204,12 +204,8 @@ export const reededGlassNode: NodeDefinition = {
     // Color output — texture mode (source wired) vs fallback
     const samplerName = ctx.textureSamplers?.source
     if (samplerName) {
-      // Convert from frozen-ref UV back to v_uv (0-1) for FBO texture sampling
-      ctx.uniforms.add('u_resolution')
-      ctx.uniforms.add('u_ref_size')
-      const sampleUV = `rg_sampleUV_${id}`
-      lines.push(`vec2 ${sampleUV} = (${distorted} - 0.5) * u_ref_size / u_resolution + 0.5;`)
-      lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${sampleUV}).rgb;`)
+      // In texture mode, coords are in v_uv space (0-1) — sample directly
+      lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${distorted}).rgb;`)
     } else {
       lines.push(`vec3 ${outputs.color} = ${inputs.source};`)
     }
