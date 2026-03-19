@@ -3,6 +3,7 @@ import { ReactFlowProvider } from '@xyflow/react'
 import type { Connection } from '@xyflow/react'
 import { WebGLRenderer } from './webgl/renderer'
 import type { QualityTier } from './webgl/renderer'
+import type { RenderPlan, RenderPass } from './compiler/glsl-generator'
 import { PreviewRenderer } from './webgl/preview-renderer'
 import { PreviewScheduler } from './webgl/preview-scheduler'
 import { useLiveCompiler } from './compiler'
@@ -235,10 +236,29 @@ function App() {
       userUniforms?: Array<{ name: string; value: number | number[] }>
       isTimeLiveAtOutput?: boolean
       qualityTier?: string
-      passes?: Array<{ index: number; fragmentShader: string }>
+      passes?: RenderPass[]
     }) => {
       if (result.success && rendererRef.current) {
-        const updateResult = rendererRef.current.updateShader(result.fragmentShader)
+        // Construct a RenderPlan from callback data
+        const plan: RenderPlan = {
+          success: true,
+          passes: result.passes || [{
+            index: 0,
+            fragmentShader: result.fragmentShader,
+            vertexShader: '',
+            userUniforms: (result.userUniforms ?? []) as RenderPlan['userUniforms'],
+            inputTextures: {},
+            isTimeLive: result.isTimeLiveAtOutput ?? false,
+          }],
+          errors: [],
+          isTimeLiveAtOutput: result.isTimeLiveAtOutput ?? false,
+          qualityTier: result.qualityTier ?? 'adaptive',
+          vertexShader: '',
+          fragmentShader: result.fragmentShader,
+          userUniforms: (result.userUniforms ?? []) as RenderPlan['userUniforms'],
+        }
+
+        const updateResult = rendererRef.current.updateRenderPlan(plan)
         if (!updateResult.success) {
           console.error('WebGL shader update failed:', updateResult.error)
         } else {
@@ -256,9 +276,6 @@ function App() {
           }
           rendererRef.current.setQualityTier((result.qualityTier ?? 'adaptive') as QualityTier)
           rendererRef.current.notifyChange()
-          // Static shaders need an explicit render — setAnimated(false) only
-          // calls requestRender() on the animated→static transition, not when
-          // the shader was already static.
           if (!isAnimated) {
             rendererRef.current.requestRender()
           }
