@@ -470,22 +470,22 @@ export function generateNodeGlsl(
 
     // Scale (new convention: coords /= scale → scale=2 means twice as large)
     if (hasScale) {
-      preambleLines.push(`${srtVar} /= vec2(${inputs._srt_scale});`)
+      preambleLines.push(`${srtVar} /= vec2(${inputs.srt_scale});`)
     } else if (hasScaleXY) {
-      preambleLines.push(`${srtVar} /= vec2(${inputs._srt_scaleX}, ${inputs._srt_scaleY});`)
+      preambleLines.push(`${srtVar} /= vec2(${inputs.srt_scaleX}, ${inputs.srt_scaleY});`)
     }
 
     // Rotate
     if (hasRotate) {
       const cVar = `srt_c_${sanitizedNodeId}`
       const sVar = `srt_s_${sanitizedNodeId}`
-      preambleLines.push(`float ${cVar} = cos(${inputs._srt_rotate}); float ${sVar} = sin(${inputs._srt_rotate});`)
+      preambleLines.push(`float ${cVar} = cos(${inputs.srt_rotate}); float ${sVar} = sin(${inputs.srt_rotate});`)
       preambleLines.push(`${srtVar} = vec2(${srtVar}.x * ${cVar} - ${srtVar}.y * ${sVar}, ${srtVar}.x * ${sVar} + ${srtVar}.y * ${cVar});`)
     }
 
     // Translate
     if (hasTranslate) {
-      preambleLines.push(`${srtVar} += vec2(${inputs._srt_translateX}, ${inputs._srt_translateY});`)
+      preambleLines.push(`${srtVar} += vec2(${inputs.srt_translateX}, ${inputs.srt_translateY});`)
     }
 
     preambleLines.push(`${srtVar} += 0.5;`)
