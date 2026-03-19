@@ -729,7 +729,7 @@ function compileMultiPass(
     success: true,
     passes,
     errors: [],
-    isTimeLiveAtOutput: lastPass.isTimeLive,
+    isTimeLiveAtOutput: passes.some(p => p.isTimeLive),
     qualityTier,
     vertexShader: VERTEX_SHADER,
     fragmentShader: lastPass.fragmentShader,

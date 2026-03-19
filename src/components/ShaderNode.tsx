@@ -276,7 +276,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
               const isConnected = connectedInputs.has(param.id)
               const displayValue = (currentValues[param.id] as number) ?? (param.default as number)
               return (
-                <div key={param.id} className={ds.connectableParamRow.root}>
+                <div key={param.id} className={cn(ds.connectableParamRow.root, "nodrag nowheel")}>
                   <BaseHandle
                     type="target"
                     position={Position.Left}

@@ -46,8 +46,7 @@ const DIRECTION_OPTIONS = [
  * Returns the displaced main-axis coordinate.
  */
 function registerLensFn(ctx: GLSLContext): void {
-  addFunction(ctx, 'reedLens', `float reedLens(float coord, float slices, float strength, float edge) {
-  float ribW = 1.0 / slices;
+  addFunction(ctx, 'reedLens', `float reedLens(float coord, float ribW, float strength, float edge) {
   float local = mod(coord, ribW) / ribW;
   float compressed = 0.5 + (local - 0.5) * (1.0 - edge);
   float curved = 0.5 - cos(compressed * 3.14159265) * 0.5;
@@ -76,8 +75,8 @@ export const reededGlassNode: NodeDefinition = {
   params: [
     ...getSpatialParams({ transforms: ['scale', 'rotate', 'translate'] }),
     {
-      id: 'slices', label: 'Slices', type: 'float', default: 12,
-      min: 2, max: 64, step: 1,
+      id: 'ribWidth', label: 'Rib Width', type: 'float', default: 0.08,
+      min: 0.01, max: 0.5, step: 0.005,
       connectable: true, updateMode: 'uniform',
     },
     {
@@ -185,7 +184,7 @@ export const reededGlassNode: NodeDefinition = {
 
     // Apply cylindrical lens remap
     const lensed = `rg_lensed_${id}`
-    lines.push(`float ${lensed} = reedLens(${warpedMain}, ${inputs.slices}, ${inputs.strength}, ${inputs.edge});`)
+    lines.push(`float ${lensed} = reedLens(${warpedMain}, ${inputs.ribWidth}, ${inputs.strength}, ${inputs.edge});`)
 
     // Reconstruct distorted vec2
     const distorted = `rg_distorted_${id}`
