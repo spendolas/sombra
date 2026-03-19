@@ -8,7 +8,7 @@
  * - Filled track with no visible thumb
  * - Dual-thumb range mode for [min, max] pairs
  * - Track shows param range; scrub/text entry allow values beyond range
- * - nodrag nowheel to prevent React Flow canvas interference
+ * - Window-level pointer listeners for reliable drag across React re-renders
  */
 
 import { useRef, useState, useCallback, useEffect } from 'react'
@@ -59,16 +59,25 @@ function SombraSlider({
   const isRange = Array.isArray(value)
   const trackRef = useRef<HTMLDivElement>(null)
   const [dragging, setDragging] = useState<null | 'single' | 'lo' | 'hi'>(null)
+  const [scrubbing, setScrubbing] = useState(false)
   const [editingField, setEditingField] = useState<null | 'single' | 'lo' | 'hi'>(null)
   const [editText, setEditText] = useState('')
 
-  // Track visual uses min/max, but values can exceed the range
+  // Refs for latest values (accessed in window listeners without stale closures)
+  const valueRef = useRef(value)
+  valueRef.current = value
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
+  const isRangeRef = useRef(isRange)
+  isRangeRef.current = isRange
+  const draggingRef = useRef(dragging)
+  draggingRef.current = dragging
+
   const valueToX = useCallback(
     (v: number) => clamp(frac(v, min, max), 0, 1),
     [min, max]
   )
 
-  // Track click → value (clamped to track range)
   const xToValue = useCallback(
     (x: number, fineMode: boolean) => {
       const raw = min + x * (max - min)
@@ -78,7 +87,7 @@ function SombraSlider({
     [min, max, step]
   )
 
-  // -- Pointer-based drag on the track ---
+  // -- Track drag: pointerDown on element, move/up on window ---
   const handleTrackPointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (disabled || editingField) return
@@ -88,7 +97,7 @@ function SombraSlider({
       if (!rect) return
 
       const x = clamp((e.clientX - rect.left) / rect.width, 0, 1)
-      const clickedVal = xToValue(x, false) // never use shift for initial click
+      const clickedVal = xToValue(x, false)
 
       let which: 'single' | 'lo' | 'hi' = 'single'
       if (isRange) {
@@ -98,7 +107,6 @@ function SombraSlider({
         which = dLo <= dHi ? 'lo' : 'hi'
       }
 
-      // Apply immediate value
       if (isRange) {
         const [lo, hi] = value as [number, number]
         if (which === 'lo') onChange([Math.min(clickedVal, hi), hi])
@@ -108,37 +116,44 @@ function SombraSlider({
       }
 
       setDragging(which)
-      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     },
     [disabled, editingField, isRange, value, onChange, xToValue]
   )
 
-  const handleTrackPointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      if (!dragging) return
+  // Window-level listeners for track drag
+  useEffect(() => {
+    if (!dragging) return
+
+    const onMove = (e: PointerEvent) => {
       const rect = trackRef.current?.getBoundingClientRect()
       if (!rect) return
       const x = clamp((e.clientX - rect.left) / rect.width, 0, 1)
       const newVal = xToValue(x, e.shiftKey)
+      const val = valueRef.current
+      const ir = isRangeRef.current
+      const d = draggingRef.current
 
-      if (isRange) {
-        const [lo, hi] = value as [number, number]
-        if (dragging === 'lo') onChange([Math.min(newVal, hi), hi])
-        else onChange([lo, Math.max(newVal, lo)])
+      if (ir) {
+        const [lo, hi] = val as [number, number]
+        if (d === 'lo') onChangeRef.current([Math.min(newVal, hi), hi])
+        else onChangeRef.current([lo, Math.max(newVal, lo)])
       } else {
-        onChange(newVal)
+        onChangeRef.current(newVal)
       }
-    },
-    [dragging, isRange, value, onChange, xToValue]
-  )
+    }
 
-  const handleTrackPointerUp = useCallback(() => {
-    setDragging(null)
-  }, [])
+    const onUp = () => setDragging(null)
 
-  // -- Label scrub (horizontal drag on label row) ---
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+  }, [dragging, xToValue])
+
+  // -- Label scrub: pointerDown on element, move/up on window ---
   const scrubState = useRef({
-    active: false,
     startX: 0,
     startValue: 0,
     which: 'single' as 'single' | 'lo' | 'hi',
@@ -156,48 +171,51 @@ function SombraSlider({
         : (value as number)
 
       scrubState.current = {
-        active: true,
         startX: e.clientX,
         startValue: currentVal,
         which,
         moved: false,
       }
-      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+      setScrubbing(true)
     },
     [disabled, editingField, isRange, value]
   )
 
-  const handleLabelPointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      const s = scrubState.current
-      if (!s.active) return
+  // Window-level listeners for label scrub
+  useEffect(() => {
+    if (!scrubbing) return
 
+    const onMove = (e: PointerEvent) => {
+      const s = scrubState.current
       const dx = e.clientX - s.startX
-      // Use a pixel threshold to distinguish click from drag — shift doesn't affect this
       if (!s.moved && Math.abs(dx) <= 2) return
       s.moved = true
 
       const range = max - min
-      // Shift for fine control — only affects sensitivity, checked live during drag
       const sensitivity = e.shiftKey ? 0.0005 : 0.003
       const raw = s.startValue + dx * range * sensitivity
-      // Scrub allows going beyond min/max — only snap, no clamp
       const newVal = snap(raw, e.shiftKey ? step * 0.1 : step, min)
 
-      if (isRange) {
-        const [lo, hi] = value as [number, number]
-        if (s.which === 'lo') onChange([Math.min(newVal, hi), hi])
-        else onChange([lo, Math.max(newVal, lo)])
+      const val = valueRef.current
+      const ir = isRangeRef.current
+      if (ir) {
+        const [lo, hi] = val as [number, number]
+        if (s.which === 'lo') onChangeRef.current([Math.min(newVal, hi), hi])
+        else onChangeRef.current([lo, Math.max(newVal, lo)])
       } else {
-        onChange(newVal)
+        onChangeRef.current(newVal)
       }
-    },
-    [isRange, value, onChange, min, max, step]
-  )
+    }
 
-  const handleLabelPointerUp = useCallback(() => {
-    scrubState.current.active = false
-  }, [])
+    const onUp = () => setScrubbing(false)
+
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+  }, [scrubbing, min, max, step])
 
   // -- Double-click to reset ---
   const handleDoubleClick = useCallback(
@@ -219,7 +237,7 @@ function SombraSlider({
   const handleValueClick = useCallback(
     (e: React.MouseEvent, which: 'single' | 'lo' | 'hi') => {
       if (disabled) return
-      if (scrubState.current.moved) return // Don't open editor after scrub
+      if (scrubState.current.moved) return
       e.stopPropagation()
       const v = isRange
         ? (which === 'lo' ? (value as [number, number])[0] : (value as [number, number])[1])
@@ -234,7 +252,6 @@ function SombraSlider({
     (which: 'single' | 'lo' | 'hi') => {
       const parsed = parseFloat(editText)
       if (!isNaN(parsed)) {
-        // Text entry allows any value — no clamping
         const snapped = snap(parsed, step, min)
         if (isRange) {
           const [lo, hi] = value as [number, number]
@@ -251,11 +268,11 @@ function SombraSlider({
 
   // Sync dragging cursor style on body
   useEffect(() => {
-    if (dragging || scrubState.current.active) {
+    if (dragging || scrubbing) {
       document.body.style.cursor = 'ew-resize'
       return () => { document.body.style.cursor = '' }
     }
-  }, [dragging])
+  }, [dragging, scrubbing])
 
   // -- Render ---
   const labels = Array.isArray(label) ? label : [label]
@@ -280,8 +297,6 @@ function SombraSlider({
             <div
               className="flex items-center gap-xs"
               onPointerDown={(e) => handleLabelPointerDown(e, 'lo')}
-              onPointerMove={handleLabelPointerMove}
-              onPointerUp={handleLabelPointerUp}
             >
               <span className={ds.floatSlider.label}>{labels[0]}</span>
               {editingField === 'lo' ? (
@@ -307,8 +322,6 @@ function SombraSlider({
             <div
               className="flex items-center gap-xs"
               onPointerDown={(e) => handleLabelPointerDown(e, 'hi')}
-              onPointerMove={handleLabelPointerMove}
-              onPointerUp={handleLabelPointerUp}
               onDoubleClick={(e) => { e.stopPropagation(); handleDoubleClick('hi') }}
             >
               {editingField === 'hi' ? (
@@ -336,8 +349,6 @@ function SombraSlider({
           <div
             className="flex justify-between items-center w-full"
             onPointerDown={(e) => handleLabelPointerDown(e, 'single')}
-            onPointerMove={handleLabelPointerMove}
-            onPointerUp={handleLabelPointerUp}
           >
             <span className={ds.floatSlider.label}>{labels[0]}</span>
             {editingField === 'single' ? (
@@ -367,12 +378,8 @@ function SombraSlider({
         ref={trackRef}
         className={cn(ds.sliderTrack.track, "cursor-ew-resize overflow-hidden")}
         onPointerDown={handleTrackPointerDown}
-        onPointerMove={handleTrackPointerMove}
-        onPointerUp={handleTrackPointerUp}
-        onLostPointerCapture={handleTrackPointerUp}
       >
         {isRange ? (
-          // Range fill between lo and hi (clamped to track visually)
           <div
             className={ds.sliderTrack.fill}
             style={{
@@ -381,7 +388,6 @@ function SombraSlider({
             }}
           />
         ) : (
-          // Single fill from left (clamped to track visually)
           <div
             className={cn(ds.sliderTrack.fill, "left-0")}
             style={{ width: `${valueToX(vals[0]) * 100}%` }}

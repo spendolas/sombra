@@ -111,8 +111,8 @@ export function getSpatialParams(spatial: SpatialConfig): NodeParameter[] {
         break
       case 'rotate':
         params.push({
-          id: 'srt_rotate', label: 'Rotate', type: 'float', default: 0.0,
-          min: -6.2832, max: 6.2832, step: 0.01,
+          id: 'srt_rotate', label: 'Rotate', type: 'float', default: 0,
+          min: -180, max: 180, step: 1,
           connectable: true, updateMode: 'uniform',
         })
         break

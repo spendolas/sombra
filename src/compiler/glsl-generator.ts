@@ -479,7 +479,9 @@ export function generateNodeGlsl(
     if (hasRotate) {
       const cVar = `srt_c_${sanitizedNodeId}`
       const sVar = `srt_s_${sanitizedNodeId}`
-      preambleLines.push(`float ${cVar} = cos(${inputs.srt_rotate}); float ${sVar} = sin(${inputs.srt_rotate});`)
+      const radVar = `srt_rad_${sanitizedNodeId}`
+      preambleLines.push(`float ${radVar} = ${inputs.srt_rotate} * 0.01745329;`)
+      preambleLines.push(`float ${cVar} = cos(${radVar}); float ${sVar} = sin(${radVar});`)
       preambleLines.push(`${srtVar} = vec2(${srtVar}.x * ${cVar} - ${srtVar}.y * ${sVar}, ${srtVar}.x * ${sVar} + ${srtVar}.y * ${cVar});`)
     }
 
