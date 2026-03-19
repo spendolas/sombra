@@ -47,7 +47,7 @@ function migrateV1ToV2(nodes: Node<NodeData>[]): Node<NodeData>[] {
     }
 
     // Domain Warp: frequency → _srt_scale (inverted)
-    if (type === 'domain_warp') {
+    if (type === 'warp_uv' || type === 'domain_warp') {
       if ('frequency' in params) {
         const old = Number(params.frequency) || 4.0
         params._srt_scale = old !== 0 ? 1 / old : 1.0
@@ -78,7 +78,7 @@ function migrateV1ToV2(nodes: Node<NodeData>[]): Node<NodeData>[] {
     }
 
     // UV Coordinates: scaleX/Y → _srt_scaleX/Y (inverted), rotate/offset → _srt_*
-    if (type === 'uv_coords') {
+    if (type === 'uv_transform' || type === 'uv_coords') {
       if ('scaleX' in params) {
         const old = Number(params.scaleX) || 1.0
         params._srt_scaleX = old !== 0 ? 1 / old : 1.0
