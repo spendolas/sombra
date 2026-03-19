@@ -97,7 +97,7 @@ void main() {
  * [P11] Only textureInput ports trigger boundaries — consecutive non-spatial
  * nodes naturally merge into one pass.
  */
-function partitionPasses(
+export function partitionPasses(
   executionOrder: string[],
   nodeMap: Map<string, Node<NodeData>>,
   edgesByTarget: Map<string, Edge<EdgeData>[]>,
@@ -177,7 +177,7 @@ function partitionPasses(
 // Texture boundary info (used by multi-pass codegen)
 // ---------------------------------------------------------------------------
 
-interface TextureBoundaryEdge {
+export interface TextureBoundaryEdge {
   consumerId: string
   consumingPortId: string
   sourcePassIndex: number
@@ -187,7 +187,7 @@ interface TextureBoundaryEdge {
 /**
  * Find all texture boundary edges in a partitioned graph.
  */
-function findTextureBoundaries(
+export function findTextureBoundaries(
   passes: string[][],
   nodeMap: Map<string, Node<NodeData>>,
   edgesByTarget: Map<string, Edge<EdgeData>[]>,
@@ -322,7 +322,7 @@ interface NodeCodegenResult {
  * Generate GLSL for a single node, resolving inputs from edges or defaults.
  * Shared between single-pass and multi-pass compilation.
  */
-function generateNodeGlsl(
+export function generateNodeGlsl(
   nodeId: string,
   nodeMap: Map<string, Node<NodeData>>,
   edgesByTarget: Map<string, Edge<EdgeData>[]>,
@@ -738,7 +738,7 @@ function compileMultiPass(
 }
 
 /** Convert an output variable to a fragColor assignment based on port type. */
-function outputTypeToFragColor(varName: string, type: string): string {
+export function outputTypeToFragColor(varName: string, type: string): string {
   switch (type) {
     case 'float':
       return `  fragColor = vec4(vec3(${varName}), 1.0);`
