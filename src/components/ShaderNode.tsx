@@ -19,6 +19,23 @@ import { ds } from '@/generated/ds'
 import { getPortColor } from '../utils/port-colors'
 
 /**
+ * Isolated preview thumbnail — subscribes to preview store independently
+ * so that data URL updates don't trigger ShaderNode re-renders.
+ */
+const NodePreview = memo(({ nodeId }: { nodeId: string }) => {
+  const previewUrl = usePreviewStore((s) => s.previews[nodeId])
+  if (!previewUrl) return null
+  return (
+    <img
+      src={previewUrl}
+      className="w-20 h-20 rounded-sm mx-auto mt-2 nodrag nowheel"
+      alt=""
+    />
+  )
+})
+NodePreview.displayName = 'NodePreview'
+
+/**
  * Check if a param is visible given current param values
  */
 function isParamVisible(param: NodeParameter, currentValues: Record<string, unknown>, allParams: NodeParameter[]): boolean {
@@ -50,7 +67,6 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   const definition = nodeRegistry.get(nodeData.type)
   const updateNodeData = useGraphStore((state) => state.updateNodeData)
   const onEdgesChange = useGraphStore((state) => state.onEdgesChange)
-  const previewUrl = usePreviewStore((s) => s.previews[id])
 
   const currentValues = nodeData.params || ({} as Record<string, unknown>)
 
@@ -305,14 +321,8 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
           </div>
         )}
 
-        {/* Node preview thumbnail */}
-        {previewUrl && nodeData.type !== 'fragment_output' && (
-          <img
-            src={previewUrl}
-            className="w-20 h-20 rounded-sm mx-auto mt-2 nodrag nowheel"
-            alt=""
-          />
-        )}
+        {/* Node preview thumbnail (isolated component to avoid re-renders) */}
+        {nodeData.type !== 'fragment_output' && <NodePreview nodeId={id} />}
       </BaseNodeContent>
     </BaseNode>
   )

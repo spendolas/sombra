@@ -12,6 +12,7 @@ import { vec2ConstantNode } from './input/vec2-constant'
 import { timeNode } from './input/time'
 import { resolutionNode } from './input/resolution'
 import { randomNode } from './input/random'
+import { imageNode } from './input/image'
 
 // Math nodes
 import { arithmeticNode } from './math/arithmetic'
@@ -76,6 +77,7 @@ export const ALL_NODES = [
   timeNode,
   resolutionNode,
   randomNode,
+  imageNode,
 
   // Math
   arithmeticNode,
@@ -152,6 +154,10 @@ export async function bindNodeComponents(): Promise<void> {
 
   const random = nodeRegistry.get('random')
   if (random) random.component = RandomDisplay
+
+  const { ImageUploader } = await import('@/components/ImageUploader')
+  const image = nodeRegistry.get('image')
+  if (image) image.component = ImageUploader
 }
 
 // Re-export for convenience

@@ -36,6 +36,8 @@ export class PreviewRenderer {
   private offscreen2d: OffscreenCanvas
   private ctx2d: OffscreenCanvasRenderingContext2D
   private startTime = Date.now()
+  /** Main canvas resolution — used for u_resolution so pixel-based params scale correctly */
+  private mainResolution: [number, number] = [PREVIEW_SIZE, PREVIEW_SIZE]
 
   constructor() {
     // Offscreen WebGL canvas (never added to DOM)
@@ -81,17 +83,31 @@ export class PreviewRenderer {
   }
 
   /**
+   * Update the main canvas resolution so pixel-based uniforms
+   * (e.g. ribWidth) compute the same UV fractions as the full render.
+   */
+  setMainResolution(width: number, height: number) {
+    this.mainResolution = [width, height]
+  }
+
+  /**
    * Render a fragment shader and return a data URL, or null on compile error.
    */
   renderPreview(fragmentShader: string, uniforms: UniformUpload[]): string | null {
     const gl = this.gl
 
-    // Get or compile program
+    // Get or compile program (LRU cache)
     let program = this.programCache.get(fragmentShader) ?? null
-    if (!program) {
+    if (program) {
+      // Move to end of LRU order on hit
+      const idx = this.cacheOrder.indexOf(fragmentShader)
+      if (idx !== -1) {
+        this.cacheOrder.splice(idx, 1)
+        this.cacheOrder.push(fragmentShader)
+      }
+    } else {
       program = this.buildProgram(fragmentShader)
       if (!program) return null
-      // LRU cache management
       if (this.cacheOrder.length >= this.MAX_CACHE) {
         const evict = this.cacheOrder.shift()!
         const old = this.programCache.get(evict)
@@ -109,10 +125,10 @@ export class PreviewRenderer {
     if (uTime) gl.uniform1f(uTime, (Date.now() - this.startTime) / 1000)
 
     const uRes = gl.getUniformLocation(program, 'u_resolution')
-    if (uRes) gl.uniform2f(uRes, PREVIEW_SIZE, PREVIEW_SIZE)
+    if (uRes) gl.uniform2f(uRes, this.mainResolution[0], this.mainResolution[1])
 
     const uRefSize = gl.getUniformLocation(program, 'u_ref_size')
-    if (uRefSize) gl.uniform1f(uRefSize, PREVIEW_SIZE)
+    if (uRefSize) gl.uniform1f(uRefSize, Math.min(this.mainResolution[0], this.mainResolution[1]))
 
     const uMouse = gl.getUniformLocation(program, 'u_mouse')
     if (uMouse) gl.uniform2f(uMouse, 0, 0)
@@ -226,9 +242,15 @@ export class PreviewRenderer {
       const pass = passes[i]
       const isLast = i === passes.length - 1
 
-      // Get or compile program
+      // Get or compile program (LRU cache)
       let program = this.programCache.get(pass.fragmentShader) ?? null
-      if (!program) {
+      if (program) {
+        const idx = this.cacheOrder.indexOf(pass.fragmentShader)
+        if (idx !== -1) {
+          this.cacheOrder.splice(idx, 1)
+          this.cacheOrder.push(pass.fragmentShader)
+        }
+      } else {
         program = this.buildProgram(pass.fragmentShader)
         if (!program) return null
         if (this.cacheOrder.length >= this.MAX_CACHE) {
@@ -255,9 +277,9 @@ export class PreviewRenderer {
       const uTime = gl.getUniformLocation(program, 'u_time')
       if (uTime) gl.uniform1f(uTime, time)
       const uRes = gl.getUniformLocation(program, 'u_resolution')
-      if (uRes) gl.uniform2f(uRes, PREVIEW_SIZE, PREVIEW_SIZE)
+      if (uRes) gl.uniform2f(uRes, this.mainResolution[0], this.mainResolution[1])
       const uRefSize = gl.getUniformLocation(program, 'u_ref_size')
-      if (uRefSize) gl.uniform1f(uRefSize, PREVIEW_SIZE)
+      if (uRefSize) gl.uniform1f(uRefSize, Math.min(this.mainResolution[0], this.mainResolution[1]))
       const uDpr = gl.getUniformLocation(program, 'u_dpr')
       if (uDpr) gl.uniform1f(uDpr, 1.0)
 
