@@ -204,8 +204,18 @@ export const reededGlassNode: NodeDefinition = {
     // Color output — texture mode (source wired) vs fallback
     const samplerName = ctx.textureSamplers?.source
     if (samplerName) {
-      // In texture mode, coords are in v_uv space (0-1) — sample directly
-      lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${distorted}).rgb;`)
+      // Displacement-based sampling: compute how much the lens shifted the
+      // coordinate, then apply that displacement to v_uv (screen space).
+      // The rib pattern follows SRT, but the texture stays fixed in place.
+      const disp = `rg_disp_${id}`
+      lines.push(`float ${disp} = ${lensed} - ${warpedMain};`)
+      const sampleUV = `rg_sampleUV_${id}`
+      if (isVert) {
+        lines.push(`vec2 ${sampleUV} = v_uv + vec2(${disp}, 0.0);`)
+      } else {
+        lines.push(`vec2 ${sampleUV} = v_uv + vec2(0.0, ${disp});`)
+      }
+      lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${sampleUV}).rgb;`)
     } else {
       lines.push(`vec3 ${outputs.color} = ${inputs.source};`)
     }
