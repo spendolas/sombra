@@ -81,6 +81,61 @@ export interface SpatialConfig {
 }
 
 /**
+ * Generate framework SRT param definitions from a SpatialConfig.
+ * Include these in the node's `params` array via spread: `...getSpatialParams(spatial)`.
+ */
+export function getSpatialParams(spatial: SpatialConfig): NodeParameter[] {
+  const params: NodeParameter[] = []
+  for (const transform of spatial.transforms) {
+    switch (transform) {
+      case 'scale':
+        params.push({
+          id: '_srt_scale', label: 'Scale', type: 'float', default: 1.0,
+          min: 0.01, max: 20.0, step: 0.01,
+          connectable: true, updateMode: 'uniform',
+        })
+        break
+      case 'scaleXY':
+        params.push(
+          {
+            id: '_srt_scaleX', label: 'Scale X', type: 'float', default: 1.0,
+            min: 0.01, max: 20.0, step: 0.01,
+            connectable: true, updateMode: 'uniform',
+          },
+          {
+            id: '_srt_scaleY', label: 'Scale Y', type: 'float', default: 1.0,
+            min: 0.01, max: 20.0, step: 0.01,
+            connectable: true, updateMode: 'uniform',
+          },
+        )
+        break
+      case 'rotate':
+        params.push({
+          id: '_srt_rotate', label: 'Rotate', type: 'float', default: 0.0,
+          min: -6.2832, max: 6.2832, step: 0.01,
+          connectable: true, updateMode: 'uniform',
+        })
+        break
+      case 'translate':
+        params.push(
+          {
+            id: '_srt_translateX', label: 'Offset X', type: 'float', default: 0.0,
+            min: -10.0, max: 10.0, step: 0.01,
+            connectable: true, updateMode: 'uniform',
+          },
+          {
+            id: '_srt_translateY', label: 'Offset Y', type: 'float', default: 0.0,
+            min: -10.0, max: 10.0, step: 0.01,
+            connectable: true, updateMode: 'uniform',
+          },
+        )
+        break
+    }
+  }
+  return params
+}
+
+/**
  * Register a shared GLSL function. Skips if key already registered.
  * Use this instead of pushing to functions[] directly.
  */

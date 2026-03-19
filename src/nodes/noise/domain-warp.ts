@@ -2,7 +2,8 @@
  * Domain Warp - Distorts coordinates using a selectable noise function.
  */
 
-import type { NodeDefinition } from '../types'
+import type { NodeDefinition, SpatialConfig } from '../types'
+import { getSpatialParams } from '../types'
 import { NOISE_TYPE_OPTIONS, resolveNoiseFn, registerNoiseType } from './noise-functions'
 
 export const domainWarpNode: NodeDefinition = {
@@ -10,6 +11,7 @@ export const domainWarpNode: NodeDefinition = {
   label: 'Warp UV',
   category: 'Transform',
   description: 'Distorts UV coordinates using noise for organic warping effects',
+  spatial: { transforms: ['scale', 'translate'] } satisfies SpatialConfig,
 
   inputs: [
     { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },
@@ -22,12 +24,12 @@ export const domainWarpNode: NodeDefinition = {
   ],
 
   params: [
+    ...getSpatialParams({ transforms: ['scale', 'translate'] }),
     {
       id: 'noiseType', label: 'Noise Type', type: 'enum', default: 'value',
       options: NOISE_TYPE_OPTIONS, updateMode: 'recompile',
     },
     { id: 'strength', label: 'Strength', type: 'float', default: 0.3, min: 0.0, max: 10.0, step: 0.01, connectable: true, updateMode: 'uniform' },
-    { id: 'frequency', label: 'Frequency', type: 'float', default: 4.0, min: 0.1, max: 20.0, step: 0.1, connectable: true, updateMode: 'uniform' },
     { id: 'seed', label: 'Seed', type: 'float', default: 12345, min: 0, max: 99999, step: 1, connectable: true, updateMode: 'uniform' },
     {
       id: 'warpDepth', label: 'Depth', type: 'enum', default: '2',
@@ -55,13 +57,13 @@ export const domainWarpNode: NodeDefinition = {
     const lines = [
       `vec2 ${seedOff} = fract(vec2(${inputs.seed}) * vec2(12.9898, 78.233)) * 1000.0;`,
       `vec2 ${sc} = ${inputs.coords} + ${seedOff};`,
-      `float ${prefix}_x = ${noiseFn}(vec3(${sc} * ${inputs.frequency}, ${inputs.phase})) * 2.0 - 1.0;`,
-      `float ${prefix}_y = ${noiseFn}(vec3(${sc} * ${inputs.frequency} + 100.0, ${inputs.phase})) * 2.0 - 1.0;`,
+      `float ${prefix}_x = ${noiseFn}(vec3(${sc}, ${inputs.phase})) * 2.0 - 1.0;`,
+      `float ${prefix}_y = ${noiseFn}(vec3(${sc} + 100.0, ${inputs.phase})) * 2.0 - 1.0;`,
     ]
 
     if (warpDepth === '3') {
       lines.push(
-        `float ${prefix}_z = ${noiseFn}(vec3(${sc} * ${inputs.frequency} + 73.156, ${inputs.phase} + 9.151)) * 2.0 - 1.0;`,
+        `float ${prefix}_z = ${noiseFn}(vec3(${sc} + 73.156, ${inputs.phase} + 9.151)) * 2.0 - 1.0;`,
       )
     }
 

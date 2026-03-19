@@ -3,7 +3,8 @@
  * Outputs: value (float, sampled).
  */
 
-import type { NodeDefinition } from '../types'
+import type { NodeDefinition, SpatialConfig } from '../types'
+import { getSpatialParams } from '../types'
 import { NOISE_TYPE_OPTIONS, resolveNoiseFn, registerNoiseType } from './noise-functions'
 
 export const noiseNode: NodeDefinition = {
@@ -11,6 +12,7 @@ export const noiseNode: NodeDefinition = {
   label: 'Noise',
   category: 'Noise',
   description: 'Configurable noise — simplex, value, worley (2D/3D), or box',
+  spatial: { transforms: ['scale', 'translate'] } satisfies SpatialConfig,
 
   inputs: [
     { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },
@@ -22,7 +24,7 @@ export const noiseNode: NodeDefinition = {
   ],
 
   params: [
-    { id: 'scale', label: 'Scale', type: 'float', default: 5.0, min: 0.1, max: 20.0, step: 0.1, connectable: true, updateMode: 'uniform' },
+    ...getSpatialParams({ transforms: ['scale', 'translate'] }),
     {
       id: 'noiseType', label: 'Type', type: 'enum', default: 'simplex',
       options: NOISE_TYPE_OPTIONS, updateMode: 'recompile',
@@ -39,7 +41,6 @@ export const noiseNode: NodeDefinition = {
     // Register GLSL functions for the selected noise type
     registerNoiseType(ctx, noiseType)
 
-    const s = inputs.scale
     const id = ctx.nodeId.replace(/-/g, '_')
     const seedOff = `n_soff_${id}`
     const sc = `n_sc_${id}`
@@ -48,9 +49,9 @@ export const noiseNode: NodeDefinition = {
 
     if (noiseType === 'box') {
       const bf = inputs.boxFreq
-      return `${seedLine}\n  ${coordsLine}\n  float ${outputs.value} = vnoise3d(floor(vec3(${sc} * ${s}, ${inputs.phase}) * ${bf}) / ${bf});`
+      return `${seedLine}\n  ${coordsLine}\n  float ${outputs.value} = vnoise3d(floor(vec3(${sc}, ${inputs.phase}) * ${bf}) / ${bf});`
     }
 
-    return `${seedLine}\n  ${coordsLine}\n  float ${outputs.value} = ${noiseFn}(vec3(${sc} * ${s}, ${inputs.phase}));`
+    return `${seedLine}\n  ${coordsLine}\n  float ${outputs.value} = ${noiseFn}(vec3(${sc}, ${inputs.phase}));`
   },
 }
