@@ -74,6 +74,9 @@ export class WebGLRenderer {
   private program: WebGLProgram | null = null
   private uniforms: Map<string, WebGLUniformLocation> = new Map()
 
+  // Uniform value tracking for [P3] selective dirty marking
+  private lastUniformValues: Map<string, number | number[]> = new Map()
+
   // Multi-pass state
   private isMultiPass = false
   private passStates: PassState[] = []
@@ -476,6 +479,7 @@ export class WebGLRenderer {
     this.passStates = []
     this.downstreamMap.clear()
     this.uniformPassMap.clear()
+    this.lastUniformValues.clear()
   }
 
   /** [P3] Build downstream adjacency from inputTextures. */
@@ -522,7 +526,12 @@ export class WebGLRenderer {
     }
 
     // Multi-pass: route each uniform to its pass program [P3]
+    let anyChanged = false
     for (const { name, value } of uniforms) {
+      // [P3] Skip if value unchanged — avoids marking unrelated passes dirty
+      if (!this.uniformValueChanged(name, value)) continue
+      this.lastUniformValues.set(name, value)
+
       const passIdx = this.uniformPassMap.get(name)
       if (passIdx === undefined) continue
 
@@ -535,9 +544,23 @@ export class WebGLRenderer {
 
       // [P3] Mark affected pass + downstream as dirty
       this.markPassDirty(passIdx)
+      anyChanged = true
     }
 
-    this.requestRender()
+    if (anyChanged) this.requestRender()
+  }
+
+  /** [P3] Check if a uniform value actually changed from last upload. */
+  private uniformValueChanged(name: string, value: number | number[]): boolean {
+    const prev = this.lastUniformValues.get(name)
+    if (prev === undefined) return true
+    if (typeof value === 'number') return prev !== value
+    if (typeof prev === 'number') return true
+    if (!Array.isArray(prev) || prev.length !== (value as number[]).length) return true
+    for (let i = 0; i < (value as number[]).length; i++) {
+      if (prev[i] !== (value as number[])[i]) return true
+    }
+    return false
   }
 
   private uploadUniform(loc: WebGLUniformLocation, value: number | number[]) {
