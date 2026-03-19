@@ -221,7 +221,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
           }
 
           return (
-            <div key={param.id} className={ds.connectableParamRow.root}>
+            <div key={param.id} className={cn(ds.connectableParamRow.root, "nodrag nowheel")}>
               <BaseHandle
                 type="target"
                 position={Position.Left}
