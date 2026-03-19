@@ -57,7 +57,11 @@ export const tileNode: NodeDefinition = {
       ]
       const samplerName = ctx.textureSamplers?.source
       if (samplerName) {
-        lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${outputs.uv}).rgb;`)
+        ctx.uniforms.add('u_resolution')
+        ctx.uniforms.add('u_ref_size')
+        const sampleUV = `tile_suv_${id}`
+        lines.push(`vec2 ${sampleUV} = (${outputs.uv} - 0.5) * u_ref_size / u_resolution + 0.5;`)
+        lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${sampleUV}).rgb;`)
       } else {
         lines.push(`vec3 ${outputs.color} = ${inputs.source};`)
       }
@@ -86,7 +90,11 @@ export const tileNode: NodeDefinition = {
 
     const samplerName = ctx.textureSamplers?.source
     if (samplerName) {
-      lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${outputs.uv}).rgb;`)
+      ctx.uniforms.add('u_resolution')
+      ctx.uniforms.add('u_ref_size')
+      const sampleUV = `tile_msuv_${id}`
+      lines.push(`vec2 ${sampleUV} = (${outputs.uv} - 0.5) * u_ref_size / u_resolution + 0.5;`)
+      lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${sampleUV}).rgb;`)
     } else {
       lines.push(`vec3 ${outputs.color} = ${inputs.source};`)
     }

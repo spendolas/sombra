@@ -1,0 +1,1 @@
+flex w-full items-center justify-between gap-md text-body

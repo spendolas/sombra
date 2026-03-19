@@ -79,7 +79,11 @@ export const domainWarpNode: NodeDefinition = {
     // Color output — texture mode (source wired) vs fallback
     const samplerName = ctx.textureSamplers?.source
     if (samplerName) {
-      lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${outputs.warped}).rgb;`)
+      ctx.uniforms.add('u_resolution')
+      ctx.uniforms.add('u_ref_size')
+      const sampleUV = `dw_suv_${id}`
+      lines.push(`vec2 ${sampleUV} = (${outputs.warped} - 0.5) * u_ref_size / u_resolution + 0.5;`)
+      lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${sampleUV}).rgb;`)
     } else {
       lines.push(`vec3 ${outputs.color} = ${inputs.source};`)
     }

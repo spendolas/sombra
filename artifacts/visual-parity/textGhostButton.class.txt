@@ -1,0 +1,1 @@
+flex flex-col items-center justify-center size-btn-md rounded-sm text-fg-dim cursor-pointer transition-colors hover:bg-surface-elevated hover:text-fg h-btn-md w-auto px-sm

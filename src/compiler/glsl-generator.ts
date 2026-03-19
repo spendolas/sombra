@@ -483,9 +483,10 @@ export function generateNodeGlsl(
       preambleLines.push(`${srtVar} = vec2(${srtVar}.x * ${cVar} - ${srtVar}.y * ${sVar}, ${srtVar}.x * ${sVar} + ${srtVar}.y * ${cVar});`)
     }
 
-    // Translate
+    // Translate (pixel units → UV conversion)
     if (hasTranslate) {
-      preambleLines.push(`${srtVar} -= vec2(${inputs.srt_translateX}, ${inputs.srt_translateY});`)
+      uniforms.add('u_resolution')
+      preambleLines.push(`${srtVar} -= vec2(${inputs.srt_translateX}, ${inputs.srt_translateY}) / u_resolution;`)
     }
 
     preambleLines.push(`${srtVar} += 0.5;`)

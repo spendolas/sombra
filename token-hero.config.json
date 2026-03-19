@@ -1,0 +1,46 @@
+{
+  "pipeline": {
+    "type": "json-source",
+    "sourceFile": "tokens/sombra.ds.json",
+    "generateCommand": "npm run tokens",
+    "auditCommand": "npx tsx scripts/token-hero-audit.ts",
+    "contactSheetUrl": "http://localhost:5173/ds-preview",
+    "generated": [
+      "src/generated/ds.ts",
+      "src/utils/port-colors.ts"
+    ]
+  },
+  "componentMap": {
+    "nodeCard": { "jsonKey": "106:405", "figmaNodeId": "106:405" },
+    "floatingPreview": { "jsonKey": "106:498", "figmaNodeId": "106:498" },
+    "fullWindowOverlay": { "jsonKey": "106:511", "figmaNodeId": "106:511" },
+    "nodePalette": { "jsonKey": "106:453", "figmaNodeId": "106:453" },
+    "propertiesPanel": { "jsonKey": "106:485", "figmaNodeId": "106:485" },
+    "zoomBar": { "jsonKey": "111:930", "figmaNodeId": "111:930" },
+    "previewToolbar": { "jsonKey": "106:352", "figmaNodeId": "282:627" },
+    "paletteItem": { "jsonKey": "106:95", "figmaNodeId": "106:95" },
+    "categoryHeader": { "jsonKey": "106:92", "figmaNodeId": "106:92" },
+    "button": { "jsonKey": "106:108", "figmaNodeId": "106:108" },
+    "handle": { "jsonKey": "106:84", "figmaNodeId": "106:84" },
+    "separator": { "jsonKey": "106:89", "figmaNodeId": "106:89" },
+    "sliderTrack": { "jsonKey": "325:22", "figmaNodeId": "325:23" },
+    "labeledHandle": { "jsonKey": "106:269", "figmaNodeId": "106:269" },
+    "floatSlider": { "jsonKey": "106:282", "figmaNodeId": "106:282" },
+    "enumSelect": { "jsonKey": "106:288", "figmaNodeId": "106:288" },
+    "colorInput": { "jsonKey": "106:292", "figmaNodeId": "106:292" },
+    "connectableParamRow": { "jsonKey": "106:311", "figmaNodeId": "106:311" },
+    "gradientEditor": { "jsonKey": "111:949", "figmaNodeId": "111:949" },
+    "randomDisplay": { "jsonKey": "111:954", "figmaNodeId": "111:954" },
+    "miniMap": { "jsonKey": "111:963", "figmaNodeId": "111:963" },
+    "graphToolbar": { "jsonKey": "268:1427", "figmaNodeId": "268:1427" },
+    "previewPanel": { "jsonKey": "306:213", "figmaNodeId": "306:213" },
+    "icon": { "jsonKey": "306:236", "figmaNodeId": "306:236" },
+    "textGhostButton": { "jsonKey": "326:36", "figmaNodeId": "326:36" },
+    "selectFrame": { "jsonKey": "354:3", "figmaNodeId": "354:3" },
+    "colorSwatch": { "jsonKey": "354:12", "figmaNodeId": "354:12" }
+  },
+  "timeouts": {
+    "componentQuery": 10000,
+    "scopedAudit": 30000
+  }
+}

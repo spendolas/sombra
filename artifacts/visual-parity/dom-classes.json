@@ -1,0 +1,6 @@
+{
+  "colorSwatch": "bg-surface-alt rounded-sm border border-edge w-6 h-6",
+  "miniMap": "react-flow__panel react-flow__minimap bg-surface-alt rounded-md border border-edge-subtle bottom right",
+  "selectFrame": "flex flex-row px-md py-md items-center justify-between gap-2 text-sm outline-none bg-surface-raised rounded-sm border border-edge text-fg w-full h-select-h",
+  "textGhostButton": "flex flex-col items-center justify-center size-btn-md rounded-sm text-fg-dim cursor-pointer transition-colors hover:bg-surface-elevated hover:text-fg h-btn-md px-sm tabular-nums w-[140px] min-w-10"
+}
