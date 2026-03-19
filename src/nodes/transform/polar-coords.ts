@@ -13,10 +13,12 @@ export const polarCoordsNode: NodeDefinition = {
   description: 'Convert between cartesian and polar coordinates',
 
   inputs: [
+    { id: 'source', label: 'Source', type: 'vec3', textureInput: true, default: [0, 0, 0] },
     { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },
   ],
 
   outputs: [
+    { id: 'color', label: 'Color', type: 'vec3' },
     { id: 'polar', label: 'Polar', type: 'vec2' },
   ],
 
@@ -47,18 +49,32 @@ export const polarCoordsNode: NodeDefinition = {
     const id = ctx.nodeId.replace(/-/g, '_')
 
     if (mode === 'inverse') {
-      return [
+      const lines = [
         `float pc_angle_${id} = (${inputs.coords}.y - 0.5) * 6.28318530718;`,
         `vec2 ${outputs.polar} = vec2(${inputs.centerX}, ${inputs.centerY}) + vec2(cos(pc_angle_${id}), sin(pc_angle_${id})) * ${inputs.coords}.x;`,
-      ].join('\n  ')
+      ]
+      const samplerName = ctx.textureSamplers?.source
+      if (samplerName) {
+        lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${outputs.polar}).rgb;`)
+      } else {
+        lines.push(`vec3 ${outputs.color} = ${inputs.source};`)
+      }
+      return lines.join('\n  ')
     }
 
     // forward: cartesian → polar
-    return [
+    const lines = [
       `vec2 pc_off_${id} = ${inputs.coords} - vec2(${inputs.centerX}, ${inputs.centerY});`,
       `float pc_r_${id} = length(pc_off_${id});`,
       `float pc_theta_${id} = atan(pc_off_${id}.y, pc_off_${id}.x) / 6.28318530718 + 0.5;`,
       `vec2 ${outputs.polar} = vec2(pc_r_${id}, pc_theta_${id});`,
-    ].join('\n  ')
+    ]
+    const samplerName = ctx.textureSamplers?.source
+    if (samplerName) {
+      lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${outputs.polar}).rgb;`)
+    } else {
+      lines.push(`vec3 ${outputs.color} = ${inputs.source};`)
+    }
+    return lines.join('\n  ')
   },
 }

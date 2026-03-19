@@ -14,11 +14,13 @@ export const domainWarpNode: NodeDefinition = {
   spatial: { transforms: ['scale', 'translate'] } satisfies SpatialConfig,
 
   inputs: [
+    { id: 'source', label: 'Source', type: 'vec3', textureInput: true, default: [0, 0, 0] },
     { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },
     { id: 'phase', label: 'Phase', type: 'float', default: 0.0 },
   ],
 
   outputs: [
+    { id: 'color', label: 'Color', type: 'vec3' },
     { id: 'warped', label: 'Warped', type: 'vec2' },
     { id: 'warpedPhase', label: 'Warped Phase', type: 'float' },
   ],
@@ -73,6 +75,14 @@ export const domainWarpNode: NodeDefinition = {
         ? `float ${outputs.warpedPhase} = ${inputs.phase} + ${prefix}_z * ${inputs.strength};`
         : `float ${outputs.warpedPhase} = ${inputs.phase};`,
     )
+
+    // Color output — texture mode (source wired) vs fallback
+    const samplerName = ctx.textureSamplers?.source
+    if (samplerName) {
+      lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${outputs.warped}).rgb;`)
+    } else {
+      lines.push(`vec3 ${outputs.color} = ${inputs.source};`)
+    }
 
     return lines.join('\n  ')
   },

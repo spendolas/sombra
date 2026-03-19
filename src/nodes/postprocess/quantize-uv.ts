@@ -13,10 +13,12 @@ export const quantizeUvNode: NodeDefinition = {
   description: 'Snap coordinates to pixel grid cell centers',
 
   inputs: [
+    { id: 'source', label: 'Source', type: 'vec3', textureInput: true, default: [0, 0, 0] },
     { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_fragcoord' },
   ],
 
   outputs: [
+    { id: 'color', label: 'Color', type: 'vec3' },
     { id: 'uv', label: 'UV', type: 'vec2' },
   ],
 
@@ -51,6 +53,14 @@ export const quantizeUvNode: NodeDefinition = {
     lines.push(`vec2 ${center} = (${cell} + 0.5) * ${inputs.pixelSize};`)
     // Convert back to frozen-ref UV space (matching auto_uv)
     lines.push(`vec2 ${outputs.uv} = (${center} / u_resolution - 0.5) * u_resolution / u_ref_size + 0.5;`)
+
+    // Color output — texture mode (source wired) vs fallback
+    const samplerName = ctx.textureSamplers?.source
+    if (samplerName) {
+      lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${outputs.uv}).rgb;`)
+    } else {
+      lines.push(`vec3 ${outputs.color} = ${inputs.source};`)
+    }
 
     return lines.join('\n  ')
   },
