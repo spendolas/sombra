@@ -29,11 +29,13 @@ export class PreviewScheduler {
   // Dependency map: nodeId → set of downstream nodeIds
   private downstreamMap = new Map<string, Set<string>>()
 
-  // Cached shaders: nodeId → { fragmentShader, uniforms, isTimeLive }
+  // Cached shaders: nodeId → { fragmentShader, uniforms, isTimeLive, passes }
   private shaderCache = new Map<string, {
     fragmentShader: string
     uniforms: UniformUpload[]
     isTimeLive: boolean
+    passes?: Array<{ fragmentShader: string; uniforms: UniformUpload[]; inputTextures: Record<string, number> }>
+    depthExceeded?: boolean
   }>()
 
   // Compile request counter for staleness
@@ -150,11 +152,20 @@ export class PreviewScheduler {
 
     if (!result || !result.success) return
 
-    // Cache the shader
+    // Cache the shader (including multi-pass data)
+    const passes = result.passes?.length
+      ? result.passes.map(p => ({
+          fragmentShader: p.fragmentShader,
+          uniforms: p.userUniforms.map(u => ({ name: u.name, value: u.value })),
+          inputTextures: p.inputTextures,
+        }))
+      : undefined
     const cached = {
       fragmentShader: result.fragmentShader,
       uniforms: result.userUniforms.map(u => ({ name: u.name, value: u.value })),
       isTimeLive: result.isTimeLive,
+      passes,
+      depthExceeded: result.depthExceeded,
     }
     this.shaderCache.set(targetNodeId, cached)
 
@@ -164,8 +175,19 @@ export class PreviewScheduler {
       this.timeLiveNodes.delete(targetNodeId)
     }
 
-    // Render immediately
-    const dataUrl = this.renderer.renderPreview(cached.fragmentShader, cached.uniforms)
+    // [P8] Depth exceeded → no render (placeholder handled by UI)
+    if (cached.depthExceeded) {
+      this.staleNodes.delete(targetNodeId)
+      return
+    }
+
+    // Render: multi-pass or single-pass
+    let dataUrl: string | null
+    if (cached.passes && cached.passes.length > 1) {
+      dataUrl = this.renderer.renderMultiPassPreview(cached.passes)
+    } else {
+      dataUrl = this.renderer.renderPreview(cached.fragmentShader, cached.uniforms)
+    }
     if (dataUrl) {
       usePreviewStore.getState().setPreview(targetNodeId, dataUrl)
     }
@@ -186,11 +208,15 @@ export class PreviewScheduler {
       this.lastAnimatedRender = now
       for (const nodeId of this.timeLiveNodes) {
         const cached = this.shaderCache.get(nodeId)
-        if (cached) {
-          const dataUrl = this.renderer.renderPreview(cached.fragmentShader, cached.uniforms)
-          if (dataUrl) {
-            usePreviewStore.getState().setPreview(nodeId, dataUrl)
-          }
+        if (!cached || cached.depthExceeded) continue
+        let dataUrl: string | null
+        if (cached.passes && cached.passes.length > 1) {
+          dataUrl = this.renderer.renderMultiPassPreview(cached.passes)
+        } else {
+          dataUrl = this.renderer.renderPreview(cached.fragmentShader, cached.uniforms)
+        }
+        if (dataUrl) {
+          usePreviewStore.getState().setPreview(nodeId, dataUrl)
         }
       }
     }

@@ -203,12 +203,144 @@ export class PreviewRenderer {
     return program
   }
 
+  /**
+   * Render a multi-pass preview chain. Uses a pair of 80×80 FBOs for ping-pong. [P8]
+   */
+  renderMultiPassPreview(
+    passes: Array<{ fragmentShader: string; uniforms: UniformUpload[]; inputTextures: Record<string, number> }>,
+  ): string | null {
+    const gl = this.gl
+    if (passes.length === 0) return null
+
+    // Single pass → delegate to existing method
+    if (passes.length === 1) {
+      return this.renderPreview(passes[0].fragmentShader, passes[0].uniforms)
+    }
+
+    // Allocate temp FBO pair for ping-pong (lazy, reused across calls)
+    this.ensurePingPongFBOs()
+
+    const time = (Date.now() - this.startTime) / 1000
+
+    for (let i = 0; i < passes.length; i++) {
+      const pass = passes[i]
+      const isLast = i === passes.length - 1
+
+      // Get or compile program
+      let program = this.programCache.get(pass.fragmentShader) ?? null
+      if (!program) {
+        program = this.buildProgram(pass.fragmentShader)
+        if (!program) return null
+        if (this.cacheOrder.length >= this.MAX_CACHE) {
+          const evict = this.cacheOrder.shift()!
+          const old = this.programCache.get(evict)
+          if (old) gl.deleteProgram(old)
+          this.programCache.delete(evict)
+        }
+        this.programCache.set(pass.fragmentShader, program)
+        this.cacheOrder.push(pass.fragmentShader)
+      }
+
+      // Bind target: last pass → main FBO, intermediate → ping-pong FBO
+      if (isLast) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo)
+      } else {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this.pingPongFBOs![i % 2].framebuffer)
+      }
+
+      gl.viewport(0, 0, PREVIEW_SIZE, PREVIEW_SIZE)
+      gl.useProgram(program)
+
+      // Built-in uniforms
+      const uTime = gl.getUniformLocation(program, 'u_time')
+      if (uTime) gl.uniform1f(uTime, time)
+      const uRes = gl.getUniformLocation(program, 'u_resolution')
+      if (uRes) gl.uniform2f(uRes, PREVIEW_SIZE, PREVIEW_SIZE)
+      const uRefSize = gl.getUniformLocation(program, 'u_ref_size')
+      if (uRefSize) gl.uniform1f(uRefSize, PREVIEW_SIZE)
+      const uDpr = gl.getUniformLocation(program, 'u_dpr')
+      if (uDpr) gl.uniform1f(uDpr, 1.0)
+
+      // User uniforms
+      for (const u of pass.uniforms) {
+        const loc = gl.getUniformLocation(program, u.name)
+        if (!loc) continue
+        if (typeof u.value === 'number') gl.uniform1f(loc, u.value)
+        else if (u.value.length === 2) gl.uniform2f(loc, u.value[0], u.value[1])
+        else if (u.value.length === 3) gl.uniform3f(loc, u.value[0], u.value[1], u.value[2])
+        else if (u.value.length === 4) gl.uniform4f(loc, u.value[0], u.value[1], u.value[2], u.value[3])
+      }
+
+      // Bind input textures from previous passes
+      let texUnit = 0
+      for (const [samplerName, sourcePassIdx] of Object.entries(pass.inputTextures)) {
+        const sourceFbo = this.pingPongFBOs![sourcePassIdx % 2]
+        gl.activeTexture(gl.TEXTURE0 + texUnit)
+        gl.bindTexture(gl.TEXTURE_2D, sourceFbo.texture)
+        const samplerLoc = gl.getUniformLocation(program, samplerName)
+        if (samplerLoc) gl.uniform1i(samplerLoc, texUnit)
+        texUnit++
+      }
+
+      // Draw
+      gl.bindVertexArray(this.vao)
+      gl.drawArrays(gl.TRIANGLES, 0, 6)
+    }
+
+    // Clean up texture bindings
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, null)
+
+    // Read pixels from main FBO (last pass wrote here)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo)
+    gl.readPixels(0, 0, PREVIEW_SIZE, PREVIEW_SIZE, gl.RGBA, gl.UNSIGNED_BYTE, this.readBuf)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+
+    const imageData = new ImageData(PREVIEW_SIZE, PREVIEW_SIZE)
+    for (let y = 0; y < PREVIEW_SIZE; y++) {
+      const srcRow = (PREVIEW_SIZE - 1 - y) * PREVIEW_SIZE * 4
+      const dstRow = y * PREVIEW_SIZE * 4
+      imageData.data.set(this.readBuf.subarray(srcRow, srcRow + PREVIEW_SIZE * 4), dstRow)
+    }
+    return this.imageDataToDataUrl(imageData)
+  }
+
+  // Ping-pong FBOs for multi-pass preview (shared, allocated once) [P8]
+  private pingPongFBOs: Array<{ framebuffer: WebGLFramebuffer; texture: WebGLTexture }> | null = null
+
+  private ensurePingPongFBOs() {
+    if (this.pingPongFBOs) return
+    const gl = this.gl
+    this.pingPongFBOs = [0, 1].map(() => {
+      const tex = gl.createTexture()!
+      gl.bindTexture(gl.TEXTURE_2D, tex)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, PREVIEW_SIZE, PREVIEW_SIZE, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+      gl.bindTexture(gl.TEXTURE_2D, null)
+
+      const fb = gl.createFramebuffer()!
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fb)
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0)
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+      return { framebuffer: fb, texture: tex }
+    })
+  }
+
   destroy() {
     const gl = this.gl
     for (const prog of this.programCache.values()) gl.deleteProgram(prog)
     this.programCache.clear()
     gl.deleteFramebuffer(this.fbo)
     gl.deleteTexture(this.fboTexture)
+    if (this.pingPongFBOs) {
+      for (const fbo of this.pingPongFBOs) {
+        gl.deleteFramebuffer(fbo.framebuffer)
+        gl.deleteTexture(fbo.texture)
+      }
+    }
     gl.deleteShader(this.vertexShader)
   }
 }
