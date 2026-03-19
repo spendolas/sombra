@@ -149,6 +149,24 @@ function App() {
     schedulerRef.current?.onGraphChange(nodes, edges)
   }, [nodes, edges])
 
+  // Sync main canvas resolution to preview renderer so pixel-based params scale correctly
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const { width, height } = entry.contentRect
+        const dpr = Math.min(window.devicePixelRatio || 1, 2)
+        schedulerRef.current?.setMainResolution(
+          Math.floor(width * dpr),
+          Math.floor(height * dpr),
+        )
+      }
+    })
+    observer.observe(canvas)
+    return () => observer.disconnect()
+  }, [])
+
   // Reparent canvas into the active target container
   useEffect(() => {
     const canvas = canvasRef.current
@@ -308,6 +326,44 @@ function App() {
   )
 
   useLiveCompiler(handleCompile, handleUniformUpdate, handleRendererUpdate)
+
+  // Sync image node textures to the WebGL renderer
+  const prevImageSamplersRef = useRef<Map<string, string>>(new Map())
+  useEffect(() => {
+    const renderer = rendererRef.current
+    if (!renderer) return
+
+    // Build current map: samplerName → imageData (base64 hash via length+prefix)
+    const currentMap = new Map<string, string>()
+    for (const node of nodes) {
+      if (node.data.type !== 'image') continue
+      const imageData = node.data.params?.imageData as string | undefined
+      if (!imageData) continue
+      const samplerName = `u_${node.id.replace(/-/g, '_')}_image`
+      currentMap.set(samplerName, imageData)
+    }
+
+    // Delete textures that are no longer active
+    for (const [samplerName] of prevImageSamplersRef.current) {
+      if (!currentMap.has(samplerName)) {
+        renderer.deleteImageTexture(samplerName)
+      }
+    }
+
+    // Upload new or changed textures
+    for (const [samplerName, imageData] of currentMap) {
+      const prev = prevImageSamplersRef.current.get(samplerName)
+      if (prev === imageData) continue // unchanged
+
+      const img = new Image()
+      img.onload = () => {
+        rendererRef.current?.uploadImageTexture(samplerName, img)
+      }
+      img.src = imageData
+    }
+
+    prevImageSamplersRef.current = currentMap
+  }, [nodes])
 
   // Determine center split direction based on mode
   const isDocked = previewMode === 'docked'

@@ -270,6 +270,10 @@ function resolveInputDefault(
     inputs[inputPort.id] = autoUvVar
     return true
   }
+  if (inputPort.default === 'screen_uv' && inputPort.type === 'vec2') {
+    inputs[inputPort.id] = 'v_uv'
+    return true
+  }
   if (inputPort.default === 'auto_fragcoord' && inputPort.type === 'vec2') {
     const autoFcVar = `node_${sanitizedNodeId}_auto_fc`
     preambleLines.push(`vec2 ${autoFcVar} = gl_FragCoord.xy;`)
@@ -331,6 +335,7 @@ export function generateNodeGlsl(
   functionRegistry: Map<string, string>,
   userUniforms: UniformSpec[],
   textureBoundaries?: TextureBoundaryEdge[],
+  imageSamplers?: Set<string>,
 ): NodeCodegenResult {
   const errors: Array<{ message: string; nodeId?: string }> = []
   const glslLines: string[] = []
@@ -498,7 +503,7 @@ export function generateNodeGlsl(
     // Translate (pixel units → UV conversion)
     if (hasTranslate) {
       uniforms.add('u_resolution')
-      preambleLines.push(`${srtVar} -= vec2(${inputs.srt_translateX}, ${inputs.srt_translateY}) / u_resolution;`)
+      preambleLines.push(`${srtVar} -= vec2(${inputs.srt_translateX}, -(${inputs.srt_translateY})) / u_resolution;`)
     }
 
     preambleLines.push(`${srtVar} += 0.5;`)
@@ -523,6 +528,7 @@ export function generateNodeGlsl(
     functions,
     functionRegistry,
     textureSamplers: Object.keys(textureSamplers).length > 0 ? textureSamplers : undefined,
+    imageSamplers,
   }
 
   try {
@@ -600,11 +606,13 @@ function compileSinglePass(
   const functionRegistry = new Map<string, string>()
   const userUniforms: UniformSpec[] = []
   const allGlslLines: string[] = []
+  const imageSamplers = new Set<string>()
 
   for (const nodeId of executionOrder) {
     const result = generateNodeGlsl(
       nodeId, nodeMap, edgesByTarget,
       uniforms, functions, functionRegistry, userUniforms,
+      undefined, imageSamplers,
     )
     allGlslLines.push(...result.glslLines)
     errors.push(...result.errors)
@@ -614,11 +622,8 @@ function compileSinglePass(
 
   const fragmentShader = assembleFragmentShader(
     uniforms, functions, functionRegistry, allGlslLines, userUniforms,
+    undefined, imageSamplers,
   )
-
-  // Debug: Log generated shader
-  console.log('[Sombra] Generated Fragment Shader:')
-  console.log(fragmentShader)
 
   const outputNode = nodes.find((n) => n.data.type === 'fragment_output')
   const qualityTier = (outputNode?.data.params?.quality as string) ?? 'adaptive'
@@ -659,6 +664,17 @@ function compileMultiPass(
   const passes: RenderPass[] = []
   const allUserUniforms: UniformSpec[] = []
 
+  // nodeId → passIndex lookup
+  const nodePassIndex = new Map<string, number>()
+  for (let i = 0; i < passPartition.length; i++) {
+    for (const id of passPartition[i]) nodePassIndex.set(id, i)
+  }
+
+  // Build set of texture boundary target handles so we can skip them
+  const textureBoundaryKeys = new Set(
+    boundaries.map(b => `${b.consumerId}:${b.consumingPortId}`)
+  )
+
   for (let passIdx = 0; passIdx < passPartition.length; passIdx++) {
     const passNodeIds = passPartition[passIdx]
     const isLastPass = passIdx === passPartition.length - 1
@@ -668,6 +684,7 @@ function compileMultiPass(
     const functionRegistry = new Map<string, string>()
     const passUserUniforms: UniformSpec[] = []
     const glslLines: string[] = []
+    const passImageSamplers = new Set<string>()
 
     // Boundaries consumed by nodes in this pass
     const passBoundaries = boundaries.filter(b => passNodeIds.includes(b.consumerId))
@@ -679,13 +696,57 @@ function compileMultiPass(
       inputTextures[b.samplerName] = b.sourcePassIndex
     }
 
+    // Find cross-pass non-texture dependencies: nodes from earlier passes
+    // that are referenced by nodes in this pass via non-texture edges.
+    // These must be re-emitted in this pass's shader.
+    const reEmitSet = new Set<string>()
+    if (passIdx > 0) {
+      const queue: string[] = []
+
+      // Seed: find all non-texture edges from this pass to earlier passes
+      for (const nodeId of passNodeIds) {
+        const incoming = edgesByTarget.get(nodeId) || []
+        for (const edge of incoming) {
+          const sourcePass = nodePassIndex.get(edge.source)
+          if (sourcePass !== undefined && sourcePass < passIdx) {
+            // Skip texture boundary edges — those are handled via FBO sampling
+            if (textureBoundaryKeys.has(`${nodeId}:${edge.targetHandle}`)) continue
+            if (!reEmitSet.has(edge.source)) {
+              reEmitSet.add(edge.source)
+              queue.push(edge.source)
+            }
+          }
+        }
+      }
+
+      // Transitively include all upstream dependencies of re-emitted nodes
+      while (queue.length > 0) {
+        const id = queue.pop()!
+        const incoming = edgesByTarget.get(id) || []
+        for (const edge of incoming) {
+          const sourcePass = nodePassIndex.get(edge.source)
+          if (sourcePass !== undefined && sourcePass < passIdx && !reEmitSet.has(edge.source)) {
+            reEmitSet.add(edge.source)
+            queue.push(edge.source)
+          }
+        }
+      }
+    }
+
+    // Combine re-emitted nodes (in original execution order) with pass nodes
+    const reEmitNodes = passPartition
+      .slice(0, passIdx)
+      .flat()
+      .filter(id => reEmitSet.has(id))
+    const combinedNodeIds = [...reEmitNodes, ...passNodeIds]
+
     // Generate GLSL for each node in this pass
     const allErrors: Array<{ message: string; nodeId?: string }> = []
-    for (const nodeId of passNodeIds) {
+    for (const nodeId of combinedNodeIds) {
       const result = generateNodeGlsl(
         nodeId, nodeMap, edgesByTarget,
         uniforms, functions, functionRegistry, passUserUniforms,
-        passBoundaries,
+        passBoundaries, passImageSamplers,
       )
       glslLines.push(...result.glslLines)
       allErrors.push(...result.errors)
@@ -714,6 +775,7 @@ function compileMultiPass(
 
     const fragmentShader = assembleFragmentShader(
       uniforms, functions, functionRegistry, glslLines, passUserUniforms, samplerNames,
+      passImageSamplers,
     )
 
     passes.push({
@@ -731,12 +793,6 @@ function compileMultiPass(
   const lastPass = passes[passes.length - 1]
   const outputNode = nodes.find((n) => n.data.type === 'fragment_output')
   const qualityTier = (outputNode?.data.params?.quality as string) ?? 'adaptive'
-
-  console.log(`[Sombra] Generated ${passes.length}-pass RenderPlan:`)
-  for (const pass of passes) {
-    console.log(`  Pass ${pass.index}: ${Object.keys(pass.inputTextures).length} texture inputs`)
-    console.log(pass.fragmentShader)
-  }
 
   return {
     success: true,
@@ -806,6 +862,8 @@ export function assembleFragmentShader(
   userUniforms: UniformSpec[],
   /** sampler2D uniform names for multi-pass texture inputs */
   samplers?: string[],
+  /** sampler2D uniform names for image node textures */
+  imageSamplers?: Set<string>,
 ): string {
   const uniformDeclarations: string[] = []
 
@@ -834,6 +892,13 @@ export function assembleFragmentShader(
   // Texture sampler uniforms (multi-pass)
   if (samplers) {
     for (const name of samplers) {
+      uniformDeclarations.push(`uniform sampler2D ${name};`)
+    }
+  }
+
+  // Image sampler uniforms (image nodes)
+  if (imageSamplers) {
+    for (const name of imageSamplers) {
       uniformDeclarations.push(`uniform sampler2D ${name};`)
     }
   }

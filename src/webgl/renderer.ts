@@ -114,6 +114,9 @@ export class WebGLRenderer {
   private maxTextureUnits = 16
   private maxIntermediateTextures = 8
 
+  // Image textures (uploaded by image nodes)
+  private imageTextures = new Map<string, WebGLTexture>()
+
   // [P5] Async compilation support (detected, used in future optimization)
   hasParallelCompile = false
 
@@ -372,6 +375,66 @@ export class WebGLRenderer {
   }
 
   // -----------------------------------------------------------------------
+  // Image texture management
+  // -----------------------------------------------------------------------
+
+  /** Upload (or replace) an image texture for a given sampler uniform name. */
+  uploadImageTexture(samplerName: string, image: HTMLImageElement): void {
+    const gl = this.gl
+    if (gl.isContextLost()) return
+
+    // Delete existing texture if present
+    const existing = this.imageTextures.get(samplerName)
+    if (existing) {
+      gl.deleteTexture(existing)
+    }
+
+    const tex = gl.createTexture()
+    if (!tex) return
+
+    gl.bindTexture(gl.TEXTURE_2D, tex)
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image)
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+    gl.bindTexture(gl.TEXTURE_2D, null)
+
+    this.imageTextures.set(samplerName, tex)
+    this.requestRender()
+  }
+
+  /** Delete an image texture by sampler name. */
+  deleteImageTexture(samplerName: string): void {
+    const gl = this.gl
+    const tex = this.imageTextures.get(samplerName)
+    if (tex) {
+      if (!gl.isContextLost()) gl.deleteTexture(tex)
+      this.imageTextures.delete(samplerName)
+    }
+  }
+
+  /** Bind all image textures to texture units, starting at the given offset. Returns next free unit. */
+  private bindImageTextures(
+    uniforms: Map<string, WebGLUniformLocation>,
+    startUnit: number,
+  ): number {
+    const gl = this.gl
+    let unit = startUnit
+    for (const [samplerName, tex] of this.imageTextures) {
+      const loc = uniforms.get(samplerName)
+      if (!loc) continue
+      gl.activeTexture(gl.TEXTURE0 + unit)
+      gl.bindTexture(gl.TEXTURE_2D, tex)
+      gl.uniform1i(loc, unit)
+      unit++
+    }
+    return unit
+  }
+
+  // -----------------------------------------------------------------------
   // Public API: updateRenderPlan / updateShader
   // -----------------------------------------------------------------------
 
@@ -383,6 +446,9 @@ export class WebGLRenderer {
     if (!plan.success || plan.passes.length === 0) {
       return { success: false, error: 'Invalid render plan' }
     }
+
+    // New programs need all uniforms uploaded fresh — clear the "already sent" cache
+    this.lastUniformValues.clear()
 
     // [P1] Single-pass fast path — bypass FBO setup entirely
     if (plan.passes.length === 1) {
@@ -717,6 +783,9 @@ export class WebGLRenderer {
     gl.useProgram(this.program)
     this.uploadBuiltinUniforms(this.uniforms, w, h, dpr, time)
 
+    // Bind image textures (starting at texture unit 0 for single-pass)
+    this.bindImageTextures(this.uniforms, 0)
+
     gl.bindVertexArray(this.vao)
     gl.drawArrays(gl.TRIANGLES, 0, 6)
     gl.bindVertexArray(null)
@@ -779,6 +848,9 @@ export class WebGLRenderer {
         if (samplerLoc) gl.uniform1i(samplerLoc, texUnit)
         texUnit++
       }
+
+      // Bind image textures after FBO textures
+      this.bindImageTextures(ps.uniforms, texUnit)
 
       gl.drawArrays(gl.TRIANGLES, 0, 6)
 
@@ -850,6 +922,11 @@ export class WebGLRenderer {
     this.resizeObserver?.disconnect()
 
     this.destroyFBOs()
+
+    // Clean up image textures
+    for (const [name] of this.imageTextures) {
+      this.deleteImageTexture(name)
+    }
 
     const gl = this.gl
     // Delete cached programs

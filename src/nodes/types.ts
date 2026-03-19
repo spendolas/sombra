@@ -70,6 +70,7 @@ export interface GLSLContext {
   functions: string[]                      // Global function declarations (outside main)
   functionRegistry: Map<string, string>    // Deduplicated shared functions (key -> GLSL code)
   textureSamplers?: Record<string, string> // portId → sampler2D uniform name (multi-pass)
+  imageSamplers?: Set<string>              // Image node sampler2D uniform names
 }
 
 /**
@@ -91,7 +92,7 @@ export function getSpatialParams(spatial: SpatialConfig): NodeParameter[] {
       case 'scale':
         params.push({
           id: 'srt_scale', label: 'Scale', type: 'float', default: 1.0,
-          min: 0.01, max: 20.0, step: 0.01,
+          min: 0, max: 2.0, step: 0.01,
           connectable: true, updateMode: 'uniform',
         })
         break
@@ -99,12 +100,12 @@ export function getSpatialParams(spatial: SpatialConfig): NodeParameter[] {
         params.push(
           {
             id: 'srt_scaleX', label: 'Scale X', type: 'float', default: 1.0,
-            min: 0.01, max: 20.0, step: 0.01,
+            min: 0, max: 2.0, step: 0.01,
             connectable: true, updateMode: 'uniform',
           },
           {
             id: 'srt_scaleY', label: 'Scale Y', type: 'float', default: 1.0,
-            min: 0.01, max: 20.0, step: 0.01,
+            min: 0, max: 2.0, step: 0.01,
             connectable: true, updateMode: 'uniform',
           },
         )

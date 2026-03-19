@@ -44,7 +44,7 @@ export class PreviewScheduler {
   // Time-dependent nodes: re-render periodically
   private timeLiveNodes = new Set<string>()
   private lastAnimatedRender = 0
-  private readonly ANIMATED_INTERVAL = 100 // 10 FPS
+  private readonly ANIMATED_INTERVAL = 200 // 5 FPS — thumbnails don't need smooth playback
 
   constructor(renderer: PreviewRenderer) {
     this.renderer = renderer
@@ -237,6 +237,14 @@ export class PreviewScheduler {
       })
       break // One per frame
     }
+  }
+
+  /**
+   * Forward the main canvas resolution to the preview renderer
+   * so pixel-based params (e.g. ribWidth) compute correct UV fractions.
+   */
+  setMainResolution(width: number, height: number) {
+    this.renderer.setMainResolution(width, height)
   }
 
   start() {
