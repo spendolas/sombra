@@ -103,6 +103,15 @@ function migrateV1ToV2(nodes: Node<NodeData>[]): Node<NodeData>[] {
       }
     }
 
+    // Reeded Glass: slices → ribWidth (1/slices)
+    if (type === 'reeded_glass') {
+      if ('slices' in params) {
+        const old = Number(params.slices) || 12
+        params.ribWidth = old > 0 ? 1 / old : 0.08
+        delete params.slices
+      }
+    }
+
     return { ...node, data: { ...node.data, params } }
   })
 }
