@@ -9,8 +9,8 @@
  *     Circular / Straight → no sub-select
  */
 
-import type { NodeDefinition, GLSLContext } from '../types'
-import { addFunction } from '../types'
+import type { NodeDefinition, GLSLContext, SpatialConfig } from '../types'
+import { addFunction, getSpatialParams } from '../types'
 import { registerNoiseType, resolveNoiseFn } from '../noise/noise-functions'
 
 const RIB_TYPE_OPTIONS = [
@@ -61,6 +61,7 @@ export const reededGlassNode: NodeDefinition = {
   label: 'Reeded Glass',
   category: 'Transform',
   description: 'Cylindrical lens distortion through ribbed glass',
+  spatial: { transforms: ['scale', 'rotate', 'translate'] } satisfies SpatialConfig,
 
   inputs: [
     { id: 'source', label: 'Source', type: 'vec3', textureInput: true, default: [0, 0, 0] },
@@ -73,6 +74,7 @@ export const reededGlassNode: NodeDefinition = {
   ],
 
   params: [
+    ...getSpatialParams({ transforms: ['scale', 'rotate', 'translate'] }),
     {
       id: 'slices', label: 'Slices', type: 'float', default: 12,
       min: 2, max: 64, step: 1,

@@ -3,13 +3,15 @@
  * Output is 0.0 or 1.0 (hard edges).
  */
 
-import type { NodeDefinition } from '../types'
+import type { NodeDefinition, SpatialConfig } from '../types'
+import { getSpatialParams } from '../types'
 
 export const checkerboardNode: NodeDefinition = {
   type: 'checkerboard',
   label: 'Checkerboard',
   category: 'Pattern',
   description: 'Alternating grid pattern — outputs 0 or 1',
+  spatial: { transforms: ['scale', 'rotate', 'translate'] } satisfies SpatialConfig,
 
   inputs: [
     { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },
@@ -20,7 +22,7 @@ export const checkerboardNode: NodeDefinition = {
   ],
 
   params: [
-    { id: 'scale', label: 'Scale', type: 'float', default: 8.0, min: 1.0, max: 64.0, step: 0.5, connectable: true, updateMode: 'uniform' },
+    ...getSpatialParams({ transforms: ['scale', 'rotate', 'translate'] }),
   ],
 
   glsl: (ctx) => {
@@ -28,7 +30,7 @@ export const checkerboardNode: NodeDefinition = {
     const id = ctx.nodeId.replace(/-/g, '_')
     const c = `cb_c_${id}`
     return [
-      `vec2 ${c} = floor(${inputs.coords} * ${inputs.scale});`,
+      `vec2 ${c} = floor(${inputs.coords});`,
       `float ${outputs.value} = mod(${c}.x + ${c}.y, 2.0);`,
     ].join('\n  ')
   },

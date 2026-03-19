@@ -121,6 +121,10 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   )
   const connectableIds = new Set(connectableParams.map((p) => p.id))
 
+  // Split connectable params: framework SRT (_srt_*) vs node-specific
+  const srtParams = connectableParams.filter((p) => p.id.startsWith('_srt_'))
+  const nodeConnectableParams = connectableParams.filter((p) => !p.id.startsWith('_srt_'))
+
   // Pure inputs: those NOT shadowed by a connectable param
   const pureInputs = resolvedInputs.filter((inp) => !connectableIds.has(inp.id))
 
@@ -192,8 +196,8 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
           </div>
         )}
 
-        {/* Connectable param rows: handle + inline slider */}
-        {connectableParams.map((param) => {
+        {/* Node connectable param rows: handle + inline slider */}
+        {nodeConnectableParams.map((param) => {
           const isConnected = connectedInputs.has(param.id)
 
           // Resolve source info when connected
@@ -261,6 +265,36 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
               parameters={regularParams}
               currentValues={currentValues}
             />
+          </div>
+        )}
+
+        {/* Framework SRT transform params */}
+        {srtParams.length > 0 && (
+          <div className={cn(ds.shaderNode.paramDivider, "mt-xs pt-xs")}>
+            <div className="px-sm pb-2xs text-fg-subtle" style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Transform</div>
+            {srtParams.map((param) => {
+              const isConnected = connectedInputs.has(param.id)
+              const displayValue = (currentValues[param.id] as number) ?? (param.default as number)
+              return (
+                <div key={param.id} className={ds.connectableParamRow.root}>
+                  <BaseHandle
+                    type="target"
+                    position={Position.Left}
+                    id={param.id}
+                    handleColor={getPortColor(param.type)}
+                    connected={isConnected}
+                  />
+                  <div className={ds.connectableParamRow.innerFrame}>
+                    <FloatSlider
+                      param={param}
+                      value={displayValue}
+                      onChange={(value) => handleParamChange(param.id, value)}
+                      disabled={isConnected}
+                    />
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
 
