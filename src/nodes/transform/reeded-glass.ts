@@ -63,10 +63,12 @@ export const reededGlassNode: NodeDefinition = {
   description: 'Cylindrical lens distortion through ribbed glass',
 
   inputs: [
+    { id: 'source', label: 'Source', type: 'vec3', textureInput: true, default: [0, 0, 0] },
     { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },
   ],
 
   outputs: [
+    { id: 'color', label: 'Color', type: 'vec3' },
     { id: 'coords', label: 'Coords', type: 'vec2' },
   ],
 
@@ -183,11 +185,23 @@ export const reededGlassNode: NodeDefinition = {
     const lensed = `rg_lensed_${id}`
     lines.push(`float ${lensed} = reedLens(${warpedMain}, ${inputs.slices}, ${inputs.strength}, ${inputs.edge});`)
 
-    // Reconstruct output vec2
+    // Reconstruct distorted vec2
+    const distorted = `rg_distorted_${id}`
     if (isVert) {
-      lines.push(`vec2 ${outputs.coords} = vec2(${lensed}, ${inputs.coords}.y);`)
+      lines.push(`vec2 ${distorted} = vec2(${lensed}, ${inputs.coords}.y);`)
     } else {
-      lines.push(`vec2 ${outputs.coords} = vec2(${inputs.coords}.x, ${lensed});`)
+      lines.push(`vec2 ${distorted} = vec2(${inputs.coords}.x, ${lensed});`)
+    }
+
+    // Coords output — always populated (legacy mode)
+    lines.push(`vec2 ${outputs.coords} = ${distorted};`)
+
+    // Color output — texture mode (source wired) vs fallback
+    const samplerName = ctx.textureSamplers?.source
+    if (samplerName) {
+      lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${distorted}).rgb;`)
+    } else {
+      lines.push(`vec3 ${outputs.color} = ${inputs.source};`)
     }
 
     return lines.join('\n  ')
