@@ -10,6 +10,7 @@ import { useCompilerStore } from '../stores/compilerStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { nodeRegistry } from '../nodes/registry'
 import type { UniformSpec } from '../nodes/types'
+import type { RenderPass } from './glsl-generator'
 import type { CompileResponse } from './compiler.worker'
 import CompilerWorker from './compiler.worker?worker'
 
@@ -29,6 +30,7 @@ export function useLiveCompiler(
     userUniforms?: UniformSpec[]
     isTimeLiveAtOutput?: boolean
     qualityTier?: string
+    passes?: RenderPass[]
   }) => void,
   onUniformUpdate?: (
     uniforms: Array<{ name: string; value: number | number[] }>
@@ -107,6 +109,7 @@ export function useLiveCompiler(
           userUniforms: result.userUniforms,
           isTimeLiveAtOutput: result.isTimeLiveAtOutput,
           qualityTier: result.qualityTier,
+          passes: result.passes,
         })
       } else {
         setErrors(

@@ -235,6 +235,7 @@ function App() {
       userUniforms?: Array<{ name: string; value: number | number[] }>
       isTimeLiveAtOutput?: boolean
       qualityTier?: string
+      passes?: Array<{ index: number; fragmentShader: string }>
     }) => {
       if (result.success && rendererRef.current) {
         const updateResult = rendererRef.current.updateShader(result.fragmentShader)

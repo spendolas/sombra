@@ -21,6 +21,7 @@ export interface PortDefinition {
   label: string        // Display name for the port
   type: PortType       // Data type
   default?: unknown    // Default value when port is unconnected
+  textureInput?: boolean  // When true + wired, triggers a pass boundary (multi-pass rendering)
 }
 
 /**
@@ -68,6 +69,15 @@ export interface GLSLContext {
   uniforms: Set<string>                    // Global uniforms to declare
   functions: string[]                      // Global function declarations (outside main)
   functionRegistry: Map<string, string>    // Deduplicated shared functions (key -> GLSL code)
+  textureSamplers?: Record<string, string> // portId → sampler2D uniform name (multi-pass)
+}
+
+/**
+ * Spatial transform configuration for framework-managed SRT
+ */
+export interface SpatialConfig {
+  transforms: Array<'scale' | 'scaleXY' | 'rotate' | 'translate'>
+  order?: 'SRT' | 'TRS' | 'RST'  // default: 'SRT'
 }
 
 /**
@@ -111,6 +121,12 @@ export interface NodeDefinition {
    * If not provided, default UI with parameter controls is used
    */
   component?: React.ComponentType<{ nodeId: string; data: Record<string, unknown> }>
+
+  /**
+   * Framework-managed spatial transforms (SRT).
+   * When present, the compiler auto-injects scale/rotate/translate uniforms and GLSL.
+   */
+  spatial?: SpatialConfig
 
   /**
    * Optional description for tooltips/help
