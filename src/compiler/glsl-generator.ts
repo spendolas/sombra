@@ -485,7 +485,7 @@ export function generateNodeGlsl(
 
     // Translate
     if (hasTranslate) {
-      preambleLines.push(`${srtVar} += vec2(${inputs.srt_translateX}, ${inputs.srt_translateY});`)
+      preambleLines.push(`${srtVar} -= vec2(${inputs.srt_translateX}, ${inputs.srt_translateY});`)
     }
 
     preambleLines.push(`${srtVar} += 0.5;`)
