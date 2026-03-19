@@ -41,7 +41,7 @@ function migrateV1ToV2(nodes: Node<NodeData>[]): Node<NodeData>[] {
     if (type === 'noise' || type === 'fbm') {
       if ('scale' in params) {
         const old = Number(params.scale) || 5.0
-        params._srt_scale = old !== 0 ? 1 / old : 1.0
+        params.srt_scale = old !== 0 ? 1 / old : 1.0
         delete params.scale
       }
     }
@@ -50,7 +50,7 @@ function migrateV1ToV2(nodes: Node<NodeData>[]): Node<NodeData>[] {
     if (type === 'warp_uv' || type === 'domain_warp') {
       if ('frequency' in params) {
         const old = Number(params.frequency) || 4.0
-        params._srt_scale = old !== 0 ? 1 / old : 1.0
+        params.srt_scale = old !== 0 ? 1 / old : 1.0
         delete params.frequency
       }
     }
@@ -59,7 +59,7 @@ function migrateV1ToV2(nodes: Node<NodeData>[]): Node<NodeData>[] {
     if (type === 'checkerboard' || type === 'dots') {
       if ('scale' in params) {
         const old = Number(params.scale) || 8.0
-        params._srt_scale = old !== 0 ? 1 / old : 1.0
+        params.srt_scale = old !== 0 ? 1 / old : 1.0
         delete params.scale
       }
     }
@@ -68,11 +68,11 @@ function migrateV1ToV2(nodes: Node<NodeData>[]): Node<NodeData>[] {
     if (type === 'stripes') {
       if ('scale' in params) {
         const old = Number(params.scale) || 8.0
-        params._srt_scale = old !== 0 ? 1 / old : 1.0
+        params.srt_scale = old !== 0 ? 1 / old : 1.0
         delete params.scale
       }
       if ('angle' in params) {
-        params._srt_rotate = Number(params.angle) * Math.PI / 180
+        params.srt_rotate = Number(params.angle) * Math.PI / 180
         delete params.angle
       }
     }
@@ -81,24 +81,24 @@ function migrateV1ToV2(nodes: Node<NodeData>[]): Node<NodeData>[] {
     if (type === 'uv_transform' || type === 'uv_coords') {
       if ('scaleX' in params) {
         const old = Number(params.scaleX) || 1.0
-        params._srt_scaleX = old !== 0 ? 1 / old : 1.0
+        params.srt_scaleX = old !== 0 ? 1 / old : 1.0
         delete params.scaleX
       }
       if ('scaleY' in params) {
         const old = Number(params.scaleY) || 1.0
-        params._srt_scaleY = old !== 0 ? 1 / old : 1.0
+        params.srt_scaleY = old !== 0 ? 1 / old : 1.0
         delete params.scaleY
       }
       if ('rotate' in params) {
-        params._srt_rotate = params.rotate
+        params.srt_rotate = params.rotate
         delete params.rotate
       }
       if ('offsetX' in params) {
-        params._srt_translateX = params.offsetX
+        params.srt_translateX = params.offsetX
         delete params.offsetX
       }
       if ('offsetY' in params) {
-        params._srt_translateY = params.offsetY
+        params.srt_translateY = params.offsetY
         delete params.offsetY
       }
     }

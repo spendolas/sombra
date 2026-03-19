@@ -122,8 +122,8 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   const connectableIds = new Set(connectableParams.map((p) => p.id))
 
   // Split connectable params: framework SRT (_srt_*) vs node-specific
-  const srtParams = connectableParams.filter((p) => p.id.startsWith('_srt_'))
-  const nodeConnectableParams = connectableParams.filter((p) => !p.id.startsWith('_srt_'))
+  const srtParams = connectableParams.filter((p) => p.id.startsWith('srt_'))
+  const nodeConnectableParams = connectableParams.filter((p) => !p.id.startsWith('srt_'))
 
   // Pure inputs: those NOT shadowed by a connectable param
   const pureInputs = resolvedInputs.filter((inp) => !connectableIds.has(inp.id))
