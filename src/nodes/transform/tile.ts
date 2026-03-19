@@ -12,10 +12,12 @@ export const tileNode: NodeDefinition = {
   description: 'Repeat coordinates with optional mirroring',
 
   inputs: [
+    { id: 'source', label: 'Source', type: 'vec3', textureInput: true, default: [0, 0, 0] },
     { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },
   ],
 
   outputs: [
+    { id: 'color', label: 'Color', type: 'vec3' },
     { id: 'uv', label: 'UV', type: 'vec2' },
   ],
 
@@ -50,7 +52,16 @@ export const tileNode: NodeDefinition = {
     const mirrorY = mirror === 'y' || mirror === 'xy'
 
     if (!mirrorX && !mirrorY) {
-      return `vec2 ${outputs.uv} = fract(${inputs.coords} * vec2(${inputs.countX}, ${inputs.countY}));`
+      const lines = [
+        `vec2 ${outputs.uv} = fract(${inputs.coords} * vec2(${inputs.countX}, ${inputs.countY}));`,
+      ]
+      const samplerName = ctx.textureSamplers?.source
+      if (samplerName) {
+        lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${outputs.uv}).rgb;`)
+      } else {
+        lines.push(`vec3 ${outputs.color} = ${inputs.source};`)
+      }
+      return lines.join('\n  ')
     }
 
     const lines = [
@@ -72,6 +83,14 @@ export const tileNode: NodeDefinition = {
     }
 
     lines.push(`vec2 ${outputs.uv} = vec2(tile_tx_${id}, tile_ty_${id});`)
+
+    const samplerName = ctx.textureSamplers?.source
+    if (samplerName) {
+      lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${outputs.uv}).rgb;`)
+    } else {
+      lines.push(`vec3 ${outputs.color} = ${inputs.source};`)
+    }
+
     return lines.join('\n  ')
   },
 }
