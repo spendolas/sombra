@@ -94,11 +94,12 @@ function migrateV1ToV2(nodes: Node<NodeData>[]): Node<NodeData>[] {
         delete params.rotate
       }
       if ('offsetX' in params) {
-        params.srt_translateX = params.offsetX
+        // Old offsets were in UV space; multiply by ~1000 for approximate pixel conversion
+        params.srt_translateX = Math.round(Number(params.offsetX) * 1000)
         delete params.offsetX
       }
       if ('offsetY' in params) {
-        params.srt_translateY = params.offsetY
+        params.srt_translateY = Math.round(Number(params.offsetY) * 1000)
         delete params.offsetY
       }
     }

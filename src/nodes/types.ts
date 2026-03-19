@@ -119,13 +119,13 @@ export function getSpatialParams(spatial: SpatialConfig): NodeParameter[] {
       case 'translate':
         params.push(
           {
-            id: 'srt_translateX', label: 'Offset X', type: 'float', default: 0.0,
-            min: -0.5, max: 0.5, step: 0.001,
+            id: 'srt_translateX', label: 'Offset X', type: 'float', default: 0,
+            min: -500, max: 500, step: 1,
             connectable: true, updateMode: 'uniform',
           },
           {
-            id: 'srt_translateY', label: 'Offset Y', type: 'float', default: 0.0,
-            min: -0.5, max: 0.5, step: 0.001,
+            id: 'srt_translateY', label: 'Offset Y', type: 'float', default: 0,
+            min: -500, max: 500, step: 1,
             connectable: true, updateMode: 'uniform',
           },
         )

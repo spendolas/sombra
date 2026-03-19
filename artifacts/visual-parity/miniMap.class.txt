@@ -1,0 +1,1 @@
+react-flow__panel react-flow__minimap bg-surface-alt rounded-md border border-edge-subtle bottom right

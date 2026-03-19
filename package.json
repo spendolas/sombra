@@ -13,6 +13,7 @@
     "tokens:audit": "tsx scripts/figma-audit.ts",
     "audit:collect": "tsx scripts/audit-collect.ts",
     "audit:visual": "tsx scripts/visual-audit.ts",
+    "audit:hero": "tsx scripts/token-hero-audit.ts",
     "audit:full": "npm run audit:collect && npm run tokens:audit && npm run audit:visual",
     "drift:collect": "tsx scripts/drift-collect.ts",
     "drift:check": "tsx scripts/drift-check.ts",

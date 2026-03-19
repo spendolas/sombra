@@ -1,0 +1,1 @@
+text-mono-value text-fg tabular-nums

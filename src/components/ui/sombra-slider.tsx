@@ -108,7 +108,7 @@ function SombraSlider({
       }
 
       setDragging(which)
-      ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     },
     [disabled, editingField, isRange, value, onChange, xToValue]
   )
@@ -162,7 +162,7 @@ function SombraSlider({
         which,
         moved: false,
       }
-      ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     },
     [disabled, editingField, isRange, value]
   )
@@ -369,6 +369,7 @@ function SombraSlider({
         onPointerDown={handleTrackPointerDown}
         onPointerMove={handleTrackPointerMove}
         onPointerUp={handleTrackPointerUp}
+        onLostPointerCapture={handleTrackPointerUp}
       >
         {isRange ? (
           // Range fill between lo and hi (clamped to track visually)

@@ -1,0 +1,7 @@
+{
+  "textGhostButton": "flex flex-col items-center justify-center size-btn-md rounded-sm text-fg-dim cursor-pointer transition-colors hover:bg-surface-elevated hover:text-fg h-btn-md w-auto px-sm",
+  "textGhostButtonInner": "text-mono-value text-fg tabular-nums",
+  "selectFrame": "flex flex-row px-md py-md h-select-h bg-surface-raised rounded-sm border border-edge text-fg w-full h-select-h",
+  "selectFrameInner": "flex w-full items-center justify-between gap-md text-body",
+  "colorSwatch": "bg-surface-alt rounded-sm border border-edge w-6 h-6 cursor-pointer"
+}
