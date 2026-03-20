@@ -1,6 +1,8 @@
 /**
  * Reeded Glass — cylindrical lens distortion through ribbed glass.
- * Divides UV space into parallel ribs and applies a lens remap within each rib.
+ * Physics-based: each rib is a cylindrical lens with Snell's law refraction.
+ * The surface normal varies across the rib — flat at center, steep at edges —
+ * producing characteristic magnification at centers and compression at seams.
  *
  * Two-level hierarchy:
  *   ribType: Straight | Wave | Circular | Noise
@@ -41,17 +43,41 @@ const DIRECTION_OPTIONS = [
 ]
 
 /**
- * Register the reeded glass lens function.
- * Takes the main-axis coordinate, slices, strength, and edge sharpness.
- * Returns the displaced main-axis coordinate.
+ * Register the physics-based cylindrical lens function.
+ *
+ * Each rib has a circular arc cross-section. The displacement comes from
+ * refraction through the curved surface: the surface slope increases from
+ * zero at the rib center to steep at the edges, producing:
+ *   - Magnification (stretching) at rib centers
+ *   - Compression and bright caustic lines at rib seams
+ *   - At high IOR × curvature, image inversion within each rib
+ *
+ * Parameters:
+ *   coord     — main-axis UV coordinate
+ *   ribW      — rib width in UV space
+ *   ior       — index of refraction (1.0 = no effect, 1.5 = glass, 2.0 = heavy)
+ *   curvature — how rounded the rib profile is (0 = flat, 1 = semicircle)
  */
 function registerLensFn(ctx: GLSLContext): void {
-  addFunction(ctx, 'reedLens', `float reedLens(float coord, float ribW, float strength, float edge) {
+  addFunction(ctx, 'reedLens', `float reedLens(float coord, float ribW, float ior, float curvature) {
   float local = mod(coord, ribW) / ribW;
-  float compressed = 0.5 + (local - 0.5) * (1.0 - edge);
-  float curved = 0.5 - cos(compressed * 3.14159265) * 0.5;
-  float lensed = mix(compressed, curved, strength);
-  return (floor(coord / ribW) + lensed) * ribW;
+  float x = (local - 0.5) * 2.0;  // -1 to 1
+
+  // Circular arc surface slope: dh/dx = -x / sqrt(R² - x²)
+  // 0-1: controls arc shape (0 = flat, 1 = semicircle)
+  // 1-2: arc stays at max, amplifies refraction strength
+  float c = clamp(curvature, 0.01, 1.0);
+  float amp = curvature > 1.0 ? curvature : 1.0;
+  float c2 = min(c, 0.99);
+  float x2 = x * x * c2 * c2;
+  float slope = x * c2 / sqrt(max(1.0 - x2, 0.001));
+
+  // Refraction displacement: proportional to slope × (ior - 1) × amplifier
+  // Negative sign: convex lens pushes rays toward center
+  float disp = -slope * (ior - 1.0) * 0.5 * amp;
+
+  float lensed = local + disp;
+  return (floor(coord / ribW) + clamp(lensed, 0.0, 1.0)) * ribW;
 }`)
 }
 
@@ -75,17 +101,22 @@ export const reededGlassNode: NodeDefinition = {
   params: [
     ...getSpatialParams({ transforms: ['scale', 'rotate', 'translate'] }),
     {
-      id: 'ribWidth', label: 'Rib Width', type: 'float', default: 20,
-      min: 2, max: 200, step: 1,
+      id: 'ribWidth', label: 'Rib Width', type: 'float', default: 80,
+      min: 2, max: 400, step: 1,
       connectable: true, updateMode: 'uniform',
     },
     {
-      id: 'strength', label: 'Strength', type: 'float', default: 0.5,
-      min: 0, max: 1, step: 0.01,
+      id: 'ior', label: 'IOR', type: 'float', default: 1.5,
+      min: 1.0, max: 3.0, step: 0.01,
       connectable: true, updateMode: 'uniform',
     },
     {
-      id: 'edge', label: 'Edge', type: 'float', default: 0.3,
+      id: 'curvature', label: 'Curvature', type: 'float', default: 0.8,
+      min: 0, max: 2, step: 0.01,
+      connectable: true, updateMode: 'uniform',
+    },
+    {
+      id: 'frost', label: 'Frost', type: 'float', default: 0,
       min: 0, max: 1, step: 0.01,
       connectable: true, updateMode: 'uniform',
     },
@@ -132,6 +163,16 @@ export const reededGlassNode: NodeDefinition = {
     const id = ctx.nodeId.replace(/-/g, '_')
 
     registerLensFn(ctx)
+
+    // Integer-based hash for frost jitter — no sin artifacts/scanlines
+    addFunction(ctx, 'reedHash', `vec2 reedHash(vec2 p) {
+  uvec2 q = uvec2(floatBitsToUint(p.x), floatBitsToUint(p.y));
+  q = q * 1103515245u + 12345u;
+  q.x += q.y * 1664525u;
+  q.y += q.x * 1013904223u;
+  q = q ^ (q >> 16u);
+  return vec2(q) / float(0xFFFFFFFFu) * 2.0 - 1.0;
+}`)
 
     // main = axis being sliced, perp = perpendicular axis
     const isVert = direction === 'vertical'
@@ -188,7 +229,7 @@ export const reededGlassNode: NodeDefinition = {
     ctx.uniforms.add('u_resolution')
     const ribUV = `rg_ribUV_${id}`
     lines.push(`float ${ribUV} = ${inputs.ribWidth} / u_resolution.${isVert ? 'x' : 'y'};`)
-    lines.push(`float ${lensed} = reedLens(${warpedMain}, ${ribUV}, ${inputs.strength}, ${inputs.edge});`)
+    lines.push(`float ${lensed} = reedLens(${warpedMain}, ${ribUV}, ${inputs.ior}, ${inputs.curvature});`)
 
     // Reconstruct distorted vec2
     const distorted = `rg_distorted_${id}`
@@ -215,7 +256,22 @@ export const reededGlassNode: NodeDefinition = {
       } else {
         lines.push(`vec2 ${sampleUV} = v_uv + vec2(0.0, ${disp});`)
       }
-      lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${sampleUV}).rgb;`)
+
+      // Frosted glass: hash-based jitter blur (grainy texture)
+      const frostVar = `rg_frost_${id}`
+      lines.push(`float ${frostVar} = ${inputs.frost};`)
+      lines.push(`vec3 ${outputs.color};`)
+      lines.push(`if (${frostVar} > 0.001) {`)
+      lines.push(`  vec3 rg_acc_${id} = vec3(0.0);`)
+      lines.push(`  float rg_frad_${id} = ${frostVar} * 0.02;`)
+      lines.push(`  for (int rg_i_${id} = 0; rg_i_${id} < 8; rg_i_${id}++) {`)
+      lines.push(`    vec2 rg_jit_${id} = reedHash(${sampleUV} * 0.1 + float(rg_i_${id}) * 7.31) * rg_frad_${id};`)
+      lines.push(`    rg_acc_${id} += texture(${samplerName}, ${sampleUV} + rg_jit_${id}).rgb;`)
+      lines.push(`  }`)
+      lines.push(`  ${outputs.color} = rg_acc_${id} / 8.0;`)
+      lines.push(`} else {`)
+      lines.push(`  ${outputs.color} = texture(${samplerName}, ${sampleUV}).rgb;`)
+      lines.push(`}`)
     } else {
       lines.push(`vec3 ${outputs.color} = ${inputs.source};`)
     }
