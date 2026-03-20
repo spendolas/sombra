@@ -104,13 +104,22 @@ function migrateV1ToV2(nodes: Node<NodeData>[]): Node<NodeData>[] {
       }
     }
 
-    // Reeded Glass: slices → ribWidth in pixels (assume ~1000px canvas)
+    // Reeded Glass: slices → ribWidth, strength/edge → ior/curvature
     if (type === 'reeded_glass') {
       if ('slices' in params) {
         const old = Number(params.slices) || 12
-        // Approximate: old slices were count in 0-1 UV range → pixel width ≈ 1000 / slices
-        params.ribWidth = old > 0 ? Math.round(1000 / old) : 20
+        params.ribWidth = old > 0 ? Math.round(1000 / old) : 80
         delete params.slices
+      }
+      if ('strength' in params) {
+        // Old strength (0-1 cosine mix) → approximate IOR
+        params.ior = 1.0 + Math.abs(Number(params.strength) || 0.5)
+        delete params.strength
+      }
+      if ('edge' in params) {
+        // Old edge (0-1 compression) → approximate curvature
+        params.curvature = Math.abs(Number(params.edge) || 0.3) * 2.0
+        delete params.edge
       }
     }
 

@@ -259,7 +259,12 @@ export const useGraphStore = create<GraphState>()(
       name: 'sombra-graph',
       version: GRAPH_SCHEMA_VERSION,
       partialize: (state) => ({
-        nodes: state.nodes,
+        // Strip large binary data (imageData) from persistence to avoid localStorage quota
+        nodes: state.nodes.map(n => {
+          if (!n.data.params?.imageData) return n
+          const { imageData: _, ...restParams } = n.data.params as Record<string, unknown>
+          return { ...n, data: { ...n.data, params: restParams } }
+        }),
         edges: state.edges,
       }),
     }
