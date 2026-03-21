@@ -9,6 +9,7 @@ export const timeNode: NodeDefinition = {
   label: 'Time',
   category: 'Input',
   description: 'Current time in seconds since start',
+  hidePreview: true,
 
   inputs: [],
 
