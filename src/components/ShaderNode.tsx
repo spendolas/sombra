@@ -322,7 +322,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
         )}
 
         {/* Node preview thumbnail (isolated component to avoid re-renders) */}
-        {nodeData.type !== 'fragment_output' && <NodePreview nodeId={id} />}
+        {nodeData.type !== 'fragment_output' && !definition.hidePreview && <NodePreview nodeId={id} />}
       </BaseNodeContent>
     </BaseNode>
   )

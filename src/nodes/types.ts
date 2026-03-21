@@ -100,12 +100,12 @@ export function getSpatialParams(spatial: SpatialConfig): NodeParameter[] {
         params.push(
           {
             id: 'srt_scaleX', label: 'Scale X', type: 'float', default: 1.0,
-            min: 0, max: 2.0, step: 0.01,
+            min: 0, max: 10.0, step: 0.01,
             connectable: true, updateMode: 'uniform',
           },
           {
             id: 'srt_scaleY', label: 'Scale Y', type: 'float', default: 1.0,
-            min: 0, max: 2.0, step: 0.01,
+            min: 0, max: 10.0, step: 0.01,
             connectable: true, updateMode: 'uniform',
           },
         )
@@ -188,6 +188,12 @@ export interface NodeDefinition {
    * Optional description for tooltips/help
    */
   description?: string
+
+  /**
+   * Hide the auto-generated mini-preview thumbnail on this node.
+   * Use for nodes that have their own preview (e.g., Image) or where preview is meaningless (e.g., Time).
+   */
+  hidePreview?: boolean
 }
 
 /**
