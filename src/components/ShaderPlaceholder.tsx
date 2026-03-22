@@ -12,7 +12,7 @@ export function ShaderPlaceholder() {
   const textRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (fragmentShader !== null) return
+    if (fragmentShader) return
 
     const container = containerRef.current
     const text = textRef.current
@@ -54,7 +54,7 @@ export function ShaderPlaceholder() {
     return () => cancelAnimationFrame(raf)
   }, [fragmentShader])
 
-  if (fragmentShader !== null) return null
+  if (fragmentShader) return null
 
   return (
     <div
