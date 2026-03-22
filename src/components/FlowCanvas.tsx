@@ -185,6 +185,8 @@ export function FlowCanvas({
         maskStrokeColor="var(--indigo)"
         maskStrokeWidth={1}
         bgColor="var(--surface-alt)"
+        pannable
+        zoomable
       />
     </ReactFlow>
   )
