@@ -21,17 +21,13 @@ function SelectTrigger({
 }) {
   return (
     <SelectPrimitive.Trigger
-      className={cn(
-        ds.selectFrame.root,
-        ds.enumSelect.trigger,
-        className
-      )}
+      className={cn(ds.enumSelect.trigger, "outline-none focus:border-active", className)}
       {...props}
     >
       <span className="flex w-full items-center justify-between gap-md">
         {children}
         <SelectPrimitive.Icon>
-          <ChevronDownIcon className="size-4 opacity-50" />
+          <ChevronDownIcon className="size-3.5 opacity-50" />
         </SelectPrimitive.Icon>
       </span>
     </SelectPrimitive.Trigger>
@@ -49,14 +45,15 @@ function SelectContent({
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
         className={cn(
-          "z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] overflow-y-auto rounded-md border shadow-md",
+          ds.enumSelect.content,
+          "z-50 max-h-(--radix-select-content-available-height) overflow-y-auto rounded-md shadow-md",
           className
         )}
         position={position}
         align={align}
         {...props}
       >
-        <SelectPrimitive.Viewport className="p-1">
+        <SelectPrimitive.Viewport className="p-xs">
           {children}
         </SelectPrimitive.Viewport>
       </SelectPrimitive.Content>
@@ -73,6 +70,9 @@ function SelectItem({
     <SelectPrimitive.Item
       className={cn(
         ds.enumSelect.item,
+        "text-fg outline-none rounded-sm px-sm py-xs",
+        "hover:bg-highlight data-[highlighted]:bg-highlight",
+        "data-[state=checked]:text-active",
         className
       )}
       {...props}

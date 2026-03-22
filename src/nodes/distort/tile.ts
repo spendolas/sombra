@@ -8,7 +8,7 @@ import type { NodeDefinition } from '../types'
 export const tileNode: NodeDefinition = {
   type: 'tile',
   label: 'Tile',
-  category: 'Transform',
+  category: 'Distort',
   description: 'Repeat coordinates with optional mirroring',
 
   inputs: [
@@ -59,7 +59,7 @@ export const tileNode: NodeDefinition = {
       if (samplerName) {
         lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${outputs.uv}).rgb;`)
       } else {
-        lines.push(`vec3 ${outputs.color} = ${inputs.source};`)
+        lines.push(`vec3 ${outputs.color} = vec3(${outputs.uv}, 0.5);`)
       }
       return lines.join('\n  ')
     }
@@ -88,7 +88,7 @@ export const tileNode: NodeDefinition = {
     if (samplerName) {
       lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${outputs.uv}).rgb;`)
     } else {
-      lines.push(`vec3 ${outputs.color} = ${inputs.source};`)
+      lines.push(`vec3 ${outputs.color} = vec3(${outputs.uv}, 0.5);`)
     }
 
     return lines.join('\n  ')

@@ -27,16 +27,16 @@ import { roundNode } from './math/round'
 import { smoothstepNode } from './math/smoothstep'
 import { turbulenceNode } from './math/turbulence'
 import { ridgedNode } from './math/ridged'
+import { warpNode } from './distort/warp'
+import { quantizeNode } from './distort/quantize'
+import { polarCoordsNode } from './distort/polar-coords'
+import { tileNode } from './distort/tile'
 
 // Noise nodes
 import { noiseNode } from './noise/noise'
 import { fbmNode } from './noise/fbm'
 
 // Transform nodes
-import { domainWarpNode } from './noise/domain-warp'
-import { quantizeUvNode } from './postprocess/quantize-uv'
-import { polarCoordsNode } from './transform/polar-coords'
-import { tileNode } from './transform/tile'
 import { reededGlassNode } from './transform/reeded-glass'
 
 // Color nodes
@@ -92,16 +92,16 @@ export const ALL_NODES = [
   smoothstepNode,
   turbulenceNode,
   ridgedNode,
+  warpNode,
+  quantizeNode,
+  polarCoordsNode,
+  tileNode,
 
   // Noise
   noiseNode,
   fbmNode,
 
   // Transform
-  domainWarpNode,
-  quantizeUvNode,
-  polarCoordsNode,
-  tileNode,
   reededGlassNode,
 
   // Color

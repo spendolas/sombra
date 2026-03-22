@@ -31,6 +31,10 @@
 
   --error: #ef4444;
 
+  --highlight: rgba(99, 102, 241, 0.15);
+  --hover: rgba(255, 255, 255, 0.06);
+  --active: #6366f1;
+
   /* ── Sombra spacing tokens (Figma: Spacing collection) ── */
   --sp-2xs: 2px;   /* spacing/2xs  VariableID:216:1079 */
   --sp-xs: 4px;   /* spacing/xs  VariableID:106:27 */
@@ -48,7 +52,7 @@
   --sz-btn-sm:        20px;  /* size/btn-sm       VariableID:106:42 */
   --sz-btn-md:        24px;  /* size/btn-md       VariableID:298:208 */
   --sz-input-h:       24px;  /* size/input-h      VariableID:106:43 */
-  --sz-select-h:      28px;  /* size/select-h     VariableID:106:44 */
+  --sz-select-h:      24px;  /* size/select-h     VariableID:106:44 */
   --sz-slider-track:  6px;  /* size/slider-track VariableID:106:45 */
   --sz-slider-thumb:  16px;  /* size/slider-thumb VariableID:106:46 */
   --sz-node-min-w:    160px;  /* size/node-min-w   VariableID:106:47 */
@@ -56,6 +60,26 @@
 
   /* ── Computed ── */
   /* === GENERATED:END root-vars === */
+}
+
+/* Minimal scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--edge) transparent;
+}
+*::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--edge);
+  border-radius: 2px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--fg-muted);
 }
 
 html, body, #root {
@@ -181,6 +205,9 @@ input[type="color"]::-webkit-color-swatch {
   --color-indigo-active: var(--indigo-active);
   --color-overlay-scrim: var(--overlay-scrim);
   --color-error: var(--error);
+  --color-highlight: var(--highlight);
+  --color-hover: var(--hover);
+  --color-active: var(--active);
 
   /* ── Sombra spacing → Tailwind utilities ── */
   --spacing-2xs: var(--sp-2xs);
@@ -285,3 +312,9 @@ input[type="color"]::-webkit-color-swatch {
   line-height: 1.5;
 }
   /* === GENERATED:END utilities === */
+
+@keyframes cmd-palette-shake {
+  0%, 100% { margin-left: 0; }
+  12%, 52%, 92% { margin-left: -5px; }
+  32%, 72% { margin-left: 5px; }
+}

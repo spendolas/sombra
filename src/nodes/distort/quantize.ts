@@ -1,15 +1,15 @@
 /**
- * Quantize UV - Snap coordinates to pixel grid cell centers
+ * Quantize — Snap coordinates to pixel grid cell centers
  * When wired to noise coords, all screen pixels within the same cell evaluate
  * the same noise value — giving uniform color per cell (chunky pixel look).
  */
 
 import type { NodeDefinition } from '../types'
 
-export const quantizeUvNode: NodeDefinition = {
-  type: 'quantize_uv',
-  label: 'Quantize UV',
-  category: 'Transform',
+export const quantizeNode: NodeDefinition = {
+  type: 'quantize',
+  label: 'Quantize',
+  category: 'Distort',
   description: 'Snap coordinates to pixel grid cell centers',
 
   inputs: [

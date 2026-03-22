@@ -10,6 +10,9 @@ import { nodeRegistry } from '../nodes/registry'
 import { useGraphStore } from '../stores/graphStore'
 import { searchNodes, groupByCategory } from '../utils/fuzzy-search'
 
+/** Node types that can only exist once on the graph */
+const SINGLETON_TYPES = new Set(['fragment_output'])
+
 interface CommandPaletteProps {
   onClose: () => void
   mousePosition: { x: number; y: number }
@@ -18,14 +21,28 @@ interface CommandPaletteProps {
 export function CommandPalette({ onClose, mousePosition }: CommandPaletteProps) {
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
+  const [shaking, setShaking] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
   const { screenToFlowPosition } = useReactFlow()
   const addNode = useGraphStore((s) => s.addNode)
+  const graphNodes = useGraphStore((s) => s.nodes)
 
   const allNodes = useMemo(() => nodeRegistry.getAll(), [])
   const results = useMemo(() => searchNodes(query, allNodes), [query, allNodes])
   const grouped = useMemo(() => groupByCategory(results), [results])
+
+  // Track which singleton types are already on the graph
+  const existingSingletons = useMemo(
+    () => new Set(graphNodes.filter(n => SINGLETON_TYPES.has(n.data.type)).map(n => n.data.type)),
+    [graphNodes],
+  )
+
+  const isDisabled = useCallback(
+    (type: string) => SINGLETON_TYPES.has(type) && existingSingletons.has(type),
+    [existingSingletons],
+  )
 
   // Flat list for keyboard navigation (category headers excluded)
   const flatResults = useMemo(() => results, [results])
@@ -46,8 +63,18 @@ export function CommandPalette({ onClose, mousePosition }: CommandPaletteProps) 
     item?.scrollIntoView({ block: 'nearest' })
   }, [selectedIndex])
 
+  const triggerShake = useCallback(() => {
+    setShaking(true)
+    setTimeout(() => setShaking(false), 500)
+  }, [])
+
   const placeNode = useCallback(
     (nodeType: string) => {
+      if (isDisabled(nodeType)) {
+        triggerShake()
+        return
+      }
+
       const def = nodeRegistry.get(nodeType)
       if (!def) return
 
@@ -73,10 +100,15 @@ export function CommandPalette({ onClose, mousePosition }: CommandPaletteProps) 
         },
       }
 
+      // Deselect all existing nodes before adding the new one
+      const currentNodes = useGraphStore.getState().nodes
+      if (currentNodes.some(n => n.selected)) {
+        useGraphStore.getState().setNodes(currentNodes.map(n => n.selected ? { ...n, selected: false } : n))
+      }
       addNode(newNode)
       onClose()
     },
-    [screenToFlowPosition, addNode, onClose]
+    [screenToFlowPosition, addNode, onClose, isDisabled, triggerShake],
   )
 
   const onKeyDown = useCallback(
@@ -117,7 +149,11 @@ export function CommandPalette({ onClose, mousePosition }: CommandPaletteProps) 
     >
       {/* Dialog */}
       <div
+        ref={dialogRef}
         className="fixed left-1/2 -translate-x-1/2 top-[20vh] w-[420px] max-h-[50vh] bg-surface-raised border border-edge rounded-lg shadow-2xl overflow-hidden flex flex-col"
+        style={shaking ? {
+          animation: 'cmd-palette-shake 0.4s ease-in-out',
+        } : undefined}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search input */}
@@ -161,22 +197,31 @@ export function CommandPalette({ onClose, mousePosition }: CommandPaletteProps) 
                   flatIndex++
                   const isSelected = flatIndex === selectedIndex
                   const currentIndex = flatIndex
+                  const disabled = isDisabled(result.definition.type)
                   return (
                     <div
                       key={result.definition.type}
                       data-selected={isSelected}
-                      className={`px-4 py-1.5 flex items-center justify-between cursor-pointer ${
-                        isSelected ? 'bg-indigo/20' : 'hover:bg-surface-elevated'
+                      className={`px-4 py-1.5 flex items-center justify-between ${
+                        disabled
+                          ? 'opacity-[var(--disabled-opacity)] cursor-not-allowed'
+                          : `cursor-pointer ${isSelected ? 'bg-highlight' : 'hover:bg-hover'}`
                       }`}
                       onClick={() => placeNode(result.definition.type)}
                       onMouseEnter={() => setSelectedIndex(currentIndex)}
                     >
-                      <span className="text-fg text-sm">{result.definition.label}</span>
-                      {result.definition.description && (
+                      <span className={`text-sm ${disabled ? 'text-fg-muted' : 'text-fg'}`}>
+                        {result.definition.label}
+                      </span>
+                      {disabled ? (
+                        <span className="text-fg-muted text-xs italic ml-4">
+                          already in graph
+                        </span>
+                      ) : result.definition.description ? (
                         <span className="text-fg-muted text-xs truncate ml-4 max-w-[55%] text-right">
                           {result.definition.description}
                         </span>
-                      )}
+                      ) : null}
                     </div>
                   )
                 })}

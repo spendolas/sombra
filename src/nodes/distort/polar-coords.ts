@@ -9,7 +9,7 @@ import type { NodeDefinition } from '../types'
 export const polarCoordsNode: NodeDefinition = {
   type: 'polar_coords',
   label: 'Polar Coordinates',
-  category: 'Transform',
+  category: 'Distort',
   description: 'Convert between cartesian and polar coordinates',
 
   inputs: [

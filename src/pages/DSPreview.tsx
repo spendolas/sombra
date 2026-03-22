@@ -505,13 +505,13 @@ function MoleculesSection() {
             <div className={ds.enumSelect.root}>
               <label className={ds.enumSelect.label}>Noise Type</label>
               <Select value={enumVal} onValueChange={setEnumVal}>
-                <SelectTrigger size="sm" className={ds.enumSelect.trigger}>
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className={ds.enumSelect.content}>
-                  <SelectItem value="simplex" className={ds.enumSelect.item}>Simplex</SelectItem>
-                  <SelectItem value="value" className={ds.enumSelect.item}>Value</SelectItem>
-                  <SelectItem value="worley" className={ds.enumSelect.item}>Worley</SelectItem>
+                <SelectContent>
+                  <SelectItem value="simplex">Simplex</SelectItem>
+                  <SelectItem value="value">Value</SelectItem>
+                  <SelectItem value="worley">Worley</SelectItem>
                 </SelectContent>
               </Select>
             </div>

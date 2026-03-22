@@ -916,6 +916,16 @@ export class WebGLRenderer {
   // Cleanup
   // -----------------------------------------------------------------------
 
+  /** Clear the canvas to black and stop animation. Used when compilation fails. */
+  clear() {
+    const gl = this.gl
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    gl.viewport(0, 0, this.canvas.width, this.canvas.height)
+    gl.clearColor(0, 0, 0, 1)
+    gl.clear(gl.COLOR_BUFFER_BIT)
+    this.setAnimated(false)
+  }
+
   destroy() {
     this.stopAnimation()
     if (this.snapTimer) { clearTimeout(this.snapTimer); this.snapTimer = null }

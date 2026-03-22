@@ -10,7 +10,14 @@ import { applyNodeChanges, applyEdgeChanges } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 
 /** Schema version — bump when persisted shape changes */
-const GRAPH_SCHEMA_VERSION = 1
+const GRAPH_SCHEMA_VERSION = 2
+
+/** Renamed node types — applied on localStorage load */
+const TYPE_RENAMES: Record<string, string> = {
+  'warp_uv': 'warp',
+  'domain_warp': 'warp',
+  'quantize_uv': 'quantize',
+}
 
 const MAX_HISTORY = 50
 
@@ -258,6 +265,17 @@ export const useGraphStore = create<GraphState>()(
     {
       name: 'sombra-graph',
       version: GRAPH_SCHEMA_VERSION,
+      migrate: (persisted: unknown) => {
+        const state = persisted as { nodes?: Node<NodeData>[]; edges?: Edge<EdgeData>[] }
+        if (state.nodes) {
+          for (const node of state.nodes) {
+            if (node.data.type in TYPE_RENAMES) {
+              node.data.type = TYPE_RENAMES[node.data.type]
+            }
+          }
+        }
+        return state
+      },
       partialize: (state) => ({
         // Strip large binary data (imageData) from persistence to avoid localStorage quota
         nodes: state.nodes.map(n => {

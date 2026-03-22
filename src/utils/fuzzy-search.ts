@@ -56,16 +56,12 @@ function fuzzyMatch(query: string, text: string): number | null {
 export function searchNodes(query: string, nodes: NodeDefinition[]): SearchResult[] {
   if (!query.trim()) {
     // No query — return all nodes (no scoring needed)
-    return nodes
-      .filter(n => n.type !== 'fragment_output')
-      .map(n => ({ definition: n, score: 0, matchField: 'label' }))
+    return nodes.map(n => ({ definition: n, score: 0, matchField: 'label' }))
   }
 
   const results: SearchResult[] = []
 
   for (const node of nodes) {
-    // Skip output node — users shouldn't place duplicates
-    if (node.type === 'fragment_output') continue
 
     let bestScore = Infinity
     let bestField = 'label'

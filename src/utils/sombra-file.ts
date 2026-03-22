@@ -46,8 +46,8 @@ function migrateV1ToV2(nodes: Node<NodeData>[]): Node<NodeData>[] {
       }
     }
 
-    // Domain Warp: frequency → _srt_scale (inverted)
-    if (type === 'warp_uv' || type === 'domain_warp') {
+    // Domain Warp / Warp: frequency → _srt_scale (inverted)
+    if (type === 'warp_uv' || type === 'domain_warp' || type === 'warp') {
       if ('frequency' in params) {
         const old = Number(params.frequency) || 4.0
         params.srt_scale = old !== 0 ? 1 / old : 1.0
@@ -156,6 +156,21 @@ export function importFromFile(json: unknown): {
   // Validate nodes and edges arrays
   if (!Array.isArray(obj.nodes) || !Array.isArray(obj.edges)) {
     throw new Error('Invalid file: expected "nodes" and "edges" arrays')
+  }
+
+  // Migrate renamed node types before validation
+  const TYPE_RENAMES: Record<string, string> = {
+    'warp_uv': 'warp',
+    'domain_warp': 'warp',
+    'quantize_uv': 'quantize',
+  }
+  for (const node of obj.nodes) {
+    if (node && typeof node === 'object') {
+      const d = (node as Record<string, unknown>).data as Record<string, unknown> | undefined
+      if (d && typeof d.type === 'string' && d.type in TYPE_RENAMES) {
+        d.type = TYPE_RENAMES[d.type]
+      }
+    }
   }
 
   // Validate each node
