@@ -370,15 +370,12 @@ export function ColorRampEditor({
 
       {/* Preset dropdown */}
       <Select onValueChange={handlePreset}>
-        <SelectTrigger
-          size="sm"
-          className={ds.enumSelect.trigger}
-        >
+        <SelectTrigger>
           <SelectValue placeholder="Preset" />
         </SelectTrigger>
-        <SelectContent className={ds.enumSelect.content}>
+        <SelectContent>
           {PRESETS.map((preset) => (
-            <SelectItem key={preset.name} value={preset.name} className={ds.enumSelect.item}>
+            <SelectItem key={preset.name} value={preset.name}>
               {preset.name}
             </SelectItem>
           ))}

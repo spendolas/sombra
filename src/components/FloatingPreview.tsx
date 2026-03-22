@@ -1,5 +1,6 @@
 import { useRef, useCallback, useEffect, useMemo, type RefObject } from 'react'
 import { PreviewToolbar } from './PreviewToolbar'
+import { ShaderPlaceholder } from './ShaderPlaceholder'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { ds } from '@/generated/ds'
 
@@ -152,6 +153,7 @@ export function FloatingPreview({ targetRef }: FloatingPreviewProps) {
         onMouseDown={onDragStart}
       />
       <div ref={targetRef} className="w-full h-full" />
+      <ShaderPlaceholder />
       {/* Resize edges */}
       <div className="absolute top-0 left-3 right-3 h-1.5 cursor-n-resize z-20" onMouseDown={(e) => onResizeStart(0, -1, e)} />
       <div className="absolute bottom-0 left-3 right-3 h-1.5 cursor-s-resize z-20" onMouseDown={(e) => onResizeStart(0, 1, e)} />

@@ -2,7 +2,7 @@
  * FlowCanvas - React Flow canvas with drag-and-drop support
  */
 
-import { useCallback, useRef, useMemo } from 'react'
+import { useCallback, useRef } from 'react'
 import { ReactFlow, Background, MiniMap, useReactFlow, reconnectEdge } from '@xyflow/react'
 import type { Node, Edge, OnNodesChange, OnEdgesChange, OnReconnect, Connection, IsValidConnection } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
@@ -12,6 +12,8 @@ import { ZoomSlider } from '@/components/zoom-slider'
 import { GraphToolbar } from '@/components/GraphToolbar'
 import { TypedEdge } from './TypedEdge'
 import { ds } from '@/generated/ds'
+
+const EDGE_TYPES = { typed: TypedEdge } as const
 
 interface FlowCanvasProps {
   nodes: Node<NodeData>[]
@@ -35,12 +37,12 @@ export function FlowCanvas({
   onAddNode,
 }: FlowCanvasProps) {
   const { screenToFlowPosition, fitView } = useReactFlow()
+
   const onInit = useCallback(() => {
     setTimeout(() => fitView({ padding: 0.2, duration: 200 }), 50)
   }, [fitView])
 
-  // Register custom edge types
-  const edgeTypes = useMemo(() => ({ typed: TypedEdge }), [])
+  const edgeTypes = EDGE_TYPES
 
   // Track whether a reconnect succeeded
   const reconnectSuccessful = useRef(false)

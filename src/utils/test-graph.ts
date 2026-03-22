@@ -286,7 +286,7 @@ export function createSpectraSimplexFBM(): {
       type: 'shaderNode',
       position: { x: 0, y: 0 },
       data: {
-        type: 'quantize_uv',
+        type: 'quantize',
         params: { pixelSize: 344 },
       },
     },
@@ -407,7 +407,7 @@ export function createSpectraWorleyRidged(): {
       type: 'shaderNode',
       position: { x: 0, y: 234 },
       data: {
-        type: 'quantize_uv',
+        type: 'quantize',
         params: { pixelSize: 28 },
       },
     },
@@ -425,7 +425,7 @@ export function createSpectraWorleyRidged(): {
       type: 'shaderNode',
       position: { x: 520, y: 156 },
       data: {
-        type: 'warp_uv',
+        type: 'warp',
         params: { strength: 0.2, frequency: 1.0 },
       },
     },
@@ -579,7 +579,7 @@ export function createSpectraBoxNone(): {
       type: 'shaderNode',
       position: { x: 0, y: 0 },
       data: {
-        type: 'quantize_uv',
+        type: 'quantize',
         params: { pixelSize: 104 },
       },
     },
@@ -599,7 +599,7 @@ export function createSpectraBoxNone(): {
       type: 'shaderNode',
       position: { x: 300, y: 0 },
       data: {
-        type: 'warp_uv',
+        type: 'warp',
         params: { strength: 5.0, frequency: 1.0 },
       },
     },

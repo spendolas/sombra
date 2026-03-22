@@ -138,15 +138,12 @@ function EnumSelect({ param, value, onChange }: EnumSelectProps) {
         {param.label}
       </Label>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger
-          size="sm"
-          className={ds.enumSelect.trigger}
-        >
+        <SelectTrigger>
           <SelectValue />
         </SelectTrigger>
-        <SelectContent className={ds.enumSelect.content}>
+        <SelectContent>
           {param.options!.map((option) => (
-            <SelectItem key={option.value} value={option.value} className={ds.enumSelect.item}>
+            <SelectItem key={option.value} value={option.value}>
               {option.label}
             </SelectItem>
           ))}

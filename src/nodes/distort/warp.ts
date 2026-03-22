@@ -1,16 +1,22 @@
 /**
- * Domain Warp - Distorts coordinates using a selectable noise function.
+ * Warp — Distorts coordinates using a selectable noise function.
  */
 
 import type { NodeDefinition, SpatialConfig } from '../types'
 import { getSpatialParams } from '../types'
-import { NOISE_TYPE_OPTIONS, resolveNoiseFn, registerNoiseType } from './noise-functions'
+import { NOISE_TYPE_OPTIONS, resolveNoiseFn, registerNoiseType } from '../noise/noise-functions'
 
-export const domainWarpNode: NodeDefinition = {
-  type: 'warp_uv',
-  label: 'Warp UV',
-  category: 'Transform',
-  description: 'Distorts UV coordinates using noise for organic warping effects',
+const EDGE_OPTIONS = [
+  { value: 'clamp', label: 'Clamp' },
+  { value: 'repeat', label: 'Repeat' },
+  { value: 'mirror', label: 'Mirror' },
+]
+
+export const warpNode: NodeDefinition = {
+  type: 'warp',
+  label: 'Warp',
+  category: 'Distort',
+  description: 'Distorts coordinates using noise for organic warping effects',
   spatial: { transforms: ['scale', 'translate'] } satisfies SpatialConfig,
 
   inputs: [
@@ -41,6 +47,10 @@ export const domainWarpNode: NodeDefinition = {
       ],
       updateMode: 'recompile',
     },
+    {
+      id: 'edge', label: 'Edge', type: 'enum', default: 'clamp',
+      options: EDGE_OPTIONS, updateMode: 'recompile',
+    },
   ],
 
   glsl: (ctx) => {
@@ -48,6 +58,7 @@ export const domainWarpNode: NodeDefinition = {
     const noiseType = (params.noiseType as string) || 'value'
     const noiseFn = resolveNoiseFn(noiseType)
     const warpDepth = (params.warpDepth as string) || '2'
+    const edge = (params.edge as string) || 'clamp'
 
     // Register GLSL functions for the selected noise type
     registerNoiseType(ctx, noiseType)
@@ -76,12 +87,25 @@ export const domainWarpNode: NodeDefinition = {
         : `float ${outputs.warpedPhase} = ${inputs.phase};`,
     )
 
-    // Color output — texture mode (source wired) vs fallback
+    // Color output — texture mode (source wired) vs UV gradient fallback
     const samplerName = ctx.textureSamplers?.source
     if (samplerName) {
-      lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${outputs.warped}).rgb;`)
+      // Apply edge wrapping before texture sampling
+      const edgeUV = `dw_edge_${id}`
+      if (edge === 'repeat') {
+        lines.push(`vec2 ${edgeUV} = fract(${outputs.warped});`)
+      } else if (edge === 'mirror') {
+        lines.push(`vec2 ${edgeUV} = vec2(`)
+        lines.push(`  mod(${outputs.warped}.x, 2.0) < 1.0 ? fract(${outputs.warped}.x) : 1.0 - fract(${outputs.warped}.x),`)
+        lines.push(`  mod(${outputs.warped}.y, 2.0) < 1.0 ? fract(${outputs.warped}.y) : 1.0 - fract(${outputs.warped}.y)`)
+        lines.push(`);`)
+      } else {
+        lines.push(`vec2 ${edgeUV} = clamp(${outputs.warped}, 0.0, 1.0);`)
+      }
+      lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${edgeUV}).rgb;`)
     } else {
-      lines.push(`vec3 ${outputs.color} = ${inputs.source};`)
+      // No source — show warped UV as gradient to visualize distortion
+      lines.push(`vec3 ${outputs.color} = vec3(${outputs.warped}, 0.5);`)
     }
 
     return lines.join('\n  ')

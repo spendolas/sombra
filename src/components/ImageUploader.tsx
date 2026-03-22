@@ -575,7 +575,7 @@ export function ImageUploader({ nodeId, data }: {
       ) : (
         <button
           onClick={handleClick}
-          className="flex items-center justify-center w-full py-md rounded-sm bg-surface-raised border border-edge-subtle text-caption text-fg-dim hover:bg-surface-elevated hover:text-fg transition-colors cursor-pointer"
+          className="flex items-center justify-center w-full py-md rounded-sm bg-surface-raised border border-edge-subtle text-caption text-fg-dim hover:bg-hover hover:text-fg transition-colors cursor-pointer"
         >
           Upload Image
         </button>

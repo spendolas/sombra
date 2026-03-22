@@ -146,6 +146,33 @@
         "namespace": "color",
         "key": "error"
       }
+    },
+    "VariableID:576:987": {
+      "figmaName": "interactive/highlight",
+      "cssVar": "--highlight",
+      "value": "rgba(99, 102, 241, 0.15)",
+      "tailwind": {
+        "namespace": "color",
+        "key": "highlight"
+      }
+    },
+    "VariableID:576:988": {
+      "figmaName": "interactive/hover",
+      "cssVar": "--hover",
+      "value": "rgba(255, 255, 255, 0.06)",
+      "tailwind": {
+        "namespace": "color",
+        "key": "hover"
+      }
+    },
+    "VariableID:576:989": {
+      "figmaName": "interactive/active",
+      "cssVar": "--active",
+      "value": "#6366f1",
+      "tailwind": {
+        "namespace": "color",
+        "key": "active"
+      }
     }
   },
   "portColors": {
@@ -387,7 +414,7 @@
     "VariableID:106:44": {
       "figmaName": "select/h",
       "cssVar": "--sz-select-h",
-      "value": 28,
+      "value": 24,
       "unit": "px",
       "tailwind": [
         {
@@ -859,12 +886,6 @@
       "parts": {
         "root": {
           "figmaNodeId": "106:95",
-          "fill": "surface/raised",
-          "stroke": {
-            "color": "edge/subtle",
-            "weight": 1
-          },
-          "radius": "sm",
           "padding": {
             "x": "md",
             "y": "sm"
@@ -874,7 +895,7 @@
           "cursor": "move",
           "transition": "colors",
           "hover": {
-            "fill": "surface/elevated",
+            "fill": "highlight",
             "textColor": "fg"
           },
           "layout": "horizontal",
@@ -950,7 +971,7 @@
         },
         "solidActive": {
           "figmaNodeId": "306:243",
-          "fill": "indigo/default",
+          "fill": "active",
           "textColor": "fg",
           "cursor": "default",
           "layout": "vertical",
@@ -967,7 +988,7 @@
           "cursor": "pointer",
           "transition": "colors",
           "hover": {
-            "fill": "surface/elevated",
+            "fill": "hover",
             "textColor": "fg"
           },
           "layout": "vertical",
@@ -992,11 +1013,11 @@
         },
         "ghostActive": {
           "figmaNodeId": "306:252",
-          "fill": "indigo/default",
+          "fill": "active",
           "textColor": "fg",
           "cursor": "default",
           "hover": {
-            "fill": "indigo/default"
+            "fill": "active"
           },
           "layout": "vertical",
           "justify": "center",
@@ -1014,7 +1035,7 @@
           "transition": "colors",
           "extra": "h-btn-md w-auto px-sm",
           "hover": {
-            "fill": "surface/elevated",
+            "fill": "hover",
             "textColor": "fg"
           },
           "layout": "vertical",
@@ -1042,12 +1063,12 @@
         "textGhostActive": {
           "figmaNodeId": "326:48",
           "textStyle": "text-mono-value",
-          "fill": "indigo/default",
+          "fill": "active",
           "textColor": "fg",
           "cursor": "default",
           "extra": "h-btn-md w-auto px-sm",
           "hover": {
-            "fill": "indigo/default"
+            "fill": "active"
           },
           "layout": "vertical",
           "justify": "center",
@@ -1072,7 +1093,7 @@
         },
         "ghostHover": {
           "figmaNodeId": "329:5",
-          "fill": "surface/elevated",
+          "fill": "hover",
           "textColor": "fg",
           "cursor": "pointer",
           "layout": "vertical",
@@ -1086,7 +1107,7 @@
         "textGhostHover": {
           "figmaNodeId": "329:7",
           "textStyle": "text-mono-value",
-          "fill": "surface/elevated",
+          "fill": "hover",
           "textColor": "fg",
           "cursor": "pointer",
           "extra": "h-btn-md w-auto px-sm",
@@ -1250,16 +1271,23 @@
           "layout": "horizontal",
           "justify": "between",
           "align": "center",
-          "padding": "md"
+          "padding": "md",
+          "cursor": "pointer",
+          "transition": "colors",
+          "hover": {
+            "fill": "highlight"
+          }
         },
         "content": {
-          "fill": "surface/elevated",
+          "fill": "surface/raised",
           "stroke": {
             "color": "edge/default"
           }
         },
         "item": {
-          "textStyle": "text-body"
+          "textStyle": "text-body",
+          "textColor": "fg",
+          "cursor": "pointer"
         }
       }
     },
@@ -1290,7 +1318,11 @@
           },
           "width": "6",
           "height": "6",
-          "cursor": "pointer"
+          "cursor": "pointer",
+          "transition": "colors",
+          "hover": {
+            "stroke": "active"
+          }
         }
       }
     },
@@ -1360,6 +1392,10 @@
             "weight": 2
           },
           "cursor": "pointer",
+          "transition": "colors",
+          "hover": {
+            "stroke": "active"
+          },
           "fill": "overlay/scrim"
         },
         "stopHandleSelected": {
@@ -1542,7 +1578,12 @@
           },
           "radius": "sm",
           "width": "6",
-          "height": "6"
+          "height": "6",
+          "cursor": "pointer",
+          "transition": "colors",
+          "hover": {
+            "stroke": "active"
+          }
         }
       }
     },
@@ -1678,9 +1719,9 @@
       "nodeFile": "src/nodes/noise/noise.ts"
     },
     "123:1814": {
-      "name": "Warp UV",
-      "category": "Transform",
-      "nodeFile": "src/nodes/noise/domain-warp.ts"
+      "name": "Warp",
+      "category": "Distort",
+      "nodeFile": "src/nodes/distort/warp.ts"
     },
     "123:1813": {
       "name": "FBM",
@@ -1738,9 +1779,9 @@
       "nodeFile": "src/nodes/color/brightness-contrast.ts"
     },
     "123:1827": {
-      "name": "Quantize UV",
-      "category": "Transform",
-      "nodeFile": "src/nodes/postprocess/quantize-uv.ts"
+      "name": "Quantize",
+      "category": "Distort",
+      "nodeFile": "src/nodes/distort/quantize.ts"
     },
     "123:1825": {
       "name": "Dither",
@@ -1794,13 +1835,13 @@
     },
     "443:1025": {
       "name": "Polar Coordinates",
-      "category": "Transform",
-      "nodeFile": "src/nodes/transform/polar-coords.ts"
+      "category": "Distort",
+      "nodeFile": "src/nodes/distort/polar-coords.ts"
     },
     "443:1070": {
       "name": "Tile",
-      "category": "Transform",
-      "nodeFile": "src/nodes/transform/tile.ts"
+      "category": "Distort",
+      "nodeFile": "src/nodes/distort/tile.ts"
     },
     "445:814": {
       "name": "Clamp",

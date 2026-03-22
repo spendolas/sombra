@@ -1,5 +1,6 @@
 import type { RefObject } from 'react'
 import { PreviewToolbar } from './PreviewToolbar'
+import { ShaderPlaceholder } from './ShaderPlaceholder'
 import { ds } from '@/generated/ds'
 
 interface PreviewPanelProps {
@@ -11,6 +12,7 @@ export function PreviewPanel({ targetRef }: PreviewPanelProps) {
     <div className={ds.previewPanel.root}>
       <PreviewToolbar className="absolute top-xl right-xl z-10" />
       <div ref={targetRef} className="w-full h-full" />
+      <ShaderPlaceholder />
     </div>
   )
 }

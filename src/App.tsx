@@ -12,6 +12,9 @@ import { useSettingsStore } from './stores/settingsStore'
 import { createDefaultGraph } from './utils/test-graph'
 import { nodeRegistry } from './nodes/registry'
 import { ShaderNode } from './components/ShaderNode'
+
+// Module-level constant — prevents React Flow from remounting all nodes on re-render
+const NODE_TYPES = { shaderNode: ShaderNode } as const
 import { NodePalette } from './components/NodePalette'
 import { FlowCanvas } from './components/FlowCanvas'
 import { PropertiesPanel } from './components/PropertiesPanel'
@@ -100,8 +103,7 @@ function App() {
     [nodes, edges, addEdge, onEdgesChange]
   )
 
-  // Register custom node types
-  const nodeTypes = useMemo(() => ({ shaderNode: ShaderNode }), [])
+  const nodeTypes = NODE_TYPES
 
   // Find selected node for properties panel
   const selectedNode = useMemo(() => {
@@ -298,6 +300,9 @@ function App() {
             rendererRef.current.requestRender()
           }
         }
+      } else {
+        // Compilation failed — clear canvas to black so stale shader doesn't bleed through
+        rendererRef.current?.clear()
       }
     },
     []
@@ -375,7 +380,7 @@ function App() {
         <div className="hidden">
           <canvas
             ref={canvasRef}
-            className="w-full h-full block"
+            className="w-full h-full block object-fill"
           />
         </div>
 

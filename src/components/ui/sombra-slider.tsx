@@ -282,7 +282,7 @@ function SombraSlider({
     <div
       className={cn(
         ds.floatSlider.root,
-        disabled && 'opacity-60 pointer-events-none',
+        disabled && 'opacity-[var(--disabled-opacity)] pointer-events-none',
         className
       )}
     >
