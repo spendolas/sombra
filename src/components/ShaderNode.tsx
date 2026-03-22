@@ -28,7 +28,8 @@ const NodePreview = memo(({ nodeId }: { nodeId: string }) => {
   return (
     <img
       src={previewUrl}
-      className="w-20 h-20 rounded-sm mx-auto mt-2 nodrag nowheel"
+      className="w-full aspect-square rounded-sm mt-2 nodrag nowheel"
+      style={{ imageRendering: 'pixelated' }}
       alt=""
     />
   )
@@ -316,7 +317,11 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
 
         {/* Custom component (if provided) */}
         {definition.component && (
-          <div className={cn("mt-xs pt-md w-full", regularParams.length === 0 && ds.shaderNode.paramDivider)}>
+          <div className={cn(
+            "w-full",
+            !definition.hidePreview && "mt-xs pt-md",
+            !definition.hidePreview && regularParams.length === 0 && ds.shaderNode.paramDivider,
+          )}>
             <definition.component nodeId={id} data={currentValues} />
           </div>
         )}

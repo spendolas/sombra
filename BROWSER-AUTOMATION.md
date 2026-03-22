@@ -218,18 +218,13 @@ The **GraphToolbar** in the top-left of the canvas provides Save (download) and 
 | `brightness_contrast` | Brightness/Contrast | `color` (vec3) | `color` (vec3) | `brightness` (connectable), `contrast` (connectable) |
 | `color_ramp` | Color Ramp | `t` (float) | `color` (vec3) | `interpolation` (enum: smooth/linear/constant), `stops` (hidden, array of `{position, color}`) |
 
-### Transform
 
-| Type | Label | Inputs | Outputs | Key Params |
-|---|---|---|---|---|
-| `reeded_glass` | Reeded Glass | `coords` (vec2, auto_uv) | `coords` (vec2) | `ribWidth`, `ior`, `curvature`, `frost` |
 
 ### Distort
 
 | Type | Label | Inputs | Outputs | Key Params |
 |---|---|---|---|---|
 | `warp` | Warp | `source` (vec3, textureInput), `coords` (vec2, auto_uv), `phase` (float) | `color` (vec3), `warped` (vec2), `warpedPhase` (float) | `noiseType` (enum), `strength` (connectable), `seed` (connectable), `warpDepth` (enum: 2/3), `edge` (enum: clamp/repeat/mirror) |
-| `quantize` | Quantize | `source` (vec3, textureInput), `coords` (vec2, auto_fragcoord) | `color` (vec3), `uv` (vec2) | `pixelSize` (connectable) |
 | `polar_coords` | Polar Coordinates | `source` (vec3, textureInput), `coords` (vec2, auto_uv) | `color` (vec3), `polar` (vec2) | `mode` (enum: forward/inverse), `centerX` (connectable), `centerY` (connectable) |
 | `tile` | Tile | `source` (vec3, textureInput), `coords` (vec2, auto_uv) | `color` (vec3), `uv` (vec2) | `countX` (connectable), `countY` (connectable), `mirror` (enum: none/x/y/xy) |
 
@@ -238,6 +233,8 @@ The **GraphToolbar** in the top-left of the canvas provides Save (download) and 
 | Type | Label | Inputs | Outputs | Key Params |
 |---|---|---|---|---|
 | `dither` | Dither | `color` (vec3) | `result` (vec3) | `pixelSize` (connectable), `shape` (enum: square/circle/diamond/triangle), `threshold` (connectable), `dither` (connectable, shown for circle) |
+| `pixelate` | Pixelate | `source` (vec3, textureInput), `coords` (vec2, screen_uv) | `color` (vec3), `uv` (vec2) | `pixelSize` (connectable) |
+| `reeded_glass` | Reeded Glass | `source` (vec3, textureInput), `coords` (vec2, auto_uv) | `color` (vec3), `coords` (vec2) | `ribWidth`, `ior`, `curvature`, `frost` |
 
 ### Output
 

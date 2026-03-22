@@ -84,7 +84,7 @@ function registerLensFn(ctx: GLSLContext): void {
 export const reededGlassNode: NodeDefinition = {
   type: 'reeded_glass',
   label: 'Reeded Glass',
-  category: 'Transform',
+  category: 'Effect',
   description: 'Cylindrical lens distortion through ribbed glass',
   spatial: { transforms: ['scale', 'rotate', 'translate'] } satisfies SpatialConfig,
 

@@ -162,7 +162,8 @@ export function importFromFile(json: unknown): {
   const TYPE_RENAMES: Record<string, string> = {
     'warp_uv': 'warp',
     'domain_warp': 'warp',
-    'quantize_uv': 'quantize',
+    'quantize_uv': 'pixelate',
+    'quantize': 'pixelate',
   }
   for (const node of obj.nodes) {
     if (node && typeof node === 'object') {
