@@ -99,7 +99,11 @@ export function useLiveCompiler(
         return
       }
 
-      if (result?.success) {
+      // Check if Fragment Output has any upstream connection
+      const outputNode = nodesRef.current.find(n => n.data.type === 'fragment_output')
+      const outputConnected = outputNode && edgesRef.current.some(e => e.target === outputNode.id)
+
+      if (result?.success && outputConnected) {
         setShaders(result.vertexShader, result.fragmentShader)
         markCompileSuccess()
         lastUniformsRef.current = result.userUniforms
