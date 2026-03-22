@@ -93,6 +93,7 @@ export function useLiveCompiler(
             severity: 'error' as const,
           },
         ])
+        setShaders('', '')
         setCompiling(false)
         onCompileRef.current?.({ success: false, fragmentShader: '' })
         return
@@ -119,6 +120,7 @@ export function useLiveCompiler(
             severity: 'error' as const,
           }))
         )
+        setShaders('', '')
 
         onCompileRef.current?.({ success: false, fragmentShader: '' })
       }
