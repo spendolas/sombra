@@ -28,7 +28,6 @@ import { smoothstepNode } from './math/smoothstep'
 import { turbulenceNode } from './math/turbulence'
 import { ridgedNode } from './math/ridged'
 import { warpNode } from './distort/warp'
-import { quantizeNode } from './distort/quantize'
 import { polarCoordsNode } from './distort/polar-coords'
 import { tileNode } from './distort/tile'
 
@@ -36,7 +35,8 @@ import { tileNode } from './distort/tile'
 import { noiseNode } from './noise/noise'
 import { fbmNode } from './noise/fbm'
 
-// Transform nodes
+// Effect nodes
+import { pixelateNode } from './distort/pixelate'
 import { reededGlassNode } from './transform/reeded-glass'
 
 // Color nodes
@@ -93,7 +93,6 @@ export const ALL_NODES = [
   turbulenceNode,
   ridgedNode,
   warpNode,
-  quantizeNode,
   polarCoordsNode,
   tileNode,
 
@@ -101,7 +100,8 @@ export const ALL_NODES = [
   noiseNode,
   fbmNode,
 
-  // Transform
+  // Effect
+  pixelateNode,
   reededGlassNode,
 
   // Color
@@ -158,6 +158,10 @@ export async function bindNodeComponents(): Promise<void> {
   const { ImageUploader } = await import('@/components/ImageUploader')
   const image = nodeRegistry.get('image')
   if (image) image.component = ImageUploader
+
+  const { PixelatePreview } = await import('@/components/PixelatePreview')
+  const pixelate = nodeRegistry.get('pixelate')
+  if (pixelate) pixelate.component = PixelatePreview
 }
 
 // Re-export for convenience

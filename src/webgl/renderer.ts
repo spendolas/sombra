@@ -885,6 +885,9 @@ export class WebGLRenderer {
 
     const refLoc = uniforms.get('u_ref_size')
     if (refLoc && this.refSize !== null) gl.uniform1f(refLoc, this.refSize)
+
+    const vpLoc = uniforms.get('u_viewport')
+    if (vpLoc) gl.uniform2f(vpLoc, w, h)
   }
 
   // -----------------------------------------------------------------------

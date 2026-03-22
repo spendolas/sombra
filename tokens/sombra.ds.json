@@ -1779,9 +1779,9 @@
       "nodeFile": "src/nodes/color/brightness-contrast.ts"
     },
     "123:1827": {
-      "name": "Quantize",
-      "category": "Distort",
-      "nodeFile": "src/nodes/distort/quantize.ts"
+      "name": "Pixelate",
+      "category": "Effect",
+      "nodeFile": "src/nodes/distort/pixelate.ts"
     },
     "123:1825": {
       "name": "Dither",
@@ -1875,7 +1875,7 @@
     },
     "518:93": {
       "name": "Reeded Glass",
-      "category": "Transform",
+      "category": "Effect",
       "nodeFile": "src/nodes/transform/reeded-glass.ts"
     }
   },

@@ -33,8 +33,6 @@ export class PreviewRenderer {
   private cacheOrder: string[] = []
   private readonly MAX_CACHE = 64
   private readBuf = new Uint8Array(PREVIEW_SIZE * PREVIEW_SIZE * 4)
-  private offscreen2d: OffscreenCanvas
-  private ctx2d: OffscreenCanvasRenderingContext2D
   private startTime = Date.now()
   /** Main canvas resolution — used for u_resolution so pixel-based params scale correctly */
   private mainResolution: [number, number] = [PREVIEW_SIZE, PREVIEW_SIZE]
@@ -76,10 +74,6 @@ export class PreviewRenderer {
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
     this.fbo = fbo
-
-    // Offscreen 2D canvas for ImageData → data URL conversion
-    this.offscreen2d = new OffscreenCanvas(PREVIEW_SIZE, PREVIEW_SIZE)
-    this.ctx2d = this.offscreen2d.getContext('2d')!
   }
 
   /**
@@ -136,6 +130,9 @@ export class PreviewRenderer {
     const uDpr = gl.getUniformLocation(program, 'u_dpr')
     if (uDpr) gl.uniform1f(uDpr, 1.0)
 
+    const uVp = gl.getUniformLocation(program, 'u_viewport')
+    if (uVp) gl.uniform2f(uVp, PREVIEW_SIZE, PREVIEW_SIZE)
+
     // Upload user uniforms
     for (const u of uniforms) {
       const loc = gl.getUniformLocation(program, u.name)
@@ -173,8 +170,7 @@ export class PreviewRenderer {
   }
 
   private imageDataToDataUrl(imageData: ImageData): string {
-    this.ctx2d.putImageData(imageData, 0, 0)
-    // OffscreenCanvas doesn't have toDataURL, but we can use a regular canvas
+    // OffscreenCanvas doesn't have toDataURL, so use a regular canvas
     const c = document.createElement('canvas')
     c.width = PREVIEW_SIZE
     c.height = PREVIEW_SIZE
@@ -282,6 +278,8 @@ export class PreviewRenderer {
       if (uRefSize) gl.uniform1f(uRefSize, Math.min(this.mainResolution[0], this.mainResolution[1]))
       const uDpr = gl.getUniformLocation(program, 'u_dpr')
       if (uDpr) gl.uniform1f(uDpr, 1.0)
+      const uVp = gl.getUniformLocation(program, 'u_viewport')
+      if (uVp) gl.uniform2f(uVp, PREVIEW_SIZE, PREVIEW_SIZE)
 
       // User uniforms
       for (const u of pass.uniforms) {

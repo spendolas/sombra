@@ -286,7 +286,7 @@ export function createSpectraSimplexFBM(): {
       type: 'shaderNode',
       position: { x: 0, y: 0 },
       data: {
-        type: 'quantize',
+        type: 'pixelate',
         params: { pixelSize: 344 },
       },
     },
@@ -407,7 +407,7 @@ export function createSpectraWorleyRidged(): {
       type: 'shaderNode',
       position: { x: 0, y: 234 },
       data: {
-        type: 'quantize',
+        type: 'pixelate',
         params: { pixelSize: 28 },
       },
     },
@@ -579,7 +579,7 @@ export function createSpectraBoxNone(): {
       type: 'shaderNode',
       position: { x: 0, y: 0 },
       data: {
-        type: 'quantize',
+        type: 'pixelate',
         params: { pixelSize: 104 },
       },
     },

@@ -16,7 +16,8 @@ const GRAPH_SCHEMA_VERSION = 2
 const TYPE_RENAMES: Record<string, string> = {
   'warp_uv': 'warp',
   'domain_warp': 'warp',
-  'quantize_uv': 'quantize',
+  'quantize_uv': 'pixelate',
+  'quantize': 'pixelate',
 }
 
 const MAX_HISTORY = 50

@@ -883,6 +883,9 @@ export function assembleFragmentShader(
   if (uniforms.has('u_dpr')) {
     uniformDeclarations.push('uniform float u_dpr;')
   }
+  if (uniforms.has('u_viewport')) {
+    uniformDeclarations.push('uniform vec2 u_viewport;')
+  }
 
   // User-defined uniforms from uniform-mode params
   for (const spec of userUniforms) {
