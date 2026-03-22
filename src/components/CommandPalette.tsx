@@ -8,10 +8,22 @@ import type { Node } from '@xyflow/react'
 import type { NodeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { useGraphStore } from '../stores/graphStore'
-import { searchNodes, groupByCategory } from '../utils/fuzzy-search'
+import { searchNodes, groupByCategory, type SearchResult } from '../utils/fuzzy-search'
 
 /** Node types that can only exist once on the graph */
 const SINGLETON_TYPES = new Set(['fragment_output'])
+
+const RECENTS_KEY = 'sombra-recent-nodes'
+const MAX_RECENTS = 3
+
+function loadRecents(): string[] {
+  try { return JSON.parse(localStorage.getItem(RECENTS_KEY) || '[]') }
+  catch { return [] }
+}
+
+function saveRecents(recents: string[]) {
+  localStorage.setItem(RECENTS_KEY, JSON.stringify(recents))
+}
 
 interface CommandPaletteProps {
   onClose: () => void
@@ -22,6 +34,7 @@ export function CommandPalette({ onClose, mousePosition }: CommandPaletteProps) 
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [shaking, setShaking] = useState(false)
+  const [recents, setRecents] = useState(loadRecents)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -30,8 +43,31 @@ export function CommandPalette({ onClose, mousePosition }: CommandPaletteProps) 
   const graphNodes = useGraphStore((s) => s.nodes)
 
   const allNodes = useMemo(() => nodeRegistry.getAll(), [])
-  const results = useMemo(() => searchNodes(query, allNodes), [query, allNodes])
-  const grouped = useMemo(() => groupByCategory(results), [results])
+  const recentsSet = useMemo(() => new Set(recents), [recents])
+
+  // Search results with recent boost
+  const results = useMemo(() => {
+    const raw = searchNodes(query, allNodes)
+    if (!query.trim() || recentsSet.size === 0) return raw
+    // Boost recent types by subtracting from score
+    return raw
+      .map(r => recentsSet.has(r.definition.type) ? { ...r, score: r.score - 3 } : r)
+      .sort((a, b) => a.score - b.score)
+  }, [query, allNodes, recentsSet])
+
+  // Build recent items for empty-query display
+  const recentResults = useMemo<SearchResult[]>(() => {
+    if (query.trim()) return []
+    return recents
+      .map(type => nodeRegistry.get(type))
+      .filter(Boolean)
+      .map(def => ({ definition: def!, score: -1, matchField: 'label' as const }))
+  }, [query, recents])
+
+  const grouped = useMemo(() => {
+    const groups = groupByCategory(results)
+    return groups
+  }, [results])
 
   // Track which singleton types are already on the graph
   const existingSingletons = useMemo(
@@ -44,8 +80,8 @@ export function CommandPalette({ onClose, mousePosition }: CommandPaletteProps) 
     [existingSingletons],
   )
 
-  // Flat list for keyboard navigation (category headers excluded)
-  const flatResults = useMemo(() => results, [results])
+  // Flat list for keyboard navigation: recents first, then grouped results
+  const flatResults = useMemo(() => [...recentResults, ...results], [recentResults, results])
 
   // Reset selection when results change
   useEffect(() => {
@@ -106,9 +142,15 @@ export function CommandPalette({ onClose, mousePosition }: CommandPaletteProps) 
         useGraphStore.getState().setNodes(currentNodes.map(n => n.selected ? { ...n, selected: false } : n))
       }
       addNode(newNode)
+
+      // Update recents
+      const updated = [nodeType, ...recents.filter(t => t !== nodeType)].slice(0, MAX_RECENTS)
+      setRecents(updated)
+      saveRecents(updated)
+
       onClose()
     },
-    [screenToFlowPosition, addNode, onClose, isDisabled, triggerShake],
+    [screenToFlowPosition, addNode, onClose, isDisabled, triggerShake, recents],
   )
 
   const onKeyDown = useCallback(
@@ -137,7 +179,39 @@ export function CommandPalette({ onClose, mousePosition }: CommandPaletteProps) 
     [flatResults, selectedIndex, placeNode, onClose]
   )
 
-  // Track flat index across grouped display
+  // Render a result row
+  const renderItem = (result: SearchResult, idx: number) => {
+    const isSelected = idx === selectedIndex
+    const disabled = isDisabled(result.definition.type)
+    return (
+      <div
+        key={`${result.definition.type}-${idx}`}
+        data-selected={isSelected}
+        className={`px-4 py-1.5 flex items-center justify-between ${
+          disabled
+            ? 'opacity-[var(--disabled-opacity)] cursor-not-allowed'
+            : `cursor-pointer ${isSelected ? 'bg-highlight' : 'hover:bg-hover'}`
+        }`}
+        onClick={() => placeNode(result.definition.type)}
+        onMouseEnter={() => setSelectedIndex(idx)}
+      >
+        <span className={`text-sm ${disabled ? 'text-fg-muted' : 'text-fg'}`}>
+          {result.definition.label}
+        </span>
+        {disabled ? (
+          <span className="text-fg-muted text-xs italic ml-4">
+            already in graph
+          </span>
+        ) : result.definition.description ? (
+          <span className="text-fg-muted text-xs truncate ml-4 max-w-[55%] text-right">
+            {result.definition.description}
+          </span>
+        ) : null}
+      </div>
+    )
+  }
+
+  // Track flat index for keyboard navigation
   let flatIndex = -1
 
   return (
@@ -188,45 +262,33 @@ export function CommandPalette({ onClose, mousePosition }: CommandPaletteProps) 
               No matching nodes
             </div>
           ) : (
-            Array.from(grouped.entries()).map(([category, items]) => (
-              <div key={category}>
-                <div className="px-4 py-1.5 text-[11px] text-fg-subtle uppercase tracking-wider">
-                  {category}
+            <>
+              {/* Recent section */}
+              {recentResults.length > 0 && (
+                <div>
+                  <div className="px-4 py-1.5 text-[11px] text-fg-subtle uppercase tracking-wider">
+                    Recent
+                  </div>
+                  {recentResults.map((result) => {
+                    flatIndex++
+                    return renderItem(result, flatIndex)
+                  })}
                 </div>
-                {items.map((result) => {
-                  flatIndex++
-                  const isSelected = flatIndex === selectedIndex
-                  const currentIndex = flatIndex
-                  const disabled = isDisabled(result.definition.type)
-                  return (
-                    <div
-                      key={result.definition.type}
-                      data-selected={isSelected}
-                      className={`px-4 py-1.5 flex items-center justify-between ${
-                        disabled
-                          ? 'opacity-[var(--disabled-opacity)] cursor-not-allowed'
-                          : `cursor-pointer ${isSelected ? 'bg-highlight' : 'hover:bg-hover'}`
-                      }`}
-                      onClick={() => placeNode(result.definition.type)}
-                      onMouseEnter={() => setSelectedIndex(currentIndex)}
-                    >
-                      <span className={`text-sm ${disabled ? 'text-fg-muted' : 'text-fg'}`}>
-                        {result.definition.label}
-                      </span>
-                      {disabled ? (
-                        <span className="text-fg-muted text-xs italic ml-4">
-                          already in graph
-                        </span>
-                      ) : result.definition.description ? (
-                        <span className="text-fg-muted text-xs truncate ml-4 max-w-[55%] text-right">
-                          {result.definition.description}
-                        </span>
-                      ) : null}
-                    </div>
-                  )
-                })}
-              </div>
-            ))
+              )}
+
+              {/* Category sections */}
+              {Array.from(grouped.entries()).map(([category, items]) => (
+                <div key={category}>
+                  <div className="px-4 py-1.5 text-[11px] text-fg-subtle uppercase tracking-wider">
+                    {category}
+                  </div>
+                  {items.map((result) => {
+                    flatIndex++
+                    return renderItem(result, flatIndex)
+                  })}
+                </div>
+              ))}
+            </>
           )}
         </div>
       </div>
