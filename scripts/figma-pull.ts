@@ -181,8 +181,9 @@ async function main() {
     }
     console.log(`  ✓ REST API: ${flatVars.length} variables`)
   } else if (existsSync(VARS_CACHE_PATH)) {
-    // Fallback: read Plugin API cache file
-    flatVars = JSON.parse(readFileSync(VARS_CACHE_PATH, 'utf-8')) as FlatVar[]
+    // Fallback: read Plugin API cache file (may be wrapped in { variables: [...] })
+    const raw = JSON.parse(readFileSync(VARS_CACHE_PATH, 'utf-8'))
+    flatVars = (Array.isArray(raw) ? raw : raw.variables ?? []) as FlatVar[]
     console.log(`  ✓ Plugin API cache: ${flatVars.length} variables (from ${VARS_CACHE_PATH})`)
   } else {
     console.log('  ⚠ Variables API returned 403 and no cache file found.')

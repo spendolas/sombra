@@ -14,7 +14,7 @@ const ROW_H = 24
 const CONNECTABLE_ROW_H = 32
 const PARAM_ROW_H = 32
 const SECTION_GAP = 8
-const NODE_MIN_W = 180
+const NODE_MIN_W = 212
 const NODE_PADDING = 16
 
 /**
