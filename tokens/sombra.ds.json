@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "lastSync": "2026-03-09T01:56:56.798Z",
+  "lastSync": "2026-03-23T00:07:53.492Z",
   "figmaFileKey": "gq5i0l617YkXy0GzAZPtqz",
   "colors": {
     "VariableID:106:3": {
@@ -414,7 +414,7 @@
     "VariableID:106:44": {
       "figmaName": "select/h",
       "cssVar": "--sz-select-h",
-      "value": 24,
+      "value": 28,
       "unit": "px",
       "tailwind": [
         {
@@ -450,7 +450,7 @@
     "VariableID:106:47": {
       "figmaName": "node/min-w",
       "cssVar": "--sz-node-min-w",
-      "value": 160,
+      "value": 212,
       "unit": "px",
       "tailwind": [
         {
@@ -844,7 +844,9 @@
           "textColor": "fg-dim",
           "overflow": "hidden",
           "textStyle": "text-mono-value",
-          "auditIgnore": ["overflow"]
+          "auditIgnore": [
+            "overflow"
+          ]
         }
       }
     },
@@ -1337,7 +1339,9 @@
           "layout": "horizontal",
           "align": "center",
           "position": "relative",
-          "auditIgnore": ["overflow"]
+          "auditIgnore": [
+            "overflow"
+          ]
         },
         "innerFrame": {
           "figmaNodeId": "106:296",
@@ -1443,7 +1447,9 @@
           "align": "center",
           "extra": "nodrag nowheel",
           "overflow": "hidden",
-          "auditIgnore": ["overflow"]
+          "auditIgnore": [
+            "overflow"
+          ]
         },
         "value": {
           "figmaNodeId": "111:951",
@@ -1916,5 +1922,5 @@
       ]
     }
   },
-  "lastFigmaVersion": 2328705468572919300
+  "lastFigmaVersion": 2333903388860937000
 }

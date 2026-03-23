@@ -52,10 +52,10 @@
   --sz-btn-sm:        20px;  /* size/btn-sm       VariableID:106:42 */
   --sz-btn-md:        24px;  /* size/btn-md       VariableID:298:208 */
   --sz-input-h:       24px;  /* size/input-h      VariableID:106:43 */
-  --sz-select-h:      24px;  /* size/select-h     VariableID:106:44 */
+  --sz-select-h:      28px;  /* size/select-h     VariableID:106:44 */
   --sz-slider-track:  6px;  /* size/slider-track VariableID:106:45 */
   --sz-slider-thumb:  16px;  /* size/slider-thumb VariableID:106:46 */
-  --sz-node-min-w:    160px;  /* size/node-min-w   VariableID:106:47 */
+  --sz-node-min-w:    212px;  /* size/node-min-w   VariableID:106:47 */
   --sz-input-w:       64px;  /* size/size-input-w VariableID:216:1080 */
 
   /* ── Computed ── */
