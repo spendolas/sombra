@@ -87,6 +87,9 @@ function main() {
       )
     }
 
+    // Render once immediately to freeze u_ref_size before animation/timeout
+    renderer.render()
+
     // Apply quality tier and animation state
     const isAnimated = result.isTimeLiveAtOutput
     renderer.setAnimated(isAnimated)
