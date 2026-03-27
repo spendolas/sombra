@@ -74,7 +74,7 @@ function main() {
   const canvas = document.getElementById('viewer') as HTMLCanvasElement
   try {
     const renderer = new WebGLRenderer(canvas)
-    const shaderResult = renderer.updateShader(result.fragmentShader)
+    const shaderResult = renderer.updateRenderPlan(result)
     if (!shaderResult.success) {
       showError(`WebGL shader error:\n\n${shaderResult.error}`)
       return

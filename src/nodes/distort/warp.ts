@@ -67,12 +67,27 @@ export const warpNode: NodeDefinition = {
     const id = ctx.nodeId.replace(/-/g, '_')
     const seedOff = `dw_soff_${id}`
     const sc = `dw_sc_${id}`
-    const lines = [
+    const noiseCoords = `dw_nc_${id}`
+    const lines: string[] = []
+
+    // In texture mode, coords is v_uv (screen space) for correct FBO sampling.
+    // Compute auto_uv internally for aspect-correct noise evaluation.
+    if (ctx.textureSamplers?.source) {
+      ctx.uniforms.add('u_resolution')
+      ctx.uniforms.add('u_dpr')
+      ctx.uniforms.add('u_ref_size')
+      lines.push(`vec2 ${noiseCoords} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * 0.5) / (u_dpr * u_ref_size) + 0.5;`)
+    } else {
+      // Single-pass: coords is already auto_uv
+      lines.push(`vec2 ${noiseCoords} = ${inputs.coords};`)
+    }
+
+    lines.push(
       `vec2 ${seedOff} = fract(vec2(${inputs.seed}) * vec2(12.9898, 78.233)) * 1000.0;`,
-      `vec2 ${sc} = ${inputs.coords} + ${seedOff};`,
+      `vec2 ${sc} = ${noiseCoords} + ${seedOff};`,
       `float ${prefix}_x = ${noiseFn}(vec3(${sc}, ${inputs.phase})) * 2.0 - 1.0;`,
       `float ${prefix}_y = ${noiseFn}(vec3(${sc} + 100.0, ${inputs.phase})) * 2.0 - 1.0;`,
-    ]
+    )
 
     if (warpDepth === '3') {
       lines.push(

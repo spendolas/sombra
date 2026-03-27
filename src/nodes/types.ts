@@ -194,6 +194,13 @@ export interface NodeDefinition {
    * Use for nodes that have their own preview (e.g., Image) or where preview is meaningless (e.g., Time).
    */
   hidePreview?: boolean
+
+  /**
+   * Texture filtering for this node's FBO output in multi-pass chains.
+   * 'nearest' preserves hard edges (e.g., pixel blocks from Pixelate).
+   * Defaults to 'linear' if not set.
+   */
+  textureFilter?: 'linear' | 'nearest'
 }
 
 /**

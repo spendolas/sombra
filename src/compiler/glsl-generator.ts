@@ -264,8 +264,9 @@ function resolveInputDefault(
 ): boolean {
   if (inputPort.default === 'auto_uv' && inputPort.type === 'vec2') {
     const autoUvVar = `node_${sanitizedNodeId}_auto_uv`
-    preambleLines.push(`vec2 ${autoUvVar} = (v_uv - 0.5) * u_resolution / u_ref_size + 0.5;`)
+    preambleLines.push(`vec2 ${autoUvVar} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * 0.5) / (u_dpr * u_ref_size) + 0.5;`)
     uniforms.add('u_resolution')
+    uniforms.add('u_dpr')
     uniforms.add('u_ref_size')
     inputs[inputPort.id] = autoUvVar
     return true
@@ -401,7 +402,8 @@ export function generateNodeGlsl(
       }
     } else {
       // In texture mode, use v_uv (screen space 0-1) instead of auto_uv
-      // so texture sampling stays within FBO bounds — no wrapping, no seam
+      // so texture sampling stays within FBO bounds — no wrapping, no seam.
+      // Nodes that need aspect-correct noise compute auto_uv internally.
       if (isTextureMode && inputPort.default === 'auto_uv' && inputPort.type === 'vec2') {
         inputs[inputPort.id] = 'v_uv'
       } else if (!resolveInputDefault(inputPort, sanitizedNodeId, preambleLines, inputs, uniforms)) {
@@ -500,10 +502,11 @@ export function generateNodeGlsl(
       preambleLines.push(`${srtVar}.x /= ${aspVar};`)
     }
 
-    // Translate (pixel units → UV conversion)
+    // Translate (pixel units → UV conversion, stable on resize)
     if (hasTranslate) {
-      uniforms.add('u_resolution')
-      preambleLines.push(`${srtVar} -= vec2(${inputs.srt_translateX}, -(${inputs.srt_translateY})) / u_resolution;`)
+      uniforms.add('u_dpr')
+      uniforms.add('u_ref_size')
+      preambleLines.push(`${srtVar} -= vec2(${inputs.srt_translateX}, -(${inputs.srt_translateY})) / (u_dpr * u_ref_size);`)
     }
 
     preambleLines.push(`${srtVar} += 0.5;`)
@@ -778,6 +781,25 @@ function compileMultiPass(
       passImageSamplers,
     )
 
+    // Determine texture filter hint: if the pass output node declares a filter, use it
+    let passTextureFilter: 'linear' | 'nearest' | undefined
+    if (!isLastPass) {
+      const outputBoundaryForFilter = boundaries.find(b => b.sourcePassIndex === passIdx)
+      if (outputBoundaryForFilter) {
+        const filterEdge = (edgesByTarget.get(outputBoundaryForFilter.consumerId) || [])
+          .find(e => e.targetHandle === outputBoundaryForFilter.consumingPortId)
+        if (filterEdge) {
+          const filterSourceNode = nodeMap.get(filterEdge.source)
+          if (filterSourceNode) {
+            const filterSourceDef = nodeRegistry.get(filterSourceNode.data.type)
+            if (filterSourceDef?.textureFilter) {
+              passTextureFilter = filterSourceDef.textureFilter
+            }
+          }
+        }
+      }
+    }
+
     passes.push({
       index: passIdx,
       fragmentShader,
@@ -785,6 +807,7 @@ function compileMultiPass(
       userUniforms: passUserUniforms,
       inputTextures,
       isTimeLive: uniforms.has('u_time'),
+      textureFilter: passTextureFilter,
     })
 
     allUserUniforms.push(...passUserUniforms)

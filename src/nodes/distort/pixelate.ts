@@ -10,6 +10,7 @@ export const pixelateNode: NodeDefinition = {
   category: 'Effect',
   description: 'Reduce image to chunky pixel blocks',
   hidePreview: true,
+  textureFilter: 'nearest',
 
   inputs: [
     { id: 'source', label: 'Source', type: 'vec3', textureInput: true, default: [0, 0, 0] },
