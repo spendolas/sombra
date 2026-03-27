@@ -108,33 +108,67 @@ export function FloatingPreview({ targetRef }: FloatingPreviewProps) {
         // Minimum size floor
         scale = Math.max(scale, MIN_W / startW, MIN_H / startH)
 
-        // Viewport ceiling
         if (isAlt) {
-          // Center-based: each edge distance from center limits scale
-          scale = Math.min(scale,
-            2 * centerX / startW, 2 * (vw - centerX) / startW,
-            2 * centerY / startH, 2 * (vh - centerY) / startH,
-          )
+          // Smooth max for corners: eliminates the kink where dominant axis switches
+          if (isCorner) {
+            const a = (startW + mul * sx * dx) / startW
+            const b = (startH + mul * sy * dy) / startH
+            const eps = 0.01
+            scale = (a + b + Math.sqrt((a - b) ** 2 + eps * eps)) / 2
+            scale = Math.max(scale, MIN_W / startW, MIN_H / startH)
+          }
+
+          const aspect = startW / startH
+          const idealW = startW * scale
+          const idealH = startH * scale
+
+          let lo_x = centerX - idealW / 2, hi_x = centerX + idealW / 2
+          let lo_y = centerY - idealH / 2, hi_y = centerY + idealH / 2
+
+          // Pin opposite edges to viewport
+          if (sx > 0 && lo_x < 0) lo_x = 0
+          if (sx < 0 && hi_x > vw) hi_x = vw
+          if (sy > 0 && lo_y < 0) lo_y = 0
+          if (sy < 0 && hi_y > vh) hi_y = vh
+          // Non-dragged axes: clamp both edges
+          if (sx === 0) { lo_x = Math.max(0, lo_x); hi_x = Math.min(vw, hi_x) }
+          if (sy === 0) { lo_y = Math.max(0, lo_y); hi_y = Math.min(vh, hi_y) }
+          // Clamp dragged edges to viewport
+          hi_x = Math.min(vw, hi_x); lo_x = Math.max(0, lo_x)
+          hi_y = Math.min(vh, hi_y); lo_y = Math.max(0, lo_y)
+
+          const availW = hi_x - lo_x, availH = hi_y - lo_y
+
+          // Fit aspect-correct rect in bounding box
+          if (availW / availH > aspect) {
+            h = availH; w = h * aspect
+          } else {
+            w = availW; h = w / aspect
+          }
+
+          // Position: center-based, clamped to stay within bounding box
+          x = Math.max(lo_x, Math.min(centerX - w / 2, hi_x - w))
+          y = Math.max(lo_y, Math.min(centerY - h / 2, hi_y - h))
         } else {
-          // Anchor-based: per-axis distance to viewport edge
+          // Anchor-based: viewport ceiling via scale
+          // Non-dragged axes: full viewport dimension (position clamp handles edge hits)
           const limW = sx > 0 ? (vw - startPos.x) / startW
                      : sx < 0 ? (startPos.x + startW) / startW
-                     : (vw - startPos.x) / startW
+                     : vw / startW
           const limH = sy > 0 ? (vh - startPos.y) / startH
                      : sy < 0 ? (startPos.y + startH) / startH
-                     : (vh - startPos.y) / startH
+                     : vh / startH
           scale = Math.min(scale, limW, limH)
+
+          w = startW * scale
+          h = startH * scale
         }
 
-        w = startW * scale
-        h = startH * scale
-
-        if (isAlt) {
-          x = centerX - w / 2
-          y = centerY - h / 2
-        } else {
-          x = sx < 0 ? startPos.x + startW - w : startPos.x
-          y = sy < 0 ? startPos.y + startH - h : startPos.y
+        if (!isAlt) {
+          // Dragged axes: anchor at opposite edge.
+          // Non-dragged axes: center-based, clamped to viewport (shifts when edge hits).
+          x = sx > 0 ? startPos.x : sx < 0 ? startPos.x + startW - w : Math.max(0, Math.min(centerX - w / 2, vw - w))
+          y = sy > 0 ? startPos.y : sy < 0 ? startPos.y + startH - h : Math.max(0, Math.min(centerY - h / 2, vh - h))
         }
 
       } else if (isAlt) {
@@ -237,7 +271,7 @@ export function FloatingPreview({ targetRef }: FloatingPreviewProps) {
   return (
     <div
       ref={panelRef}
-      className={ds.floatingPreview.root}
+      className="fixed z-40"
       style={{
         left: pos.x,
         top: pos.y,
@@ -245,24 +279,27 @@ export function FloatingPreview({ targetRef }: FloatingPreviewProps) {
         height: floatingSize.height,
       }}
     >
-      <PreviewToolbar className="absolute top-xl right-xl z-10" />
-      {/* Invisible drag surface */}
-      <div
-        className="absolute top-0 left-0 right-0 h-8 z-[5] cursor-grab active:cursor-grabbing"
-        onMouseDown={onDragStart}
-      />
-      <div ref={targetRef} className="w-full h-full" />
-      <ShaderPlaceholder />
-      {/* Resize edges */}
-      <div className="absolute top-0 left-3 right-3 h-1.5 cursor-n-resize z-20" onMouseDown={(e) => onResizeStart(0, -1, e)} />
-      <div className="absolute bottom-0 left-3 right-3 h-1.5 cursor-s-resize z-20" onMouseDown={(e) => onResizeStart(0, 1, e)} />
-      <div className="absolute left-0 top-3 bottom-3 w-1.5 cursor-w-resize z-20" onMouseDown={(e) => onResizeStart(-1, 0, e)} />
-      <div className="absolute right-0 top-3 bottom-3 w-1.5 cursor-e-resize z-20" onMouseDown={(e) => onResizeStart(1, 0, e)} />
-      {/* Resize corners */}
-      <div className="absolute top-0 left-0 w-3 h-3 cursor-nw-resize z-20" onMouseDown={(e) => onResizeStart(-1, -1, e)} />
-      <div className="absolute top-0 right-0 w-3 h-3 cursor-ne-resize z-20" onMouseDown={(e) => onResizeStart(1, -1, e)} />
-      <div className="absolute bottom-0 left-0 w-3 h-3 cursor-sw-resize z-20" onMouseDown={(e) => onResizeStart(-1, 1, e)} />
-      <div className="absolute bottom-0 right-0 w-3 h-3 cursor-se-resize z-20" onMouseDown={(e) => onResizeStart(1, 1, e)} />
+      {/* Inner: visual styling + overflow-hidden for content */}
+      <div className={ds.floatingPreview.root + ' w-full h-full !relative'}>
+        <PreviewToolbar className="absolute top-xl right-xl z-10" />
+        {/* Invisible drag surface */}
+        <div
+          className="absolute top-0 left-0 right-0 h-8 z-[5] cursor-grab active:cursor-grabbing"
+          onMouseDown={onDragStart}
+        />
+        <div ref={targetRef} className="w-full h-full" />
+        <ShaderPlaceholder />
+      </div>
+      {/* Resize edges — outside overflow-hidden, extend beyond window */}
+      <div className="absolute -top-1 left-5 right-5 h-3 cursor-n-resize z-20" onMouseDown={(e) => onResizeStart(0, -1, e)} />
+      <div className="absolute -bottom-1 left-5 right-5 h-3 cursor-s-resize z-20" onMouseDown={(e) => onResizeStart(0, 1, e)} />
+      <div className="absolute -left-1 top-5 bottom-5 w-3 cursor-w-resize z-20" onMouseDown={(e) => onResizeStart(-1, 0, e)} />
+      <div className="absolute -right-1 top-5 bottom-5 w-3 cursor-e-resize z-20" onMouseDown={(e) => onResizeStart(1, 0, e)} />
+      {/* Resize corners — extend beyond window */}
+      <div className="absolute -top-1 -left-1 w-5 h-5 cursor-nw-resize z-20" onMouseDown={(e) => onResizeStart(-1, -1, e)} />
+      <div className="absolute -top-1 -right-1 w-5 h-5 cursor-ne-resize z-20" onMouseDown={(e) => onResizeStart(1, -1, e)} />
+      <div className="absolute -bottom-1 -left-1 w-5 h-5 cursor-sw-resize z-20" onMouseDown={(e) => onResizeStart(-1, 1, e)} />
+      <div className="absolute -bottom-1 -right-1 w-5 h-5 cursor-se-resize z-20" onMouseDown={(e) => onResizeStart(1, 1, e)} />
     </div>
   )
 }
