@@ -87,7 +87,7 @@ export function FloatingPreview({ targetRef }: FloatingPreviewProps) {
       const isCorner = sx !== 0 && sy !== 0
       const mul = isAlt ? 2 : 1
 
-      let w: number, h: number, x: number, y: number
+      let w = startW, h = startH, x = startPos.x, y = startPos.y
 
       if (isShift) {
         // ── Uniform scale: aspect ratio locked ──
