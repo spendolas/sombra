@@ -1,6 +1,6 @@
 /**
  * UV Transform node - SRT transform for UV coordinates
- * When unconnected, generates frozen-ref UVs (same as auto_uv).
+ * When unconnected, generates aspect-corrected UVs (same as auto_uv).
  * When wired, transforms incoming coordinates (e.g. from Quantize UV).
  */
 

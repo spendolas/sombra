@@ -105,6 +105,7 @@ export class WebGLRenderer {
   private lastAnimationSpeed = 1.0
 
   // Reference size (frozen on first render)
+  /** Frozen CSS-pixel min(width, height) — used with u_dpr in auto_uv for DPR-independent scaling */
   private refSize: number | null = null
 
   // Resize
@@ -760,9 +761,9 @@ export class WebGLRenderer {
       this.canvas.height = displayHeight
     }
 
-    // Freeze reference size on first valid render
-    if (this.refSize === null && displayWidth > 0 && displayHeight > 0) {
-      this.refSize = Math.min(displayWidth, displayHeight)
+    // Freeze reference size on first valid render (CSS pixels, DPR-independent)
+    if (this.refSize === null && this.canvas.clientWidth > 0 && this.canvas.clientHeight > 0) {
+      this.refSize = Math.min(this.canvas.clientWidth, this.canvas.clientHeight)
     }
 
     const time = (Date.now() - this.startTime) / 1000

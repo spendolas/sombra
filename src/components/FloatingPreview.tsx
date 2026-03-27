@@ -74,15 +74,114 @@ export function FloatingPreview({ targetRef }: FloatingPreviewProps) {
     const startH = floatingSize.height
     const startPos = { ...pos }
 
+    const centerX = startPos.x + startW / 2
+    const centerY = startPos.y + startH / 2
+
     const compute = (ev: MouseEvent) => {
       const dx = ev.clientX - startMouseX
       const dy = ev.clientY - startMouseY
-      const maxW = sx < 0 ? startPos.x + startW : sx > 0 ? window.innerWidth - startPos.x : startW
-      const maxH = sy < 0 ? startPos.y + startH : sy > 0 ? window.innerHeight - startPos.y : startH
-      const w = Math.max(MIN_W, Math.min(startW + sx * dx, maxW))
-      const h = Math.max(MIN_H, Math.min(startH + sy * dy, maxH))
-      const x = sx < 0 ? startPos.x + startW - w : startPos.x
-      const y = sy < 0 ? startPos.y + startH - h : startPos.y
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      const isAlt = ev.altKey
+      const isShift = ev.shiftKey
+      const isCorner = sx !== 0 && sy !== 0
+      const mul = isAlt ? 2 : 1
+
+      let w: number, h: number, x: number, y: number
+
+      if (isShift) {
+        // ── Uniform scale: aspect ratio locked ──
+        let scale: number
+        if (isCorner) {
+          // Dominant axis → edge follows mouse
+          scale = Math.max(
+            (startW + mul * sx * dx) / startW,
+            (startH + mul * sy * dy) / startH,
+          )
+        } else {
+          // Dragged axis determines scale
+          scale = sx !== 0
+            ? (startW + mul * sx * dx) / startW
+            : (startH + mul * sy * dy) / startH
+        }
+
+        // Minimum size floor
+        scale = Math.max(scale, MIN_W / startW, MIN_H / startH)
+
+        // Viewport ceiling
+        if (isAlt) {
+          // Center-based: each edge distance from center limits scale
+          scale = Math.min(scale,
+            2 * centerX / startW, 2 * (vw - centerX) / startW,
+            2 * centerY / startH, 2 * (vh - centerY) / startH,
+          )
+        } else {
+          // Anchor-based: per-axis distance to viewport edge
+          const limW = sx > 0 ? (vw - startPos.x) / startW
+                     : sx < 0 ? (startPos.x + startW) / startW
+                     : (vw - startPos.x) / startW
+          const limH = sy > 0 ? (vh - startPos.y) / startH
+                     : sy < 0 ? (startPos.y + startH) / startH
+                     : (vh - startPos.y) / startH
+          scale = Math.min(scale, limW, limH)
+        }
+
+        w = startW * scale
+        h = startH * scale
+
+        if (isAlt) {
+          x = centerX - w / 2
+          y = centerY - h / 2
+        } else {
+          x = sx < 0 ? startPos.x + startW - w : startPos.x
+          y = sy < 0 ? startPos.y + startH - h : startPos.y
+        }
+
+      } else if (isAlt) {
+        // ── Center-based, axes independent ──
+        if (sx !== 0) {
+          const half = Math.max(MIN_W / 2, (startW + 2 * sx * dx) / 2)
+          let lo = centerX - half
+          let hi = centerX + half
+          // Pin opposite edge to viewport
+          if (sx > 0 && lo < 0) lo = 0
+          if (sx < 0 && hi > vw) hi = vw
+          // Clamp dragged edge to viewport
+          if (hi > vw) hi = vw
+          if (lo < 0) lo = 0
+          x = lo; w = hi - lo
+        } else {
+          w = startW; x = startPos.x
+        }
+
+        if (sy !== 0) {
+          const half = Math.max(MIN_H / 2, (startH + 2 * sy * dy) / 2)
+          let lo = centerY - half
+          let hi = centerY + half
+          if (sy > 0 && lo < 0) lo = 0
+          if (sy < 0 && hi > vh) hi = vh
+          if (hi > vh) hi = vh
+          if (lo < 0) lo = 0
+          y = lo; h = hi - lo
+        } else {
+          h = startH; y = startPos.y
+        }
+
+      } else {
+        // ── Anchor-based, axes independent ──
+        w = sx !== 0 ? Math.max(MIN_W, startW + sx * dx) : startW
+        h = sy !== 0 ? Math.max(MIN_H, startH + sy * dy) : startH
+
+        x = sx < 0 ? startPos.x + startW - w : startPos.x
+        y = sy < 0 ? startPos.y + startH - h : startPos.y
+
+        // Viewport clamp
+        if (sx > 0 && x + w > vw) w = vw - x
+        if (sx < 0 && x < 0) { x = 0; w = startPos.x + startW }
+        if (sy > 0 && y + h > vh) h = vh - y
+        if (sy < 0 && y < 0) { y = 0; h = startPos.y + startH }
+      }
+
       return { x, y, w, h }
     }
 
