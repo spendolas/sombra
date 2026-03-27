@@ -1,7 +1,7 @@
 /**
  * Offscreen WebGL2 renderer for per-node preview thumbnails.
  * Uses a single offscreen canvas + FBO to render subgraph shaders
- * and read pixels back as data URLs for <img> display.
+ * and read pixels back as ImageBitmaps for zero-copy canvas display.
  */
 
 const VERTEX_SHADER = `#version 300 es
@@ -36,6 +36,9 @@ export class PreviewRenderer {
   private startTime = Date.now()
   /** Main canvas resolution — used for u_resolution so pixel-based params scale correctly */
   private mainResolution: [number, number] = [PREVIEW_SIZE, PREVIEW_SIZE]
+  /** Reusable OffscreenCanvas for zero-copy ImageBitmap conversion (separate from WebGL canvas) */
+  private canvas2d = new OffscreenCanvas(PREVIEW_SIZE, PREVIEW_SIZE)
+  private ctx2d = this.canvas2d.getContext('2d')!
 
   constructor() {
     // Offscreen WebGL canvas (never added to DOM)
@@ -85,9 +88,9 @@ export class PreviewRenderer {
   }
 
   /**
-   * Render a fragment shader and return a data URL, or null on compile error.
+   * Render a fragment shader and return an ImageBitmap, or null on compile error.
    */
-  renderPreview(fragmentShader: string, uniforms: UniformUpload[]): string | null {
+  renderPreview(fragmentShader: string, uniforms: UniformUpload[]): ImageBitmap | null {
     const gl = this.gl
 
     // Get or compile program (LRU cache)
@@ -158,7 +161,7 @@ export class PreviewRenderer {
     gl.readPixels(0, 0, PREVIEW_SIZE, PREVIEW_SIZE, gl.RGBA, gl.UNSIGNED_BYTE, this.readBuf)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
 
-    // Convert to data URL via offscreen 2D canvas
+    // Convert to ImageBitmap via reusable OffscreenCanvas (zero PNG encoding)
     // WebGL reads bottom-up, so flip vertically
     const imageData = new ImageData(PREVIEW_SIZE, PREVIEW_SIZE)
     for (let y = 0; y < PREVIEW_SIZE; y++) {
@@ -166,17 +169,16 @@ export class PreviewRenderer {
       const dstRow = y * PREVIEW_SIZE * 4
       imageData.data.set(this.readBuf.subarray(srcRow, srcRow + PREVIEW_SIZE * 4), dstRow)
     }
-    return this.imageDataToDataUrl(imageData)
+    return this.renderToImageBitmap(imageData)
   }
 
-  private imageDataToDataUrl(imageData: ImageData): string {
-    // OffscreenCanvas doesn't have toDataURL, so use a regular canvas
-    const c = document.createElement('canvas')
-    c.width = PREVIEW_SIZE
-    c.height = PREVIEW_SIZE
-    const ctx = c.getContext('2d')!
-    ctx.putImageData(imageData, 0, 0)
-    return c.toDataURL()
+  /**
+   * Convert ImageData to ImageBitmap via a reusable OffscreenCanvas.
+   * transferToImageBitmap() is synchronous and avoids PNG encoding entirely.
+   */
+  private renderToImageBitmap(imageData: ImageData): ImageBitmap {
+    this.ctx2d.putImageData(imageData, 0, 0)
+    return this.canvas2d.transferToImageBitmap()
   }
 
   private compileShader(type: number, source: string): WebGLShader {
@@ -220,7 +222,7 @@ export class PreviewRenderer {
    */
   renderMultiPassPreview(
     passes: Array<{ fragmentShader: string; uniforms: UniformUpload[]; inputTextures: Record<string, number> }>,
-  ): string | null {
+  ): ImageBitmap | null {
     const gl = this.gl
     if (passes.length === 0) return null
 
@@ -322,7 +324,7 @@ export class PreviewRenderer {
       const dstRow = y * PREVIEW_SIZE * 4
       imageData.data.set(this.readBuf.subarray(srcRow, srcRow + PREVIEW_SIZE * 4), dstRow)
     }
-    return this.imageDataToDataUrl(imageData)
+    return this.renderToImageBitmap(imageData)
   }
 
   // Ping-pong FBOs for multi-pass preview (shared, allocated once) [P8]

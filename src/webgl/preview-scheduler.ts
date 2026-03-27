@@ -2,7 +2,8 @@
  * Preview scheduler — orchestrates subgraph compilation (via Worker)
  * and rendering (via PreviewRenderer) for per-node thumbnails.
  *
- * Processes one stale node per animation frame to stay within budget.
+ * Batches up to 4 stale nodes per animation frame within an 8ms budget.
+ * Uses fine-grained staleness detection to avoid recompiling unchanged nodes.
  */
 
 import type { Node, Edge } from '@xyflow/react'
@@ -29,6 +30,10 @@ export class PreviewScheduler {
   // Dependency map: nodeId → set of downstream nodeIds
   private downstreamMap = new Map<string, Set<string>>()
 
+  // Previous graph state for fine-grained staleness detection
+  private prevEdges: Edge<EdgeData>[] = []
+  private prevNodeMap = new Map<string, Node<NodeData>>()
+
   // Cached shaders: nodeId → { fragmentShader, uniforms, isTimeLive, passes }
   private shaderCache = new Map<string, {
     fragmentShader: string
@@ -54,6 +59,7 @@ export class PreviewScheduler {
 
   /**
    * Called when the graph changes. Rebuilds dependency map and marks affected nodes stale.
+   * Uses fine-grained detection: only marks nodes stale when edges or params actually change.
    */
   onGraphChange(nodes: Node<NodeData>[], edges: Edge<EdgeData>[]) {
     const prevNodeIds = new Set(this.nodes.map(n => n.id))
@@ -64,15 +70,6 @@ export class PreviewScheduler {
     // Determine which nodes changed
     const currentNodeIds = new Set(nodes.map(n => n.id))
 
-    // New nodes or nodes with changed params → mark stale + downstream
-    for (const node of nodes) {
-      if (node.data.type === 'fragment_output') continue
-      if (!prevNodeIds.has(node.id)) {
-        // New node
-        this.markStaleWithDownstream(node.id)
-      }
-    }
-
     // Removed nodes — clean up
     for (const oldId of prevNodeIds) {
       if (!currentNodeIds.has(oldId)) {
@@ -82,12 +79,36 @@ export class PreviewScheduler {
       }
     }
 
-    // Mark all nodes as stale on graph change (simple, correct)
-    // The scheduler will lazily re-render them
+    // Detect edge changes (added/removed connections)
+    const prevEdgeKey = (e: Edge<EdgeData>) => `${e.source}:${e.sourceHandle}->${e.target}:${e.targetHandle}`
+    const prevEdgeSet = new Set(this.prevEdges.map(prevEdgeKey))
+    const currEdgeSet = new Set(edges.map(prevEdgeKey))
+
+    const addedEdges = edges.filter(e => !prevEdgeSet.has(prevEdgeKey(e)))
+    const removedEdges = this.prevEdges.filter(e => !currEdgeSet.has(prevEdgeKey(e)))
+
+    // Mark affected nodes stale (source and target of changed edges + their downstream)
+    for (const e of [...addedEdges, ...removedEdges]) {
+      this.markStaleWithDownstream(e.source)
+      this.markStaleWithDownstream(e.target)
+    }
+
+    // Detect node additions and param changes
     for (const node of nodes) {
       if (node.data.type === 'fragment_output') continue
-      this.staleNodes.add(node.id)
+      const prev = this.prevNodeMap.get(node.id)
+      if (!prev) {
+        // New node
+        this.markStaleWithDownstream(node.id)
+      } else if (prev.data !== node.data) {
+        // Data reference changed (Zustand immutability) — params changed
+        this.markStaleWithDownstream(node.id)
+      }
     }
+
+    // Save current state for next comparison
+    this.prevEdges = edges
+    this.prevNodeMap = new Map(nodes.map(n => [n.id, n]))
   }
 
   /**
@@ -181,21 +202,21 @@ export class PreviewScheduler {
       return
     }
 
-    // Render: multi-pass or single-pass
-    let dataUrl: string | null
+    // Render: multi-pass or single-pass (returns ImageBitmap)
+    let bitmap: ImageBitmap | null
     if (cached.passes && cached.passes.length > 1) {
-      dataUrl = this.renderer.renderMultiPassPreview(cached.passes)
+      bitmap = this.renderer.renderMultiPassPreview(cached.passes)
     } else {
-      dataUrl = this.renderer.renderPreview(cached.fragmentShader, cached.uniforms)
+      bitmap = this.renderer.renderPreview(cached.fragmentShader, cached.uniforms)
     }
-    if (dataUrl) {
-      usePreviewStore.getState().setPreview(targetNodeId, dataUrl)
+    if (bitmap) {
+      usePreviewStore.getState().setPreview(targetNodeId, bitmap)
     }
     this.staleNodes.delete(targetNodeId)
   }
 
   /**
-   * Animation frame tick. Processes one stale node per frame.
+   * Animation frame tick. Batches multiple stale nodes per frame within a time budget.
    */
   private tick = () => {
     if (!this.running) return
@@ -209,20 +230,24 @@ export class PreviewScheduler {
       for (const nodeId of this.timeLiveNodes) {
         const cached = this.shaderCache.get(nodeId)
         if (!cached || cached.depthExceeded) continue
-        let dataUrl: string | null
+        let bitmap: ImageBitmap | null
         if (cached.passes && cached.passes.length > 1) {
-          dataUrl = this.renderer.renderMultiPassPreview(cached.passes)
+          bitmap = this.renderer.renderMultiPassPreview(cached.passes)
         } else {
-          dataUrl = this.renderer.renderPreview(cached.fragmentShader, cached.uniforms)
+          bitmap = this.renderer.renderPreview(cached.fragmentShader, cached.uniforms)
         }
-        if (dataUrl) {
-          usePreviewStore.getState().setPreview(nodeId, dataUrl)
+        if (bitmap) {
+          usePreviewStore.getState().setPreview(nodeId, bitmap)
         }
       }
     }
 
-    // Pick one stale node to compile (skip nodes already pending)
+    // Batch multiple stale nodes per frame within a time budget
+    const FRAME_BUDGET_MS = 8
+    const frameStart = performance.now()
+    let dispatched = 0
     for (const nodeId of this.staleNodes) {
+      if (performance.now() - frameStart > FRAME_BUDGET_MS) break
       if (this.pendingCompile.has(nodeId)) continue
 
       // Request compilation from Worker
@@ -235,7 +260,8 @@ export class PreviewScheduler {
         nodes: this.nodes,
         edges: this.edges,
       })
-      break // One per frame
+      dispatched++
+      if (dispatched >= 4) break // Cap at 4 per frame
     }
   }
 

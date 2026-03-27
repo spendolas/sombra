@@ -2,7 +2,7 @@
  * ShaderNode - Visual component for shader nodes on the canvas
  */
 
-import { memo, useCallback } from 'react'
+import { memo, useCallback, useRef, useEffect } from 'react'
 import { Position, useEdges, type NodeProps } from '@xyflow/react'
 import type { NodeData, NodeParameter } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
@@ -20,17 +20,31 @@ import { getPortColor } from '../utils/port-colors'
 
 /**
  * Isolated preview thumbnail — subscribes to preview store independently
- * so that data URL updates don't trigger ShaderNode re-renders.
+ * so that ImageBitmap updates don't trigger ShaderNode re-renders.
+ * Draws ImageBitmap to a canvas element (zero-copy, no PNG encoding).
  */
+const PREVIEW_SIZE = 80
 const NodePreview = memo(({ nodeId }: { nodeId: string }) => {
-  const previewUrl = usePreviewStore((s) => s.previews[nodeId])
-  if (!previewUrl) return null
+  const bitmap = usePreviewStore((s) => s.previews[nodeId])
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || !bitmap) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, PREVIEW_SIZE, PREVIEW_SIZE)
+    ctx.drawImage(bitmap, 0, 0)
+  }, [bitmap])
+
+  if (!bitmap) return null
   return (
-    <img
-      src={previewUrl}
+    <canvas
+      ref={canvasRef}
+      width={PREVIEW_SIZE}
+      height={PREVIEW_SIZE}
       className="w-full aspect-square rounded-sm mt-2 nodrag nowheel"
       style={{ imageRendering: 'pixelated' }}
-      alt=""
     />
   )
 })

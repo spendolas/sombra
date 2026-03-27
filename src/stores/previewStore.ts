@@ -1,15 +1,15 @@
 /**
- * Preview store — manages per-node preview data URLs.
+ * Preview store — manages per-node preview ImageBitmaps.
  * Ephemeral (not persisted to localStorage).
  */
 
 import { create } from 'zustand'
 
 interface PreviewState {
-  /** nodeId → data URL */
-  previews: Record<string, string>
-  /** Set a preview data URL for a node */
-  setPreview: (nodeId: string, dataUrl: string) => void
+  /** nodeId → ImageBitmap */
+  previews: Record<string, ImageBitmap>
+  /** Set a preview ImageBitmap for a node */
+  setPreview: (nodeId: string, bitmap: ImageBitmap) => void
   /** Remove previews for deleted nodes */
   clearNodes: (nodeIds: string[]) => void
   /** Remove all previews */
@@ -18,13 +18,26 @@ interface PreviewState {
 
 export const usePreviewStore = create<PreviewState>((set) => ({
   previews: {},
-  setPreview: (nodeId, dataUrl) =>
-    set((s) => ({ previews: { ...s.previews, [nodeId]: dataUrl } })),
+  setPreview: (nodeId, bitmap) =>
+    set((s) => {
+      // Close the old bitmap to free GPU memory
+      const old = s.previews[nodeId]
+      if (old) old.close()
+      return { previews: { ...s.previews, [nodeId]: bitmap } }
+    }),
   clearNodes: (nodeIds) =>
     set((s) => {
       const next = { ...s.previews }
-      for (const id of nodeIds) delete next[id]
+      for (const id of nodeIds) {
+        if (next[id]) next[id].close()
+        delete next[id]
+      }
       return { previews: next }
     }),
-  clearAll: () => set({ previews: {} }),
+  clearAll: () =>
+    set((s) => {
+      // Close all bitmaps to free GPU memory
+      for (const bitmap of Object.values(s.previews)) bitmap.close()
+      return { previews: {} }
+    }),
 }))
