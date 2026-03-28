@@ -180,7 +180,8 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
           .filter(e => e.target === id)
           .some(e => {
             const srcType = (allNodes.find(n => n.id === e.source)?.data as NodeData | undefined)?.type
-            return srcType ? !nodeRegistry.get(srcType)?.hidePreview : false
+            const srcDef = srcType ? nodeRegistry.get(srcType) : undefined
+            return srcDef ? !srcDef.hidePreview && !srcDef.conditionalPreview : false
           })
         const show = hasVisualSource
         return (
