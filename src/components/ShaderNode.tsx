@@ -180,7 +180,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
         return (
           <div
             className="overflow-hidden transition-[max-height,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
-            style={{ maxHeight: show ? PREVIEW_SIZE + 'px' : '0px', opacity: show ? 1 : 0 }}
+            style={{ maxHeight: show ? '300px' : '0px', opacity: show ? 1 : 0 }}
           >
             <NodePreview nodeId={id} />
           </div>
