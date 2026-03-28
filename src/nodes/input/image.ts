@@ -22,7 +22,6 @@ export const imageNode: NodeDefinition = {
   label: 'Image',
   category: 'Input',
   description: 'Upload an image file to use as a texture',
-  hidePreview: true,
   spatial: { transforms: ['scale', 'rotate', 'translate'] } satisfies SpatialConfig,
 
   inputs: [

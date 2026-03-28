@@ -9,7 +9,6 @@ export const pixelateNode: NodeDefinition = {
   label: 'Pixelate',
   category: 'Effect',
   description: 'Reduce image to chunky pixel blocks',
-  hidePreview: true,
   textureFilter: 'nearest',
 
   inputs: [
