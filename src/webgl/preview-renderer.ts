@@ -197,7 +197,8 @@ export class PreviewRenderer {
     let fragShader: WebGLShader
     try {
       fragShader = this.compileShader(gl.FRAGMENT_SHADER, fragmentSource)
-    } catch {
+    } catch (e) {
+      console.warn('[preview-renderer] shader compile error:', e instanceof Error ? e.message : e)
       return null
     }
 
@@ -208,6 +209,7 @@ export class PreviewRenderer {
     gl.deleteShader(fragShader)
 
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      console.warn('[preview-renderer] program link error:', gl.getProgramInfoLog(program))
       gl.deleteProgram(program)
       return null
     }
