@@ -196,6 +196,13 @@ export interface NodeDefinition {
   hidePreview?: boolean
 
   /**
+   * Show preview only when at least one input is connected.
+   * Use for scalar math nodes (Arithmetic, Trig, etc.) whose preview
+   * is only meaningful when a visual pattern is wired in.
+   */
+  conditionalPreview?: boolean
+
+  /**
    * Texture filtering for this node's FBO output in multi-pass chains.
    * 'nearest' preserves hard edges (e.g., pixel blocks from Pixelate).
    * Defaults to 'linear' if not set.

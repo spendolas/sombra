@@ -11,6 +11,7 @@ export const smoothstepNode: NodeDefinition = {
   label: 'Smoothstep',
   category: 'Math',
   description: 'Soft clamp — smooth S-curve remap between Low and High thresholds',
+  conditionalPreview: true,
 
   inputs: [
     { id: 'x', label: 'Value', type: 'float', default: 0.5 },

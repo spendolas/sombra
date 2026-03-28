@@ -23,6 +23,7 @@ export const trigNode: NodeDefinition = {
   label: 'Trig',
   category: 'Math',
   description: 'Trigonometric and absolute value functions',
+  conditionalPreview: true,
 
   inputs: [
     { id: 'value', label: 'Value', type: 'float', default: 0.0 },

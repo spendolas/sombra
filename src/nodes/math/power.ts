@@ -9,6 +9,7 @@ export const powerNode: NodeDefinition = {
   label: 'Power',
   category: 'Math',
   description: 'Raise a value to an exponent',
+  conditionalPreview: true,
 
   inputs: [
     { id: 'base', label: 'Base', type: 'float', default: 0.5 },

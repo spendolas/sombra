@@ -10,6 +10,7 @@ export const roundNode: NodeDefinition = {
   label: 'Round',
   category: 'Math',
   description: 'Apply floor, ceil, fract, round, or sign to a value',
+  conditionalPreview: true,
 
   inputs: [
     { id: 'value', label: 'Value', type: 'float', default: 0.5 },

@@ -174,8 +174,18 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
           {definition.label}
         </BaseNodeHeaderTitle>
       </BaseNodeHeader>
-      {/* Preview thumbnail below title — draggable (no nodrag) */}
-      {!definition.hidePreview && <NodePreview nodeId={id} />}
+      {/* Preview thumbnail below title — animated show/hide for conditional nodes */}
+      {!definition.hidePreview && (() => {
+        const show = !definition.conditionalPreview || connectedInputs.size > 0
+        return (
+          <div
+            className="overflow-hidden transition-[max-height,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+            style={{ maxHeight: show ? PREVIEW_SIZE + 'px' : '0px', opacity: show ? 1 : 0 }}
+          >
+            <NodePreview nodeId={id} />
+          </div>
+        )
+      })()}
 
       <BaseNodeContent>
         {/* Output handles (above inputs) */}

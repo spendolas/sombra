@@ -42,6 +42,7 @@ export const arithmeticNode: NodeDefinition = {
   label: 'Arithmetic',
   category: 'Math',
   description: 'Add, subtract, multiply, or divide values (2-8 inputs)',
+  conditionalPreview: true,
 
   inputs: [
     { id: 'in_0', label: 'A', type: 'float', default: 0.0 },
