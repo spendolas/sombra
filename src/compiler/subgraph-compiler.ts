@@ -159,6 +159,15 @@ function compileMultiPassPreview(
   const allUserUniforms: UniformSpec[] = []
   let globalTimeLive = false
 
+  // nodeId → passIndex lookup (for cross-pass re-emission)
+  const nodePassIndex = new Map<string, number>()
+  for (let i = 0; i < passPartition.length; i++) {
+    for (const id of passPartition[i]) nodePassIndex.set(id, i)
+  }
+  const textureBoundaryKeys = new Set(
+    boundaries.map(b => `${b.consumerId}:${b.consumingPortId}`)
+  )
+
   for (let passIdx = 0; passIdx < passPartition.length; passIdx++) {
     const passNodeIds = passPartition[passIdx]
     const isLastPass = passIdx === passPartition.length - 1
@@ -177,8 +186,40 @@ function compileMultiPassPreview(
       inputTextures[b.samplerName] = b.sourcePassIndex
     }
 
+    // Re-emit nodes from earlier passes that are referenced via non-texture edges
+    const reEmitSet = new Set<string>()
+    if (passIdx > 0) {
+      const queue: string[] = []
+      for (const nodeId of passNodeIds) {
+        const incoming = edgesByTarget.get(nodeId) || []
+        for (const edge of incoming) {
+          const sourcePass = nodePassIndex.get(edge.source)
+          if (sourcePass !== undefined && sourcePass < passIdx) {
+            if (textureBoundaryKeys.has(`${nodeId}:${edge.targetHandle}`)) continue
+            if (!reEmitSet.has(edge.source)) {
+              reEmitSet.add(edge.source)
+              queue.push(edge.source)
+            }
+          }
+        }
+      }
+      while (queue.length > 0) {
+        const id = queue.pop()!
+        const incoming = edgesByTarget.get(id) || []
+        for (const edge of incoming) {
+          const sourcePass = nodePassIndex.get(edge.source)
+          if (sourcePass !== undefined && sourcePass < passIdx && !reEmitSet.has(edge.source)) {
+            reEmitSet.add(edge.source)
+            queue.push(edge.source)
+          }
+        }
+      }
+    }
+    const reEmitNodes = passPartition.slice(0, passIdx).flat().filter(id => reEmitSet.has(id))
+    const combinedNodeIds = [...reEmitNodes, ...passNodeIds]
+
     const allErrors: Array<{ message: string; nodeId?: string }> = []
-    for (const nodeId of passNodeIds) {
+    for (const nodeId of combinedNodeIds) {
       const result = generateNodeGlsl(
         nodeId, nodeMap, edgesByTarget,
         uniforms, functions, functionRegistry, passUserUniforms,
