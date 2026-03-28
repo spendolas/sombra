@@ -9,6 +9,7 @@ export const resolutionNode: NodeDefinition = {
   label: 'Resolution',
   category: 'Input',
   description: 'Canvas resolution (width, height)',
+  hidePreview: true,
 
   inputs: [],
 

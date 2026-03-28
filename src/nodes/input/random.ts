@@ -21,6 +21,7 @@ export const randomNode: NodeDefinition = {
   label: 'Random',
   category: 'Input',
   description: 'Random float with Randomise button (stable between edits)',
+  hidePreview: true,
 
   inputs: [],
 

@@ -43,7 +43,7 @@ const NodePreview = memo(({ nodeId }: { nodeId: string }) => {
       ref={canvasRef}
       width={PREVIEW_SIZE}
       height={PREVIEW_SIZE}
-      className="w-full aspect-square rounded-sm mt-2 nodrag nowheel"
+      className="w-full aspect-square rounded-t-md nodrag nowheel"
       style={{ imageRendering: 'pixelated' }}
     />
   )
@@ -169,6 +169,8 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
 
   return (
     <BaseNode className="min-w-node">
+      {/* Preview thumbnail above title — first visual element */}
+      {!definition.hidePreview && <NodePreview nodeId={id} />}
       <BaseNodeHeader>
         <BaseNodeHeaderTitle>
           {definition.label}
@@ -340,8 +342,6 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
           </div>
         )}
 
-        {/* Node preview thumbnail (isolated component to avoid re-renders) */}
-        {nodeData.type !== 'fragment_output' && !definition.hidePreview && <NodePreview nodeId={id} />}
       </BaseNodeContent>
     </BaseNode>
   )

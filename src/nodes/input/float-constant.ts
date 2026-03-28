@@ -9,6 +9,7 @@ export const floatConstantNode: NodeDefinition = {
   label: 'Number',
   category: 'Input',
   description: 'Constant number value',
+  hidePreview: true,
 
   inputs: [],
 

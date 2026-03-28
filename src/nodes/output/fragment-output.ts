@@ -9,6 +9,7 @@ export const fragmentOutputNode: NodeDefinition = {
   label: 'Fragment Output',
   category: 'Output',
   description: 'Final color output (master node - only one per graph)',
+  hidePreview: true,
 
   inputs: [
     {

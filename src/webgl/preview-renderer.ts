@@ -122,7 +122,7 @@ export class PreviewRenderer {
     if (uTime) gl.uniform1f(uTime, (Date.now() - this.startTime) / 1000)
 
     const uRes = gl.getUniformLocation(program, 'u_resolution')
-    if (uRes) gl.uniform2f(uRes, this.mainResolution[0], this.mainResolution[1])
+    if (uRes) gl.uniform2f(uRes, PREVIEW_SIZE, PREVIEW_SIZE)
 
     const uRefSize = gl.getUniformLocation(program, 'u_ref_size')
     if (uRefSize) gl.uniform1f(uRefSize, Math.min(this.mainResolution[0], this.mainResolution[1]))
@@ -275,7 +275,7 @@ export class PreviewRenderer {
       const uTime = gl.getUniformLocation(program, 'u_time')
       if (uTime) gl.uniform1f(uTime, time)
       const uRes = gl.getUniformLocation(program, 'u_resolution')
-      if (uRes) gl.uniform2f(uRes, this.mainResolution[0], this.mainResolution[1])
+      if (uRes) gl.uniform2f(uRes, PREVIEW_SIZE, PREVIEW_SIZE)
       const uRefSize = gl.getUniformLocation(program, 'u_ref_size')
       if (uRefSize) gl.uniform1f(uRefSize, Math.min(this.mainResolution[0], this.mainResolution[1]))
       const uDpr = gl.getUniformLocation(program, 'u_dpr')
