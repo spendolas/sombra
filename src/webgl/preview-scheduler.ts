@@ -172,7 +172,11 @@ export class PreviewScheduler {
     const { targetNodeId, result } = data
     this.pendingCompile.delete(targetNodeId)
 
-    if (!result || !result.success) return
+    if (!result || !result.success) {
+      // Clear from staleNodes to prevent infinite recompile loops
+      this.staleNodes.delete(targetNodeId)
+      return
+    }
 
     // Cache the shader (including multi-pass data)
     const passes = result.passes?.length
@@ -253,7 +257,7 @@ export class PreviewScheduler {
 
     const frameStart = performance.now()
     let dispatched = 0
-    for (const nodeId of this.staleNodes) {
+    for (const nodeId of [...this.staleNodes]) {
       if (performance.now() - frameStart > FRAME_BUDGET_MS) break
       if (this.pendingCompile.has(nodeId)) continue
 
