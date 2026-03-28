@@ -245,14 +245,17 @@ export class PreviewScheduler {
 
     // Batch multiple stale nodes per frame within a time budget
     const FRAME_BUDGET_MS = 8
+    // Remove hidePreview nodes from stale set before iterating (avoid mutation during iteration)
+    for (const nodeId of [...this.staleNodes]) {
+      const nodeType = this.prevNodeMap.get(nodeId)?.data?.type
+      if (nodeType && nodeRegistry.get(nodeType)?.hidePreview) this.staleNodes.delete(nodeId)
+    }
+
     const frameStart = performance.now()
     let dispatched = 0
     for (const nodeId of this.staleNodes) {
       if (performance.now() - frameStart > FRAME_BUDGET_MS) break
       if (this.pendingCompile.has(nodeId)) continue
-      // Skip nodes that don't need previews
-      const nodeType = this.prevNodeMap.get(nodeId)?.data?.type
-      if (nodeType && nodeRegistry.get(nodeType)?.hidePreview) { this.staleNodes.delete(nodeId); continue }
 
       // Request compilation from Worker
       this.pendingCompile.add(nodeId)
