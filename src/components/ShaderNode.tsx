@@ -43,7 +43,7 @@ const NodePreview = memo(({ nodeId }: { nodeId: string }) => {
       ref={canvasRef}
       width={PREVIEW_SIZE}
       height={PREVIEW_SIZE}
-      className="w-full aspect-square rounded-t-md nodrag nowheel"
+      className="w-full aspect-square nowheel"
       style={{ imageRendering: 'pixelated' }}
     />
   )
@@ -169,13 +169,13 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
 
   return (
     <BaseNode className="min-w-node">
-      {/* Preview thumbnail above title — first visual element */}
-      {!definition.hidePreview && <NodePreview nodeId={id} />}
       <BaseNodeHeader>
         <BaseNodeHeaderTitle>
           {definition.label}
         </BaseNodeHeaderTitle>
       </BaseNodeHeader>
+      {/* Preview thumbnail below title — draggable (no nodrag) */}
+      {!definition.hidePreview && <NodePreview nodeId={id} />}
 
       <BaseNodeContent>
         {/* Output handles (above inputs) */}
