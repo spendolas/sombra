@@ -167,6 +167,31 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   // Dynamic input flag
   const hasDynamicInputs = !!definition.dynamicInputs
 
+  // Compute which source nodes need reactive preview tracking (conditionalPreview sources)
+  const conditionalSourceIds = definition.conditionalPreview
+    ? edges.filter(e => e.target === id).filter(e => {
+        const srcType = (allNodes.find(n => n.id === e.source)?.data as NodeData | undefined)?.type
+        const srcDef = srcType ? nodeRegistry.get(srcType) : undefined
+        return srcDef?.conditionalPreview && !srcDef.hidePreview
+      }).map(e => e.source)
+    : []
+
+  // Reactively subscribe to whether any conditional source has a preview
+  const anyConditionalSourceHasPreview = usePreviewStore((s) =>
+    conditionalSourceIds.some(srcId => !!s.previews[srcId])
+  )
+
+  // Determine if preview should show
+  const showPreview = !definition.hidePreview && (!definition.conditionalPreview || (() => {
+    // Check for always-visual sources (not hidePreview, not conditionalPreview)
+    const hasAlwaysVisualSource = edges.filter(e => e.target === id).some(e => {
+      const srcType = (allNodes.find(n => n.id === e.source)?.data as NodeData | undefined)?.type
+      const srcDef = srcType ? nodeRegistry.get(srcType) : undefined
+      return srcDef ? !srcDef.hidePreview && !srcDef.conditionalPreview : false
+    })
+    return hasAlwaysVisualSource || anyConditionalSourceHasPreview
+  })())
+
   return (
     <BaseNode className="min-w-node">
       <BaseNodeHeader>
@@ -176,18 +201,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
       </BaseNodeHeader>
       {/* Preview thumbnail below title — animated show/hide for conditional nodes */}
       {!definition.hidePreview && (() => {
-        const previews = usePreviewStore.getState().previews
-        const hasVisualSource = !definition.conditionalPreview || edges
-          .filter(e => e.target === id)
-          .some(e => {
-            const srcType = (allNodes.find(n => n.id === e.source)?.data as NodeData | undefined)?.type
-            const srcDef = srcType ? nodeRegistry.get(srcType) : undefined
-            if (!srcDef) return false
-            if (srcDef.hidePreview) return false
-            // Always-visual nodes count immediately; conditional nodes count if they have a preview
-            return !srcDef.conditionalPreview || !!previews[e.source]
-          })
-        const show = hasVisualSource
+        const show = showPreview
         return (
           <div
             className="overflow-hidden transition-[max-height,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
