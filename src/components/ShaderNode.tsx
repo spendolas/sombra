@@ -176,7 +176,13 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
       </BaseNodeHeader>
       {/* Preview thumbnail below title — animated show/hide for conditional nodes */}
       {!definition.hidePreview && (() => {
-        const show = !definition.conditionalPreview || connectedInputs.size > 0
+        const hasVisualSource = !definition.conditionalPreview || edges
+          .filter(e => e.target === id)
+          .some(e => {
+            const srcType = (allNodes.find(n => n.id === e.source)?.data as NodeData | undefined)?.type
+            return srcType ? !nodeRegistry.get(srcType)?.hidePreview : false
+          })
+        const show = hasVisualSource
         return (
           <div
             className="overflow-hidden transition-[max-height,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
