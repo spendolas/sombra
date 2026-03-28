@@ -9,6 +9,7 @@ export const clampNode: NodeDefinition = {
   label: 'Clamp',
   category: 'Math',
   description: 'Restrict a value to a min/max range',
+  conditionalPreview: true,
 
   inputs: [
     { id: 'value', label: 'Value', type: 'float', default: 0.5 },

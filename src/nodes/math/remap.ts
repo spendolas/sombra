@@ -10,6 +10,7 @@ export const remapNode: NodeDefinition = {
   label: 'Remap',
   category: 'Math',
   description: 'Remap value from input range to output range',
+  conditionalPreview: true,
 
   inputs: [
     {
