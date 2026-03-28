@@ -173,7 +173,7 @@ export class PreviewScheduler {
     this.pendingCompile.delete(targetNodeId)
 
     if (!result || !result.success) {
-      // Clear from staleNodes to prevent infinite recompile loops
+      console.warn(`[preview] compile failed for ${targetNodeId}`, result?.errors || 'no result')
       this.staleNodes.delete(targetNodeId)
       return
     }
@@ -201,8 +201,8 @@ export class PreviewScheduler {
       this.timeLiveNodes.delete(targetNodeId)
     }
 
-    // [P8] Depth exceeded → no render (placeholder handled by UI)
     if (cached.depthExceeded) {
+      console.warn(`[preview] depth exceeded for ${targetNodeId} (>${cached.passes?.length || '?'} passes)`)
       this.staleNodes.delete(targetNodeId)
       return
     }
@@ -216,6 +216,8 @@ export class PreviewScheduler {
     }
     if (bitmap) {
       usePreviewStore.getState().setPreview(targetNodeId, bitmap)
+    } else {
+      console.warn(`[preview] render returned null for ${targetNodeId}`, cached.passes ? `(${cached.passes.length} passes)` : '(single)')
     }
     this.staleNodes.delete(targetNodeId)
   }

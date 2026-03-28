@@ -34,8 +34,6 @@ export class PreviewRenderer {
   private readonly MAX_CACHE = 64
   private readBuf = new Uint8Array(PREVIEW_SIZE * PREVIEW_SIZE * 4)
   private startTime = Date.now()
-  /** Main canvas resolution — used for u_resolution so pixel-based params scale correctly */
-  private mainResolution: [number, number] = [PREVIEW_SIZE, PREVIEW_SIZE]
   /** Reusable OffscreenCanvas for zero-copy ImageBitmap conversion (separate from WebGL canvas) */
   private canvas2d = new OffscreenCanvas(PREVIEW_SIZE, PREVIEW_SIZE)
   private ctx2d = this.canvas2d.getContext('2d')!
@@ -83,8 +81,8 @@ export class PreviewRenderer {
    * Update the main canvas resolution so pixel-based uniforms
    * (e.g. ribWidth) compute the same UV fractions as the full render.
    */
-  setMainResolution(width: number, height: number) {
-    this.mainResolution = [width, height]
+  setMainResolution(_width: number, _height: number) {
+    // No-op: preview now uses PREVIEW_SIZE for all uniforms
   }
 
   /**
