@@ -125,7 +125,7 @@ export class PreviewRenderer {
     if (uRes) gl.uniform2f(uRes, PREVIEW_SIZE, PREVIEW_SIZE)
 
     const uRefSize = gl.getUniformLocation(program, 'u_ref_size')
-    if (uRefSize) gl.uniform1f(uRefSize, Math.min(this.mainResolution[0], this.mainResolution[1]))
+    if (uRefSize) gl.uniform1f(uRefSize, PREVIEW_SIZE)
 
     const uMouse = gl.getUniformLocation(program, 'u_mouse')
     if (uMouse) gl.uniform2f(uMouse, 0, 0)
@@ -277,7 +277,7 @@ export class PreviewRenderer {
       const uRes = gl.getUniformLocation(program, 'u_resolution')
       if (uRes) gl.uniform2f(uRes, PREVIEW_SIZE, PREVIEW_SIZE)
       const uRefSize = gl.getUniformLocation(program, 'u_ref_size')
-      if (uRefSize) gl.uniform1f(uRefSize, Math.min(this.mainResolution[0], this.mainResolution[1]))
+      if (uRefSize) gl.uniform1f(uRefSize, PREVIEW_SIZE)
       const uDpr = gl.getUniformLocation(program, 'u_dpr')
       if (uDpr) gl.uniform1f(uDpr, 1.0)
       const uVp = gl.getUniformLocation(program, 'u_viewport')
