@@ -9,6 +9,7 @@ export const splitVec2Node: NodeDefinition = {
   label: 'Split Vec2',
   category: 'Vector',
   description: 'Decompose vec2 into X, Y float components',
+  hidePreview: true,
 
   inputs: [
     { id: 'vector', label: 'Vector', type: 'vec2', default: [0, 0] },

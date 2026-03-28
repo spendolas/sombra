@@ -8,6 +8,7 @@
 
 import type { Node, Edge } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
+import { nodeRegistry } from '../nodes/registry'
 import type { PreviewResponse } from '../compiler/compiler.worker'
 import type { PreviewRenderer, UniformUpload } from './preview-renderer'
 import { usePreviewStore } from '../stores/previewStore'
@@ -249,6 +250,9 @@ export class PreviewScheduler {
     for (const nodeId of this.staleNodes) {
       if (performance.now() - frameStart > FRAME_BUDGET_MS) break
       if (this.pendingCompile.has(nodeId)) continue
+      // Skip nodes that don't need previews
+      const nodeType = this.prevNodeMap.get(nodeId)?.data?.type
+      if (nodeType && nodeRegistry.get(nodeType)?.hidePreview) { this.staleNodes.delete(nodeId); continue }
 
       // Request compilation from Worker
       this.pendingCompile.add(nodeId)

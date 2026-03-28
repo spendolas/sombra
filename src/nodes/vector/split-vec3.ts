@@ -9,6 +9,7 @@ export const splitVec3Node: NodeDefinition = {
   label: 'Split Vec3',
   category: 'Vector',
   description: 'Decompose vec3 into X, Y, Z float components',
+  hidePreview: true,
 
   inputs: [
     { id: 'vector', label: 'Vector', type: 'vec3', default: [0, 0, 0] },

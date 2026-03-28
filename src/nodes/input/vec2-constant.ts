@@ -9,6 +9,7 @@ export const vec2ConstantNode: NodeDefinition = {
   label: 'Vec2',
   category: 'Input',
   description: 'Constant 2D vector value',
+  hidePreview: true,
 
   inputs: [],
 
