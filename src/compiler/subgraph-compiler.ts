@@ -19,7 +19,7 @@ import {
 } from './glsl-generator'
 
 /** Maximum passes for preview rendering. Beyond this, show placeholder. [P8] */
-const MAX_PREVIEW_PASSES = 3
+const MAX_PREVIEW_PASSES = 6
 
 export interface PreviewPass {
   fragmentShader: string
