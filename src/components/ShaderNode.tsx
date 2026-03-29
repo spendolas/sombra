@@ -200,11 +200,14 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
     }
   }, [showPreview, id, definition.conditionalPreview])
 
+  const previewWrapperRef = useRef<HTMLDivElement>(null)
+  const previewHeight = previewWrapperRef.current?.scrollHeight ?? 0
+
   return (
     <BaseNode
       className="min-w-node"
       style={!definition.hidePreview ? {
-        marginTop: showPreview ? -212 : 0,
+        marginTop: showPreview ? -previewHeight : 0,
         transition: 'margin-top 300ms cubic-bezier(0.4,0,0.2,1)',
       } : undefined}
     >
@@ -218,8 +221,9 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
         const show = showPreview
         return (
           <div
+            ref={previewWrapperRef}
             className="overflow-hidden transition-[max-height,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
-            style={{ maxHeight: show ? '212px' : '0px', opacity: show ? 1 : 0 }}
+            style={{ maxHeight: show ? previewHeight + 'px' : '0px', opacity: show ? 1 : 0 }}
           >
             <NodePreview nodeId={id} />
           </div>
