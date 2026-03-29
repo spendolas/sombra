@@ -206,7 +206,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   return (
     <BaseNode
       className="min-w-node"
-      style={!definition.hidePreview ? {
+      style={definition.conditionalPreview ? {
         marginTop: showPreview ? -previewHeight : 0,
         transition: 'margin-top 300ms cubic-bezier(0.4,0,0.2,1)',
       } : undefined}
@@ -216,19 +216,18 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
           {definition.label}
         </BaseNodeHeaderTitle>
       </BaseNodeHeader>
-      {/* Preview thumbnail below title — animated show/hide for conditional nodes */}
-      {!definition.hidePreview && (() => {
-        const show = showPreview
+      {/* Preview: conditional nodes get animated wrapper, others render directly */}
+      {!definition.hidePreview && (definition.conditionalPreview ? (() => {
         return (
           <div
             ref={previewWrapperRef}
             className="overflow-hidden transition-[max-height,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
-            style={{ maxHeight: show ? previewHeight + 'px' : '0px', opacity: show ? 1 : 0 }}
+            style={{ maxHeight: showPreview ? (previewHeight || 9999) + 'px' : '0px', opacity: showPreview ? 1 : 0 }}
           >
             <NodePreview nodeId={id} />
           </div>
         )
-      })()}
+      })() : <NodePreview nodeId={id} />)}
 
       <BaseNodeContent>
         {/* Output handles (above inputs) */}
