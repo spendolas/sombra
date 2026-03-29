@@ -251,10 +251,25 @@ export class PreviewScheduler {
 
     // Batch multiple stale nodes per frame within a time budget
     const FRAME_BUDGET_MS = 8
-    // Remove hidePreview nodes from stale set before iterating (avoid mutation during iteration)
+    // Remove hidePreview and inactive conditionalPreview nodes from stale set
     for (const nodeId of [...this.staleNodes]) {
       const nodeType = this.prevNodeMap.get(nodeId)?.data?.type
-      if (nodeType && nodeRegistry.get(nodeType)?.hidePreview) this.staleNodes.delete(nodeId)
+      if (!nodeType) continue
+      const def = nodeRegistry.get(nodeType)
+      if (!def) continue
+      if (def.hidePreview) { this.staleNodes.delete(nodeId); continue }
+      if (def.conditionalPreview) {
+        // Skip if no input source is visual
+        const incomingEdges = this.edges.filter(e => e.target === nodeId)
+        const hasVisualSource = incomingEdges.some(e => {
+          const srcType = this.prevNodeMap.get(e.source)?.data?.type
+          const srcDef = srcType ? nodeRegistry.get(srcType) : undefined
+          if (!srcDef || srcDef.hidePreview) return false
+          if (!srcDef.conditionalPreview) return true
+          return !!usePreviewStore.getState().previews[e.source]
+        })
+        if (!hasVisualSource) this.staleNodes.delete(nodeId)
+      }
     }
 
     const frameStart = performance.now()
