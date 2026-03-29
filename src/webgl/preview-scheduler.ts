@@ -249,15 +249,6 @@ export class PreviewScheduler {
       }
     }
 
-    // Re-stale conditionalPreview nodes without bitmaps (their source may have resolved)
-    const previews = usePreviewStore.getState().previews
-    for (const [nodeId, node] of this.prevNodeMap) {
-      const def = nodeRegistry.get(node.data.type)
-      if (def?.conditionalPreview && !previews[nodeId]) {
-        this.staleNodes.add(nodeId)
-      }
-    }
-
     // Batch multiple stale nodes per frame within a time budget
     const FRAME_BUDGET_MS = 8
     // Remove hidePreview nodes from stale set
@@ -271,20 +262,6 @@ export class PreviewScheduler {
     for (const nodeId of [...this.staleNodes]) {
       if (performance.now() - frameStart > FRAME_BUDGET_MS) break
       if (this.pendingCompile.has(nodeId)) continue
-
-      // Skip conditionalPreview nodes without visual sources (stay stale for re-check next frame)
-      const nodeType = this.prevNodeMap.get(nodeId)?.data?.type
-      const nodeDef = nodeType ? nodeRegistry.get(nodeType) : undefined
-      if (nodeDef?.conditionalPreview) {
-        const hasVisualSource = this.edges.filter(e => e.target === nodeId).some(e => {
-          const srcType = this.prevNodeMap.get(e.source)?.data?.type
-          const srcDef = srcType ? nodeRegistry.get(srcType) : undefined
-          if (!srcDef || srcDef.hidePreview) return false
-          if (!srcDef.conditionalPreview) return true
-          return !!usePreviewStore.getState().previews[e.source]
-        })
-        if (!hasVisualSource) continue
-      }
 
       // Request compilation from Worker
       this.pendingCompile.add(nodeId)
