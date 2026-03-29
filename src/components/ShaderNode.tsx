@@ -200,7 +200,13 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   }, [showPreview, id, definition.conditionalPreview])
 
   return (
-    <BaseNode className="min-w-node">
+    <BaseNode
+      className="min-w-node"
+      style={!definition.hidePreview ? {
+        marginTop: showPreview ? -212 : 0,
+        transition: 'margin-top 300ms cubic-bezier(0.4,0,0.2,1)',
+      } : undefined}
+    >
       <BaseNodeHeader>
         <BaseNodeHeaderTitle>
           {definition.label}
