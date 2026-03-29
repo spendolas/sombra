@@ -2,7 +2,7 @@
  * ShaderNode - Visual component for shader nodes on the canvas
  */
 
-import { memo, useCallback, useRef, useEffect, useLayoutEffect, useState } from 'react'
+import { memo, useCallback, useRef, useEffect } from 'react'
 import { Position, useEdges, type NodeProps } from '@xyflow/react'
 import type { NodeData, NodeParameter } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
@@ -167,63 +167,98 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   // Dynamic input flag
   const hasDynamicInputs = !!definition.dynamicInputs
 
-  // Compute which source nodes need reactive preview tracking (conditionalPreview sources)
-  const conditionalSourceIds = definition.conditionalPreview
-    ? edges.filter(e => e.target === id).filter(e => {
-        const srcType = (allNodes.find(n => n.id === e.source)?.data as NodeData | undefined)?.type
-        const srcDef = srcType ? nodeRegistry.get(srcType) : undefined
-        return srcDef?.conditionalPreview && !srcDef.hidePreview
-      }).map(e => e.source)
-    : []
-
-  // Reactively subscribe to whether any conditional source has a preview
-  const anyConditionalSourceHasPreview = usePreviewStore((s) =>
-    conditionalSourceIds.some(srcId => !!s.previews[srcId])
-  )
-
-  // Determine if preview should show
+  // Determine if preview should show via upstream graph traversal
+  // BFS backward: if ANY always-visual node exists upstream, show preview
   const showPreview = !definition.hidePreview && (!definition.conditionalPreview || (() => {
-    // Check for always-visual sources (not hidePreview, not conditionalPreview)
-    const hasAlwaysVisualSource = edges.filter(e => e.target === id).some(e => {
-      const srcType = (allNodes.find(n => n.id === e.source)?.data as NodeData | undefined)?.type
+    const visited = new Set<string>()
+    const queue = edges.filter(e => e.target === id).map(e => e.source)
+    while (queue.length > 0) {
+      const srcId = queue.pop()!
+      if (visited.has(srcId)) continue
+      visited.add(srcId)
+      const srcType = (allNodes.find(n => n.id === srcId)?.data as NodeData | undefined)?.type
       const srcDef = srcType ? nodeRegistry.get(srcType) : undefined
-      return srcDef ? !srcDef.hidePreview && !srcDef.conditionalPreview : false
-    })
-    return hasAlwaysVisualSource || anyConditionalSourceHasPreview
+      if (!srcDef || srcDef.hidePreview) continue
+      if (!srcDef.conditionalPreview) return true // found always-visual upstream
+      // Conditional — keep searching its inputs
+      edges.filter(e => e.target === srcId).forEach(e => queue.push(e.source))
+    }
+    return false
   })())
 
-  // Clear preview from store after collapse animation — propagates to downstream conditional nodes
-  useEffect(() => {
-    if (!showPreview && definition.conditionalPreview) {
-      const timer = setTimeout(() => usePreviewStore.getState().clearNodes([id]), 300)
-      return () => clearTimeout(timer)
-    }
-  }, [showPreview, id, definition.conditionalPreview])
-
   const previewWrapperRef = useRef<HTMLDivElement>(null)
-  const [previewHeight, setPreviewHeight] = useState(0)
-  const mounted = useRef(false)
+  const animRef = useRef<number>(0)
+  const mountedRef = useRef(false)
 
-  // Measure preview height synchronously before paint
-  useLayoutEffect(() => {
-    const h = previewWrapperRef.current?.scrollHeight ?? 0
-    if (h !== previewHeight) setPreviewHeight(h)
-  })
+  // Animate preview expand/collapse — JS-driven for perfect sync
+  useEffect(() => {
+    const wrapper = previewWrapperRef.current
+    if (!wrapper) return
+    const baseNode = wrapper.parentElement
+    if (!baseNode) return
 
-  // Enable transitions after first paint (skip animation on load)
-  useEffect(() => { mounted.current = true }, [])
+    cancelAnimationFrame(animRef.current)
 
-  const transition = mounted.current ? 'margin-top 300ms cubic-bezier(0.4,0,0.2,1)' : 'none'
-  const wrapperTransition = mounted.current ? 'max-height 300ms cubic-bezier(0.4,0,0.2,1), opacity 300ms cubic-bezier(0.4,0,0.2,1)' : 'none'
+    const runAnimation = (from: number, to: number) => {
+      let start = 0
+      const duration = 300
+      const expanding = to > from
+
+      const tick = (now: number) => {
+        if (!start) start = now
+        const t = Math.min((now - start) / duration, 1)
+        const e = 1 - Math.pow(1 - t, 3) // ease-out cubic
+        const val = from + (to - from) * e
+
+        wrapper.style.maxHeight = val + 'px'
+        wrapper.style.opacity = String(expanding ? e : 1 - e)
+        baseNode.style.marginTop = -val + 'px'
+
+        if (t < 1) animRef.current = requestAnimationFrame(tick)
+      }
+      animRef.current = requestAnimationFrame(tick)
+    }
+
+    if (showPreview) {
+      // Expanding — wait for canvas to render if needed
+      const waitAndExpand = () => {
+        const h = wrapper.scrollHeight
+        if (h > 0) {
+          if (!mountedRef.current) {
+            // First mount: snap
+            mountedRef.current = true
+            wrapper.style.maxHeight = h + 'px'
+            wrapper.style.opacity = '1'
+            baseNode.style.marginTop = -h + 'px'
+          } else {
+            runAnimation(parseFloat(wrapper.style.maxHeight) || 0, h)
+          }
+        } else {
+          // Canvas not yet rendered — poll next frame
+          animRef.current = requestAnimationFrame(waitAndExpand)
+        }
+      }
+      waitAndExpand()
+    } else {
+      // Collapsing
+      if (!mountedRef.current) {
+        mountedRef.current = true
+        wrapper.style.maxHeight = '0px'
+        wrapper.style.opacity = '0'
+        baseNode.style.marginTop = '0px'
+      } else {
+        const from = parseFloat(wrapper.style.maxHeight) || 0
+        if (from > 0) {
+          runAnimation(from, 0)
+        }
+      }
+    }
+
+    return () => cancelAnimationFrame(animRef.current)
+  }, [showPreview]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <BaseNode
-      className="min-w-node"
-      style={definition.conditionalPreview ? {
-        marginTop: showPreview ? -previewHeight : 0,
-        transition,
-      } : undefined}
-    >
+    <BaseNode className="min-w-node">
       <BaseNodeHeader>
         <BaseNodeHeaderTitle>
           {definition.label}
@@ -234,7 +269,6 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
         <div
           ref={previewWrapperRef}
           className="overflow-hidden"
-          style={{ maxHeight: showPreview ? previewHeight + 'px' : '0px', opacity: showPreview ? 1 : 0, transition: wrapperTransition }}
         >
           <NodePreview nodeId={id} />
         </div>
