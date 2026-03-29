@@ -192,6 +192,13 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
     return hasAlwaysVisualSource || anyConditionalSourceHasPreview
   })())
 
+  // Clear preview from store when hidden — propagates collapse to downstream conditional nodes
+  useEffect(() => {
+    if (!showPreview && definition.conditionalPreview) {
+      usePreviewStore.getState().clearNodes([id])
+    }
+  }, [showPreview, id, definition.conditionalPreview])
+
   return (
     <BaseNode className="min-w-node">
       <BaseNodeHeader>
