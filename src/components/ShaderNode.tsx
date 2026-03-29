@@ -2,7 +2,7 @@
  * ShaderNode - Visual component for shader nodes on the canvas
  */
 
-import { memo, useCallback, useRef, useEffect } from 'react'
+import { memo, useCallback, useRef, useEffect, useLayoutEffect, useState } from 'react'
 import { Position, useEdges, type NodeProps } from '@xyflow/react'
 import type { NodeData, NodeParameter } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
@@ -201,14 +201,27 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   }, [showPreview, id, definition.conditionalPreview])
 
   const previewWrapperRef = useRef<HTMLDivElement>(null)
-  const previewHeight = previewWrapperRef.current?.scrollHeight ?? 0
+  const [previewHeight, setPreviewHeight] = useState(0)
+  const mounted = useRef(false)
+
+  // Measure preview height synchronously before paint
+  useLayoutEffect(() => {
+    const h = previewWrapperRef.current?.scrollHeight ?? 0
+    if (h !== previewHeight) setPreviewHeight(h)
+  })
+
+  // Enable transitions after first paint (skip animation on load)
+  useEffect(() => { mounted.current = true }, [])
+
+  const transition = mounted.current ? 'margin-top 300ms cubic-bezier(0.4,0,0.2,1)' : 'none'
+  const wrapperTransition = mounted.current ? 'max-height 300ms cubic-bezier(0.4,0,0.2,1), opacity 300ms cubic-bezier(0.4,0,0.2,1)' : 'none'
 
   return (
     <BaseNode
       className="min-w-node"
       style={definition.conditionalPreview ? {
         marginTop: showPreview ? -previewHeight : 0,
-        transition: 'margin-top 300ms cubic-bezier(0.4,0,0.2,1)',
+        transition,
       } : undefined}
     >
       <BaseNodeHeader>
@@ -217,17 +230,15 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
         </BaseNodeHeaderTitle>
       </BaseNodeHeader>
       {/* Preview: conditional nodes get animated wrapper, others render directly */}
-      {!definition.hidePreview && (definition.conditionalPreview ? (() => {
-        return (
-          <div
-            ref={previewWrapperRef}
-            className="overflow-hidden transition-[max-height,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
-            style={{ maxHeight: showPreview ? (previewHeight || 9999) + 'px' : '0px', opacity: showPreview ? 1 : 0 }}
-          >
-            <NodePreview nodeId={id} />
-          </div>
-        )
-      })() : <NodePreview nodeId={id} />)}
+      {!definition.hidePreview && (definition.conditionalPreview ? (
+        <div
+          ref={previewWrapperRef}
+          className="overflow-hidden"
+          style={{ maxHeight: showPreview ? previewHeight + 'px' : '0px', opacity: showPreview ? 1 : 0, transition: wrapperTransition }}
+        >
+          <NodePreview nodeId={id} />
+        </div>
+      ) : <NodePreview nodeId={id} />)}
 
       <BaseNodeContent>
         {/* Output handles (above inputs) */}
