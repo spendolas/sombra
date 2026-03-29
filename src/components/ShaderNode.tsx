@@ -192,10 +192,11 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
     return hasAlwaysVisualSource || anyConditionalSourceHasPreview
   })())
 
-  // Clear preview from store when hidden — propagates collapse to downstream conditional nodes
+  // Clear preview from store after collapse animation — propagates to downstream conditional nodes
   useEffect(() => {
     if (!showPreview && definition.conditionalPreview) {
-      usePreviewStore.getState().clearNodes([id])
+      const timer = setTimeout(() => usePreviewStore.getState().clearNodes([id]), 300)
+      return () => clearTimeout(timer)
     }
   }, [showPreview, id, definition.conditionalPreview])
 
