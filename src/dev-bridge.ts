@@ -51,10 +51,13 @@ function createNode(
   Object.assign(params, paramOverrides)
 
   const id = uid('n')
+  const pos = position && typeof position === 'object'
+    ? { x: position.x ?? 0, y: position.y ?? 0 }
+    : { x: 0, y: 0 }
   const node: Node<NodeData> = {
     id,
     type: 'shaderNode',
-    position,
+    position: pos,
     data: { type, params },
   }
   useGraphStore.getState().addNode(node)

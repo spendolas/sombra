@@ -82,7 +82,7 @@ export class WebGLRenderer {
   private passStates: PassState[] = []
   private fboPool: FBOSlot[] = []
   private downstreamMap: Map<number, number[]> = new Map()
-  private uniformPassMap: Map<string, number> = new Map()
+  private uniformPassMap: Map<string, number[]> = new Map()
 
   // [P6] Program cache — keyed by fragment shader source
   private programCache: Map<string, ProgramCacheEntry> = new Map()
@@ -561,12 +561,17 @@ export class WebGLRenderer {
     }
   }
 
-  /** Build uniform name → pass index routing map. */
+  /** Build uniform name → pass indices routing map (one uniform may span multiple passes). */
   private buildUniformPassMap() {
     this.uniformPassMap.clear()
     for (const ps of this.passStates) {
       for (const spec of ps.userUniforms) {
-        this.uniformPassMap.set(spec.name, ps.index)
+        const existing = this.uniformPassMap.get(spec.name)
+        if (existing) {
+          if (!existing.includes(ps.index)) existing.push(ps.index)
+        } else {
+          this.uniformPassMap.set(spec.name, [ps.index])
+        }
       }
     }
   }
@@ -592,25 +597,27 @@ export class WebGLRenderer {
       return
     }
 
-    // Multi-pass: route each uniform to its pass program [P3]
+    // Multi-pass: route each uniform to ALL its passes (re-emitted nodes span multiple)
     let anyChanged = false
     for (const { name, value } of uniforms) {
       // [P3] Skip if value unchanged — avoids marking unrelated passes dirty
       if (!this.uniformValueChanged(name, value)) continue
       this.lastUniformValues.set(name, value)
 
-      const passIdx = this.uniformPassMap.get(name)
-      if (passIdx === undefined) continue
+      const passIndices = this.uniformPassMap.get(name)
+      if (!passIndices) continue
 
-      const ps = this.passStates[passIdx]
-      if (!ps) continue
+      for (const passIdx of passIndices) {
+        const ps = this.passStates[passIdx]
+        if (!ps) continue
 
-      gl.useProgram(ps.program)
-      const loc = ps.uniforms.get(name)
-      if (loc) this.uploadUniform(loc, value)
+        gl.useProgram(ps.program)
+        const loc = ps.uniforms.get(name)
+        if (loc) this.uploadUniform(loc, value)
 
-      // [P3] Mark affected pass + downstream as dirty
-      this.markPassDirty(passIdx)
+        // [P3] Mark affected pass + downstream as dirty
+        this.markPassDirty(passIdx)
+      }
       anyChanged = true
     }
 
