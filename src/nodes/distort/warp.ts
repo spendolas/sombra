@@ -71,12 +71,14 @@ export const warpNode: NodeDefinition = {
     const lines: string[] = []
 
     // In texture mode, coords is v_uv (screen space) for correct FBO sampling.
-    // Compute auto_uv internally for aspect-correct noise evaluation.
+    // Compute auto_uv internally for aspect-correct noise evaluation,
+    // then apply SRT scale/translate so the noise pattern responds to sliders.
     if (ctx.textureSamplers?.source) {
       ctx.uniforms.add('u_resolution')
       ctx.uniforms.add('u_dpr')
       ctx.uniforms.add('u_ref_size')
       lines.push(`vec2 ${noiseCoords} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * 0.5) / (u_dpr * u_ref_size) + 0.5;`)
+      lines.push(`${noiseCoords} = (${noiseCoords} - 0.5) / vec2(${inputs.srt_scale}) - vec2(${inputs.srt_translateX}, -(${inputs.srt_translateY})) / (u_dpr * u_ref_size) + 0.5;`)
     } else {
       // Single-pass: coords is already auto_uv
       lines.push(`vec2 ${noiseCoords} = ${inputs.coords};`)

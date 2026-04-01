@@ -92,7 +92,7 @@ export function getSpatialParams(spatial: SpatialConfig): NodeParameter[] {
       case 'scale':
         params.push({
           id: 'srt_scale', label: 'Scale', type: 'float', default: 1.0,
-          min: 0, max: 2.0, step: 0.01,
+          min: 0, max: 10.0, step: 0.01,
           connectable: true, updateMode: 'uniform',
         })
         break
