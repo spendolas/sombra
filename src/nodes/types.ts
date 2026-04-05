@@ -173,6 +173,14 @@ export interface NodeDefinition {
   glsl: (ctx: GLSLContext) => string
 
   /**
+   * Generate IR (Intermediate Representation) for this node.
+   * When present, the IR path can be used alongside glsl() for dual-target codegen.
+   * The IR is lowered to GLSL or WGSL by the respective backends.
+   * Added in Phase 1a of the WebGPU migration.
+   */
+  ir?: (ctx: import('../compiler/ir/types').IRContext) => import('../compiler/ir/types').IRNodeOutput
+
+  /**
    * Optional custom React component for node body
    * If not provided, default UI with parameter controls is used
    */

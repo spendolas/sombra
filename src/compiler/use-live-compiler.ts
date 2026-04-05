@@ -31,11 +31,14 @@ export function useLiveCompiler(
     isTimeLiveAtOutput?: boolean
     qualityTier?: string
     passes?: RenderPass[]
+    wgsl?: import('./glsl-generator').RenderPlan['wgsl']
   }) => void,
   onUniformUpdate?: (
     uniforms: Array<{ name: string; value: number | number[] }>
   ) => void,
-  onRendererUpdate?: (update: { qualityTier: string }) => void
+  onRendererUpdate?: (update: { qualityTier: string }) => void,
+  /** When true, the worker also produces WGSL output via the IR path. */
+  useIR?: boolean,
 ) {
   const nodes = useGraphStore((state) => state.nodes)
   const edges = useGraphStore((state) => state.edges)
@@ -115,6 +118,7 @@ export function useLiveCompiler(
           isTimeLiveAtOutput: result.isTimeLiveAtOutput,
           qualityTier: result.qualityTier,
           passes: result.passes,
+          wgsl: result.wgsl,
         })
       } else {
         setErrors(
@@ -242,6 +246,7 @@ export function useLiveCompiler(
           id,
           nodes: nodesRef.current,
           edges: edgesRef.current,
+          useIR: useIR ?? false,
         })
       }, delay)
     } else {

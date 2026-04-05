@@ -3,6 +3,7 @@
  */
 
 import type { NodeDefinition } from '../types'
+import { variable, construct, declare } from '../../compiler/ir/types'
 
 export const combineVec2Node: NodeDefinition = {
   type: 'combine_vec2',
@@ -23,4 +24,14 @@ export const combineVec2Node: NodeDefinition = {
     const { inputs, outputs } = ctx
     return `vec2 ${outputs.vector} = vec2(${inputs.x}, ${inputs.y});`
   },
+
+  ir: (ctx) => ({
+    statements: [
+      declare(ctx.outputs.vector, 'vec2',
+        construct('vec2', [variable(ctx.inputs.x), variable(ctx.inputs.y)]),
+      ),
+    ],
+    uniforms: [],
+    standardUniforms: new Set(),
+  }),
 }

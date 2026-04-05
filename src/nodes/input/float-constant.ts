@@ -3,6 +3,7 @@
  */
 
 import type { NodeDefinition } from '../types'
+import { variable, declare } from '../../compiler/ir/types'
 
 export const floatConstantNode: NodeDefinition = {
   type: 'float_constant',
@@ -38,4 +39,12 @@ export const floatConstantNode: NodeDefinition = {
     const { inputs, outputs } = ctx
     return `float ${outputs.value} = ${inputs.value};`
   },
+
+  ir: (ctx) => ({
+    statements: [
+      declare(ctx.outputs.value, 'float', variable(ctx.inputs.value)),
+    ],
+    uniforms: [],
+    standardUniforms: new Set(),
+  }),
 }

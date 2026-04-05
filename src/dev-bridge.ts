@@ -11,6 +11,7 @@ import { useCompilerStore } from './stores/compilerStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { nodeRegistry } from './nodes/registry'
 import { compileGraph } from './compiler/glsl-generator'
+import { compileGraphIR } from './compiler/ir-compiler'
 import type { NodeData, EdgeData, PortType } from './nodes/types'
 import type { Node, Edge } from '@xyflow/react'
 import { exportToFile, importFromFile, encodeCompactHash } from './utils/sombra-file'
@@ -198,7 +199,8 @@ function compile(): ReturnType<typeof compileGraph> {
   const result = compileGraph(nodes, edges)
   const cs = useCompilerStore.getState()
   if (result.success) {
-    cs.setShaders(result.vertexShader, result.fragmentShader)
+    const wgslPasses = result.wgsl?.passes
+    cs.setShaders(result.vertexShader, result.fragmentShader, wgslPasses?.[wgslPasses.length - 1]?.shaderCode)
     cs.markCompileSuccess()
   } else {
     cs.setErrors(result.errors.map(e => ({
@@ -407,6 +409,347 @@ function help() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  WGSL GPU compilation validation                                   */
+/* ------------------------------------------------------------------ */
+
+let _validationDevice: GPUDevice | null = null
+
+async function getValidationDevice(): Promise<GPUDevice> {
+  if (_validationDevice) return _validationDevice
+  if (!navigator.gpu) throw new Error('WebGPU not available in this browser')
+  const adapter = await navigator.gpu.requestAdapter()
+  if (!adapter) throw new Error('No GPU adapter available')
+  _validationDevice = await adapter.requestDevice()
+  return _validationDevice
+}
+
+/**
+ * Validate a single WGSL shader via device.createShaderModule().
+ * Returns compilation errors from the GPU driver.
+ */
+async function validateWGSL(shaderCode: string): Promise<{ success: boolean; errors: string[] }> {
+  const device = await getValidationDevice()
+  const module = device.createShaderModule({ code: shaderCode })
+  const info = await module.getCompilationInfo()
+  const errors = info.messages
+    .filter(m => m.type === 'error')
+    .map(m => `Line ${m.lineNum}: ${m.message}`)
+  return { success: errors.length === 0, errors }
+}
+
+interface WGSLValidationResult {
+  name: string
+  passCount: number
+  glslOk: boolean
+  wgslOk: boolean
+  gpuOk: boolean
+  errors: string[]
+}
+
+/**
+ * Build every valid multi-pass graph combination, compile to WGSL,
+ * and validate via device.createShaderModule(). Returns full results.
+ *
+ * Usage: `await __sombra.validateAllWGSL()`
+ */
+async function validateAllWGSL(): Promise<{
+  total: number; passed: number; failed: number
+  results: WGSLValidationResult[]
+}> {
+  const device = await getValidationDevice()
+
+  let nodeCounter = 0
+  const id = () => `vt_${++nodeCounter}`
+
+  function makeNode(nid: string, type: string, params: Record<string, unknown> = {}): Node<NodeData> {
+    return { id: nid, type: 'shaderNode', position: { x: 0, y: 0 }, data: { type, params } }
+  }
+  function makeEdge(src: string, tgt: string, srcH: string, tgtH: string): Edge<EdgeData> {
+    return { id: `${src}-${srcH}-${tgt}-${tgtH}`, source: src, target: tgt,
+      sourceHandle: srcH, targetHandle: tgtH, type: 'typed',
+      data: { sourcePort: srcH, targetPort: tgtH, sourcePortType: 'float' as PortType } }
+  }
+
+  async function runTest(
+    name: string,
+    nodes: Node<NodeData>[],
+    edges: Edge<EdgeData>[],
+  ): Promise<WGSLValidationResult> {
+    const result: WGSLValidationResult = {
+      name, passCount: 0, glslOk: false, wgslOk: false, gpuOk: false, errors: [],
+    }
+
+    const glsl = compileGraph(nodes, edges)
+    if (!glsl.success) {
+      result.errors.push(`GLSL: ${glsl.errors.map(e => e.message).join('; ')}`)
+      return result
+    }
+    result.glslOk = true
+
+    const wgsl = compileGraphIR(nodes, edges)
+    if (!wgsl) {
+      result.errors.push('IR compilation returned null')
+      return result
+    }
+    result.wgslOk = true
+    result.passCount = wgsl.passes.length
+
+    // GPU-compile each pass
+    for (let i = 0; i < wgsl.passes.length; i++) {
+      const module = device.createShaderModule({ code: wgsl.passes[i].shaderCode })
+      const info = await module.getCompilationInfo()
+      for (const msg of info.messages) {
+        if (msg.type === 'error') {
+          result.errors.push(`Pass ${i} line ${msg.lineNum}: ${msg.message}`)
+        }
+      }
+    }
+    result.gpuOk = result.errors.length === 0
+    return result
+  }
+
+  // --- Test matrix ---
+  const NOISE_TYPES = ['simplex', 'value', 'worley', 'worley_fast', 'worley2d', 'box']
+  const TEXTURE_NODES: Array<{ type: string; params?: Record<string, unknown>; label: string }> = [
+    { type: 'warp', params: { edgeMode: 'clamp' }, label: 'Warp(clamp)' },
+    { type: 'warp', params: { edgeMode: 'repeat' }, label: 'Warp(repeat)' },
+    { type: 'warp', params: { edgeMode: 'mirror' }, label: 'Warp(mirror)' },
+    { type: 'pixelate', label: 'Pixelate' },
+    { type: 'tile', params: { mirror: 'none' }, label: 'Tile(none)' },
+    { type: 'tile', params: { mirror: 'x' }, label: 'Tile(mirrorX)' },
+    { type: 'tile', params: { mirror: 'y' }, label: 'Tile(mirrorY)' },
+    { type: 'tile', params: { mirror: 'xy' }, label: 'Tile(mirrorXY)' },
+    { type: 'polar_coords', params: { mode: 'inverse' }, label: 'Polar(inv)' },
+    { type: 'polar_coords', params: { mode: 'forward' }, label: 'Polar(fwd)' },
+    { type: 'reeded_glass', params: { frost: 0.0 }, label: 'ReededGlass' },
+    { type: 'reeded_glass', params: { frost: 0.5 }, label: 'ReededGlass(frost)' },
+  ]
+
+  const results: WGSLValidationResult[] = []
+
+  // Single-pass: every noise + FBM
+  for (const noiseType of NOISE_TYPES) {
+    const nId = id(), oId = id()
+    results.push(await runTest(`Noise(${noiseType})`, [makeNode(nId, 'noise', { noiseType }), makeNode(oId, 'fragment_output')], [makeEdge(nId, oId, 'value', 'color')]))
+  }
+  for (const noiseType of NOISE_TYPES) {
+    const fId = id(), oId = id()
+    results.push(await runTest(`FBM(${noiseType})`, [makeNode(fId, 'fbm', { noiseType, octaves: 4 }), makeNode(oId, 'fragment_output')], [makeEdge(fId, oId, 'value', 'color')]))
+  }
+
+  // Multi-pass: noise × texture nodes
+  for (const tex of TEXTURE_NODES) {
+    for (const noiseType of NOISE_TYPES) {
+      const sId = id(), rId = id(), tId = id(), oId = id()
+      results.push(await runTest(`Noise(${noiseType})→${tex.label}`,
+        [makeNode(sId, 'noise', { noiseType }), makeNode(rId, 'color_ramp'), makeNode(tId, tex.type, tex.params), makeNode(oId, 'fragment_output')],
+        [makeEdge(sId, rId, 'value', 'value'), makeEdge(rId, tId, 'color', 'source'), makeEdge(tId, oId, 'color', 'color')],
+      ))
+    }
+  }
+
+  // Multi-pass: FBM × texture nodes
+  for (const tex of TEXTURE_NODES) {
+    for (const noiseType of NOISE_TYPES) {
+      const fId = id(), rId = id(), tId = id(), oId = id()
+      results.push(await runTest(`FBM(${noiseType})→${tex.label}`,
+        [makeNode(fId, 'fbm', { noiseType, octaves: 4 }), makeNode(rId, 'color_ramp'), makeNode(tId, tex.type, tex.params), makeNode(oId, 'fragment_output')],
+        [makeEdge(fId, rId, 'value', 'value'), makeEdge(rId, tId, 'color', 'source'), makeEdge(tId, oId, 'color', 'color')],
+      ))
+    }
+  }
+
+  // Special: Image, Pixel Grid, Checkerboard
+  {
+    const iId = id(), oId = id()
+    results.push(await runTest('Image', [makeNode(iId, 'image', { imageData: '', fitMode: 'cover' }), makeNode(oId, 'fragment_output')], [makeEdge(iId, oId, 'color', 'color')]))
+  }
+  {
+    const nId = id(), rId = id(), gId = id(), oId = id()
+    results.push(await runTest('PixelGrid',
+      [makeNode(nId, 'noise', { noiseType: 'simplex' }), makeNode(rId, 'color_ramp'), makeNode(gId, 'dither', { shape: 'circle' }), makeNode(oId, 'fragment_output')],
+      [makeEdge(nId, rId, 'value', 'value'), makeEdge(rId, gId, 'color', 'color'), makeEdge(gId, oId, 'result', 'color')],
+    ))
+  }
+  {
+    const cId = id(), oId = id()
+    results.push(await runTest('Checkerboard', [makeNode(cId, 'checkerboard'), makeNode(oId, 'fragment_output')], [makeEdge(cId, oId, 'value', 'color')]))
+  }
+
+  // --- Semantic tests (catch re-emission, uniform routing, animation bugs) ---
+
+  // Helper: compile graph and inspect WGSL semantics
+  function semanticTest(
+    name: string,
+    nodes: Node<NodeData>[],
+    edges: Edge<EdgeData>[],
+    check: (wgsl: { passes: Array<{ shaderCode: string; uniformLayout: { offsets: Map<string, number> }; inputTextures: Array<{ passIndex: number; samplerName: string }> }> }) => string | null,
+  ): WGSLValidationResult {
+    const r: WGSLValidationResult = { name, passCount: 0, glslOk: true, wgslOk: false, gpuOk: false, errors: [] }
+    const wgsl = compileGraphIR(nodes, edges)
+    if (!wgsl) { r.errors.push('IR compile returned null'); return r }
+    r.wgslOk = true
+    r.passCount = wgsl.passes.length
+    const err = check(wgsl)
+    if (err) { r.errors.push(err); return r }
+    r.gpuOk = true
+    return r
+  }
+
+  // Test: Re-emitted textureInput node samples texture, not fallback
+  // Graph: Noise → Ridged → Pixelate(textureInput) → Dither → Mix.A
+  //         FBM → Warp(textureInput) → Pixelate2(textureInput) → Dither2 → Mix.B → Output
+  // Pixelate is in pass 1, re-emitted in pass 2 for the Dither→Mix chain.
+  // Verify pass 2 has textureSample for the re-emitted Pixelate (not mix(0.15, 0.3,...) fallback).
+  {
+    const tId = id(), nId = id(), ridId = id(), pxId = id(), dtId = id()
+    const fId = id(), wId = id(), px2Id = id(), dt2Id = id()
+    const smId = id(), mixId = id(), ramp1Id = id(), ramp2Id = id(), oId = id()
+    const ns = [
+      makeNode(tId, 'time', { speed: 1.0 }),
+      makeNode(nId, 'noise', { noiseType: 'simplex' }),
+      makeNode(ridId, 'ridged'),
+      makeNode(pxId, 'pixelate', { pixelSize: 12 }),
+      makeNode(dtId, 'dither', { pixelSize: 12 }),
+      makeNode(fId, 'fbm', { noiseType: 'value', octaves: 2 }),
+      makeNode(wId, 'warp', { edgeMode: 'clamp' }),
+      makeNode(px2Id, 'pixelate', { pixelSize: 55 }),
+      makeNode(dt2Id, 'dither', { pixelSize: 8 }),
+      makeNode(smId, 'smoothstep', { min: 0.44, max: 0.68 }),
+      makeNode(ramp1Id, 'color_ramp'),
+      makeNode(ramp2Id, 'color_ramp'),
+      makeNode(mixId, 'mix'),
+      makeNode(oId, 'fragment_output'),
+    ]
+    const es = [
+      makeEdge(tId, nId, 'time', 'phase'),
+      makeEdge(tId, fId, 'time', 'phase'),
+      makeEdge(nId, ridId, 'value', 'value'),
+      makeEdge(ridId, pxId, 'value', 'source'),
+      makeEdge(pxId, dtId, 'color', 'color'),
+      makeEdge(pxId, dtId, 'color', 'threshold'),
+      makeEdge(dtId, smId, 'result', 'x'),
+      makeEdge(smId, ramp1Id, 'result', 'value'),
+      makeEdge(fId, wId, 'value', 'source'),
+      makeEdge(wId, px2Id, 'color', 'source'),
+      makeEdge(px2Id, dt2Id, 'color', 'color'),
+      makeEdge(px2Id, dt2Id, 'color', 'threshold'),
+      makeEdge(dt2Id, ramp2Id, 'result', 'value'),
+      makeEdge(dt2Id, mixId, 'result', 'factor'),
+      makeEdge(ramp1Id, mixId, 'color', 'a'),
+      makeEdge(ramp2Id, mixId, 'color', 'b'),
+      makeEdge(mixId, oId, 'result', 'color'),
+    ]
+
+    // Test 1: No fallback checkerboard in any pass
+    results.push(semanticTest('ReEmit: no fallback checkerboard', ns, es, (wgsl) => {
+      for (let i = 0; i < wgsl.passes.length; i++) {
+        if (wgsl.passes[i].shaderCode.includes("mix(vec3f(0.15)")) {
+          return `Pass ${i} contains Pixelate fallback checkerboard — re-emitted textureInput lost its boundary`
+        }
+      }
+      return null
+    }))
+
+    // Test 2: Re-emitted Pixelate in final pass has textureSample
+    results.push(semanticTest('ReEmit: final pass has texture samples', ns, es, (wgsl) => {
+      const lastPass = wgsl.passes[wgsl.passes.length - 1]
+      const texSamples = (lastPass.shaderCode.match(/textureSample\(/g) || []).length
+      if (texSamples < 1) {
+        return `Final pass has ${texSamples} textureSample calls — re-emitted textureInput nodes should sample intermediate textures`
+      }
+      return null
+    }))
+
+    // Test 3: Final pass has input textures from earlier passes
+    results.push(semanticTest('ReEmit: final pass references earlier passes', ns, es, (wgsl) => {
+      const lastPass = wgsl.passes[wgsl.passes.length - 1]
+      if (lastPass.inputTextures.length < 1) {
+        return `Final pass has 0 inputTextures — should reference intermediate pass output`
+      }
+      return null
+    }))
+
+    // Test 4: u_time is in all time-live passes
+    results.push(semanticTest('Animation: u_time in all time-live passes', ns, es, (wgsl) => {
+      for (let i = 0; i < wgsl.passes.length; i++) {
+        const code = wgsl.passes[i].shaderCode
+        const hasTimeUsage = code.includes('uniforms.u_time')
+        const hasTimeInLayout = wgsl.passes[i].uniformLayout.offsets.has('u_time')
+        if (hasTimeUsage && !hasTimeInLayout) {
+          return `Pass ${i} uses uniforms.u_time but u_time is not in its uniform layout`
+        }
+      }
+      return null
+    }))
+
+    // Test 5: Shared uniforms exist in ALL passes that use them
+    results.push(semanticTest('Animation: speed uniform in all re-emitted passes', ns, es, (wgsl) => {
+      // Find passes that reference the time speed uniform
+      const speedUniform = 'u_' + tId.replace(/-/g, '_') + '_speed'
+      const passesWithSpeed: number[] = []
+      for (let i = 0; i < wgsl.passes.length; i++) {
+        if (wgsl.passes[i].shaderCode.includes(speedUniform)) {
+          passesWithSpeed.push(i)
+        }
+      }
+      for (const pi of passesWithSpeed) {
+        if (!wgsl.passes[pi].uniformLayout.offsets.has(speedUniform)) {
+          return `Pass ${pi} references ${speedUniform} in code but it's not in the uniform layout`
+        }
+      }
+      if (passesWithSpeed.length < 2) {
+        // Time is re-emitted, so speed should be in 2+ passes
+        return `${speedUniform} only in ${passesWithSpeed.length} pass(es) — should be in multiple passes due to re-emission`
+      }
+      return null
+    }))
+
+    // Test 6: 3+ pass graph compiles and all passes GPU-validate
+    results.push(await runTest('3-pass complex graph (GPU)', ns, es))
+  }
+
+  // Test: Chained texture boundaries (Source → Warp → Pixelate, 3 passes)
+  {
+    const nId = id(), rId = id(), wId = id(), pId = id(), oId = id()
+    results.push(await runTest('Chain: Noise→Ramp→Warp→Pixelate→Out',
+      [makeNode(nId, 'noise', { noiseType: 'simplex' }), makeNode(rId, 'color_ramp'),
+       makeNode(wId, 'warp', { edgeMode: 'clamp' }), makeNode(pId, 'pixelate'),
+       makeNode(oId, 'fragment_output')],
+      [makeEdge(nId, rId, 'value', 'value'), makeEdge(rId, wId, 'color', 'source'),
+       makeEdge(wId, pId, 'color', 'source'), makeEdge(pId, oId, 'color', 'color')],
+    ))
+  }
+
+  // Test: Gradient node with atan2 in multi-pass
+  {
+    const gId = id(), rId = id(), tId = id(), oId = id()
+    results.push(await runTest('Gradient(radial)→Tile (atan2)',
+      [makeNode(gId, 'gradient', { mode: 'radial' }), makeNode(rId, 'color_ramp'),
+       makeNode(tId, 'tile', { mirror: 'none' }), makeNode(oId, 'fragment_output')],
+      [makeEdge(gId, rId, 'value', 'value'), makeEdge(rId, tId, 'color', 'source'),
+       makeEdge(tId, oId, 'color', 'color')],
+    ))
+  }
+
+  // Summary
+  const passed = results.filter(r => r.gpuOk).length
+  const failed = results.filter(r => !r.gpuOk).length
+  const total = results.length
+
+  // Console output
+  console.log(`%c[Sombra WGSL Validator] ${passed}/${total} passed, ${failed} failed`, failed > 0 ? 'color: red; font-weight: bold' : 'color: green; font-weight: bold')
+  for (const r of results) {
+    if (!r.gpuOk) {
+      console.log(`  ✗ ${r.name}`)
+      for (const e of r.errors) console.log(`    ${e}`)
+    }
+  }
+
+  return { total, passed, failed, results }
+}
+
+/* ------------------------------------------------------------------ */
 /*  Mount on window                                                   */
 /* ------------------------------------------------------------------ */
 
@@ -442,6 +785,11 @@ export function installDevBridge(): void {
 
     // Low-level compiler
     compileGraph,
+    compileGraphIR,
+
+    // WGSL validation (browser-only, uses GPU)
+    validateWGSL,
+    validateAllWGSL,
   }
 
   ;(window as unknown as Record<string, unknown>).__sombra = api

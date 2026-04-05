@@ -5,6 +5,7 @@
  */
 
 import type { NodeDefinition } from '../types'
+import { variable, call, declare } from '../../compiler/ir/types'
 
 export const smoothstepNode: NodeDefinition = {
   type: 'smoothstep',
@@ -30,4 +31,18 @@ export const smoothstepNode: NodeDefinition = {
     const { inputs, outputs } = ctx
     return `float ${outputs.result} = smoothstep(${inputs.min}, ${inputs.max}, ${inputs.x});`
   },
+
+  ir: (ctx) => ({
+    statements: [
+      declare(ctx.outputs.result, 'float',
+        call('smoothstep', [
+          variable(ctx.inputs.min),
+          variable(ctx.inputs.max),
+          variable(ctx.inputs.x),
+        ], 'float'),
+      ),
+    ],
+    uniforms: [],
+    standardUniforms: new Set(),
+  }),
 }

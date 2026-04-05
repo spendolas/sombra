@@ -3,6 +3,7 @@
  */
 
 import type { NodeDefinition } from '../types'
+import { variable, literal, construct, assign } from '../../compiler/ir/types'
 
 export const fragmentOutputNode: NodeDefinition = {
   type: 'fragment_output',
@@ -42,4 +43,14 @@ export const fragmentOutputNode: NodeDefinition = {
     const { inputs } = ctx
     return `fragColor = vec4(${inputs.color}, 1.0);`
   },
+
+  ir: (ctx) => ({
+    statements: [
+      assign('fragColor',
+        construct('vec4', [variable(ctx.inputs.color), literal('float', 1.0)]),
+      ),
+    ],
+    uniforms: [],
+    standardUniforms: new Set(),
+  }),
 }

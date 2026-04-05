@@ -57,6 +57,18 @@ export interface RenderPlan {
   vertexShader: string
   fragmentShader: string
   userUniforms: UniformSpec[]
+  // WebGPU/WGSL data (optional — present when IR path is active)
+  wgsl?: {
+    passes: Array<{
+      shaderCode: string
+      uniformLayout: import('./ir/wgsl-assembler').UniformBufferLayout
+      textureBindings: import('./ir/wgsl-assembler').TextureBinding[]
+      /** Which previous pass textures this pass samples. */
+      inputTextures: Array<{ passIndex: number; samplerName: string }>
+      isTimeLive: boolean
+      textureFilter?: 'linear' | 'nearest'
+    }>
+  }
 }
 
 /** @deprecated Use RenderPlan instead */
@@ -689,16 +701,6 @@ function compileMultiPass(
     const glslLines: string[] = []
     const passImageSamplers = new Set<string>()
 
-    // Boundaries consumed by nodes in this pass
-    const passBoundaries = boundaries.filter(b => passNodeIds.includes(b.consumerId))
-    const samplerNames = passBoundaries.map(b => b.samplerName)
-
-    // Build inputTextures map
-    const inputTextures: Record<string, number> = {}
-    for (const b of passBoundaries) {
-      inputTextures[b.samplerName] = b.sourcePassIndex
-    }
-
     // Find cross-pass non-texture dependencies: nodes from earlier passes
     // that are referenced by nodes in this pass via non-texture edges.
     // These must be re-emitted in this pass's shader.
@@ -734,6 +736,20 @@ function compileMultiPass(
           }
         }
       }
+    }
+
+    // Boundaries consumed by nodes in this pass OR by re-emitted nodes.
+    // Re-emitted textureInput nodes need their boundaries so they sample
+    // the intermediate texture instead of emitting fallback code.
+    const passBoundaries = boundaries.filter(b =>
+      passNodeIds.includes(b.consumerId) || reEmitSet.has(b.consumerId)
+    )
+    const samplerNames = passBoundaries.map(b => b.samplerName)
+
+    // Build inputTextures map
+    const inputTextures: Record<string, number> = {}
+    for (const b of passBoundaries) {
+      inputTextures[b.samplerName] = b.sourcePassIndex
     }
 
     // Combine re-emitted nodes (in original execution order) with pass nodes

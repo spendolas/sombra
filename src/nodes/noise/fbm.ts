@@ -4,7 +4,9 @@
 
 import type { NodeDefinition, SpatialConfig } from '../types'
 import { addFunction, getSpatialParams } from '../types'
-import { NOISE_TYPE_OPTIONS, resolveNoiseFn, registerNoiseType } from './noise-functions'
+import { NOISE_TYPE_OPTIONS, resolveNoiseFn, registerNoiseType, getIRNoiseFunctions } from './noise-functions'
+import { variable, call, declare, construct, raw } from '../../compiler/ir/types'
+import type { IRFunction } from '../../compiler/ir/types'
 
 export const fbmNode: NodeDefinition = {
   type: 'fbm',
@@ -84,5 +86,77 @@ ${loopBody}
     const seedOff = `fbm_soff_${sanitizedId}`
     const sc = `fbm_sc_${sanitizedId}`
     return `vec2 ${seedOff} = fract(vec2(${inputs.seed}) * vec2(12.9898, 78.233)) * 1000.0;\n  vec2 ${sc} = ${inputs.coords} + ${seedOff};\n  float ${outputs.value} = ${fbmKey}(vec3(${sc}, ${inputs.phase}), ${inputs.octaves}, ${inputs.lacunarity}, ${inputs.gain});`
+  },
+
+  ir: (ctx) => {
+    const fractalMode = (ctx.params.fractalMode as string) || 'standard'
+    const noiseType = (ctx.params.noiseType as string) || 'simplex'
+    const noiseFn = resolveNoiseFn(noiseType)
+    const sanitizedId = ctx.nodeId.replace(/-/g, '_')
+    const fbmKey = `fbm_${fractalMode}_${noiseType}`
+    const seedOff = `fbm_soff_${sanitizedId}`
+    const sc = `fbm_sc_${sanitizedId}`
+
+    // Collect noise dependency functions + the FBM function itself
+    const functions: IRFunction[] = getIRNoiseFunctions(noiseType)
+
+    // Build fractal loop body
+    let loopBody: string
+    if (fractalMode === 'turbulence') {
+      loopBody = `      total += abs(${noiseFn}(p) * 2.0 - 1.0) * amp;`
+    } else if (fractalMode === 'ridged') {
+      loopBody = `      float n = 1.0 - abs(${noiseFn}(p) * 2.0 - 1.0);\n      total += n * n * amp;`
+    } else {
+      loopBody = `      total += ${noiseFn}(p) * amp;`
+    }
+
+    // FBM function as IRFunction with raw body
+    const fbmFn: IRFunction = {
+      key: fbmKey,
+      name: fbmKey,
+      params: [
+        { name: 'p', type: 'vec3' },
+        { name: 'oct', type: 'float' },
+        { name: 'lac', type: 'float' },
+        { name: 'g', type: 'float' },
+      ],
+      returnType: 'float',
+      body: [raw(
+        `float total = 0.0;\n` +
+        `float amp = 0.5;\n` +
+        `float maxAmp = 0.0;\n` +
+        `for (int i = 0; i < 8; i++) {\n` +
+        `    if (float(i) >= oct) break;\n` +
+        `${loopBody}\n` +
+        `    maxAmp += amp;\n` +
+        `    p *= lac;\n` +
+        `    amp *= g;\n` +
+        `}\n` +
+        `return total / maxAmp;`,
+      )],
+    }
+    functions.push(fbmFn)
+
+    return {
+      statements: [
+        // Seed offset preamble
+        raw(
+          `vec2 ${seedOff} = fract(vec2(${ctx.inputs.seed}) * vec2(12.9898, 78.233)) * 1000.0;\n` +
+          `vec2 ${sc} = ${ctx.inputs.coords} + ${seedOff};`,
+        ),
+        // Call FBM function
+        declare(ctx.outputs.value, 'float',
+          call(fbmKey, [
+            construct('vec3', [variable(sc), variable(ctx.inputs.phase)]),
+            variable(ctx.inputs.octaves),
+            variable(ctx.inputs.lacunarity),
+            variable(ctx.inputs.gain),
+          ], 'float'),
+        ),
+      ],
+      uniforms: [],
+      standardUniforms: new Set<string>(),
+      functions,
+    }
   },
 }

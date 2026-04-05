@@ -555,14 +555,14 @@ export function createSpectraWorleyRidged(): {
 /**
  * Spectra preset: Box None
  * Pipeline: Quantize UV(104) → UV Transform(scale=0.5, offset=seed) → Domain Warp(strength=5) →
- *           Noise(box, boxFreq=201) → Smoothstep(0.2,0.8) → Color Ramp + Pixel Grid(13) → Output
+ *           Noise(box, scale=50) → Smoothstep(0.2,0.8) → Color Ramp + Pixel Grid(13) → Output
  *
  * Spectra params:
  * - foldScale=0.5 → UV Transform scale
  * - seed=[42.3, 167.5] → UV Transform offset
  * - foldIntensity=2 → pixelSize = 3.0 + 2×5.0 = 13, cellPixelSize = 8×13 = 104
  * - noiseType=box, fractalType=none → raw box noise, no FBM
- * - boxFreq=201 → extremely fine hash grid
+ * - scale=50 → fine hash grid (4x internal normalization × 50 = 200 cells)
  * - warpStrength=5 → heavy domain warp
  * - speed=5 → fast animation
  * - min=0.2, max=0.8 → Smoothstep range compression
@@ -609,14 +609,14 @@ export function createSpectraBoxNone(): {
       position: { x: 0, y: 220 },
       data: { type: 'time', params: { speed: 5.0 } },
     },
-    // Box noise: raw (no FBM), boxFreq=201
+    // Box noise: raw (no FBM), high scale for fine grid
     {
       id: 'sp4-noise',
       type: 'shaderNode',
       position: { x: 600, y: 0 },
       data: {
         type: 'noise',
-        params: { scale: 1.0, noiseType: 'box', boxFreq: 201 },
+        params: { scale: 50.0, noiseType: 'box' },
       },
     },
     // Smoothstep range compression: smoothstep(0.2, 0.8, noise)

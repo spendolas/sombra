@@ -3,6 +3,7 @@
  */
 
 import type { NodeDefinition } from '../types'
+import { variable, binary, declare } from '../../compiler/ir/types'
 
 export const timeNode: NodeDefinition = {
   type: 'time',
@@ -40,4 +41,14 @@ export const timeNode: NodeDefinition = {
     uniforms.add('u_time')
     return `float ${outputs.time} = u_time * ${inputs.speed};`
   },
+
+  ir: (ctx) => ({
+    statements: [
+      declare(ctx.outputs.time, 'float',
+        binary('*', variable('u_time'), variable(ctx.inputs.speed), 'float'),
+      ),
+    ],
+    uniforms: [],
+    standardUniforms: new Set(['u_time']),
+  }),
 }

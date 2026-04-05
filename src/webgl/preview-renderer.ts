@@ -4,6 +4,8 @@
  * and read pixels back as ImageBitmaps for zero-copy canvas display.
  */
 
+import type { PreviewRenderer as IPreviewRenderer } from '../renderer/types'
+
 const VERTEX_SHADER = `#version 300 es
 precision highp float;
 
@@ -23,12 +25,14 @@ export interface UniformUpload {
   value: number | number[]
 }
 
-export class PreviewRenderer {
-  private gl: WebGL2RenderingContext
-  private vao: WebGLVertexArrayObject
-  private fbo: WebGLFramebuffer
-  private fboTexture: WebGLTexture
-  private vertexShader: WebGLShader
+export class WebGL2PreviewRenderer implements IPreviewRenderer {
+  readonly backend = 'webgl2' as const
+
+  private gl!: WebGL2RenderingContext
+  private vao!: WebGLVertexArrayObject
+  private fbo!: WebGLFramebuffer
+  private fboTexture!: WebGLTexture
+  private vertexShader!: WebGLShader
   private programCache = new Map<string, WebGLProgram>()
   private cacheOrder: string[] = []
   private readonly MAX_CACHE = 64
@@ -38,7 +42,7 @@ export class PreviewRenderer {
   private canvas2d = new OffscreenCanvas(PREVIEW_SIZE, PREVIEW_SIZE)
   private ctx2d = this.canvas2d.getContext('2d')!
 
-  constructor() {
+  async init(): Promise<void> {
     // Offscreen WebGL canvas (never added to DOM)
     const canvas = new OffscreenCanvas(PREVIEW_SIZE, PREVIEW_SIZE)
     const gl = canvas.getContext('webgl2')
@@ -88,7 +92,7 @@ export class PreviewRenderer {
   /**
    * Render a fragment shader and return an ImageBitmap, or null on compile error.
    */
-  renderPreview(fragmentShader: string, uniforms: UniformUpload[]): ImageBitmap | null {
+  async renderPreview(fragmentShader: string, uniforms: UniformUpload[]): Promise<ImageBitmap | null> {
     const gl = this.gl
 
     // Get or compile program (LRU cache)
@@ -220,9 +224,9 @@ export class PreviewRenderer {
   /**
    * Render a multi-pass preview chain. Uses a pair of 80×80 FBOs for ping-pong. [P8]
    */
-  renderMultiPassPreview(
+  async renderMultiPassPreview(
     passes: Array<{ fragmentShader: string; uniforms: UniformUpload[]; inputTextures: Record<string, number> }>,
-  ): ImageBitmap | null {
+  ): Promise<ImageBitmap | null> {
     const gl = this.gl
     if (passes.length === 0) return null
 
@@ -351,7 +355,7 @@ export class PreviewRenderer {
     })
   }
 
-  destroy() {
+  dispose() {
     const gl = this.gl
     for (const prog of this.programCache.values()) gl.deleteProgram(prog)
     this.programCache.clear()

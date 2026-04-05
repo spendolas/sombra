@@ -5,6 +5,7 @@
 
 import { compileGraph } from './glsl-generator'
 import type { RenderPlan } from './glsl-generator'
+import { compileGraphIR } from './ir-compiler'
 import { compileNodePreview } from './subgraph-compiler'
 import { initializeNodeLibrary } from '../nodes'
 import type { Node, Edge } from '@xyflow/react'
@@ -18,6 +19,8 @@ export interface CompileRequest {
   id: string
   nodes: Node<NodeData>[]
   edges: Edge<EdgeData>[]
+  /** When true, also runs IR→WGSL compilation and attaches plan.wgsl. */
+  useIR?: boolean
 }
 
 export interface PreviewRequest {
@@ -62,6 +65,16 @@ self.onmessage = (event: MessageEvent<CompileRequest | PreviewRequest>) => {
   const start = performance.now()
   try {
     const result = compileGraph(nodes, edges)
+
+    // If IR path requested, also compile to WGSL
+    if (data.useIR && result.success) {
+      const wgslResult = compileGraphIR(nodes, edges)
+      if (wgslResult) {
+        result.wgsl = { passes: wgslResult.passes }
+      }
+      // If wgslResult is null (IR failure), plan.wgsl stays undefined
+    }
+
     const durationMs = performance.now() - start
     self.postMessage({ id, result, durationMs } satisfies CompileResponse)
   } catch (err) {

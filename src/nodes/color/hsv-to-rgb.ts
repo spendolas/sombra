@@ -5,6 +5,8 @@
 
 import type { NodeDefinition } from '../types'
 import { addFunction } from '../types'
+import { variable, call, declare, raw } from '../../compiler/ir/types'
+import type { IRFunction } from '../../compiler/ir/types'
 
 export const hsvToRgbNode: NodeDefinition = {
   type: 'hsv_to_rgb',
@@ -54,5 +56,39 @@ export const hsvToRgbNode: NodeDefinition = {
 }`)
 
     return `vec3 ${outputs.rgb} = hsv2rgb(${inputs.h}, ${inputs.s}, ${inputs.v});`
+  },
+
+  ir: (ctx) => {
+    const hsv2rgbFn: IRFunction = {
+      key: 'hsv2rgb',
+      name: 'hsv2rgb',
+      params: [
+        { name: 'h', type: 'float' },
+        { name: 's', type: 'float' },
+        { name: 'v', type: 'float' },
+      ],
+      returnType: 'vec3',
+      body: [raw(
+        `vec3 c = vec3(h, s, v);\n` +
+        `vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);\n` +
+        `vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);\n` +
+        `return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);`,
+      )],
+    }
+
+    return {
+      statements: [
+        declare(ctx.outputs.rgb, 'vec3',
+          call('hsv2rgb', [
+            variable(ctx.inputs.h),
+            variable(ctx.inputs.s),
+            variable(ctx.inputs.v),
+          ], 'vec3'),
+        ),
+      ],
+      uniforms: [],
+      standardUniforms: new Set<string>(),
+      functions: [hsv2rgbFn],
+    }
   },
 }

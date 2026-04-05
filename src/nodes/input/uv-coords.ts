@@ -6,6 +6,7 @@
 
 import type { NodeDefinition, SpatialConfig } from '../types'
 import { getSpatialParams } from '../types'
+import { variable, declare } from '../../compiler/ir/types'
 
 export const uvCoordsNode: NodeDefinition = {
   type: 'uv_transform',
@@ -34,4 +35,12 @@ export const uvCoordsNode: NodeDefinition = {
     const { outputs, inputs } = ctx
     return `vec2 ${outputs.uv} = ${inputs.coords};`
   },
+
+  ir: (ctx) => ({
+    statements: [
+      declare(ctx.outputs.uv, 'vec2', variable(ctx.inputs.coords)),
+    ],
+    uniforms: [],
+    standardUniforms: new Set(),
+  }),
 }

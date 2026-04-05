@@ -3,6 +3,7 @@
  */
 
 import type { NodeDefinition } from '../types'
+import { variable, call, binary, literal, declare } from '../../compiler/ir/types'
 
 export const posterizeNode: NodeDefinition = {
   type: 'posterize',
@@ -30,4 +31,21 @@ export const posterizeNode: NodeDefinition = {
     const { inputs, outputs } = ctx
     return `vec3 ${outputs.result} = floor(${inputs.color} * ${inputs.levels}) / (${inputs.levels} - 1.0);`
   },
+
+  ir: (ctx) => ({
+    statements: [
+      // floor(color * levels) / (levels - 1.0)
+      declare(ctx.outputs.result, 'vec3',
+        binary('/',
+          call('floor', [
+            binary('*', variable(ctx.inputs.color), variable(ctx.inputs.levels), 'vec3'),
+          ], 'vec3'),
+          binary('-', variable(ctx.inputs.levels), literal('float', 1.0), 'float'),
+          'vec3',
+        ),
+      ),
+    ],
+    uniforms: [],
+    standardUniforms: new Set(),
+  }),
 }

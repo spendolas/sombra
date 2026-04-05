@@ -3,6 +3,7 @@
  */
 
 import type { NodeDefinition } from '../types'
+import { variable, call, declare } from '../../compiler/ir/types'
 
 export const powerNode: NodeDefinition = {
   type: 'power',
@@ -27,4 +28,17 @@ export const powerNode: NodeDefinition = {
     const { inputs, outputs } = ctx
     return `float ${outputs.result} = pow(${inputs.base}, ${inputs.exponent});`
   },
+
+  ir: (ctx) => ({
+    statements: [
+      declare(ctx.outputs.result, 'float',
+        call('pow', [
+          variable(ctx.inputs.base),
+          variable(ctx.inputs.exponent),
+        ], 'float'),
+      ),
+    ],
+    uniforms: [],
+    standardUniforms: new Set(),
+  }),
 }
