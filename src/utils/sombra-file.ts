@@ -332,7 +332,12 @@ export function encodeCompactHash(
   nodes: Node<NodeData>[],
   edges: Edge<EdgeData>[],
 ): string {
-  const compactNodes: CompactNode[] = nodes.map(node => {
+  // Strip disconnected nodes — they don't affect the output
+  const connectedIds = new Set<string>()
+  for (const e of edges) { connectedIds.add(e.source); connectedIds.add(e.target) }
+  const connectedNodes = nodes.filter(n => connectedIds.has(n.id))
+
+  const compactNodes: CompactNode[] = connectedNodes.map(node => {
     const cn: CompactNode = { i: node.id, t: node.data.type }
     const params = node.data.params
     if (params && Object.keys(params).length > 0) {
