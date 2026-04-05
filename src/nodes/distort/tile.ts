@@ -4,6 +4,8 @@
  */
 
 import type { NodeDefinition } from '../types'
+import type { IRContext, IRNodeOutput, IRStmt } from '../../compiler/ir/types'
+import { variable, declare, construct, binary, literal, call, textureSample, swizzle, raw } from '../../compiler/ir/types'
 
 export const tileNode: NodeDefinition = {
   type: 'tile',
@@ -92,5 +94,91 @@ export const tileNode: NodeDefinition = {
     }
 
     return lines.join('\n  ')
+  },
+
+  ir: (ctx: IRContext): IRNodeOutput => {
+    const mirror = (ctx.params.mirror as string) || 'none'
+    const id = ctx.nodeId.replace(/-/g, '_')
+    const mirrorX = mirror === 'x' || mirror === 'xy'
+    const mirrorY = mirror === 'y' || mirror === 'xy'
+    const samplerName = ctx.textureSamplers?.source
+
+    const stmts: IRStmt[] = []
+
+    if (!mirrorX && !mirrorY) {
+      // Simple fract tiling
+      stmts.push(
+        declare(ctx.outputs.uv, 'vec2',
+          call('fract', [
+            binary('*',
+              variable(ctx.inputs.coords),
+              construct('vec2', [variable(ctx.inputs.countX), variable(ctx.inputs.countY)]),
+              'vec2',
+            ),
+          ], 'vec2'),
+        ),
+      )
+    } else {
+      // Mirror tiling: scale, then mirror per-axis
+      const sc = `tile_sc_${id}`
+      stmts.push(
+        declare(sc, 'vec2',
+          binary('*',
+            variable(ctx.inputs.coords),
+            construct('vec2', [variable(ctx.inputs.countX), variable(ctx.inputs.countY)]),
+            'vec2',
+          ),
+        ),
+      )
+
+      if (mirrorX) {
+        stmts.push(
+          raw(`float tile_mx_${id} = mod(${sc}.x, 2.0);`),
+          raw(`float tile_tx_${id} = tile_mx_${id} < 1.0 ? tile_mx_${id} : 2.0 - tile_mx_${id};`),
+        )
+      } else {
+        stmts.push(
+          raw(`float tile_tx_${id} = fract(${sc}.x);`),
+        )
+      }
+
+      if (mirrorY) {
+        stmts.push(
+          raw(`float tile_my_${id} = mod(${sc}.y, 2.0);`),
+          raw(`float tile_ty_${id} = tile_my_${id} < 1.0 ? tile_my_${id} : 2.0 - tile_my_${id};`),
+        )
+      } else {
+        stmts.push(
+          raw(`float tile_ty_${id} = fract(${sc}.y);`),
+        )
+      }
+
+      stmts.push(
+        declare(ctx.outputs.uv, 'vec2',
+          construct('vec2', [variable(`tile_tx_${id}`), variable(`tile_ty_${id}`)]),
+        ),
+      )
+    }
+
+    // Color output
+    if (samplerName) {
+      stmts.push(
+        declare(ctx.outputs.color, 'vec3',
+          swizzle(textureSample(samplerName, variable(ctx.outputs.uv)), 'rgb', 'vec3'),
+        ),
+      )
+    } else {
+      stmts.push(
+        declare(ctx.outputs.color, 'vec3',
+          construct('vec3', [variable(ctx.outputs.uv), literal('float', 0.5)]),
+        ),
+      )
+    }
+
+    return {
+      statements: stmts,
+      uniforms: [],
+      standardUniforms: new Set(),
+    }
   },
 }

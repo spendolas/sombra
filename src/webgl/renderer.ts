@@ -7,6 +7,7 @@
 
 import type { RenderPlan } from '../compiler/glsl-generator'
 import type { UniformSpec } from '../nodes/types'
+import type { ShaderRenderer, QualityTier } from '../renderer/types'
 
 const VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -31,7 +32,8 @@ void main() {
 }
 `
 
-export type QualityTier = 'adaptive' | 'low' | 'medium' | 'high'
+// QualityTier is now defined in src/renderer/types.ts
+export type { QualityTier } from '../renderer/types'
 
 // ---------------------------------------------------------------------------
 // Internal types
@@ -64,9 +66,11 @@ interface ProgramCacheEntry {
 // Renderer
 // ---------------------------------------------------------------------------
 
-export class WebGLRenderer {
-  private canvas: HTMLCanvasElement
-  private gl: WebGL2RenderingContext
+export class WebGL2ShaderRenderer implements ShaderRenderer {
+  readonly backend = 'webgl2' as const
+
+  private canvas!: HTMLCanvasElement
+  private gl!: WebGL2RenderingContext
   private vao: WebGLVertexArrayObject | null = null
   private buffer: WebGLBuffer | null = null
 
@@ -104,9 +108,8 @@ export class WebGLRenderer {
   private snapTimer: ReturnType<typeof setTimeout> | null = null
   private lastAnimationSpeed = 1.0
 
-  // Reference size (frozen on first render)
-  /** Frozen CSS-pixel min(width, height) — used with u_dpr in auto_uv for DPR-independent scaling */
-  private refSize: number | null = null
+  /** Fixed reference size for DPR-independent UV scaling in auto_uv and SRT translate. */
+  private static readonly REFERENCE_SIZE = 512
 
   // Resize
   private resizeObserver: ResizeObserver | null = null
@@ -121,7 +124,10 @@ export class WebGLRenderer {
   // [P5] Async compilation support (detected, used in future optimization)
   hasParallelCompile = false
 
-  constructor(canvas: HTMLCanvasElement) {
+  // Device/context loss callback
+  private deviceLostCallback: (() => void) | null = null
+
+  async init(canvas: HTMLCanvasElement): Promise<void> {
     this.canvas = canvas
     const gl = canvas.getContext('webgl2')
     if (!gl) throw new Error('WebGL2 not supported')
@@ -137,6 +143,10 @@ export class WebGLRenderer {
       this.requestRender()
     })
     this.resizeObserver.observe(canvas)
+  }
+
+  onDeviceLost(callback: () => void): void {
+    this.deviceLostCallback = callback
   }
 
   // -----------------------------------------------------------------------
@@ -198,6 +208,8 @@ export class WebGLRenderer {
       this.buffer = null
       this.uniforms.clear()
       this.passStates = []
+      // Notify consumer of device loss
+      this.deviceLostCallback?.()
       this.fboPool = []
       this.programCache.clear()
     })
@@ -273,7 +285,7 @@ export class WebGLRenderer {
     this.programCache.set(fragmentSource, { program, lastUsed: Date.now() })
 
     // LRU eviction
-    if (this.programCache.size > WebGLRenderer.PROGRAM_CACHE_MAX) {
+    if (this.programCache.size > WebGL2ShaderRenderer.PROGRAM_CACHE_MAX) {
       let oldestKey: string | null = null
       let oldestTime = Infinity
       for (const [key, entry] of this.programCache) {
@@ -768,11 +780,6 @@ export class WebGLRenderer {
       this.canvas.height = displayHeight
     }
 
-    // Freeze reference size on first valid render (CSS pixels, DPR-independent)
-    if (this.refSize === null && this.canvas.clientWidth > 0 && this.canvas.clientHeight > 0) {
-      this.refSize = Math.min(this.canvas.clientWidth, this.canvas.clientHeight)
-    }
-
     const time = (Date.now() - this.startTime) / 1000
 
     if (this.isMultiPass && this.passStates.length > 1) {
@@ -892,7 +899,7 @@ export class WebGLRenderer {
     if (dprLoc) gl.uniform1f(dprLoc, dpr)
 
     const refLoc = uniforms.get('u_ref_size')
-    if (refLoc && this.refSize !== null) gl.uniform1f(refLoc, this.refSize)
+    if (refLoc) gl.uniform1f(refLoc, WebGL2ShaderRenderer.REFERENCE_SIZE)
 
     const vpLoc = uniforms.get('u_viewport')
     if (vpLoc) gl.uniform2f(vpLoc, w, h)
@@ -937,7 +944,7 @@ export class WebGLRenderer {
     this.setAnimated(false)
   }
 
-  destroy() {
+  dispose() {
     this.stopAnimation()
     if (this.snapTimer) { clearTimeout(this.snapTimer); this.snapTimer = null }
     this.resizeObserver?.disconnect()

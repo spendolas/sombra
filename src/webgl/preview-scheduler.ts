@@ -10,7 +10,8 @@ import type { Node, Edge } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import type { PreviewResponse } from '../compiler/compiler.worker'
-import type { PreviewRenderer, UniformUpload } from './preview-renderer'
+import type { PreviewRenderer } from '../renderer/types'
+import type { UniformUpload } from './preview-renderer'
 import { usePreviewStore } from '../stores/previewStore'
 import CompilerWorker from '../compiler/compiler.worker?worker'
 
@@ -50,7 +51,10 @@ export class PreviewScheduler {
   // Time-dependent nodes: re-render periodically
   private timeLiveNodes = new Set<string>()
   private lastAnimatedRender = 0
-  private readonly ANIMATED_INTERVAL = 200 // 5 FPS — thumbnails don't need smooth playback
+  private readonly BASE_ANIMATED_INTERVAL = 200 // 5 FPS at small canvas sizes
+
+  // Canvas dimension hint for adaptive throttling
+  private canvasMaxDimension = 0
 
   constructor(renderer: PreviewRenderer) {
     this.renderer = renderer
@@ -105,6 +109,15 @@ export class PreviewScheduler {
         // Data reference changed (Zustand immutability) — params changed
         this.markStaleWithDownstream(node.id)
       }
+    }
+
+    // Final cleanup: remove stale/pending entries for nodes no longer in the graph.
+    // This handles clearGraph() where edge removal re-marks deleted nodes as stale.
+    for (const id of [...this.staleNodes]) {
+      if (!currentNodeIds.has(id)) this.staleNodes.delete(id)
+    }
+    for (const id of [...this.pendingCompile]) {
+      if (!currentNodeIds.has(id)) this.pendingCompile.delete(id)
     }
 
     // Save current state for next comparison
@@ -165,7 +178,7 @@ export class PreviewScheduler {
   /**
    * Handle compilation result from the Worker.
    */
-  private onWorkerMessage(event: MessageEvent<PreviewResponse>) {
+  private async onWorkerMessage(event: MessageEvent<PreviewResponse>) {
     const data = event.data
     if (data.type !== 'preview') return
 
@@ -207,12 +220,12 @@ export class PreviewScheduler {
       return
     }
 
-    // Render: multi-pass or single-pass (returns ImageBitmap)
+    // Render: multi-pass or single-pass (returns Promise<ImageBitmap | null>)
     let bitmap: ImageBitmap | null
     if (cached.passes && cached.passes.length > 1) {
-      bitmap = this.renderer.renderMultiPassPreview(cached.passes)
+      bitmap = await this.renderer.renderMultiPassPreview(cached.passes)
     } else {
-      bitmap = this.renderer.renderPreview(cached.fragmentShader, cached.uniforms)
+      bitmap = await this.renderer.renderPreview(cached.fragmentShader, cached.uniforms)
     }
     if (bitmap) {
       usePreviewStore.getState().setPreview(targetNodeId, bitmap)
@@ -225,27 +238,31 @@ export class PreviewScheduler {
   /**
    * Animation frame tick. Batches multiple stale nodes per frame within a time budget.
    */
-  private tick = () => {
+  private tick = async () => {
     if (!this.running) return
     this.rafId = requestAnimationFrame(this.tick)
 
     const now = performance.now()
 
-    // Re-render time-dependent nodes periodically
-    if (now - this.lastAnimatedRender > this.ANIMATED_INTERVAL) {
+    // Re-render time-dependent nodes periodically (adaptive interval based on canvas size)
+    if (now - this.lastAnimatedRender > this.animatedInterval) {
       this.lastAnimatedRender = now
+      const batch = new Map<string, ImageBitmap>()
       for (const nodeId of this.timeLiveNodes) {
         const cached = this.shaderCache.get(nodeId)
         if (!cached || cached.depthExceeded) continue
         let bitmap: ImageBitmap | null
         if (cached.passes && cached.passes.length > 1) {
-          bitmap = this.renderer.renderMultiPassPreview(cached.passes)
+          bitmap = await this.renderer.renderMultiPassPreview(cached.passes)
         } else {
-          bitmap = this.renderer.renderPreview(cached.fragmentShader, cached.uniforms)
+          bitmap = await this.renderer.renderPreview(cached.fragmentShader, cached.uniforms)
         }
         if (bitmap) {
-          usePreviewStore.getState().setPreview(nodeId, bitmap)
+          batch.set(nodeId, bitmap)
         }
+      }
+      if (batch.size > 0) {
+        usePreviewStore.getState().setBatchPreviews(batch)
       }
     }
 
@@ -284,6 +301,14 @@ export class PreviewScheduler {
    */
   setMainResolution(width: number, height: number) {
     this.renderer.setMainResolution(width, height)
+    this.canvasMaxDimension = Math.max(width, height)
+  }
+
+  /** Adaptive refresh interval — slower thumbnails at large canvas sizes to stay in frame budget. */
+  private get animatedInterval(): number {
+    if (this.canvasMaxDimension > 1500) return 1000
+    if (this.canvasMaxDimension > 800) return 500
+    return this.BASE_ANIMATED_INTERVAL
   }
 
   start() {

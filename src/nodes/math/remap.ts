@@ -4,6 +4,7 @@
  */
 
 import type { NodeDefinition } from '../types'
+import { variable, binary, declare } from '../../compiler/ir/types'
 
 export const remapNode: NodeDefinition = {
   type: 'remap',
@@ -59,5 +60,20 @@ export const remapNode: NodeDefinition = {
     const { inputs, outputs } = ctx
     // Remap formula: outMin + (value - inMin) * (outMax - outMin) / (inMax - inMin)
     return `float ${outputs.result} = ${inputs.outMin} + (${inputs.value} - ${inputs.inMin}) * (${inputs.outMax} - ${inputs.outMin}) / (${inputs.inMax} - ${inputs.inMin});`
+  },
+
+  ir: (ctx) => {
+    // outMin + (value - inMin) * (outMax - outMin) / (inMax - inMin)
+    const valueSub = binary('-', variable(ctx.inputs.value), variable(ctx.inputs.inMin), 'float')
+    const outRange = binary('-', variable(ctx.inputs.outMax), variable(ctx.inputs.outMin), 'float')
+    const inRange = binary('-', variable(ctx.inputs.inMax), variable(ctx.inputs.inMin), 'float')
+    const scaled = binary('/', binary('*', valueSub, outRange, 'float'), inRange, 'float')
+    const result = binary('+', variable(ctx.inputs.outMin), scaled, 'float')
+
+    return {
+      statements: [declare(ctx.outputs.result, 'float', result)],
+      uniforms: [],
+      standardUniforms: new Set(),
+    }
   },
 }

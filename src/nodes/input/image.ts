@@ -6,6 +6,8 @@
 
 import type { NodeDefinition, GLSLContext, SpatialConfig } from '../types'
 import { getSpatialParams } from '../types'
+import type { IRContext, IRNodeOutput, IRStmt } from '../../compiler/ir/types'
+import { declare, construct, literal, raw } from '../../compiler/ir/types'
 
 /** Compute the sampler uniform name for an image node. */
 export function imageSamplerName(nodeId: string): string {
@@ -105,5 +107,72 @@ export const imageNode: NodeDefinition = {
     }
 
     return lines.join('\n  ')
+  },
+
+  ir: (ctx: IRContext): IRNodeOutput => {
+    const sanitizedId = ctx.nodeId.replace(/-/g, '_')
+    const samplerName = `u_${sanitizedId}_image`
+    const hasImage = !!(ctx.params.imageData)
+    const fitMode = (ctx.params.fitMode as string) || 'contain'
+
+    // Register image sampler in IR context
+    if (ctx.imageSamplers) {
+      ctx.imageSamplers.add(samplerName)
+    }
+
+    const stmts: IRStmt[] = []
+
+    if (hasImage) {
+      // Fit mode UV adjustment + texture sampling
+      // Uses raw() for conditional if/else fit logic — complex branching
+      const fitUV = `img_uv_${sanitizedId}`
+      const ratio = `img_ratio_${sanitizedId}`
+      const sampleVar = `node_${sanitizedId}_sample`
+
+      stmts.push(
+        raw(`float ${ratio} = ${ctx.inputs.imageAspect} / (u_resolution.x / u_resolution.y);`),
+        raw(`vec2 ${fitUV} = ${ctx.inputs.coords};`),
+      )
+
+      if (fitMode === 'contain') {
+        stmts.push(raw(`if (${ratio} > 1.0) {
+    ${fitUV}.y = (${ctx.inputs.coords}.y - 0.5) * ${ratio} + 0.5;
+  } else {
+    ${fitUV}.x = (${ctx.inputs.coords}.x - 0.5) / ${ratio} + 0.5;
+  }`))
+
+        // Clamp to image bounds — black outside
+        stmts.push(raw(`vec4 ${sampleVar} = vec4(0.0);
+  if (${fitUV}.x >= 0.0 && ${fitUV}.x <= 1.0 && ${fitUV}.y >= 0.0 && ${fitUV}.y <= 1.0) {
+    ${sampleVar} = texture(${samplerName}, ${fitUV});
+  }`))
+      } else {
+        // Cover
+        stmts.push(raw(`if (${ratio} > 1.0) {
+    ${fitUV}.x = (${ctx.inputs.coords}.x - 0.5) / ${ratio} + 0.5;
+  } else {
+    ${fitUV}.y = (${ctx.inputs.coords}.y - 0.5) * ${ratio} + 0.5;
+  }`))
+
+        stmts.push(raw(`vec4 ${sampleVar} = texture(${samplerName}, clamp(${fitUV}, 0.0, 1.0));`))
+      }
+
+      stmts.push(
+        raw(`vec3 ${ctx.outputs.color} = ${sampleVar}.rgb;`),
+        raw(`float ${ctx.outputs.alpha} = ${sampleVar}.a;`),
+      )
+    } else {
+      // No image loaded — mid-gray placeholder
+      stmts.push(
+        declare(ctx.outputs.color, 'vec3', construct('vec3', [literal('float', 0.5)])),
+        declare(ctx.outputs.alpha, 'float', literal('float', 1.0)),
+      )
+    }
+
+    return {
+      statements: stmts,
+      uniforms: [],
+      standardUniforms: hasImage ? new Set(['u_resolution']) : new Set(),
+    }
   },
 }

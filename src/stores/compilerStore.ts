@@ -21,6 +21,7 @@ interface CompilerState {
   // Compiled shader code
   vertexShader: string | null
   fragmentShader: string | null
+  wgslShader: string | null       // WGSL shader source (when IR compilation succeeds)
 
   // Compilation status
   isCompiling: boolean
@@ -31,8 +32,9 @@ interface CompilerState {
   hasErrors: boolean
 
   // Actions
-  setShaders: (vertex: string, fragment: string) => void
+  setShaders: (vertex: string, fragment: string, wgsl?: string | null) => void
   setFragmentShader: (fragment: string) => void
+  setWgslShader: (wgsl: string | null) => void
   setCompiling: (isCompiling: boolean) => void
   setErrors: (errors: CompilationError[]) => void
   addError: (error: CompilationError) => void
@@ -49,19 +51,24 @@ interface CompilerState {
 export const useCompilerStore = create<CompilerState>((set, get) => ({
   vertexShader: null,
   fragmentShader: null,
+  wgslShader: null,
   isCompiling: false,
   lastCompileTime: null,
   errors: [],
   hasErrors: false,
 
-  setShaders: (vertex, fragment) =>
+  setShaders: (vertex, fragment, wgsl) =>
     set({
       vertexShader: vertex,
       fragmentShader: fragment,
+      wgslShader: wgsl ?? null,
     }),
 
   setFragmentShader: (fragment) =>
     set({ fragmentShader: fragment }),
+
+  setWgslShader: (wgsl) =>
+    set({ wgslShader: wgsl }),
 
   setCompiling: (isCompiling) =>
     set({ isCompiling }),

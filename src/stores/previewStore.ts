@@ -10,6 +10,8 @@ interface PreviewState {
   previews: Record<string, ImageBitmap>
   /** Set a preview ImageBitmap for a node */
   setPreview: (nodeId: string, bitmap: ImageBitmap) => void
+  /** Set multiple preview ImageBitmaps in one store update (one React re-render). */
+  setBatchPreviews: (updates: Map<string, ImageBitmap>) => void
   /** Remove previews for deleted nodes */
   clearNodes: (nodeIds: string[]) => void
   /** Remove all previews */
@@ -24,6 +26,16 @@ export const usePreviewStore = create<PreviewState>((set) => ({
       const old = s.previews[nodeId]
       if (old) old.close()
       return { previews: { ...s.previews, [nodeId]: bitmap } }
+    }),
+  setBatchPreviews: (updates) =>
+    set((s) => {
+      const next = { ...s.previews }
+      for (const [nodeId, bitmap] of updates) {
+        const old = next[nodeId]
+        if (old) old.close()
+        next[nodeId] = bitmap
+      }
+      return { previews: next }
     }),
   clearNodes: (nodeIds) =>
     set((s) => {

@@ -6,9 +6,10 @@
 
 import { initializeNodeLibrary } from './nodes'
 import { compileGraph } from './compiler/glsl-generator'
+import { compileGraphIR } from './compiler/ir-compiler'
 import { decodeGraphFromHash, decodeCompactHash } from './utils/sombra-file'
-import { WebGLRenderer } from './webgl/renderer'
-import type { QualityTier } from './webgl/renderer'
+import { createShaderRenderer } from './renderer/create-renderer'
+import type { QualityTier } from './renderer/types'
 
 function showError(message: string) {
   const el = document.getElementById('error')!
@@ -17,7 +18,7 @@ function showError(message: string) {
   document.getElementById('viewer')!.style.display = 'none'
 }
 
-function main() {
+async function main() {
   // Parse hash — accept #g=<compact> or #graph=<full> (legacy)
   const hash = window.location.hash.slice(1) // remove leading #
 
@@ -70,10 +71,18 @@ function main() {
     return
   }
 
+  // If WebGPU is available, also compile to WGSL via IR path
+  if (typeof navigator !== 'undefined' && navigator.gpu) {
+    const wgslResult = compileGraphIR(nodes, edges)
+    if (wgslResult) {
+      result.wgsl = { passes: wgslResult.passes }
+    }
+  }
+
   // Render
   const canvas = document.getElementById('viewer') as HTMLCanvasElement
   try {
-    const renderer = new WebGLRenderer(canvas)
+    const renderer = await createShaderRenderer(canvas)
     const shaderResult = renderer.updateRenderPlan(result)
     if (!shaderResult.success) {
       showError(`WebGL shader error:\n\n${shaderResult.error}`)
@@ -87,7 +96,7 @@ function main() {
       )
     }
 
-    // Render once immediately to freeze u_ref_size before animation/timeout
+    // Render once immediately before animation starts
     renderer.render()
 
     // Apply quality tier and animation state

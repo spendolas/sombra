@@ -4,6 +4,7 @@
  */
 
 import type { NodeDefinition } from '../types'
+import { variable, call, declare } from '../../compiler/ir/types'
 
 export const roundNode: NodeDefinition = {
   type: 'round',
@@ -43,5 +44,24 @@ export const roundNode: NodeDefinition = {
       : mode === 'sign' ? 'sign'
       : 'floor'
     return `float ${outputs.result} = ${fn}(${inputs.value});`
+  },
+
+  ir: (ctx) => {
+    const mode = (ctx.params.mode as string) || 'floor'
+    const fn = mode === 'ceil' ? 'ceil'
+      : mode === 'fract' ? 'fract'
+      : mode === 'round' ? 'round'
+      : mode === 'sign' ? 'sign'
+      : 'floor'
+
+    return {
+      statements: [
+        declare(ctx.outputs.result, 'float',
+          call(fn, [variable(ctx.inputs.value)], 'float'),
+        ),
+      ],
+      uniforms: [],
+      standardUniforms: new Set(),
+    }
   },
 }

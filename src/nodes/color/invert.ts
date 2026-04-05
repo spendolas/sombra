@@ -3,6 +3,7 @@
  */
 
 import type { NodeDefinition } from '../types'
+import { variable, binary, literal, declare, construct } from '../../compiler/ir/types'
 
 export const invertNode: NodeDefinition = {
   type: 'invert',
@@ -22,4 +23,18 @@ export const invertNode: NodeDefinition = {
     const { inputs, outputs } = ctx
     return `vec3 ${outputs.result} = vec3(1.0) - ${inputs.color};`
   },
+
+  ir: (ctx) => ({
+    statements: [
+      declare(ctx.outputs.result, 'vec3',
+        binary('-',
+          construct('vec3', [literal('float', 1.0)]),
+          variable(ctx.inputs.color),
+          'vec3',
+        ),
+      ),
+    ],
+    uniforms: [],
+    standardUniforms: new Set(),
+  }),
 }

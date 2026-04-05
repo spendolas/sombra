@@ -5,6 +5,7 @@
 
 import type { NodeDefinition, SpatialConfig } from '../types'
 import { getSpatialParams } from '../types'
+import { variable, call, binary, literal, declare, swizzle } from '../../compiler/ir/types'
 
 export const checkerboardNode: NodeDefinition = {
   type: 'checkerboard',
@@ -33,5 +34,25 @@ export const checkerboardNode: NodeDefinition = {
       `vec2 ${c} = floor(${inputs.coords});`,
       `float ${outputs.value} = mod(${c}.x + ${c}.y, 2.0);`,
     ].join('\n  ')
+  },
+
+  ir: (ctx) => {
+    const id = ctx.nodeId.replace(/-/g, '_')
+    const c = `cb_c_${id}`
+    return {
+      statements: [
+        declare(c, 'vec2',
+          call('floor', [variable(ctx.inputs.coords)], 'vec2'),
+        ),
+        declare(ctx.outputs.value, 'float',
+          call('mod', [
+            binary('+', swizzle(variable(c), 'x', 'float'), swizzle(variable(c), 'y', 'float'), 'float'),
+            literal('float', 2.0),
+          ], 'float'),
+        ),
+      ],
+      uniforms: [],
+      standardUniforms: new Set(),
+    }
   },
 }

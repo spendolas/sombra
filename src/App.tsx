@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import type { Connection } from '@xyflow/react'
-import { WebGLRenderer } from './webgl/renderer'
-import type { QualityTier } from './webgl/renderer'
+import type { ShaderRenderer, QualityTier } from './renderer/types'
+import { createShaderRenderer, createPreviewRenderer } from './renderer/create-renderer'
 import type { RenderPlan, RenderPass } from './compiler/glsl-generator'
-import { PreviewRenderer } from './webgl/preview-renderer'
 import { PreviewScheduler } from './webgl/preview-scheduler'
 import { useLiveCompiler } from './compiler'
 import { useGraphStore } from './stores/graphStore'
 import { useSettingsStore } from './stores/settingsStore'
+import { useCompilerStore } from './stores/compilerStore'
 import { createDefaultGraph } from './utils/test-graph'
 import { nodeRegistry } from './nodes/registry'
 import { ShaderNode } from './components/ShaderNode'
@@ -28,9 +28,75 @@ import {
   ResizableHandle,
 } from '@/components/ui/resizable'
 
+/** Apply a compile result to a renderer (shared by handleCompile + pending replay). */
+function applyCompileResult(
+  r: ShaderRenderer,
+  result: {
+    success: boolean
+    fragmentShader: string
+    userUniforms?: Array<{ name: string; value: number | number[] }>
+    isTimeLiveAtOutput?: boolean
+    qualityTier?: string
+    passes?: RenderPass[]
+    wgsl?: RenderPlan['wgsl']
+  },
+) {
+  const plan: RenderPlan = {
+    success: true,
+    passes: result.passes || [{
+      index: 0,
+      fragmentShader: result.fragmentShader,
+      vertexShader: '',
+      userUniforms: (result.userUniforms ?? []) as RenderPlan['userUniforms'],
+      inputTextures: {},
+      isTimeLive: result.isTimeLiveAtOutput ?? false,
+    }],
+    errors: [],
+    isTimeLiveAtOutput: result.isTimeLiveAtOutput ?? false,
+    qualityTier: result.qualityTier ?? 'adaptive',
+    vertexShader: '',
+    fragmentShader: result.fragmentShader,
+    userUniforms: (result.userUniforms ?? []) as RenderPlan['userUniforms'],
+    wgsl: result.wgsl,
+  }
+
+  const updateResult = r.updateRenderPlan(plan)
+  if (!updateResult.success) {
+    console.error('WebGL shader update failed:', updateResult.error)
+    return
+  }
+  if (result.userUniforms?.length) {
+    r.updateUniforms(result.userUniforms.map(u => ({ name: u.name, value: u.value })))
+  }
+  const isAnimated = result.isTimeLiveAtOutput ?? false
+  r.setAnimated(isAnimated)
+  if (isAnimated) {
+    const timeNode = useGraphStore.getState().nodes.find(n => n.data.type === 'time')
+    const speed = (timeNode?.data.params?.speed as number) ?? 1.0
+    r.setAnimationSpeed(speed)
+  }
+  r.setQualityTier((result.qualityTier ?? 'adaptive') as QualityTier)
+  r.notifyChange()
+  if (!isAnimated) {
+    r.requestRender()
+  }
+}
+
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const rendererRef = useRef<WebGLRenderer | null>(null)
+  const rendererRef = useRef<ShaderRenderer | null>(null)
+
+  // Buffer for compile results that arrive before the renderer is ready.
+  // The Worker compile may complete while the async factory is still resolving.
+  // We store the result and replay it once the renderer is available.
+  const pendingCompileRef = useRef<{
+    success: boolean
+    fragmentShader: string
+    userUniforms?: Array<{ name: string; value: number | number[] }>
+    isTimeLiveAtOutput?: boolean
+    qualityTier?: string
+    passes?: RenderPass[]
+  } | null>(null)
 
   // Target refs for canvas reparenting
   const dockTargetRef = useRef<HTMLDivElement>(null)
@@ -120,29 +186,58 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only run on mount
   }, [])
 
-  // Initialize WebGL renderer
+  // Initialize shader renderer (WebGPU preferred, WebGL2 fallback)
   useEffect(() => {
     if (!canvasRef.current) return
+    let disposed = false
+    let renderer: ShaderRenderer | null = null
 
-    const renderer = new WebGLRenderer(canvasRef.current)
-    rendererRef.current = renderer
-    renderer.startAnimation()
+    createShaderRenderer(canvasRef.current).then((r) => {
+      if (disposed) { r.dispose(); return }
+      renderer = r
+      rendererRef.current = r
+
+      // Expose backend info on dev bridge
+      const sombra = (window as unknown as Record<string, unknown>).__sombra as Record<string, unknown> | undefined
+      if (sombra) sombra.renderer = { backend: r.backend }
+
+      // Replay any compile result that arrived while the factory was resolving.
+      if (pendingCompileRef.current) {
+        applyCompileResult(r, pendingCompileRef.current)
+        pendingCompileRef.current = null
+      }
+
+      r.startAnimation()
+    })
 
     return () => {
-      renderer.destroy()
+      disposed = true
+      renderer?.dispose()
+      rendererRef.current = null
     }
   }, [])
 
   // Initialize preview scheduler for per-node thumbnails
   const schedulerRef = useRef<PreviewScheduler | null>(null)
   useEffect(() => {
-    const previewRenderer = new PreviewRenderer()
-    const scheduler = new PreviewScheduler(previewRenderer)
-    schedulerRef.current = scheduler
-    scheduler.start()
+    let disposed = false
+    let scheduler: PreviewScheduler | null = null
+
+    createPreviewRenderer().then((previewRenderer) => {
+      if (disposed) { previewRenderer.dispose(); return }
+      scheduler = new PreviewScheduler(previewRenderer)
+      schedulerRef.current = scheduler
+      scheduler.start()
+      // Feed the current graph state so previews render on initial load
+      // (the graph change effect may have already fired while the factory was resolving)
+      const { nodes: currentNodes, edges: currentEdges } = useGraphStore.getState()
+      scheduler.onGraphChange(currentNodes, currentEdges)
+    })
+
     return () => {
-      scheduler.destroy()
-      previewRenderer.destroy()
+      disposed = true
+      scheduler?.destroy()
+      schedulerRef.current = null
     }
   }, [])
 
@@ -257,49 +352,23 @@ function App() {
       isTimeLiveAtOutput?: boolean
       qualityTier?: string
       passes?: RenderPass[]
+      wgsl?: RenderPlan['wgsl']
     }) => {
-      if (result.success && rendererRef.current) {
-        // Construct a RenderPlan from callback data
-        const plan: RenderPlan = {
-          success: true,
-          passes: result.passes || [{
-            index: 0,
-            fragmentShader: result.fragmentShader,
-            vertexShader: '',
-            userUniforms: (result.userUniforms ?? []) as RenderPlan['userUniforms'],
-            inputTextures: {},
-            isTimeLive: result.isTimeLiveAtOutput ?? false,
-          }],
-          errors: [],
-          isTimeLiveAtOutput: result.isTimeLiveAtOutput ?? false,
-          qualityTier: result.qualityTier ?? 'adaptive',
-          vertexShader: '',
-          fragmentShader: result.fragmentShader,
-          userUniforms: (result.userUniforms ?? []) as RenderPlan['userUniforms'],
-        }
+      if (result.success) {
+        // Store shaders for debug/export (GLSL always, WGSL when IR succeeds)
+        const cs = useCompilerStore.getState()
+        const wgslPasses = result.wgsl?.passes
+        cs.setShaders('', result.fragmentShader, wgslPasses?.[wgslPasses.length - 1]?.shaderCode)
+        cs.markCompileSuccess()
+      }
 
-        const updateResult = rendererRef.current.updateRenderPlan(plan)
-        if (!updateResult.success) {
-          console.error('WebGL shader update failed:', updateResult.error)
-        } else {
-          if (result.userUniforms?.length) {
-            rendererRef.current.updateUniforms(
-              result.userUniforms.map((u) => ({ name: u.name, value: u.value }))
-            )
-          }
-          const isAnimated = result.isTimeLiveAtOutput ?? false
-          rendererRef.current.setAnimated(isAnimated)
-          if (isAnimated) {
-            const timeNode = useGraphStore.getState().nodes.find(n => n.data.type === 'time')
-            const speed = (timeNode?.data.params?.speed as number) ?? 1.0
-            rendererRef.current.setAnimationSpeed(speed)
-          }
-          rendererRef.current.setQualityTier((result.qualityTier ?? 'adaptive') as QualityTier)
-          rendererRef.current.notifyChange()
-          if (!isAnimated) {
-            rendererRef.current.requestRender()
-          }
-        }
+      if (result.success && rendererRef.current) {
+        applyCompileResult(rendererRef.current, result)
+      } else if (result.success) {
+        // Renderer not ready yet — buffer the result for replay after factory resolves.
+        // This is the normal case on initial load: the Worker compile finishes
+        // before the async renderer factory has resolved.
+        pendingCompileRef.current = result
       } else {
         // Compilation failed — clear canvas to black so stale shader doesn't bleed through
         rendererRef.current?.clear()
@@ -330,7 +399,9 @@ function App() {
     []
   )
 
-  useLiveCompiler(handleCompile, handleUniformUpdate, handleRendererUpdate)
+  // Enable IR→WGSL compilation when WebGPU is available
+  const useIR = typeof navigator !== 'undefined' && !!navigator.gpu
+  useLiveCompiler(handleCompile, handleUniformUpdate, handleRendererUpdate, useIR)
 
   // Sync image node textures to the WebGL renderer
   const prevImageSamplersRef = useRef<Map<string, string>>(new Map())

@@ -3,6 +3,7 @@
  */
 
 import type { NodeDefinition } from '../types'
+import { variable, call, declare } from '../../compiler/ir/types'
 
 export const clampNode: NodeDefinition = {
   type: 'clamp',
@@ -28,4 +29,18 @@ export const clampNode: NodeDefinition = {
     const { inputs, outputs } = ctx
     return `float ${outputs.result} = clamp(${inputs.value}, ${inputs.min}, ${inputs.max});`
   },
+
+  ir: (ctx) => ({
+    statements: [
+      declare(ctx.outputs.result, 'float',
+        call('clamp', [
+          variable(ctx.inputs.value),
+          variable(ctx.inputs.min),
+          variable(ctx.inputs.max),
+        ], 'float'),
+      ),
+    ],
+    uniforms: [],
+    standardUniforms: new Set(),
+  }),
 }

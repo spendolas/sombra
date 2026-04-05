@@ -3,6 +3,7 @@
  */
 
 import type { NodeDefinition } from '../types'
+import { variable, declare } from '../../compiler/ir/types'
 
 export const resolutionNode: NodeDefinition = {
   type: 'resolution',
@@ -26,4 +27,12 @@ export const resolutionNode: NodeDefinition = {
     uniforms.add('u_resolution')
     return `vec2 ${outputs.resolution} = u_resolution;`
   },
+
+  ir: (ctx) => ({
+    statements: [
+      declare(ctx.outputs.resolution, 'vec2', variable('u_resolution')),
+    ],
+    uniforms: [],
+    standardUniforms: new Set(['u_resolution']),
+  }),
 }

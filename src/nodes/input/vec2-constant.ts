@@ -3,6 +3,7 @@
  */
 
 import type { NodeDefinition } from '../types'
+import { variable, declare, construct } from '../../compiler/ir/types'
 
 export const vec2ConstantNode: NodeDefinition = {
   type: 'vec2_constant',
@@ -30,4 +31,14 @@ export const vec2ConstantNode: NodeDefinition = {
     const { inputs, outputs } = ctx
     return `vec2 ${outputs.value} = vec2(${inputs.x}, ${inputs.y});`
   },
+
+  ir: (ctx) => ({
+    statements: [
+      declare(ctx.outputs.value, 'vec2',
+        construct('vec2', [variable(ctx.inputs.x), variable(ctx.inputs.y)]),
+      ),
+    ],
+    uniforms: [],
+    standardUniforms: new Set(),
+  }),
 }

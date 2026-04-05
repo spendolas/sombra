@@ -3,6 +3,7 @@
  */
 
 import type { NodeDefinition, PortDefinition } from '../types'
+import { variable, binary, declare, type IRExpr } from '../../compiler/ir/types'
 
 const OPERATIONS = [
   { value: 'add', label: 'Add' },
@@ -89,6 +90,27 @@ export const arithmeticNode: NodeDefinition = {
     }
 
     return `float ${outputs.result} = ${parts.join(` ${symbol} `)};`
+  },
+
+  ir: (ctx) => {
+    const op = (ctx.params.operation as string) || 'add'
+    const count = Math.max(2, Math.min(8, Number(ctx.params.inputCount) || 2))
+    const IR_OP_SYMBOLS: Record<string, '+' | '-' | '*' | '/'> = {
+      add: '+', subtract: '-', multiply: '*', divide: '/',
+    }
+    const symbol = IR_OP_SYMBOLS[op] || '+'
+
+    // Build a left-associative chain: ((in_0 op in_1) op in_2) ...
+    let expr: IRExpr = variable(ctx.inputs.in_0)
+    for (let i = 1; i < count; i++) {
+      expr = binary(symbol, expr, variable(ctx.inputs[`in_${i}`]), 'float')
+    }
+
+    return {
+      statements: [declare(ctx.outputs.result, 'float', expr)],
+      uniforms: [],
+      standardUniforms: new Set(),
+    }
   },
 }
 

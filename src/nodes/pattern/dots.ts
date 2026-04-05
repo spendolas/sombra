@@ -4,6 +4,7 @@
 
 import type { NodeDefinition, SpatialConfig } from '../types'
 import { getSpatialParams } from '../types'
+import { variable, call, binary, literal, declare } from '../../compiler/ir/types'
 
 export const dotsNode: NodeDefinition = {
   type: 'dots',
@@ -38,5 +39,44 @@ export const dotsNode: NodeDefinition = {
       `float ${d} = length(${cell});`,
       `float ${outputs.value} = 1.0 - smoothstep(${inputs.radius} - ${inputs.softness}, ${inputs.radius} + ${inputs.softness}, ${d});`,
     ].join('\n  ')
+  },
+
+  ir: (ctx) => {
+    const id = ctx.nodeId.replace(/-/g, '_')
+    const sc = `dt_sc_${id}`
+    const cell = `dt_cell_${id}`
+    const d = `dt_d_${id}`
+    return {
+      statements: [
+        // vec2 sc = coords
+        declare(sc, 'vec2', variable(ctx.inputs.coords)),
+        // vec2 cell = fract(sc) - 0.5
+        declare(cell, 'vec2',
+          binary('-',
+            call('fract', [variable(sc)], 'vec2'),
+            literal('float', 0.5),
+            'vec2',
+          ),
+        ),
+        // float d = length(cell)
+        declare(d, 'float',
+          call('length', [variable(cell)], 'float'),
+        ),
+        // float value = 1.0 - smoothstep(radius - softness, radius + softness, d)
+        declare(ctx.outputs.value, 'float',
+          binary('-',
+            literal('float', 1.0),
+            call('smoothstep', [
+              binary('-', variable(ctx.inputs.radius), variable(ctx.inputs.softness), 'float'),
+              binary('+', variable(ctx.inputs.radius), variable(ctx.inputs.softness), 'float'),
+              variable(d),
+            ], 'float'),
+            'float',
+          ),
+        ),
+      ],
+      uniforms: [],
+      standardUniforms: new Set(),
+    }
   },
 }

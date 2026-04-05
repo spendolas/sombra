@@ -3,6 +3,7 @@
  */
 
 import type { NodeDefinition } from '../types'
+import { variable, call, declare } from '../../compiler/ir/types'
 
 export const mixNode: NodeDefinition = {
   type: 'mix',
@@ -52,4 +53,18 @@ export const mixNode: NodeDefinition = {
     // inputs.factor is always a GLSL expression (connectable param)
     return `vec3 ${outputs.result} = mix(${inputs.a}, ${inputs.b}, ${inputs.factor});`
   },
+
+  ir: (ctx) => ({
+    statements: [
+      declare(ctx.outputs.result, 'vec3',
+        call('mix', [
+          variable(ctx.inputs.a),
+          variable(ctx.inputs.b),
+          variable(ctx.inputs.factor),
+        ], 'vec3'),
+      ),
+    ],
+    uniforms: [],
+    standardUniforms: new Set(),
+  }),
 }

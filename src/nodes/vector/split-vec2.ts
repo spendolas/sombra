@@ -3,6 +3,7 @@
  */
 
 import type { NodeDefinition } from '../types'
+import { variable, swizzle, declare } from '../../compiler/ir/types'
 
 export const splitVec2Node: NodeDefinition = {
   type: 'split_vec2',
@@ -27,4 +28,17 @@ export const splitVec2Node: NodeDefinition = {
       `float ${outputs.y} = ${inputs.vector}.y;`,
     ].join('\n  ')
   },
+
+  ir: (ctx) => ({
+    statements: [
+      declare(ctx.outputs.x, 'float',
+        swizzle(variable(ctx.inputs.vector), 'x', 'float'),
+      ),
+      declare(ctx.outputs.y, 'float',
+        swizzle(variable(ctx.inputs.vector), 'y', 'float'),
+      ),
+    ],
+    uniforms: [],
+    standardUniforms: new Set(),
+  }),
 }

@@ -3,6 +3,7 @@
  */
 
 import type { NodeDefinition } from '../types'
+import { variable, binary, call, declare } from '../../compiler/ir/types'
 
 const FUNCTIONS = [
   { value: 'sin', label: 'Sin' },
@@ -74,5 +75,26 @@ export const trigNode: NodeDefinition = {
     const amp = inputs.amplitude
 
     return `float ${outputs.result} = ${glslFn}(${inputs.value} * ${freq}) * ${amp};`
+  },
+
+  ir: (ctx) => {
+    const func = (ctx.params.func as string) || 'sin'
+    const fn = GLSL_FN[func] || 'sin'
+
+    return {
+      statements: [
+        declare(ctx.outputs.result, 'float',
+          binary('*',
+            call(fn, [
+              binary('*', variable(ctx.inputs.value), variable(ctx.inputs.frequency), 'float'),
+            ], 'float'),
+            variable(ctx.inputs.amplitude),
+            'float',
+          ),
+        ),
+      ],
+      uniforms: [],
+      standardUniforms: new Set(),
+    }
   },
 }

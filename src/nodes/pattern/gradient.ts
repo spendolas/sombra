@@ -4,6 +4,7 @@
  */
 
 import type { NodeDefinition } from '../types'
+import { variable, call, binary, literal, declare, swizzle } from '../../compiler/ir/types'
 
 export const gradientNode: NodeDefinition = {
   type: 'gradient',
@@ -45,6 +46,95 @@ export const gradientNode: NodeDefinition = {
         return `float ${outputs.value} = clamp((abs(${inputs.coords}.x - 0.5) + abs(${inputs.coords}.y - 0.5)) * 2.0, 0.0, 1.0);`
       default: // linear
         return `float ${outputs.value} = ${inputs.coords}.x;`
+    }
+  },
+
+  ir: (ctx) => {
+    const gradType = (ctx.params.gradientType as string) || 'linear'
+    const coords = variable(ctx.inputs.coords)
+
+    switch (gradType) {
+      case 'radial':
+        // clamp(length(coords - 0.5) * 2.0, 0.0, 1.0)
+        return {
+          statements: [
+            declare(ctx.outputs.value, 'float',
+              call('clamp', [
+                binary('*',
+                  call('length', [
+                    binary('-', coords, literal('vec2', [0.5, 0.5]), 'vec2'),
+                  ], 'float'),
+                  literal('float', 2.0),
+                  'float',
+                ),
+                literal('float', 0.0),
+                literal('float', 1.0),
+              ], 'float'),
+            ),
+          ],
+          uniforms: [],
+          standardUniforms: new Set(),
+        }
+      case 'angular':
+        // atan(coords.y - 0.5, coords.x - 0.5) * (1.0 / 6.28318530718) + 0.5
+        return {
+          statements: [
+            declare(ctx.outputs.value, 'float',
+              binary('+',
+                binary('*',
+                  call('atan', [
+                    binary('-', swizzle(coords, 'y', 'float'), literal('float', 0.5), 'float'),
+                    binary('-', swizzle(coords, 'x', 'float'), literal('float', 0.5), 'float'),
+                  ], 'float'),
+                  literal('float', 1.0 / 6.28318530718),
+                  'float',
+                ),
+                literal('float', 0.5),
+                'float',
+              ),
+            ),
+          ],
+          uniforms: [],
+          standardUniforms: new Set(),
+        }
+      case 'diamond':
+        // clamp((abs(coords.x - 0.5) + abs(coords.y - 0.5)) * 2.0, 0.0, 1.0)
+        return {
+          statements: [
+            declare(ctx.outputs.value, 'float',
+              call('clamp', [
+                binary('*',
+                  binary('+',
+                    call('abs', [
+                      binary('-', swizzle(coords, 'x', 'float'), literal('float', 0.5), 'float'),
+                    ], 'float'),
+                    call('abs', [
+                      binary('-', swizzle(coords, 'y', 'float'), literal('float', 0.5), 'float'),
+                    ], 'float'),
+                    'float',
+                  ),
+                  literal('float', 2.0),
+                  'float',
+                ),
+                literal('float', 0.0),
+                literal('float', 1.0),
+              ], 'float'),
+            ),
+          ],
+          uniforms: [],
+          standardUniforms: new Set(),
+        }
+      default: // linear
+        // coords.x
+        return {
+          statements: [
+            declare(ctx.outputs.value, 'float',
+              swizzle(coords, 'x', 'float'),
+            ),
+          ],
+          uniforms: [],
+          standardUniforms: new Set(),
+        }
     }
   },
 }
