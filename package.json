@@ -26,7 +26,6 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^2.0.4",
-    "@rollup/rollup-darwin-arm64": "^4.60.0",
     "@types/pako": "^2.0.4",
     "@xyflow/react": "^12.10.0",
     "clsx": "^2.1.1",
