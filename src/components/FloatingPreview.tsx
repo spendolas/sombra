@@ -8,6 +8,9 @@ const MIN_W = 200
 const MIN_H = 150
 const MARGIN = 16
 
+/** Toggle to visualize hit areas: yellow=drag, red=resize edges, blue=resize corners */
+const DEBUG_HIT_AREAS = false
+
 interface FloatingPreviewProps {
   targetRef: RefObject<HTMLDivElement | null>
 }
@@ -279,27 +282,27 @@ export function FloatingPreview({ targetRef }: FloatingPreviewProps) {
         height: floatingSize.height,
       }}
     >
-      {/* Inner: visual styling + overflow-hidden for content */}
-      <div className={ds.floatingPreview.root + ' w-full h-full !relative'}>
+      {/* Inner: visual styling + overflow-hidden for content — z-10 so resize handles (z-30) sit on top */}
+      <div className={ds.floatingPreview.root + ' w-full h-full !relative z-10'}>
         <PreviewToolbar className="absolute top-xl right-xl z-10" />
         {/* Invisible drag surface */}
         <div
-          className="absolute top-0 left-0 right-0 h-8 z-[5] cursor-grab active:cursor-grabbing"
+          className={`absolute top-0 left-0 right-0 h-8 z-[5] cursor-grab active:cursor-grabbing${DEBUG_HIT_AREAS ? ' bg-yellow-500/30' : ''}`}
           onMouseDown={onDragStart}
         />
         <div ref={targetRef} className="w-full h-full" />
         <ShaderPlaceholder />
       </div>
-      {/* Resize edges — outside overflow-hidden, extend beyond window */}
-      <div className="absolute -top-1 left-5 right-5 h-3 cursor-n-resize z-20" onMouseDown={(e) => onResizeStart(0, -1, e)} />
-      <div className="absolute -bottom-1 left-5 right-5 h-3 cursor-s-resize z-20" onMouseDown={(e) => onResizeStart(0, 1, e)} />
-      <div className="absolute -left-1 top-5 bottom-5 w-3 cursor-w-resize z-20" onMouseDown={(e) => onResizeStart(-1, 0, e)} />
-      <div className="absolute -right-1 top-5 bottom-5 w-3 cursor-e-resize z-20" onMouseDown={(e) => onResizeStart(1, 0, e)} />
-      {/* Resize corners — extend beyond window */}
-      <div className="absolute -top-1 -left-1 w-5 h-5 cursor-nw-resize z-20" onMouseDown={(e) => onResizeStart(-1, -1, e)} />
-      <div className="absolute -top-1 -right-1 w-5 h-5 cursor-ne-resize z-20" onMouseDown={(e) => onResizeStart(1, -1, e)} />
-      <div className="absolute -bottom-1 -left-1 w-5 h-5 cursor-sw-resize z-20" onMouseDown={(e) => onResizeStart(-1, 1, e)} />
-      <div className="absolute -bottom-1 -right-1 w-5 h-5 cursor-se-resize z-20" onMouseDown={(e) => onResizeStart(1, 1, e)} />
+      {/* Resize edges — 12px hit area (6px each side of boundary) */}
+      <div className={`absolute -top-1.5 left-3 right-3 h-3 cursor-n-resize z-50${DEBUG_HIT_AREAS ? ' bg-red-500/30' : ''}`} onMouseDown={(e) => onResizeStart(0, -1, e)} />
+      <div className={`absolute -bottom-1.5 left-3 right-3 h-3 cursor-s-resize z-50${DEBUG_HIT_AREAS ? ' bg-red-500/30' : ''}`} onMouseDown={(e) => onResizeStart(0, 1, e)} />
+      <div className={`absolute -left-1.5 top-3 bottom-3 w-3 cursor-w-resize z-50${DEBUG_HIT_AREAS ? ' bg-red-500/30' : ''}`} onMouseDown={(e) => onResizeStart(-1, 0, e)} />
+      <div className={`absolute -right-1.5 top-3 bottom-3 w-3 cursor-e-resize z-50${DEBUG_HIT_AREAS ? ' bg-red-500/30' : ''}`} onMouseDown={(e) => onResizeStart(1, 0, e)} />
+      {/* Resize corners */}
+      <div className={`absolute -top-[12px] -left-[12px] w-[28px] h-[28px] cursor-nw-resize z-50${DEBUG_HIT_AREAS ? ' bg-blue-500/30' : ''}`} onMouseDown={(e) => onResizeStart(-1, -1, e)} />
+      <div className={`absolute -top-[12px] -right-[12px] w-[28px] h-[28px] cursor-ne-resize z-50${DEBUG_HIT_AREAS ? ' bg-blue-500/30' : ''}`} onMouseDown={(e) => onResizeStart(1, -1, e)} />
+      <div className={`absolute -bottom-[12px] -left-[12px] w-[28px] h-[28px] cursor-sw-resize z-50${DEBUG_HIT_AREAS ? ' bg-blue-500/30' : ''}`} onMouseDown={(e) => onResizeStart(-1, 1, e)} />
+      <div className={`absolute -bottom-[12px] -right-[12px] w-[28px] h-[28px] cursor-se-resize z-50${DEBUG_HIT_AREAS ? ' bg-blue-500/30' : ''}`} onMouseDown={(e) => onResizeStart(1, 1, e)} />
     </div>
   )
 }
