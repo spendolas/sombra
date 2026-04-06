@@ -47,9 +47,10 @@ export const pixelateNode: NodeDefinition = {
 
     const lines: string[] = []
 
-    // Grid in actual pixel space — cells are pixelSize × pixelSize screen pixels
-    lines.push(`vec2 pxl_cell_${id} = floor(gl_FragCoord.xy / vec2(${inputs.pixelSize}));`)
-    lines.push(`vec2 pxl_px_${id} = (pxl_cell_${id} + 0.5) * vec2(${inputs.pixelSize});`)
+    // Grid in pixel space, centered on canvas center
+    lines.push(`vec2 pxl_centered_${id} = gl_FragCoord.xy - u_resolution * 0.5;`)
+    lines.push(`vec2 pxl_cell_${id} = floor(pxl_centered_${id} / vec2(${inputs.pixelSize}));`)
+    lines.push(`vec2 pxl_px_${id} = (pxl_cell_${id} + 0.5) * vec2(${inputs.pixelSize}) + u_resolution * 0.5;`)
     // Screen UV for FBO sampling
     lines.push(`vec2 pxl_screenUV_${id} = pxl_px_${id} / u_viewport;`)
     // Frozen-ref UV for downstream nodes
@@ -74,17 +75,24 @@ export const pixelateNode: NodeDefinition = {
     const standardUniforms = new Set<string>(['u_viewport'])
 
     const stmts: IRStmt[] = [
-      // Grid in actual pixel space
+      // Grid in pixel space, centered on canvas center
+      declare(`pxl_centered_${id}`, 'vec2',
+        binary('-', variable('gl_FragCoord.xy'), binary('*', variable('u_resolution'), literal('float', 0.5), 'vec2'), 'vec2'),
+      ),
       declare(`pxl_cell_${id}`, 'vec2',
         call('floor', [
-          binary('/', variable('gl_FragCoord.xy'), construct('vec2', [variable(ctx.inputs.pixelSize)]), 'vec2'),
+          binary('/', variable(`pxl_centered_${id}`), construct('vec2', [variable(ctx.inputs.pixelSize)]), 'vec2'),
         ], 'vec2'),
       ),
-      // Pixel center in screen space
+      // Pixel center in screen space (add center offset back)
       declare(`pxl_px_${id}`, 'vec2',
-        binary('*',
-          binary('+', variable(`pxl_cell_${id}`), literal('vec2', [0.5, 0.5]), 'vec2'),
-          construct('vec2', [variable(ctx.inputs.pixelSize)]),
+        binary('+',
+          binary('*',
+            binary('+', variable(`pxl_cell_${id}`), literal('vec2', [0.5, 0.5]), 'vec2'),
+            construct('vec2', [variable(ctx.inputs.pixelSize)]),
+            'vec2',
+          ),
+          binary('*', variable('u_resolution'), literal('float', 0.5), 'vec2'),
           'vec2',
         ),
       ),
