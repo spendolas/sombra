@@ -172,9 +172,16 @@ export function generateNodeIR(
         resolveInputDefaultIR(inputPort, sanitizedNodeId, preambleStatements, inputs, collectedStandardUniforms)
       }
     } else {
-      // In texture mode, use screen-space UV instead of auto_uv
+      // In texture mode, use gl_FragCoord.xy/viewport (screen space 0-1) instead of auto_uv.
+      // Uses FragCoord because on WGSL in.position.y=0 at top matches WebGPU texture convention.
       if (isTextureMode && inputPort.default === 'auto_uv' && inputPort.type === 'vec2') {
-        inputs[inputPort.id] = 'in.v_uv'
+        const screenUvVar = `node_${sanitizedNodeId}_screen_uv`
+        preambleStatements.push(raw(
+          `vec2 ${screenUvVar} = gl_FragCoord.xy / u_viewport;`,
+          `let ${screenUvVar}: vec2f = in.position.xy / uniforms.u_viewport;`,
+        ))
+        collectedStandardUniforms.add('u_viewport')
+        inputs[inputPort.id] = screenUvVar
       } else if (!resolveInputDefaultIR(inputPort, sanitizedNodeId, preambleStatements, inputs, collectedStandardUniforms)) {
         errors.push({
           message: `Input "${inputPort.label}" on ${definition.label} has no connection and no default`,
@@ -268,6 +275,7 @@ export function generateNodeIR(
     }
 
     // Add standard uniforms needed by SRT
+    collectedStandardUniforms.add('u_anchor')
     if (spatial.transforms.includes('rotate')) {
       collectedStandardUniforms.add('u_resolution')
     }
@@ -335,14 +343,12 @@ export function resolveInputDefaultIR(
   if (inputPort.default === 'auto_uv' && inputPort.type === 'vec2') {
     const autoUvVar = `node_${sanitizedNodeId}_auto_uv`
     // WGSL: in.position.y is already top-to-bottom — NO y-flip needed
-    // Emit using GLSL syntax with gl_FragCoord; the assembler rewrites to in.position
     preambleStatements.push(raw(
-      // GLSL version (not used in WGSL path, but required by raw())
-      `vec2 ${autoUvVar} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * 0.5) / (u_dpr * u_ref_size) + 0.5;`,
-      // WGSL version: no y-flip since @builtin(position).y is top-down
-      `let ${autoUvVar}: vec2f = (in.position.xy - uniforms.u_resolution * 0.5) / (uniforms.u_dpr * uniforms.u_ref_size) + 0.5;`,
+      `vec2 ${autoUvVar} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * u_anchor) / (u_dpr * u_ref_size) + u_anchor;`,
+      `let ${autoUvVar}: vec2f = (in.position.xy - uniforms.u_resolution * uniforms.u_anchor) / (uniforms.u_dpr * uniforms.u_ref_size) + uniforms.u_anchor;`,
     ))
     uniforms.add('u_resolution')
+    uniforms.add('u_anchor')
     uniforms.add('u_dpr')
     uniforms.add('u_ref_size')
     inputs[inputPort.id] = autoUvVar
@@ -355,9 +361,11 @@ export function resolveInputDefaultIR(
   if (inputPort.default === 'auto_fragcoord' && inputPort.type === 'vec2') {
     const autoFcVar = `node_${sanitizedNodeId}_auto_fc`
     preambleStatements.push(raw(
-      `vec2 ${autoFcVar} = gl_FragCoord.xy;`,
-      `let ${autoFcVar}: vec2f = in.position.xy;`,
+      `vec2 ${autoFcVar} = gl_FragCoord.xy - u_resolution * u_anchor;`,
+      `let ${autoFcVar}: vec2f = in.position.xy - uniforms.u_resolution * uniforms.u_anchor;`,
     ))
+    uniforms.add('u_resolution')
+    uniforms.add('u_anchor')
     inputs[inputPort.id] = autoFcVar
     return true
   }

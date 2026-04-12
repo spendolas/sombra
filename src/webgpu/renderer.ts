@@ -77,6 +77,9 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
   private passStates: PassState[] = []
   private intermediateTextures: GPUTexture[] = []
   private intermediateSamplers: GPUSampler[] = []
+  // Anchor point for coordinate origin (9-point grid, default center)
+  private anchor: [number, number] = [0.5, 0.5]
+
   private isMultiPass = false
   /** Map uniform name → pass indices for routing uniform updates (multi-pass re-emission). */
   private uniformPassMap = new Map<string, number[]>()
@@ -714,6 +717,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     set('u_dpr', dpr)
     set('u_ref_size', WebGPUShaderRenderer.REFERENCE_SIZE)
     set('u_viewport', w, h)
+    set('u_anchor', this.anchor[0], this.anchor[1])
 
     this.device.queue.writeBuffer(this.uniformBuffer, 0, this.uniformData!)
   }
@@ -734,6 +738,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
       set('u_dpr', dpr)
       set('u_ref_size', WebGPUShaderRenderer.REFERENCE_SIZE)
       set('u_viewport', w, h)
+      set('u_anchor', this.anchor[0], this.anchor[1])
 
       this.device.queue.writeBuffer(ps.uniformBuffer, 0, ps.uniformData)
     }
@@ -944,6 +949,11 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     if (this.currentTier === tier) return
     this.currentTier = tier
     this.applyTier()
+  }
+
+  setAnchor(anchor: [number, number]): void {
+    this.anchor = anchor
+    this.requestRender()
   }
 
   private applyTier(): void {

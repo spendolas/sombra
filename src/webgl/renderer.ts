@@ -78,6 +78,9 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
   private program: WebGLProgram | null = null
   private uniforms: Map<string, WebGLUniformLocation> = new Map()
 
+  // Anchor point for coordinate origin (9-point grid, default center)
+  private anchor: [number, number] = [0.5, 0.5]
+
   // Uniform value tracking for [P3] selective dirty marking
   private lastUniformValues: Map<string, number | number[]> = new Map()
 
@@ -708,6 +711,11 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
     this.applyTier()
   }
 
+  setAnchor(anchor: [number, number]): void {
+    this.anchor = anchor
+    this.requestRender()
+  }
+
   private applyTier(): void {
     switch (this.currentTier) {
       case 'adaptive':
@@ -903,6 +911,9 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
 
     const vpLoc = uniforms.get('u_viewport')
     if (vpLoc) gl.uniform2f(vpLoc, w, h)
+
+    const anchorLoc = uniforms.get('u_anchor')
+    if (anchorLoc) gl.uniform2f(anchorLoc, this.anchor[0], this.anchor[1])
   }
 
   // -----------------------------------------------------------------------

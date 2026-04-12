@@ -148,7 +148,7 @@ export function lowerSpatialTransformToGLSL(srt: IRSpatialTransform): string[] {
   const lines: string[] = []
   const v = srt.outputVar
 
-  lines.push(`vec2 ${v} = ${srt.coordsVar} - 0.5;`)
+  lines.push(`vec2 ${v} = ${srt.coordsVar} - u_anchor;`)
 
   // Scale
   if (srt.scaleUniform) {
@@ -176,7 +176,7 @@ export function lowerSpatialTransformToGLSL(srt: IRSpatialTransform): string[] {
     lines.push(`${v} -= vec2(${srt.translateXUniform}, -(${srt.translateYUniform})) / (u_dpr * u_ref_size);`)
   }
 
-  lines.push(`${v} += 0.5;`)
+  lines.push(`${v} += u_anchor;`)
   return lines
 }
 

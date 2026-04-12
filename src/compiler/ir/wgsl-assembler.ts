@@ -92,6 +92,8 @@ function computeUniformLayout(
     fields.push({ name: 'u_dpr', wgslType: 'f32', size: 4, align: 4 })
   if (standardUniforms.has('u_ref_size'))
     fields.push({ name: 'u_ref_size', wgslType: 'f32', size: 4, align: 4 })
+  if (standardUniforms.has('u_anchor'))
+    fields.push({ name: 'u_anchor', wgslType: 'vec2f', size: 8, align: 8 })
   if (standardUniforms.has('u_viewport'))
     fields.push({ name: 'u_viewport', wgslType: 'vec2f', size: 8, align: 8 })
   if (standardUniforms.has('u_mouse'))

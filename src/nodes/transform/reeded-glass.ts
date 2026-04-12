@@ -181,10 +181,11 @@ export const reededGlassNode: NodeDefinition = {
     ctx.uniforms.add('u_resolution')
     ctx.uniforms.add('u_dpr')
     ctx.uniforms.add('u_ref_size')
+    ctx.uniforms.add('u_anchor')
     const coordsVar = `rg_coords_${id}`
-    lines.push(`vec2 ${coordsVar} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * 0.5) / (u_dpr * u_ref_size) + 0.5;`)
+    lines.push(`vec2 ${coordsVar} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * u_anchor) / (u_dpr * u_ref_size) + u_anchor;`)
     // SRT: center → scale → rotate (aspect-corrected) → translate → re-center
-    lines.push(`${coordsVar} -= 0.5;`)
+    lines.push(`${coordsVar} -= u_anchor;`)
     lines.push(`${coordsVar} /= vec2(${inputs.srt_scale});`)
     const aspRef = `rg_asp_ref_${id}`
     const radRef = `rg_rad_ref_${id}`
@@ -194,7 +195,7 @@ export const reededGlassNode: NodeDefinition = {
     lines.push(`${coordsVar} = vec2(${coordsVar}.x * cos(${radRef}) - ${coordsVar}.y * sin(${radRef}), ${coordsVar}.x * sin(${radRef}) + ${coordsVar}.y * cos(${radRef}));`)
     lines.push(`${coordsVar}.x /= ${aspRef};`)
     lines.push(`${coordsVar} -= vec2(${inputs.srt_translateX}, -(${inputs.srt_translateY})) / (u_dpr * u_ref_size);`)
-    lines.push(`${coordsVar} += 0.5;`)
+    lines.push(`${coordsVar} += u_anchor;`)
 
     // main = axis being sliced, perp = perpendicular axis
     const main = isVert ? `${coordsVar}.x` : `${coordsVar}.y`
@@ -272,7 +273,7 @@ export const reededGlassNode: NodeDefinition = {
     if (samplerName) {
       // Apply SRT to screen UV coords for rib pattern
       const srtScr = `rg_srt_scr_${id}`
-      lines.push(`vec2 ${srtScr} = v_uv - 0.5;`)
+      lines.push(`vec2 ${srtScr} = v_uv - vec2(u_anchor.x, 1.0 - u_anchor.y);`)
       lines.push(`${srtScr} /= vec2(${inputs.srt_scale});`)
       // Rotate with aspect correction
       const aspScr = `rg_asp_scr_${id}`
@@ -320,7 +321,7 @@ export const reededGlassNode: NodeDefinition = {
               lines.push(`float ${waveValScr} = (pow(abs(fract(${perpScr} / ${wlScr}) * 2.0 - 1.0), 2.0) * 2.0 - 1.0) * ${ampScr};`); break
           }
         } else if (ribType === 'circular') {
-          lines.push(`float ${waveValScr} = sin(length((v_uv - 0.5) * u_resolution) / ${wlPx} * 6.28318) * ${ampScr};`)
+          lines.push(`float ${waveValScr} = sin(length((v_uv - vec2(u_anchor.x, 1.0 - u_anchor.y)) * u_resolution) / ${wlPx} * 6.28318) * ${ampScr};`)
         } else if (ribType === 'noise') {
           const noiseType = (params.noiseType as string) || 'simplex'
           const noiseFn = resolveNoiseFn(noiseType)
@@ -334,11 +335,15 @@ export const reededGlassNode: NodeDefinition = {
       lines.push(`float ${lensedScreen} = reedLens(${warpedMainScr}, ${ribUVScreen}, ${inputs.ior}, ${inputs.curvature});`)
       const disp = `rg_disp_${id}`
       lines.push(`float ${disp} = ${lensedScreen} - ${warpedMainScr};`)
+      // Use gl_FragCoord/viewport instead of v_uv for FBO sampling —
+      // on WGSL, in.position.y=0 at top matches WebGPU texture convention,
+      // while v_uv.y=0 at bottom does not.
+      ctx.uniforms.add('u_viewport')
       const sampleUV = `rg_sampleUV_${id}`
       if (isVert) {
-        lines.push(`vec2 ${sampleUV} = v_uv + vec2(${disp}, 0.0);`)
+        lines.push(`vec2 ${sampleUV} = gl_FragCoord.xy / u_viewport + vec2(${disp}, 0.0);`)
       } else {
-        lines.push(`vec2 ${sampleUV} = v_uv + vec2(0.0, ${disp});`)
+        lines.push(`vec2 ${sampleUV} = gl_FragCoord.xy / u_viewport + vec2(0.0, ${disp});`)
       }
 
       // Frosted glass: hash-based jitter blur (grainy texture)
@@ -431,14 +436,14 @@ export const reededGlassNode: NodeDefinition = {
     // WGSL needs `var` (mutable) since SRT modifies it in-place
     stmts.push(raw(
       // GLSL
-      `vec2 ${coordsVar} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * 0.5) / (u_dpr * u_ref_size) + 0.5;`,
+      `vec2 ${coordsVar} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * u_anchor) / (u_dpr * u_ref_size) + u_anchor;`,
       // WGSL
-      `var ${coordsVar}: vec2f = (in.position.xy - uniforms.u_resolution * 0.5) / (uniforms.u_dpr * uniforms.u_ref_size) + 0.5;`,
+      `var ${coordsVar}: vec2f = (in.position.xy - uniforms.u_resolution * uniforms.u_anchor) / (uniforms.u_dpr * uniforms.u_ref_size) + uniforms.u_anchor;`,
     ))
     // SRT: center → scale → rotate (aspect-corrected) → translate → re-center
     stmts.push(raw(
       // GLSL
-      `${coordsVar} -= 0.5;\n` +
+      `${coordsVar} -= u_anchor;\n` +
       `  ${coordsVar} /= vec2(${ctx.inputs.srt_scale});\n` +
       `  float rg_asp_ref_${id} = u_resolution.x / u_resolution.y;\n` +
       `  float rg_rad_ref_${id} = ${ctx.inputs.srt_rotate} * 0.01745329;\n` +
@@ -446,9 +451,9 @@ export const reededGlassNode: NodeDefinition = {
       `  ${coordsVar} = vec2(${coordsVar}.x * cos(rg_rad_ref_${id}) - ${coordsVar}.y * sin(rg_rad_ref_${id}), ${coordsVar}.x * sin(rg_rad_ref_${id}) + ${coordsVar}.y * cos(rg_rad_ref_${id}));\n` +
       `  ${coordsVar}.x /= rg_asp_ref_${id};\n` +
       `  ${coordsVar} -= vec2(${ctx.inputs.srt_translateX}, -(${ctx.inputs.srt_translateY})) / (u_dpr * u_ref_size);\n` +
-      `  ${coordsVar} += 0.5;`,
+      `  ${coordsVar} += u_anchor;`,
       // WGSL
-      `${coordsVar} -= vec2f(0.5);\n` +
+      `${coordsVar} -= uniforms.u_anchor;\n` +
       `  ${coordsVar} /= vec2f(${ctx.inputs.srt_scale});\n` +
       `  var rg_asp_ref_${id}: f32 = uniforms.u_resolution.x / uniforms.u_resolution.y;\n` +
       `  var rg_rad_ref_${id}: f32 = ${ctx.inputs.srt_rotate} * 0.01745329;\n` +
@@ -456,7 +461,7 @@ export const reededGlassNode: NodeDefinition = {
       `  ${coordsVar} = vec2f(${coordsVar}.x * cos(rg_rad_ref_${id}) - ${coordsVar}.y * sin(rg_rad_ref_${id}), ${coordsVar}.x * sin(rg_rad_ref_${id}) + ${coordsVar}.y * cos(rg_rad_ref_${id}));\n` +
       `  ${coordsVar}.x /= rg_asp_ref_${id};\n` +
       `  ${coordsVar} -= vec2f(${ctx.inputs.srt_translateX}, -(${ctx.inputs.srt_translateY})) / (uniforms.u_dpr * uniforms.u_ref_size);\n` +
-      `  ${coordsVar} += vec2f(0.5);`,
+      `  ${coordsVar} += uniforms.u_anchor;`,
     ))
 
     const mainAxis = isVert ? `${coordsVar}.x` : `${coordsVar}.y`
@@ -567,7 +572,7 @@ export const reededGlassNode: NodeDefinition = {
     if (samplerName) {
       // Apply SRT to screen UV coords for rib pattern
       const srtScr = `rg_srt_scr_${id}`
-      stmts.push(raw(`vec2 ${srtScr} = v_uv - 0.5;`))
+      stmts.push(raw(`vec2 ${srtScr} = v_uv - vec2(u_anchor.x, 1.0 - u_anchor.y);`))
       stmts.push(raw(`${srtScr} /= vec2(${ctx.inputs.srt_scale});`))
       stmts.push(raw(`float rg_asp_scr_${id} = u_resolution.x / u_resolution.y;`))
       stmts.push(raw(`float rg_rad_scr_${id} = ${ctx.inputs.srt_rotate} * 0.01745329;`))
@@ -610,7 +615,7 @@ export const reededGlassNode: NodeDefinition = {
               stmts.push(raw(`float ${waveValScr} = (pow(abs(fract(${perpScr} / ${wlScrIR}) * 2.0 - 1.0), 2.0) * 2.0 - 1.0) * ${ampScrIR};`)); break
           }
         } else if (ribType === 'circular') {
-          stmts.push(raw(`float ${waveValScr} = sin(length((v_uv - 0.5) * u_resolution) / ${wlPxIR} * 6.28318) * ${ampScrIR};`))
+          stmts.push(raw(`float ${waveValScr} = sin(length((v_uv - vec2(u_anchor.x, 1.0 - u_anchor.y)) * u_resolution) / ${wlPxIR} * 6.28318) * ${ampScrIR};`))
         } else if (ribType === 'noise') {
           const noiseType = (ctx.params.noiseType as string) || 'simplex'
           const noiseFn = resolveNoiseFn(noiseType)
@@ -638,17 +643,24 @@ export const reededGlassNode: NodeDefinition = {
         ),
       )
 
+      // Use gl_FragCoord/viewport instead of v_uv — matches WebGPU texture convention
       const sampleUV = `rg_sampleUV_${id}`
+      const sampleBase = `rg_sampleBase_${id}`
+      stmts.push(
+        declare(sampleBase, 'vec2',
+          binary('/', variable('gl_FragCoord.xy'), variable('u_viewport'), 'vec2'),
+        ),
+      )
       if (isVert) {
         stmts.push(
           declare(sampleUV, 'vec2',
-            binary('+', variable('v_uv'), construct('vec2', [variable(disp), literal('float', 0.0)]), 'vec2'),
+            binary('+', variable(sampleBase), construct('vec2', [variable(disp), literal('float', 0.0)]), 'vec2'),
           ),
         )
       } else {
         stmts.push(
           declare(sampleUV, 'vec2',
-            binary('+', variable('v_uv'), construct('vec2', [literal('float', 0.0), variable(disp)]), 'vec2'),
+            binary('+', variable(sampleBase), construct('vec2', [literal('float', 0.0), variable(disp)]), 'vec2'),
           ),
         )
       }
@@ -683,7 +695,7 @@ export const reededGlassNode: NodeDefinition = {
     return {
       statements: stmts,
       uniforms: [],
-      standardUniforms: new Set(['u_ref_size', 'u_resolution', 'u_dpr']),
+      standardUniforms: new Set(['u_ref_size', 'u_resolution', 'u_dpr', 'u_anchor', 'u_viewport']),
       functions,
     }
   },

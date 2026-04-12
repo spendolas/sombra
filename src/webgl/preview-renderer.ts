@@ -141,6 +141,9 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
     const uVp = gl.getUniformLocation(program, 'u_viewport')
     if (uVp) gl.uniform2f(uVp, PREVIEW_SIZE, PREVIEW_SIZE)
 
+    const uAnchor = gl.getUniformLocation(program, 'u_anchor')
+    if (uAnchor) gl.uniform2f(uAnchor, 0.5, 0.5)
+
     // Upload user uniforms
     for (const u of uniforms) {
       const loc = gl.getUniformLocation(program, u.name)
@@ -289,6 +292,8 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
       if (uDpr) gl.uniform1f(uDpr, 1.0)
       const uVp = gl.getUniformLocation(program, 'u_viewport')
       if (uVp) gl.uniform2f(uVp, PREVIEW_SIZE, PREVIEW_SIZE)
+      const uAnchor = gl.getUniformLocation(program, 'u_anchor')
+      if (uAnchor) gl.uniform2f(uAnchor, 0.5, 0.5)
 
       // User uniforms
       for (const u of pass.uniforms) {

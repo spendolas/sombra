@@ -414,6 +414,7 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
     set('u_dpr', 1.0)
     set('u_viewport', PREVIEW_SIZE, PREVIEW_SIZE)
     set('u_mouse', 0, 0)
+    set('u_anchor', 0.5, 0.5)
   }
 
   private writeUserUniforms(

@@ -3,6 +3,21 @@
  */
 
 import type { NodeDefinition } from '../types'
+
+/** Map anchor enum value to vec2 (x, y fractions 0–1). */
+export function anchorToVec2(anchor: string): [number, number] {
+  switch (anchor) {
+    case 'tl': return [0, 0]
+    case 'tc': return [0.5, 0]
+    case 'tr': return [1, 0]
+    case 'cl': return [0, 0.5]
+    case 'cr': return [1, 0.5]
+    case 'bl': return [0, 1]
+    case 'bc': return [0.5, 1]
+    case 'br': return [1, 1]
+    default:   return [0.5, 0.5] // center
+  }
+}
 import { variable, literal, construct, assign } from '../../compiler/ir/types'
 
 export const fragmentOutputNode: NodeDefinition = {
@@ -34,6 +49,18 @@ export const fragmentOutputNode: NodeDefinition = {
         { value: 'low', label: 'Low' },
         { value: 'medium', label: 'Medium' },
         { value: 'high', label: 'High' },
+      ],
+      updateMode: 'renderer',
+    },
+    {
+      id: 'anchor',
+      label: 'Anchor',
+      type: 'enum',
+      default: 'center',
+      options: [
+        { value: 'tl', label: '↖' }, { value: 'tc', label: '↑' }, { value: 'tr', label: '↗' },
+        { value: 'cl', label: '←' }, { value: 'center', label: '·' }, { value: 'cr', label: '→' },
+        { value: 'bl', label: '↙' }, { value: 'bc', label: '↓' }, { value: 'br', label: '↘' },
       ],
       updateMode: 'renderer',
     },

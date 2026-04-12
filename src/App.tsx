@@ -12,6 +12,7 @@ import { useCompilerStore } from './stores/compilerStore'
 import { createDefaultGraph } from './utils/test-graph'
 import { nodeRegistry } from './nodes/registry'
 import { ShaderNode } from './components/ShaderNode'
+import { anchorToVec2 } from './nodes/output/fragment-output'
 
 // Module-level constant — prevents React Flow from remounting all nodes on re-render
 const NODE_TYPES = { shaderNode: ShaderNode } as const
@@ -76,6 +77,8 @@ function applyCompileResult(
     r.setAnimationSpeed(speed)
   }
   r.setQualityTier((result.qualityTier ?? 'adaptive') as QualityTier)
+  const outputNode = useGraphStore.getState().nodes.find(n => n.data.type === 'fragment_output')
+  r.setAnchor(anchorToVec2((outputNode?.data.params?.anchor as string) ?? 'center'))
   r.notifyChange()
   if (!isAnimated) {
     r.requestRender()
@@ -404,8 +407,9 @@ function App() {
   )
 
   const handleRendererUpdate = useCallback(
-    (update: { qualityTier: string }) => {
+    (update: { qualityTier: string; anchor: string }) => {
       rendererRef.current?.setQualityTier(update.qualityTier as QualityTier)
+      rendererRef.current?.setAnchor(anchorToVec2(update.anchor))
     },
     []
   )
