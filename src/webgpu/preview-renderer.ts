@@ -104,10 +104,6 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
   private cacheOrder: string[] = []
   private startTime = Date.now()
 
-  // Ping-pong textures for multi-pass (lazy init)
-  private pingPongTextures: GPUTexture[] | null = null
-  private pingPongSamplers: GPUSampler[] | null = null
-
   // Render lock — only one render can use the staging buffer at a time.
   // Each render awaits this promise before starting, then replaces it.
   private renderLock: Promise<void> = Promise.resolve()
@@ -258,7 +254,21 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
   // -----------------------------------------------------------------------
 
   private async renderMultiPassWGSL(passes: WGSLPreviewPass[]): Promise<ImageBitmap | null> {
-    this.ensurePingPongTextures()
+    // Allocate one intermediate texture per non-final pass (no ping-pong —
+    // relay passes can read from non-adjacent passes, causing read-write conflicts)
+    const numIntermediate = passes.length - 1
+    const intermediateTextures: GPUTexture[] = []
+    for (let i = 0; i < numIntermediate; i++) {
+      intermediateTextures.push(this.device.createTexture({
+        size: [PREVIEW_SIZE, PREVIEW_SIZE],
+        format: 'rgba8unorm',
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
+      }))
+    }
+    const intermediateSampler = numIntermediate > 0 ? this.device.createSampler({
+      magFilter: 'linear', minFilter: 'linear',
+      addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge',
+    }) : null
 
     const time = (Date.now() - this.startTime) / 1000
     const passStates: PreviewPassState[] = []
@@ -287,18 +297,18 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
 
       // Build texture bind group for inter-pass textures
       let textureBindGroup: GPUBindGroup | null = null
-      if (pass.textureBindings.length > 0 && this.pingPongTextures) {
+      if (pass.textureBindings.length > 0 && intermediateTextures.length > 0) {
         const entries: GPUBindGroupEntry[] = []
         for (const binding of pass.textureBindings) {
           const passInput = pass.inputTextures.find(it => it.samplerName === binding.samplerName)
-          if (passInput && passInput.passIndex < this.pingPongTextures.length) {
+          if (passInput && passInput.passIndex < intermediateTextures.length) {
             entries.push({
               binding: binding.textureBinding,
-              resource: this.pingPongTextures[passInput.passIndex % 2].createView(),
+              resource: intermediateTextures[passInput.passIndex].createView(),
             })
             entries.push({
               binding: binding.samplerBinding,
-              resource: this.pingPongSamplers![passInput.passIndex % 2],
+              resource: intermediateSampler!,
             })
           }
         }
@@ -339,7 +349,7 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
       if (isLastPass) {
         targetView = this.renderTexture.createView()
       } else {
-        targetView = this.pingPongTextures![i % 2].createView()
+        targetView = intermediateTextures[i].createView()
       }
 
       const renderPass = encoder.beginRenderPass({
@@ -364,8 +374,9 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
     // Readback from the render texture (last pass wrote here)
     const bitmap = await this.readbackTexture(encoder)
 
-    // Cleanup per-render uniform buffers
+    // Cleanup per-render resources
     for (const ps of passStates) ps.uniformBuffer.destroy()
+    for (const tex of intermediateTextures) tex.destroy()
 
     return bitmap
   }
@@ -508,31 +519,6 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
   }
 
   // -----------------------------------------------------------------------
-  // Ping-pong textures for multi-pass
-  // -----------------------------------------------------------------------
-
-  private ensurePingPongTextures(): void {
-    if (this.pingPongTextures) return
-
-    this.pingPongTextures = [0, 1].map(() =>
-      this.device.createTexture({
-        size: [PREVIEW_SIZE, PREVIEW_SIZE],
-        format: 'rgba8unorm',
-        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
-      })
-    )
-
-    this.pingPongSamplers = [0, 1].map(() =>
-      this.device.createSampler({
-        magFilter: 'linear',
-        minFilter: 'linear',
-        addressModeU: 'clamp-to-edge',
-        addressModeV: 'clamp-to-edge',
-      })
-    )
-  }
-
-  // -----------------------------------------------------------------------
   // Cleanup
   // -----------------------------------------------------------------------
 
@@ -542,10 +528,5 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
     this.renderTexture?.destroy()
     this.stagingBuffer?.destroy()
     this.quadBuffer?.destroy()
-    if (this.pingPongTextures) {
-      for (const tex of this.pingPongTextures) tex.destroy()
-      this.pingPongTextures = null
-      this.pingPongSamplers = null
-    }
   }
 }
