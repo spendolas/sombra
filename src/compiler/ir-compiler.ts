@@ -16,6 +16,7 @@ import { nodeRegistry } from '../nodes/registry'
 import { topologicalSort, hasCycles } from './topological-sort'
 import {
   partitionPasses, findTextureBoundaries, outputTypeToFragColor,
+  resolveSourceEdge, groupBoundariesBySourceOutput,
   uniformName, paramGlslType, formatDefaultValue,
 } from './glsl-generator'
 import type { TextureBoundaryEdge } from './glsl-generator'
@@ -523,6 +524,7 @@ function compileMultiPassIR(
 ): WGSLMultiPassOutput | null {
   const boundaries = findTextureBoundaries(passPartition, nodeMap, edgesByTarget)
   const passes: WGSLPassOutput[] = []
+  const samplerCompiledIndex = new Map<string, number>()
 
   // nodeId → passIndex lookup
   const nodePassIndex = new Map<string, number>()
@@ -584,11 +586,12 @@ function compileMultiPassIR(
       passNodeIds.includes(b.consumerId) || reEmitSet.has(b.consumerId)
     )
 
-    // Build inputTextures map and collect pass input sampler names
+    // Build inputTextures map — use relay compiled index if available
     const inputTextures: Array<{ passIndex: number; samplerName: string }> = []
     const passInputSamplers: string[] = []
     for (const b of passBoundaries) {
-      inputTextures.push({ passIndex: b.sourcePassIndex, samplerName: b.samplerName })
+      const compiledIdx = samplerCompiledIndex.get(b.samplerName) ?? b.sourcePassIndex
+      inputTextures.push({ passIndex: compiledIdx, samplerName: b.samplerName })
       passInputSamplers.push(b.samplerName)
     }
 
@@ -621,67 +624,77 @@ function compileMultiPassIR(
       allOutputs.push(result.output)
     }
 
-    // Intermediate passes: write the pass output node's value to fragColor
+    // Intermediate passes: fragColor + relay passes for multi-output conflicts
     if (!isLastPass) {
-      const outputBoundary = boundaries.find(b => b.sourcePassIndex === passIdx)
-      if (outputBoundary) {
-        const consumerIncoming = edgesByTarget.get(outputBoundary.consumerId) || []
-        const texEdge = consumerIncoming.find(e => e.targetHandle === outputBoundary.consumingPortId)
-        if (texEdge) {
-          const sourceDef = nodeMap.get(texEdge.source)
-            ? nodeRegistry.get(nodeMap.get(texEdge.source)!.data.type)
-            : undefined
-          const sourcePort = sourceDef?.outputs.find(p => p.id === texEdge.sourceHandle)
-          if (sourcePort) {
-            const sourceVar = `node_${texEdge.source.replace(/-/g, '_')}_${texEdge.sourceHandle}`
-            // Emit GLSL fragColor assignment — the assembler rewrites to WGSL return
-            const glslOutput = outputTypeToFragColor(sourceVar, sourcePort.type)
-            allOutputs.push({
-              statements: [raw(glslOutput)],
-              uniforms: [],
-              standardUniforms: new Set(),
-            })
-          }
+      const outBounds = boundaries.filter(b => b.sourcePassIndex === passIdx)
+      const groups = groupBoundariesBySourceOutput(outBounds, edgesByTarget)
+
+      // Save body BEFORE appending any fragColor
+      const bodyOutputs = [...allOutputs]
+
+      const resolveGroup = (group: TextureBoundaryEdge[]) => {
+        const edge = resolveSourceEdge(group[0], edgesByTarget)
+        if (!edge) return null
+        const srcDef = nodeMap.get(edge.source) ? nodeRegistry.get(nodeMap.get(edge.source)!.data.type) : undefined
+        const srcPort = srcDef?.outputs.find(p => p.id === edge.sourceHandle)
+        if (!srcPort) return null
+        const srcVar = `node_${edge.source.replace(/-/g, '_')}_${edge.sourceHandle}`
+        return {
+          fragOutput: { statements: [raw(outputTypeToFragColor(srcVar, srcPort.type))], uniforms: [], standardUniforms: new Set() } as IRNodeOutput,
+          textureFilter: srcDef?.textureFilter as 'linear' | 'nearest' | undefined,
         }
       }
-    }
 
-    // Determine texture filter hint
-    let textureFilter: 'linear' | 'nearest' | undefined
-    if (!isLastPass) {
-      const outputBoundary = boundaries.find(b => b.sourcePassIndex === passIdx)
-      if (outputBoundary) {
-        const filterEdge = (edgesByTarget.get(outputBoundary.consumerId) || [])
-          .find(e => e.targetHandle === outputBoundary.consumingPortId)
-        if (filterEdge) {
-          const filterSourceNode = nodeMap.get(filterEdge.source)
-          if (filterSourceNode) {
-            const filterSourceDef = nodeRegistry.get(filterSourceNode.data.type)
-            if (filterSourceDef?.textureFilter) {
-              textureFilter = filterSourceDef.textureFilter
-            }
-          }
-        }
+      // --- Primary pass ---
+      const primaryResolved = groups.length > 0 ? resolveGroup(groups[0]) : null
+      if (primaryResolved) allOutputs.push(primaryResolved.fragOutput)
+
+      const assembled = assembleWGSL(
+        allOutputs, standardUniforms,
+        passUserUniforms.map(u => ({ name: u.name, glslType: u.glslType })),
+        [...imageSamplers], passInputSamplers,
+      )
+      const primaryIdx = passes.length
+      if (groups.length > 0) {
+        for (const b of groups[0]) samplerCompiledIndex.set(b.samplerName, primaryIdx)
       }
+      passes.push({
+        shaderCode: assembled.shaderCode, uniformLayout: assembled.uniformLayout,
+        textureBindings: assembled.textureBindings, inputTextures,
+        isTimeLive: standardUniforms.has('u_time'), textureFilter: primaryResolved?.textureFilter,
+      })
+
+      // --- Relay passes ---
+      for (let g = 1; g < groups.length; g++) {
+        const resolved = resolveGroup(groups[g])
+        if (!resolved) continue
+        const relayOutputs = [...bodyOutputs, resolved.fragOutput]
+        const relayAssembled = assembleWGSL(
+          relayOutputs, standardUniforms,
+          passUserUniforms.map(u => ({ name: u.name, glslType: u.glslType })),
+          [...imageSamplers], passInputSamplers,
+        )
+        const relayIdx = passes.length
+        for (const b of groups[g]) samplerCompiledIndex.set(b.samplerName, relayIdx)
+        passes.push({
+          shaderCode: relayAssembled.shaderCode, uniformLayout: relayAssembled.uniformLayout,
+          textureBindings: relayAssembled.textureBindings, inputTextures,
+          isTimeLive: standardUniforms.has('u_time'), textureFilter: resolved.textureFilter,
+        })
+      }
+    } else {
+      // Last pass: no relay needed
+      const assembled = assembleWGSL(
+        allOutputs, standardUniforms,
+        passUserUniforms.map(u => ({ name: u.name, glslType: u.glslType })),
+        [...imageSamplers], passInputSamplers,
+      )
+      passes.push({
+        shaderCode: assembled.shaderCode, uniformLayout: assembled.uniformLayout,
+        textureBindings: assembled.textureBindings, inputTextures,
+        isTimeLive: standardUniforms.has('u_time'),
+      })
     }
-
-    // Assemble WGSL for this pass
-    const assembled = assembleWGSL(
-      allOutputs,
-      standardUniforms,
-      passUserUniforms.map(u => ({ name: u.name, glslType: u.glslType })),
-      [...imageSamplers],
-      passInputSamplers,
-    )
-
-    passes.push({
-      shaderCode: assembled.shaderCode,
-      uniformLayout: assembled.uniformLayout,
-      textureBindings: assembled.textureBindings,
-      inputTextures,
-      isTimeLive: standardUniforms.has('u_time'),
-      textureFilter,
-    })
   }
 
   return { passes }
