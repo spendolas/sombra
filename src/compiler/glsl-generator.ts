@@ -242,6 +242,30 @@ export function findTextureBoundaries(
   return boundaries
 }
 
+/** Resolve the actual source edge feeding a texture boundary. */
+export function resolveSourceEdge(
+  boundary: TextureBoundaryEdge,
+  edgesByTarget: Map<string, Edge<EdgeData>[]>,
+): Edge<EdgeData> | undefined {
+  const incoming = edgesByTarget.get(boundary.consumerId) || []
+  return incoming.find(e => e.targetHandle === boundary.consumingPortId)
+}
+
+/** Group boundaries by their source output (nodeId:handleId). */
+export function groupBoundariesBySourceOutput(
+  bounds: TextureBoundaryEdge[],
+  edgesByTarget: Map<string, Edge<EdgeData>[]>,
+): TextureBoundaryEdge[][] {
+  const groups = new Map<string, TextureBoundaryEdge[]>()
+  for (const b of bounds) {
+    const edge = resolveSourceEdge(b, edgesByTarget)
+    const key = edge ? `${edge.source}:${edge.sourceHandle}` : b.samplerName
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(b)
+  }
+  return [...groups.values()]
+}
+
 // ---------------------------------------------------------------------------
 // Error plan helper
 // ---------------------------------------------------------------------------
@@ -690,6 +714,9 @@ function compileMultiPass(
     boundaries.map(b => `${b.consumerId}:${b.consumingPortId}`)
   )
 
+  // Track samplerName → compiled pass array index for relay resolution
+  const samplerCompiledIndex = new Map<string, number>()
+
   for (let passIdx = 0; passIdx < passPartition.length; passIdx++) {
     const passNodeIds = passPartition[passIdx]
     const isLastPass = passIdx === passPartition.length - 1
@@ -746,10 +773,10 @@ function compileMultiPass(
     )
     const samplerNames = passBoundaries.map(b => b.samplerName)
 
-    // Build inputTextures map
+    // Build inputTextures map — use relay compiled index if available
     const inputTextures: Record<string, number> = {}
     for (const b of passBoundaries) {
-      inputTextures[b.samplerName] = b.sourcePassIndex
+      inputTextures[b.samplerName] = samplerCompiledIndex.get(b.samplerName) ?? b.sourcePassIndex
     }
 
     // Combine re-emitted nodes (in original execution order) with pass nodes
@@ -773,58 +800,89 @@ function compileMultiPass(
 
     if (allErrors.length > 0) return errorPlan(allErrors)
 
-    // Intermediate passes: write the pass output node's value to fragColor
+    // Intermediate passes: write fragColor + handle multi-output conflicts via relay passes
     if (!isLastPass) {
-      const outputBoundary = boundaries.find(b => b.sourcePassIndex === passIdx)
-      if (outputBoundary) {
-        const consumerIncoming = edgesByTarget.get(outputBoundary.consumerId) || []
-        const texEdge = consumerIncoming.find(e => e.targetHandle === outputBoundary.consumingPortId)
-        if (texEdge) {
-          const sourceDef = nodeMap.get(texEdge.source)
-            ? nodeRegistry.get(nodeMap.get(texEdge.source)!.data.type)
-            : undefined
-          const sourcePort = sourceDef?.outputs.find(p => p.id === texEdge.sourceHandle)
-          if (sourcePort) {
-            const sourceVar = `node_${texEdge.source.replace(/-/g, '_')}_${texEdge.sourceHandle}`
-            glslLines.push(outputTypeToFragColor(sourceVar, sourcePort.type))
-          }
+      const outBounds = boundaries.filter(b => b.sourcePassIndex === passIdx)
+      const groups = groupBoundariesBySourceOutput(outBounds, edgesByTarget)
+
+      // Save body BEFORE appending any fragColor
+      const bodyLines = [...glslLines]
+
+      // Helper: resolve fragColor line + textureFilter for a boundary group
+      const resolveGroup = (group: TextureBoundaryEdge[]) => {
+        const edge = resolveSourceEdge(group[0], edgesByTarget)
+        if (!edge) return null
+        const srcNode = nodeMap.get(edge.source)
+        const srcDef = srcNode ? nodeRegistry.get(srcNode.data.type) : undefined
+        const srcPort = srcDef?.outputs.find(p => p.id === edge.sourceHandle)
+        if (!srcPort) return null
+        const srcVar = `node_${edge.source.replace(/-/g, '_')}_${edge.sourceHandle}`
+        return {
+          fragLine: outputTypeToFragColor(srcVar, srcPort.type),
+          textureFilter: srcDef?.textureFilter as 'linear' | 'nearest' | undefined,
         }
       }
-    }
 
-    const fragmentShader = assembleFragmentShader(
-      uniforms, functions, functionRegistry, glslLines, passUserUniforms, samplerNames,
-      passImageSamplers,
-    )
+      // --- Primary pass (first group) ---
+      const primaryResolved = groups.length > 0 ? resolveGroup(groups[0]) : null
+      if (primaryResolved) glslLines.push(primaryResolved.fragLine)
 
-    // Determine texture filter hint: if the pass output node declares a filter, use it
-    let passTextureFilter: 'linear' | 'nearest' | undefined
-    if (!isLastPass) {
-      const outputBoundaryForFilter = boundaries.find(b => b.sourcePassIndex === passIdx)
-      if (outputBoundaryForFilter) {
-        const filterEdge = (edgesByTarget.get(outputBoundaryForFilter.consumerId) || [])
-          .find(e => e.targetHandle === outputBoundaryForFilter.consumingPortId)
-        if (filterEdge) {
-          const filterSourceNode = nodeMap.get(filterEdge.source)
-          if (filterSourceNode) {
-            const filterSourceDef = nodeRegistry.get(filterSourceNode.data.type)
-            if (filterSourceDef?.textureFilter) {
-              passTextureFilter = filterSourceDef.textureFilter
-            }
-          }
-        }
+      const fragmentShader = assembleFragmentShader(
+        uniforms, functions, functionRegistry, glslLines, passUserUniforms, samplerNames,
+        passImageSamplers,
+      )
+
+      const primaryIdx = passes.length
+      if (groups.length > 0) {
+        for (const b of groups[0]) samplerCompiledIndex.set(b.samplerName, primaryIdx)
       }
-    }
 
-    passes.push({
-      index: passIdx,
-      fragmentShader,
-      vertexShader: VERTEX_SHADER,
-      userUniforms: passUserUniforms,
-      inputTextures,
-      isTimeLive: uniforms.has('u_time'),
-      textureFilter: passTextureFilter,
-    })
+      passes.push({
+        index: primaryIdx,
+        fragmentShader,
+        vertexShader: VERTEX_SHADER,
+        userUniforms: passUserUniforms,
+        inputTextures,
+        isTimeLive: uniforms.has('u_time'),
+        textureFilter: primaryResolved?.textureFilter,
+      })
+
+      // --- Relay passes (remaining groups) ---
+      for (let g = 1; g < groups.length; g++) {
+        const resolved = resolveGroup(groups[g])
+        if (!resolved) continue
+        const relayLines = [...bodyLines, resolved.fragLine]
+        const relayShader = assembleFragmentShader(
+          uniforms, functions, functionRegistry, relayLines, passUserUniforms, samplerNames,
+          passImageSamplers,
+        )
+        const relayIdx = passes.length
+        for (const b of groups[g]) samplerCompiledIndex.set(b.samplerName, relayIdx)
+        passes.push({
+          index: relayIdx,
+          fragmentShader: relayShader,
+          vertexShader: VERTEX_SHADER,
+          userUniforms: passUserUniforms,
+          inputTextures,
+          isTimeLive: uniforms.has('u_time'),
+          textureFilter: resolved.textureFilter,
+        })
+      }
+    } else {
+      // Last pass: no relay needed
+      const fragmentShader = assembleFragmentShader(
+        uniforms, functions, functionRegistry, glslLines, passUserUniforms, samplerNames,
+        passImageSamplers,
+      )
+      passes.push({
+        index: passes.length,
+        fragmentShader,
+        vertexShader: VERTEX_SHADER,
+        userUniforms: passUserUniforms,
+        inputTextures,
+        isTimeLive: uniforms.has('u_time'),
+      })
+    }
 
     allUserUniforms.push(...passUserUniforms)
   }

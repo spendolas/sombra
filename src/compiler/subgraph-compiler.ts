@@ -16,7 +16,10 @@ import {
   partitionPasses,
   findTextureBoundaries,
   outputTypeToFragColor,
+  resolveSourceEdge,
+  groupBoundariesBySourceOutput,
 } from './glsl-generator'
+import type { TextureBoundaryEdge } from './glsl-generator'
 
 /** Maximum passes for preview rendering. Beyond this, show placeholder. [P8] */
 const MAX_PREVIEW_PASSES = 6
@@ -158,6 +161,7 @@ function compileMultiPassPreview(
   const passes: PreviewPass[] = []
   const allUserUniforms: UniformSpec[] = []
   let globalTimeLive = false
+  const samplerCompiledIndex = new Map<string, number>()
 
   // nodeId → passIndex lookup (for cross-pass re-emission)
   const nodePassIndex = new Map<string, number>()
@@ -183,7 +187,7 @@ function compileMultiPassPreview(
 
     const inputTextures: Record<string, number> = {}
     for (const b of passBoundaries) {
-      inputTextures[b.samplerName] = b.sourcePassIndex
+      inputTextures[b.samplerName] = samplerCompiledIndex.get(b.samplerName) ?? b.sourcePassIndex
     }
 
     // Re-emit nodes from earlier passes that are referenced via non-texture edges
@@ -231,38 +235,71 @@ function compileMultiPassPreview(
 
     if (allErrors.length > 0) return fail(allErrors)
 
-    // fragColor output
-    if (isLastPass) {
+    // Intermediate passes: write fragColor + handle multi-output conflicts via relay passes
+    if (!isLastPass) {
+      const outBounds = boundaries.filter(b => b.sourcePassIndex === passIdx)
+      const groups = groupBoundariesBySourceOutput(outBounds, edgesByTarget)
+
+      // Save body BEFORE appending any fragColor
+      const bodyLines = [...glslLines]
+
+      // Helper: resolve fragColor line for a boundary group
+      const resolveGroup = (group: TextureBoundaryEdge[]) => {
+        const edge = resolveSourceEdge(group[0], edgesByTarget)
+        if (!edge) return null
+        const srcDef = nodeMap.get(edge.source)
+          ? nodeRegistry.get(nodeMap.get(edge.source)!.data.type)
+          : undefined
+        const srcPort = srcDef?.outputs.find(p => p.id === edge.sourceHandle)
+        if (!srcPort) return null
+        const srcVar = `node_${edge.source.replace(/-/g, '_')}_${edge.sourceHandle}`
+        return { fragLine: outputTypeToFragColor(srcVar, srcPort.type) }
+      }
+
+      // --- Primary pass (first group) ---
+      const primaryResolved = groups.length > 0 ? resolveGroup(groups[0]) : null
+      if (primaryResolved) glslLines.push(primaryResolved.fragLine)
+
+      const fragmentShader = assembleFragmentShader(
+        uniforms, functions, functionRegistry, glslLines, passUserUniforms, samplerNames,
+      )
+
+      if (uniforms.has('u_time')) globalTimeLive = true
+
+      const primaryIdx = passes.length
+      if (groups.length > 0) {
+        for (const b of groups[0]) samplerCompiledIndex.set(b.samplerName, primaryIdx)
+      }
+
+      passes.push({ fragmentShader, userUniforms: passUserUniforms, inputTextures })
+
+      // --- Relay passes (remaining groups) ---
+      for (let g = 1; g < groups.length; g++) {
+        const resolved = resolveGroup(groups[g])
+        if (!resolved) continue
+        const relayLines = [...bodyLines, resolved.fragLine]
+        const relayShader = assembleFragmentShader(
+          uniforms, functions, functionRegistry, relayLines, passUserUniforms, samplerNames,
+        )
+        const relayIdx = passes.length
+        for (const b of groups[g]) samplerCompiledIndex.set(b.samplerName, relayIdx)
+        passes.push({ fragmentShader: relayShader, userUniforms: passUserUniforms, inputTextures })
+      }
+    } else {
       // Last pass: output target node's value
       const targetOutput = targetDef.outputs[0]
       const targetVar = `node_${targetNodeId.replace(/-/g, '_')}_${targetOutput.id}`
       glslLines.push(outputTypeToFragColor(targetVar, targetOutput.type))
-    } else {
-      // Intermediate pass: output the node feeding the next pass's textureInput
-      const outputBoundary = boundaries.find(b => b.sourcePassIndex === passIdx)
-      if (outputBoundary) {
-        const consumerIncoming = edgesByTarget.get(outputBoundary.consumerId) || []
-        const texEdge = consumerIncoming.find(e => e.targetHandle === outputBoundary.consumingPortId)
-        if (texEdge) {
-          const sourceDef = nodeMap.get(texEdge.source)
-            ? nodeRegistry.get(nodeMap.get(texEdge.source)!.data.type)
-            : undefined
-          const sourcePort = sourceDef?.outputs.find(p => p.id === texEdge.sourceHandle)
-          if (sourcePort) {
-            const sourceVar = `node_${texEdge.source.replace(/-/g, '_')}_${texEdge.sourceHandle}`
-            glslLines.push(outputTypeToFragColor(sourceVar, sourcePort.type))
-          }
-        }
-      }
+
+      const fragmentShader = assembleFragmentShader(
+        uniforms, functions, functionRegistry, glslLines, passUserUniforms, samplerNames,
+      )
+
+      if (uniforms.has('u_time')) globalTimeLive = true
+
+      passes.push({ fragmentShader, userUniforms: passUserUniforms, inputTextures })
     }
 
-    const fragmentShader = assembleFragmentShader(
-      uniforms, functions, functionRegistry, glslLines, passUserUniforms, samplerNames,
-    )
-
-    if (uniforms.has('u_time')) globalTimeLive = true
-
-    passes.push({ fragmentShader, userUniforms: passUserUniforms, inputTextures })
     allUserUniforms.push(...passUserUniforms)
   }
 
