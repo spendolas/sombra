@@ -4,19 +4,49 @@
  *
  * Batches up to 4 stale nodes per animation frame within an 8ms budget.
  * Uses fine-grained staleness detection to avoid recompiling unchanged nodes.
+ *
+ * Supports both WebGL2 (GLSL) and WebGPU (WGSL/IR) preview paths.
  */
 
 import type { Node, Edge } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
-import type { PreviewResponse } from '../compiler/compiler.worker'
-import type { PreviewRenderer } from '../renderer/types'
-import type { UniformUpload } from './preview-renderer'
+import type { PreviewResponse, PreviewIRResponse, SerializedIRPreviewResult } from '../compiler/compiler.worker'
+import type { PreviewRenderer, UniformUpload } from './types'
+import type { WebGPUPreviewRenderer, WGSLPreviewPass } from '../webgpu/preview-renderer'
+import type { UniformBufferLayout, TextureBinding } from '../compiler/ir/wgsl-assembler'
 import { usePreviewStore } from '../stores/previewStore'
 import CompilerWorker from '../compiler/compiler.worker?worker'
 
+// ---------------------------------------------------------------------------
+// Cached shader types — discriminated by backend
+// ---------------------------------------------------------------------------
+
+interface CachedShaderWebGL2 {
+  backend: 'webgl2'
+  fragmentShader: string
+  uniforms: UniformUpload[]
+  isTimeLive: boolean
+  passes?: Array<{ fragmentShader: string; uniforms: UniformUpload[]; inputTextures: Record<string, number> }>
+  depthExceeded?: boolean
+}
+
+interface CachedShaderWebGPU {
+  backend: 'webgpu'
+  wgslPasses: WGSLPreviewPass[]
+  isTimeLive: boolean
+  depthExceeded?: boolean
+}
+
+type CachedShader = CachedShaderWebGL2 | CachedShaderWebGPU
+
+// ---------------------------------------------------------------------------
+// Scheduler
+// ---------------------------------------------------------------------------
+
 export class PreviewScheduler {
   private renderer: PreviewRenderer
+  private isWebGPU: boolean
   private worker: Worker
   private rafId: number | null = null
   private running = false
@@ -36,14 +66,8 @@ export class PreviewScheduler {
   private prevEdges: Edge<EdgeData>[] = []
   private prevNodeMap = new Map<string, Node<NodeData>>()
 
-  // Cached shaders: nodeId → { fragmentShader, uniforms, isTimeLive, passes }
-  private shaderCache = new Map<string, {
-    fragmentShader: string
-    uniforms: UniformUpload[]
-    isTimeLive: boolean
-    passes?: Array<{ fragmentShader: string; uniforms: UniformUpload[]; inputTextures: Record<string, number> }>
-    depthExceeded?: boolean
-  }>()
+  // Cached shaders: nodeId → CachedShader
+  private shaderCache = new Map<string, CachedShader>()
 
   // Compile request counter for staleness
   private compileIdCounter = 0
@@ -58,6 +82,7 @@ export class PreviewScheduler {
 
   constructor(renderer: PreviewRenderer) {
     this.renderer = renderer
+    this.isWebGPU = renderer.backend === 'webgpu'
     this.worker = new CompilerWorker()
     this.worker.onmessage = this.onWorkerMessage.bind(this)
   }
@@ -178,10 +203,24 @@ export class PreviewScheduler {
   /**
    * Handle compilation result from the Worker.
    */
-  private async onWorkerMessage(event: MessageEvent<PreviewResponse>) {
+  private async onWorkerMessage(event: MessageEvent<PreviewResponse | PreviewIRResponse>) {
     const data = event.data
-    if (data.type !== 'preview') return
 
+    if (data.type === 'preview-ir') {
+      await this.handleIRPreviewResult(data)
+      return
+    }
+
+    if (data.type === 'preview') {
+      await this.handleGLSLPreviewResult(data)
+      return
+    }
+  }
+
+  /**
+   * Handle GLSL preview compilation result (WebGL2 path).
+   */
+  private async handleGLSLPreviewResult(data: PreviewResponse) {
     const { targetNodeId, result } = data
     this.pendingCompile.delete(targetNodeId)
 
@@ -199,7 +238,8 @@ export class PreviewScheduler {
           inputTextures: p.inputTextures,
         }))
       : undefined
-    const cached = {
+    const cached: CachedShaderWebGL2 = {
+      backend: 'webgl2',
       fragmentShader: result.fragmentShader,
       uniforms: result.userUniforms.map(u => ({ name: u.name, value: u.value })),
       isTimeLive: result.isTimeLive,
@@ -215,24 +255,80 @@ export class PreviewScheduler {
     }
 
     if (cached.depthExceeded) {
-      console.warn(`[preview] depth exceeded for ${targetNodeId} (>${cached.passes?.length || '?'} passes)`)
+      console.warn(`[preview] depth exceeded for ${targetNodeId}`)
       this.staleNodes.delete(targetNodeId)
       return
     }
 
-    // Render: multi-pass or single-pass (returns Promise<ImageBitmap | null>)
-    let bitmap: ImageBitmap | null
-    if (cached.passes && cached.passes.length > 1) {
-      bitmap = await this.renderer.renderMultiPassPreview(cached.passes)
-    } else {
-      bitmap = await this.renderer.renderPreview(cached.fragmentShader, cached.uniforms)
-    }
+    // Render
+    const bitmap = await this.renderCached(targetNodeId, cached)
     if (bitmap) {
       usePreviewStore.getState().setPreview(targetNodeId, bitmap)
     } else {
-      console.warn(`[preview] render returned null for ${targetNodeId}`, cached.passes ? `(${cached.passes.length} passes)` : '(single)')
+      console.warn(`[preview] render returned null for ${targetNodeId}`)
     }
     this.staleNodes.delete(targetNodeId)
+  }
+
+  /**
+   * Handle IR/WGSL preview compilation result (WebGPU path).
+   */
+  private async handleIRPreviewResult(data: PreviewIRResponse) {
+    const { targetNodeId, result } = data
+    this.pendingCompile.delete(targetNodeId)
+
+    if (!result || !result.success) {
+      console.warn(`[preview-ir] compile failed for ${targetNodeId}`, result?.errors || 'no result')
+      this.staleNodes.delete(targetNodeId)
+      return
+    }
+
+    if (result.depthExceeded) {
+      console.warn(`[preview-ir] depth exceeded for ${targetNodeId}`)
+      this.staleNodes.delete(targetNodeId)
+      return
+    }
+
+    // Deserialize and cache
+    const wgslPasses = deserializeWGSLPasses(result)
+    const cached: CachedShaderWebGPU = {
+      backend: 'webgpu',
+      wgslPasses,
+      isTimeLive: result.isTimeLive,
+      depthExceeded: result.depthExceeded,
+    }
+    this.shaderCache.set(targetNodeId, cached)
+
+    if (result.isTimeLive) {
+      this.timeLiveNodes.add(targetNodeId)
+    } else {
+      this.timeLiveNodes.delete(targetNodeId)
+    }
+
+    // Render
+    const bitmap = await this.renderCached(targetNodeId, cached)
+    if (bitmap) {
+      usePreviewStore.getState().setPreview(targetNodeId, bitmap)
+    } else {
+      console.warn(`[preview-ir] render returned null for ${targetNodeId}`)
+    }
+    this.staleNodes.delete(targetNodeId)
+  }
+
+  /**
+   * Render from cached data — dispatches to the correct backend method.
+   */
+  private async renderCached(_nodeId: string, cached: CachedShader): Promise<ImageBitmap | null> {
+    if (cached.backend === 'webgpu') {
+      const gpuRenderer = this.renderer as WebGPUPreviewRenderer
+      return gpuRenderer.renderWGSLPreview(cached.wgslPasses)
+    }
+
+    // WebGL2 path
+    if (cached.passes && cached.passes.length > 1) {
+      return this.renderer.renderMultiPassPreview(cached.passes)
+    }
+    return this.renderer.renderPreview(cached.fragmentShader, cached.uniforms)
   }
 
   /**
@@ -251,12 +347,7 @@ export class PreviewScheduler {
       for (const nodeId of this.timeLiveNodes) {
         const cached = this.shaderCache.get(nodeId)
         if (!cached || cached.depthExceeded) continue
-        let bitmap: ImageBitmap | null
-        if (cached.passes && cached.passes.length > 1) {
-          bitmap = await this.renderer.renderMultiPassPreview(cached.passes)
-        } else {
-          bitmap = await this.renderer.renderPreview(cached.fragmentShader, cached.uniforms)
-        }
+        const bitmap = await this.renderCached(nodeId, cached)
         if (bitmap) {
           batch.set(nodeId, bitmap)
         }
@@ -283,13 +374,25 @@ export class PreviewScheduler {
       // Request compilation from Worker
       this.pendingCompile.add(nodeId)
       const id = `preview-${++this.compileIdCounter}`
-      this.worker.postMessage({
-        type: 'preview',
-        id,
-        targetNodeId: nodeId,
-        nodes: this.nodes,
-        edges: this.edges,
-      })
+
+      if (this.isWebGPU) {
+        this.worker.postMessage({
+          type: 'preview-ir',
+          id,
+          targetNodeId: nodeId,
+          nodes: this.nodes,
+          edges: this.edges,
+        })
+      } else {
+        this.worker.postMessage({
+          type: 'preview',
+          id,
+          targetNodeId: nodeId,
+          nodes: this.nodes,
+          edges: this.edges,
+        })
+      }
+
       dispatched++
       if (dispatched >= 4) break // Cap at 4 per frame
     }
@@ -334,4 +437,40 @@ export class PreviewScheduler {
     this.timeLiveNodes.clear()
     usePreviewStore.getState().clearAll()
   }
+}
+
+// ---------------------------------------------------------------------------
+// Deserialization helpers (Map reconstruction from worker postMessage)
+// ---------------------------------------------------------------------------
+
+/**
+ * Deserialize the serialized IR preview result from the worker
+ * into WGSLPreviewPass[] with proper Map offsets.
+ */
+function deserializeWGSLPasses(result: SerializedIRPreviewResult): WGSLPreviewPass[] {
+  return result.wgslPasses.map((pass) => {
+    // Reconstruct Map from Record
+    const offsets = new Map<string, number>(Object.entries(pass.uniformLayout.offsets))
+    const uniformLayout: UniformBufferLayout = {
+      totalSize: pass.uniformLayout.totalSize,
+      offsets,
+      struct: pass.uniformLayout.struct,
+    }
+
+    // Collect user uniforms for this pass from the result
+    // User uniforms are global in the result — filter to those present in this pass's layout
+    const passUserUniforms: UniformUpload[] = result.userUniforms
+      .filter(u => offsets.has(u.name))
+      .map(u => ({ name: u.name, value: u.value }))
+
+    const textureBindings: TextureBinding[] = pass.textureBindings
+
+    return {
+      shaderCode: pass.shaderCode,
+      uniformLayout,
+      textureBindings,
+      inputTextures: pass.inputTextures,
+      userUniforms: passUserUniforms,
+    }
+  })
 }

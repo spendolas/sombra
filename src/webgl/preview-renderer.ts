@@ -20,6 +20,9 @@ void main() {
 
 const PREVIEW_SIZE = 80
 
+/** Frozen reference size — must match the main renderer's REFERENCE_SIZE. */
+const REFERENCE_SIZE = 512
+
 export interface UniformUpload {
   name: string
   value: number | number[]
@@ -127,7 +130,7 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
     if (uRes) gl.uniform2f(uRes, PREVIEW_SIZE, PREVIEW_SIZE)
 
     const uRefSize = gl.getUniformLocation(program, 'u_ref_size')
-    if (uRefSize) gl.uniform1f(uRefSize, PREVIEW_SIZE)
+    if (uRefSize) gl.uniform1f(uRefSize, REFERENCE_SIZE)
 
     const uMouse = gl.getUniformLocation(program, 'u_mouse')
     if (uMouse) gl.uniform2f(uMouse, 0, 0)
@@ -281,7 +284,7 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
       const uRes = gl.getUniformLocation(program, 'u_resolution')
       if (uRes) gl.uniform2f(uRes, PREVIEW_SIZE, PREVIEW_SIZE)
       const uRefSize = gl.getUniformLocation(program, 'u_ref_size')
-      if (uRefSize) gl.uniform1f(uRefSize, PREVIEW_SIZE)
+      if (uRefSize) gl.uniform1f(uRefSize, REFERENCE_SIZE)
       const uDpr = gl.getUniformLocation(program, 'u_dpr')
       if (uDpr) gl.uniform1f(uDpr, 1.0)
       const uVp = gl.getUniformLocation(program, 'u_viewport')

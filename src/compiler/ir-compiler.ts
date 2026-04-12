@@ -32,7 +32,7 @@ import { assembleWGSL } from './ir/wgsl-assembler'
  * expressions end up as variable names inside IR nodes, not in raw GLSL
  * blocks that go through mechanical translation.
  */
-function coerceTypeForIR(varName: string, from: PortType, to: PortType): string {
+export function coerceTypeForIR(varName: string, from: PortType, to: PortType): string {
   if (from === to) return varName
   // color is alias for vec3
   if ((from === 'color' && to === 'vec3') || (from === 'vec3' && to === 'color')) return varName
@@ -76,7 +76,7 @@ function coerceTypeForIR(varName: string, from: PortType, to: PortType): string 
 // Safe float formatting (same as glsl-generator.ts)
 // ---------------------------------------------------------------------------
 
-function formatDefaultValueIR(value: unknown, type: string): string {
+export function formatDefaultValueIR(value: unknown, type: string): string {
   // For IR, we generate GLSL-syntax defaults that the raw() node or
   // the WGSL backend's mechanical translation will handle.
   return formatDefaultValue(value, type)
@@ -86,7 +86,7 @@ function formatDefaultValueIR(value: unknown, type: string): string {
 // Per-node IR generation
 // ---------------------------------------------------------------------------
 
-interface NodeIRResult {
+export interface NodeIRResult {
   output: IRNodeOutput | null
   errors: Array<{ message: string; nodeId?: string }>
   /** Preamble IR statements (auto_uv, SRT transforms) injected before node IR. */
@@ -98,7 +98,7 @@ interface NodeIRResult {
  * Resolves inputs from edges or defaults, handles connectable params,
  * injects SRT spatial transforms, and calls definition.ir().
  */
-function generateNodeIR(
+export function generateNodeIR(
   nodeId: string,
   nodeMap: Map<string, Node<NodeData>>,
   edgesByTarget: Map<string, Edge<EdgeData>[]>,
@@ -324,7 +324,7 @@ function generateNodeIR(
  * - vec2 → vec2f (WGSL backend mechanical translation)
  * - u_resolution → uniforms.u_resolution (assembler rewrite)
  */
-function resolveInputDefaultIR(
+export function resolveInputDefaultIR(
   inputPort: { id: string; type: string; default?: unknown },
   sanitizedNodeId: string,
   preambleStatements: import('./ir/types').IRStmt[],
@@ -370,7 +370,7 @@ function resolveInputDefaultIR(
 /**
  * Resolve a connectable param fallback for IR compilation.
  */
-function resolveParamFallbackIR(
+export function resolveParamFallbackIR(
   param: NodeParameter,
   node: Node<NodeData>,
   sanitizedNodeId: string,
