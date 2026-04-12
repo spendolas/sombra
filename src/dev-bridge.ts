@@ -12,6 +12,7 @@ import { useSettingsStore } from './stores/settingsStore'
 import { nodeRegistry } from './nodes/registry'
 import { compileGraph } from './compiler/glsl-generator'
 import { compileGraphIR } from './compiler/ir-compiler'
+import { compileNodePreviewIR } from './compiler/ir-subgraph-compiler'
 import type { NodeData, EdgeData, PortType } from './nodes/types'
 import type { Node, Edge } from '@xyflow/react'
 import { exportToFile, importFromFile, encodeCompactHash } from './utils/sombra-file'
@@ -749,6 +750,96 @@ async function validateAllWGSL(): Promise<{
   return { total, passed, failed, results }
 }
 
+/**
+ * Validate IR subgraph (preview) WGSL compilation for all node types.
+ * Tests that compileNodePreviewIR produces valid WGSL for every registered node.
+ *
+ * Usage: `await __sombra.validateAllSubgraphWGSL()`
+ */
+async function validateAllSubgraphWGSL(): Promise<{
+  total: number; passed: number; failed: number
+  results: Array<{ name: string; ok: boolean; passCount: number; errors: string[] }>
+}> {
+  const device = await getValidationDevice()
+
+  let counter = 0
+  const nid = () => `sg_${++counter}`
+
+  function makeNode(id: string, type: string, params: Record<string, unknown> = {}): Node<NodeData> {
+    return { id, type: 'shaderNode', position: { x: 0, y: 0 }, data: { type, params } }
+  }
+  function makeEdge(src: string, tgt: string, srcH: string, tgtH: string): Edge<EdgeData> {
+    return { id: `${src}-${srcH}-${tgt}-${tgtH}`, source: src, target: tgt,
+      sourceHandle: srcH, targetHandle: tgtH, type: 'typed',
+      data: { sourcePort: srcH, targetPort: tgtH, sourcePortType: 'float' as PortType } }
+  }
+
+  const results: Array<{ name: string; ok: boolean; passCount: number; errors: string[] }> = []
+
+  // Test every node type that has an ir() function
+  for (const def of nodeRegistry.getAll()) {
+    const typeName = def.type
+    if (!def.ir || typeName === 'fragment_output') continue
+    if (def.outputs.length === 0) continue
+
+    const errors: string[] = []
+    const targetId = nid()
+    const nodes: Node<NodeData>[] = [makeNode(targetId, typeName)]
+    const edges: Edge<EdgeData>[] = []
+
+    // For texture input nodes (warp, pixelate, etc.), wire a noise source
+    const hasTextureInput = def.inputs.some(i => i.textureInput)
+    if (hasTextureInput) {
+      const noiseId = nid()
+      const rampId = nid()
+      nodes.push(makeNode(noiseId, 'noise', { noiseType: 'simplex' }))
+      nodes.push(makeNode(rampId, 'color_ramp'))
+      edges.push(makeEdge(noiseId, rampId, 'value', 'value'))
+      edges.push(makeEdge(rampId, targetId, 'color', 'source'))
+    }
+
+    const result = compileNodePreviewIR(nodes, edges, targetId)
+    if (!result.success) {
+      errors.push(`Compile failed: ${result.errors.map(e => e.message).join('; ')}`)
+    } else if (result.depthExceeded) {
+      errors.push('Depth exceeded')
+    } else {
+      // GPU-validate each pass
+      for (let i = 0; i < result.wgslPasses.length; i++) {
+        const module = device.createShaderModule({ code: result.wgslPasses[i].shaderCode })
+        const info = await module.getCompilationInfo()
+        for (const msg of info.messages) {
+          if (msg.type === 'error') {
+            errors.push(`Pass ${i} line ${msg.lineNum}: ${msg.message}`)
+          }
+        }
+      }
+    }
+
+    results.push({
+      name: `Subgraph(${typeName})${hasTextureInput ? ' [multi-pass]' : ''}`,
+      ok: errors.length === 0,
+      passCount: result.wgslPasses.length,
+      errors,
+    })
+  }
+
+  const total = results.length
+  const passed = results.filter(r => r.ok).length
+  const failed = total - passed
+
+  console.log(`%c[Sombra Subgraph WGSL Validator] ${passed}/${total} passed, ${failed} failed`,
+    failed > 0 ? 'color: red; font-weight: bold' : 'color: green; font-weight: bold')
+  for (const r of results) {
+    if (!r.ok) {
+      console.log(`  ✗ ${r.name}`)
+      for (const e of r.errors) console.log(`    ${e}`)
+    }
+  }
+
+  return { total, passed, failed, results }
+}
+
 /* ------------------------------------------------------------------ */
 /*  Mount on window                                                   */
 /* ------------------------------------------------------------------ */
@@ -790,6 +881,10 @@ export function installDevBridge(): void {
     // WGSL validation (browser-only, uses GPU)
     validateWGSL,
     validateAllWGSL,
+    validateAllSubgraphWGSL,
+
+    // Subgraph compiler (for preview debugging)
+    compileNodePreviewIR,
   }
 
   ;(window as unknown as Record<string, unknown>).__sombra = api

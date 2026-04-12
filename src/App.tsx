@@ -4,7 +4,7 @@ import type { Connection } from '@xyflow/react'
 import type { ShaderRenderer, QualityTier } from './renderer/types'
 import { createShaderRenderer, createPreviewRenderer } from './renderer/create-renderer'
 import type { RenderPlan, RenderPass } from './compiler/glsl-generator'
-import { PreviewScheduler } from './webgl/preview-scheduler'
+import { PreviewScheduler } from './renderer/preview-scheduler'
 import { useLiveCompiler } from './compiler'
 import { useGraphStore } from './stores/graphStore'
 import { useSettingsStore } from './stores/settingsStore'
@@ -218,21 +218,32 @@ function App() {
   }, [])
 
   // Initialize preview scheduler for per-node thumbnails
+  // Waits for the main renderer so we can share its GPUDevice when available.
   const schedulerRef = useRef<PreviewScheduler | null>(null)
   useEffect(() => {
     let disposed = false
     let scheduler: PreviewScheduler | null = null
 
-    createPreviewRenderer().then((previewRenderer) => {
-      if (disposed) { previewRenderer.dispose(); return }
-      scheduler = new PreviewScheduler(previewRenderer)
-      schedulerRef.current = scheduler
-      scheduler.start()
-      // Feed the current graph state so previews render on initial load
-      // (the graph change effect may have already fired while the factory was resolving)
-      const { nodes: currentNodes, edges: currentEdges } = useGraphStore.getState()
-      scheduler.onGraphChange(currentNodes, currentEdges)
-    })
+    // Poll for the main renderer (it initializes asynchronously in a sibling effect).
+    // Once available, create the preview renderer sharing its device.
+    const tryInit = () => {
+      if (disposed) return
+      const mainRenderer = rendererRef.current
+      if (!mainRenderer) {
+        requestAnimationFrame(tryInit)
+        return
+      }
+      createPreviewRenderer(mainRenderer).then((previewRenderer) => {
+        if (disposed) { previewRenderer.dispose(); return }
+        scheduler = new PreviewScheduler(previewRenderer)
+        schedulerRef.current = scheduler
+        scheduler.start()
+        // Feed the current graph state so previews render on initial load
+        const { nodes: currentNodes, edges: currentEdges } = useGraphStore.getState()
+        scheduler.onGraphChange(currentNodes, currentEdges)
+      })
+    }
+    tryInit()
 
     return () => {
       disposed = true

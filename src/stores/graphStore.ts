@@ -8,9 +8,10 @@ import { persist } from 'zustand/middleware'
 import type { Node, Edge, OnNodesChange, OnEdgesChange } from '@xyflow/react'
 import { applyNodeChanges, applyEdgeChanges } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
+import { nodeRegistry } from '../nodes/registry'
 
 /** Schema version — bump when persisted shape changes */
-const GRAPH_SCHEMA_VERSION = 2
+const GRAPH_SCHEMA_VERSION = 3
 
 /** Renamed node types — applied on localStorage load */
 const TYPE_RENAMES: Record<string, string> = {
@@ -274,6 +275,38 @@ export const useGraphStore = create<GraphState>()(
               node.data.type = TYPE_RENAMES[node.data.type]
             }
           }
+        }
+        // Strip edges targeting handles that no longer exist on their target node.
+        // Handles removed param renames/removals (e.g. boxFreq → removed "frequency").
+        if (state.nodes && state.edges) {
+          const nodeMap = new Map(state.nodes.map(n => [n.id, n]))
+          state.edges = state.edges.filter(edge => {
+            const targetNode = nodeMap.get(edge.target)
+            if (!targetNode) return true // orphan edge — let React Flow handle it
+            const def = nodeRegistry.get(targetNode.data.type)
+            if (!def) return true // unknown type — keep edge, node will error separately
+            const validHandles = new Set([
+              ...def.inputs.map(i => i.id),
+              ...def.outputs.map(o => o.id),
+              ...(def.params?.filter(p => p.connectable).map(p => p.id) ?? []),
+              ...(def.dynamicInputs?.(targetNode.data.params || {}).map(i => i.id) ?? []),
+            ])
+            if (edge.targetHandle && !validHandles.has(edge.targetHandle)) return false
+            if (edge.sourceHandle) {
+              const sourceNode = nodeMap.get(edge.source)
+              if (sourceNode) {
+                const sourceDef = nodeRegistry.get(sourceNode.data.type)
+                if (sourceDef) {
+                  const sourceHandles = new Set([
+                    ...sourceDef.outputs.map(o => o.id),
+                    ...sourceDef.inputs.map(i => i.id),
+                  ])
+                  if (!sourceHandles.has(edge.sourceHandle)) return false
+                }
+              }
+            }
+            return true
+          })
         }
         return state
       },

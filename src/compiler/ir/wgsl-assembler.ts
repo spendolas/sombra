@@ -128,6 +128,13 @@ function computeUniformLayout(
     offset += field.size
   }
 
+  // WGSL requires at least one member in a struct.
+  // Nodes with no uniforms (pure math) would produce an empty struct.
+  if (structLines.length === 0) {
+    structLines.push(`  _pad0: f32,`)
+    offset = 4
+  }
+
   // Round total size up to 16-byte boundary (GPU buffer alignment)
   const totalSize = Math.ceil(offset / 16) * 16
 

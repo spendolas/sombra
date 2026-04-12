@@ -11,7 +11,7 @@
  *     Circular / Straight → no sub-select
  */
 
-import type { NodeDefinition, GLSLContext, SpatialConfig } from '../types'
+import type { NodeDefinition, GLSLContext } from '../types'
 import { addFunction, getSpatialParams } from '../types'
 import { registerNoiseType, resolveNoiseFn, getIRNoiseFunctions } from '../noise/noise-functions'
 import type { IRContext, IRFunction, IRNodeOutput, IRStmt } from '../../compiler/ir/types'
@@ -88,11 +88,9 @@ export const reededGlassNode: NodeDefinition = {
   label: 'Reeded Glass',
   category: 'Effect',
   description: 'Cylindrical lens distortion through ribbed glass',
-  spatial: { transforms: ['scale', 'rotate', 'translate'] } satisfies SpatialConfig,
 
   inputs: [
     { id: 'source', label: 'Source', type: 'vec3', textureInput: true, default: [0, 0, 0] },
-    { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },
   ],
 
   outputs: [
@@ -176,12 +174,32 @@ export const reededGlassNode: NodeDefinition = {
   return vec2(q) / float(0xFFFFFFFFu) * 2.0 - 1.0;
 }`)
 
-    // main = axis being sliced, perp = perpendicular axis
     const isVert = direction === 'vertical'
-    const main = isVert ? `${inputs.coords}.x` : `${inputs.coords}.y`
-    const perp = isVert ? `${inputs.coords}.y` : `${inputs.coords}.x`
-
     const lines: string[] = []
+
+    // Generate auto_uv with SRT applied (frozen-ref space)
+    ctx.uniforms.add('u_resolution')
+    ctx.uniforms.add('u_dpr')
+    ctx.uniforms.add('u_ref_size')
+    const coordsVar = `rg_coords_${id}`
+    lines.push(`vec2 ${coordsVar} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * 0.5) / (u_dpr * u_ref_size) + 0.5;`)
+    // SRT: center → scale → rotate (aspect-corrected) → translate → re-center
+    lines.push(`${coordsVar} -= 0.5;`)
+    lines.push(`${coordsVar} /= vec2(${inputs.srt_scale});`)
+    const aspRef = `rg_asp_ref_${id}`
+    const radRef = `rg_rad_ref_${id}`
+    lines.push(`float ${aspRef} = u_resolution.x / u_resolution.y;`)
+    lines.push(`float ${radRef} = ${inputs.srt_rotate} * 0.01745329;`)
+    lines.push(`${coordsVar}.x *= ${aspRef};`)
+    lines.push(`${coordsVar} = vec2(${coordsVar}.x * cos(${radRef}) - ${coordsVar}.y * sin(${radRef}), ${coordsVar}.x * sin(${radRef}) + ${coordsVar}.y * cos(${radRef}));`)
+    lines.push(`${coordsVar}.x /= ${aspRef};`)
+    lines.push(`${coordsVar} -= vec2(${inputs.srt_translateX}, -(${inputs.srt_translateY})) / (u_dpr * u_ref_size);`)
+    lines.push(`${coordsVar} += 0.5;`)
+
+    // main = axis being sliced, perp = perpendicular axis
+    const main = isVert ? `${coordsVar}.x` : `${coordsVar}.y`
+    const perp = isVert ? `${coordsVar}.y` : `${coordsVar}.x`
+
     const warpedMain = `rg_wm_${id}`
 
     // Convert amplitude and wavelength from pixels to frozen-ref UV
@@ -212,7 +230,7 @@ export const reededGlassNode: NodeDefinition = {
             lines.push(`float ${waveVal} = (pow(abs(fract(${perp} / ${wlRef}) * 2.0 - 1.0), 2.0) * 2.0 - 1.0) * ${ampRef};`); break
         }
       } else if (ribType === 'circular') {
-        lines.push(`float ${waveVal} = sin(length(${inputs.coords} - 0.5) / ${wlRef} * 6.28318) * ${ampRef};`)
+        lines.push(`float ${waveVal} = sin(length(${coordsVar} - 0.5) / ${wlRef} * 6.28318) * ${ampRef};`)
       } else if (ribType === 'noise') {
         const noiseType = (params.noiseType as string) || 'simplex'
         registerNoiseType(ctx, noiseType)
@@ -241,9 +259,9 @@ export const reededGlassNode: NodeDefinition = {
     // Reconstruct distorted vec2 (frozen-ref coords output)
     const distorted = `rg_distorted_${id}`
     if (isVert) {
-      lines.push(`vec2 ${distorted} = vec2(${lensedRef}, ${inputs.coords}.y);`)
+      lines.push(`vec2 ${distorted} = vec2(${lensedRef}, ${coordsVar}.y);`)
     } else {
-      lines.push(`vec2 ${distorted} = vec2(${inputs.coords}.x, ${lensedRef});`)
+      lines.push(`vec2 ${distorted} = vec2(${coordsVar}.x, ${lensedRef});`)
     }
 
     // Coords output — always populated
@@ -346,9 +364,6 @@ export const reededGlassNode: NodeDefinition = {
   },
 
   ir: (ctx: IRContext): IRNodeOutput => {
-    // NOTE: Texture sampling path (ctx.textureSamplers?.source) is Phase 1c.
-    // This IR covers: coordinate distortion via cylindrical lens + rib patterns.
-    // Color output falls back to source input passthrough (non-texture path).
 
     const direction = (ctx.params.direction as string) || 'vertical'
     const ribType = (ctx.params.ribType as string) || 'straight'
@@ -408,11 +423,46 @@ export const reededGlassNode: NodeDefinition = {
     functions.push(hashFn)
 
     // --- Main computation ---
-    const mainAxis = isVert ? `${ctx.inputs.coords}.x` : `${ctx.inputs.coords}.y`
-    const perpAxis = isVert ? `${ctx.inputs.coords}.y` : `${ctx.inputs.coords}.x`
+    const stmts: IRStmt[] = []
+
+    // Generate auto_uv with SRT applied (frozen-ref space)
+    // WGSL: in.position.y is already top-to-bottom — NO y-flip needed
+    const coordsVar = `rg_coords_${id}`
+    // WGSL needs `var` (mutable) since SRT modifies it in-place
+    stmts.push(raw(
+      // GLSL
+      `vec2 ${coordsVar} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * 0.5) / (u_dpr * u_ref_size) + 0.5;`,
+      // WGSL
+      `var ${coordsVar}: vec2f = (in.position.xy - uniforms.u_resolution * 0.5) / (uniforms.u_dpr * uniforms.u_ref_size) + 0.5;`,
+    ))
+    // SRT: center → scale → rotate (aspect-corrected) → translate → re-center
+    stmts.push(raw(
+      // GLSL
+      `${coordsVar} -= 0.5;\n` +
+      `  ${coordsVar} /= vec2(${ctx.inputs.srt_scale});\n` +
+      `  float rg_asp_ref_${id} = u_resolution.x / u_resolution.y;\n` +
+      `  float rg_rad_ref_${id} = ${ctx.inputs.srt_rotate} * 0.01745329;\n` +
+      `  ${coordsVar}.x *= rg_asp_ref_${id};\n` +
+      `  ${coordsVar} = vec2(${coordsVar}.x * cos(rg_rad_ref_${id}) - ${coordsVar}.y * sin(rg_rad_ref_${id}), ${coordsVar}.x * sin(rg_rad_ref_${id}) + ${coordsVar}.y * cos(rg_rad_ref_${id}));\n` +
+      `  ${coordsVar}.x /= rg_asp_ref_${id};\n` +
+      `  ${coordsVar} -= vec2(${ctx.inputs.srt_translateX}, -(${ctx.inputs.srt_translateY})) / (u_dpr * u_ref_size);\n` +
+      `  ${coordsVar} += 0.5;`,
+      // WGSL
+      `${coordsVar} -= vec2f(0.5);\n` +
+      `  ${coordsVar} /= vec2f(${ctx.inputs.srt_scale});\n` +
+      `  var rg_asp_ref_${id}: f32 = uniforms.u_resolution.x / uniforms.u_resolution.y;\n` +
+      `  var rg_rad_ref_${id}: f32 = ${ctx.inputs.srt_rotate} * 0.01745329;\n` +
+      `  ${coordsVar}.x *= rg_asp_ref_${id};\n` +
+      `  ${coordsVar} = vec2f(${coordsVar}.x * cos(rg_rad_ref_${id}) - ${coordsVar}.y * sin(rg_rad_ref_${id}), ${coordsVar}.x * sin(rg_rad_ref_${id}) + ${coordsVar}.y * cos(rg_rad_ref_${id}));\n` +
+      `  ${coordsVar}.x /= rg_asp_ref_${id};\n` +
+      `  ${coordsVar} -= vec2f(${ctx.inputs.srt_translateX}, -(${ctx.inputs.srt_translateY})) / (uniforms.u_dpr * uniforms.u_ref_size);\n` +
+      `  ${coordsVar} += vec2f(0.5);`,
+    ))
+
+    const mainAxis = isVert ? `${coordsVar}.x` : `${coordsVar}.y`
+    const perpAxis = isVert ? `${coordsVar}.y` : `${coordsVar}.x`
 
     const warpedMain = `rg_wm_${id}`
-    const stmts = []
 
     // Convert amplitude and wavelength from pixels to frozen-ref UV
     const ampRef = `rg_amp_ref_${id}`
@@ -442,7 +492,7 @@ export const reededGlassNode: NodeDefinition = {
             stmts.push(raw(`float ${waveVal} = (pow(abs(fract(${perpAxis} / ${wlRef}) * 2.0 - 1.0), 2.0) * 2.0 - 1.0) * ${ampRef};`)); break
         }
       } else if (ribType === 'circular') {
-        stmts.push(raw(`float ${waveVal} = sin(length(${ctx.inputs.coords} - 0.5) / ${wlRef} * 6.28318) * ${ampRef};`))
+        stmts.push(raw(`float ${waveVal} = sin(length(${coordsVar} - 0.5) / ${wlRef} * 6.28318) * ${ampRef};`))
       } else if (ribType === 'noise') {
         const noiseType = (ctx.params.noiseType as string) || 'simplex'
         const noiseFn = resolveNoiseFn(noiseType)
@@ -496,13 +546,13 @@ export const reededGlassNode: NodeDefinition = {
     if (isVert) {
       stmts.push(
         declare(distorted, 'vec2',
-          construct('vec2', [variable(lensedRef), variable(`${ctx.inputs.coords}.y`)]),
+          construct('vec2', [variable(lensedRef), variable(`${coordsVar}.y`)]),
         ),
       )
     } else {
       stmts.push(
         declare(distorted, 'vec2',
-          construct('vec2', [variable(`${ctx.inputs.coords}.x`), variable(lensedRef)]),
+          construct('vec2', [variable(`${coordsVar}.x`), variable(lensedRef)]),
         ),
       )
     }

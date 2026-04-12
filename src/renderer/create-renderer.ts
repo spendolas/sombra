@@ -34,12 +34,29 @@ export async function createShaderRenderer(
 
 /**
  * Create and initialize an offscreen preview renderer for node thumbnails.
- * Returns a PreviewRenderer backed by WebGL2 (future: WebGPU when available).
+ * When the main renderer is WebGPU, shares its GPUDevice for preview rendering.
+ * Falls back to WebGL2 otherwise.
  */
-export async function createPreviewRenderer(): Promise<PreviewRenderer> {
-  // Preview renderer uses WebGL2 (async GPU readback for WebGPU previews is a future task)
+export async function createPreviewRenderer(
+  mainRenderer?: ShaderRenderer,
+): Promise<PreviewRenderer> {
+  if (mainRenderer?.backend === 'webgpu') {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const device = (mainRenderer as any).getDevice() as GPUDevice
+      const { WebGPUPreviewRenderer } = await import('../webgpu/preview-renderer')
+      const renderer = new WebGPUPreviewRenderer(device)
+      await renderer.init()
+      console.log('[Sombra] Preview renderer backend: webgpu (shared device)')
+      return renderer
+    } catch (e) {
+      console.warn('[Sombra] WebGPU preview init failed, falling back to WebGL2:', e)
+    }
+  }
+
   const { WebGL2PreviewRenderer } = await import('../webgl/preview-renderer')
   const renderer = new WebGL2PreviewRenderer()
   await renderer.init()
+  console.log('[Sombra] Preview renderer backend: webgl2')
   return renderer
 }

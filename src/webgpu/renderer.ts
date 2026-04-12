@@ -57,6 +57,9 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
   private context!: GPUCanvasContext
   private canvasFormat!: GPUTextureFormat
 
+  /** Expose the GPUDevice for sharing with the preview renderer. */
+  getDevice(): GPUDevice { return this.device }
+
   // Fullscreen quad
   private quadBuffer!: GPUBuffer
 

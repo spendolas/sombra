@@ -7,6 +7,8 @@ import { compileGraph } from './glsl-generator'
 import type { RenderPlan } from './glsl-generator'
 import { compileGraphIR } from './ir-compiler'
 import { compileNodePreview } from './subgraph-compiler'
+import { compileNodePreviewIR } from './ir-subgraph-compiler'
+import type { IRPreviewCompilationResult } from './ir-subgraph-compiler'
 import { initializeNodeLibrary } from '../nodes'
 import type { Node, Edge } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
@@ -46,8 +48,88 @@ export interface PreviewResponse {
   error?: string
 }
 
-self.onmessage = (event: MessageEvent<CompileRequest | PreviewRequest>) => {
+export interface PreviewIRRequest {
+  type: 'preview-ir'
+  id: string
+  targetNodeId: string
+  nodes: Node<NodeData>[]
+  edges: Edge<EdgeData>[]
+}
+
+/**
+ * Serialized version of IRPreviewCompilationResult for postMessage.
+ * UniformBufferLayout.offsets is Map<string, number> which doesn't survive
+ * structured cloning — converted to Record<string, number>.
+ */
+export interface SerializedIRPreviewResult {
+  success: boolean
+  errors: Array<{ message: string; nodeId?: string }>
+  isTimeLive: boolean
+  outputType: string
+  depthExceeded: boolean
+  wgslPasses: Array<{
+    shaderCode: string
+    uniformLayout: {
+      totalSize: number
+      offsets: Record<string, number>
+      struct: string
+    }
+    textureBindings: Array<{
+      samplerName: string
+      textureBinding: number
+      samplerBinding: number
+      group: number
+    }>
+    inputTextures: Array<{ passIndex: number; samplerName: string }>
+    isTimeLive: boolean
+    textureFilter?: 'linear' | 'nearest'
+  }>
+  userUniforms: Array<{
+    name: string
+    glslType: string
+    value: number | number[]
+    nodeId: string
+    paramId: string
+  }>
+}
+
+export interface PreviewIRResponse {
+  type: 'preview-ir'
+  id: string
+  targetNodeId: string
+  result?: SerializedIRPreviewResult
+  error?: string
+}
+
+/** Convert Map<string, number> offsets to Record for postMessage. */
+function serializeIRResult(result: IRPreviewCompilationResult): SerializedIRPreviewResult {
+  return {
+    ...result,
+    wgslPasses: result.wgslPasses.map(pass => ({
+      ...pass,
+      uniformLayout: {
+        totalSize: pass.uniformLayout.totalSize,
+        offsets: Object.fromEntries(pass.uniformLayout.offsets),
+        struct: pass.uniformLayout.struct,
+      },
+    })),
+  }
+}
+
+self.onmessage = (event: MessageEvent<CompileRequest | PreviewRequest | PreviewIRRequest>) => {
   const data = event.data
+
+  if (data.type === 'preview-ir') {
+    const { id, targetNodeId, nodes, edges } = data
+    try {
+      const result = compileNodePreviewIR(nodes, edges, targetNodeId)
+      const serialized = serializeIRResult(result)
+      self.postMessage({ type: 'preview-ir', id, targetNodeId, result: serialized } satisfies PreviewIRResponse)
+    } catch (err) {
+      self.postMessage({ type: 'preview-ir', id, targetNodeId, error: String(err) } satisfies PreviewIRResponse)
+    }
+    return
+  }
 
   if (data.type === 'preview') {
     const { id, targetNodeId, nodes, edges } = data
