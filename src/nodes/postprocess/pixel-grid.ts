@@ -135,8 +135,9 @@ export const ditherNode: NodeDefinition = {
     const mask = `pg_m_${id}`
 
     const lines: string[] = []
-    // Screen-space pixel coordinates (pixelSize is in buffer pixels)
-    lines.push(`vec2 ${px} = gl_FragCoord.xy;`)
+    ctx.uniforms.add('u_resolution')
+    // Screen-space pixel coordinates centered on canvas center (stable on resize)
+    lines.push(`vec2 ${px} = gl_FragCoord.xy - u_resolution * 0.5;`)
     // Cell index (which big pixel)
     lines.push(`vec2 ${cell} = floor(${px} / ${inputs.pixelSize});`)
     // Bayer threshold at cell index
@@ -248,8 +249,10 @@ export const ditherNode: NodeDefinition = {
     const mask = `pg_m_${id}`
 
     const stmts = [
-      // Screen-space pixel coordinates
-      declare(px, 'vec2', variable('gl_FragCoord.xy')),
+      // Screen-space pixel coordinates centered on canvas center (stable on resize)
+      declare(px, 'vec2',
+        binary('-', variable('gl_FragCoord.xy'), binary('*', variable('u_resolution'), literal('float', 0.5), 'vec2'), 'vec2'),
+      ),
       // Cell index (which big pixel)
       declare(cell, 'vec2',
         call('floor', [
@@ -326,7 +329,7 @@ export const ditherNode: NodeDefinition = {
     return {
       statements: stmts,
       uniforms: [],
-      standardUniforms: new Set(),
+      standardUniforms: new Set(['u_resolution']),
       functions,
     }
   },
