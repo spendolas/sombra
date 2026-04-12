@@ -505,7 +505,7 @@ export function lowerSpatialTransformToWGSL(srt: IRSpatialTransform): string[] {
   const lines: string[] = []
   const v = srt.outputVar
 
-  lines.push(`var ${v}: vec2f = ${srt.coordsVar} - vec2f(0.5);`)
+  lines.push(`var ${v}: vec2f = ${srt.coordsVar} - uniforms.u_anchor;`)
 
   // Scale
   if (srt.scaleUniform) {
@@ -533,7 +533,7 @@ export function lowerSpatialTransformToWGSL(srt: IRSpatialTransform): string[] {
     lines.push(`${v} -= vec2f(${srt.translateXUniform}, -(${srt.translateYUniform})) / (u_dpr * u_ref_size);`)
   }
 
-  lines.push(`${v} += vec2f(0.5);`)
+  lines.push(`${v} += uniforms.u_anchor;`)
   return lines
 }
 

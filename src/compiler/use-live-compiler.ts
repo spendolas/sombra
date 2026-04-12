@@ -36,7 +36,7 @@ export function useLiveCompiler(
   onUniformUpdate?: (
     uniforms: Array<{ name: string; value: number | number[] }>
   ) => void,
-  onRendererUpdate?: (update: { qualityTier: string }) => void,
+  onRendererUpdate?: (update: { qualityTier: string; anchor: string }) => void,
   /** When true, the worker also produces WGSL output via the IR path. */
   useIR?: boolean,
 ) {
@@ -224,7 +224,8 @@ export function useLiveCompiler(
       lastRendererKeyRef.current = rendererKey
       const outputNode = nodesRef.current.find((n) => n.data.type === 'fragment_output')
       const qualityTier = (outputNode?.data.params?.quality as string) ?? 'adaptive'
-      onRendererUpdateRef.current?.({ qualityTier })
+      const anchor = (outputNode?.data.params?.anchor as string) ?? 'center'
+      onRendererUpdateRef.current?.({ qualityTier, anchor })
       return
     }
 

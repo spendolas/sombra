@@ -43,18 +43,19 @@ export const pixelateNode: NodeDefinition = {
     uniforms.add('u_resolution')
     uniforms.add('u_dpr')
     uniforms.add('u_ref_size')
+    uniforms.add('u_anchor')
     const id = ctx.nodeId.replace(/-/g, '_')
 
     const lines: string[] = []
 
     // Grid in pixel space, centered on canvas center
-    lines.push(`vec2 pxl_centered_${id} = gl_FragCoord.xy - u_resolution * 0.5;`)
+    lines.push(`vec2 pxl_centered_${id} = gl_FragCoord.xy - u_resolution * u_anchor;`)
     lines.push(`vec2 pxl_cell_${id} = floor(pxl_centered_${id} / vec2(${inputs.pixelSize}));`)
-    lines.push(`vec2 pxl_px_${id} = (pxl_cell_${id} + 0.5) * vec2(${inputs.pixelSize}) + u_resolution * 0.5;`)
+    lines.push(`vec2 pxl_px_${id} = (pxl_cell_${id} + 0.5) * vec2(${inputs.pixelSize}) + u_resolution * u_anchor;`)
     // Screen UV for FBO sampling
     lines.push(`vec2 pxl_screenUV_${id} = pxl_px_${id} / u_viewport;`)
     // Frozen-ref UV for downstream nodes
-    lines.push(`vec2 ${outputs.uv} = (pxl_px_${id} - u_resolution * 0.5) / (u_dpr * u_ref_size) + 0.5;`)
+    lines.push(`vec2 ${outputs.uv} = (pxl_px_${id} - u_resolution * u_anchor) / (u_dpr * u_ref_size) + u_anchor;`)
 
     // Color output
     const samplerName = ctx.textureSamplers?.source
@@ -77,7 +78,7 @@ export const pixelateNode: NodeDefinition = {
     const stmts: IRStmt[] = [
       // Grid in pixel space, centered on canvas center
       declare(`pxl_centered_${id}`, 'vec2',
-        binary('-', variable('gl_FragCoord.xy'), binary('*', variable('u_resolution'), literal('float', 0.5), 'vec2'), 'vec2'),
+        binary('-', variable('gl_FragCoord.xy'), binary('*', variable('u_resolution'), variable('u_anchor'), 'vec2'), 'vec2'),
       ),
       declare(`pxl_cell_${id}`, 'vec2',
         call('floor', [
@@ -92,7 +93,7 @@ export const pixelateNode: NodeDefinition = {
             construct('vec2', [variable(ctx.inputs.pixelSize)]),
             'vec2',
           ),
-          binary('*', variable('u_resolution'), literal('float', 0.5), 'vec2'),
+          binary('*', variable('u_resolution'), variable('u_anchor'), 'vec2'),
           'vec2',
         ),
       ),
@@ -108,7 +109,7 @@ export const pixelateNode: NodeDefinition = {
             binary('*', variable('u_dpr'), variable('u_ref_size'), 'float'),
             'vec2',
           ),
-          literal('vec2', [0.5, 0.5]),
+          variable('u_anchor'),
           'vec2',
         ),
       ),
@@ -117,6 +118,7 @@ export const pixelateNode: NodeDefinition = {
     standardUniforms.add('u_resolution')
     standardUniforms.add('u_dpr')
     standardUniforms.add('u_ref_size')
+    standardUniforms.add('u_anchor')
 
     if (samplerName) {
       // Texture mode: sample from FBO at quantized screen UV (not frozen-ref UV)

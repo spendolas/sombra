@@ -59,6 +59,9 @@ export interface ShaderRenderer {
   /** Set the quality/performance tier. */
   setQualityTier(tier: QualityTier): void
 
+  /** Set the 9-point anchor for coordinate origin. */
+  setAnchor(anchor: [number, number]): void
+
   /** Notify of a change (triggers snap-to-static DPR for quality snapshot). */
   notifyChange(): void
 

@@ -300,8 +300,9 @@ function resolveInputDefault(
 ): boolean {
   if (inputPort.default === 'auto_uv' && inputPort.type === 'vec2') {
     const autoUvVar = `node_${sanitizedNodeId}_auto_uv`
-    preambleLines.push(`vec2 ${autoUvVar} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * 0.5) / (u_dpr * u_ref_size) + 0.5;`)
+    preambleLines.push(`vec2 ${autoUvVar} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * u_anchor) / (u_dpr * u_ref_size) + u_anchor;`)
     uniforms.add('u_resolution')
+    uniforms.add('u_anchor')
     uniforms.add('u_dpr')
     uniforms.add('u_ref_size')
     inputs[inputPort.id] = autoUvVar
@@ -313,7 +314,9 @@ function resolveInputDefault(
   }
   if (inputPort.default === 'auto_fragcoord' && inputPort.type === 'vec2') {
     const autoFcVar = `node_${sanitizedNodeId}_auto_fc`
-    preambleLines.push(`vec2 ${autoFcVar} = gl_FragCoord.xy;`)
+    preambleLines.push(`vec2 ${autoFcVar} = gl_FragCoord.xy - u_resolution * u_anchor;`)
+    uniforms.add('u_resolution')
+    uniforms.add('u_anchor')
     inputs[inputPort.id] = autoFcVar
     return true
   }
@@ -437,11 +440,15 @@ export function generateNodeGlsl(
         resolveInputDefault(inputPort, sanitizedNodeId, preambleLines, inputs, uniforms)
       }
     } else {
-      // In texture mode, use v_uv (screen space 0-1) instead of auto_uv
+      // In texture mode, use gl_FragCoord.xy/viewport (screen space 0-1) instead of auto_uv
       // so texture sampling stays within FBO bounds — no wrapping, no seam.
-      // Nodes that need aspect-correct noise compute auto_uv internally.
+      // Uses FragCoord not v_uv because on WGSL in.position.y=0 at top matches
+      // WebGPU texture convention, while v_uv.y=0 at bottom does not.
       if (isTextureMode && inputPort.default === 'auto_uv' && inputPort.type === 'vec2') {
-        inputs[inputPort.id] = 'v_uv'
+        const screenUvVar = `node_${sanitizedNodeId}_screen_uv`
+        uniforms.add('u_viewport')
+        preambleLines.push(`vec2 ${screenUvVar} = gl_FragCoord.xy / u_viewport;`)
+        inputs[inputPort.id] = screenUvVar
       } else if (!resolveInputDefault(inputPort, sanitizedNodeId, preambleLines, inputs, uniforms)) {
         errors.push({
           message: `Input "${inputPort.label}" on ${definition.label} has no connection and no default`,
@@ -514,7 +521,8 @@ export function generateNodeGlsl(
     const hasRotate = spatial.transforms.includes('rotate')
     const hasTranslate = spatial.transforms.includes('translate')
 
-    preambleLines.push(`vec2 ${srtVar} = ${inputs.coords} - 0.5;`)
+    uniforms.add('u_anchor')
+    preambleLines.push(`vec2 ${srtVar} = ${inputs.coords} - u_anchor;`)
 
     // Scale (new convention: coords /= scale → scale=2 means twice as large)
     if (hasScale) {
@@ -545,7 +553,7 @@ export function generateNodeGlsl(
       preambleLines.push(`${srtVar} -= vec2(${inputs.srt_translateX}, -(${inputs.srt_translateY})) / (u_dpr * u_ref_size);`)
     }
 
-    preambleLines.push(`${srtVar} += 0.5;`)
+    preambleLines.push(`${srtVar} += u_anchor;`)
 
     // Replace coords input with transformed variable
     inputs.coords = srtVar
