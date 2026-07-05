@@ -1,520 +1,177 @@
-# Sombra - Project Guide for Claude Code
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
-**Sombra** is a browser-based, node-based WebGL shader builder. Users wire visual nodes together on a canvas to create fragment shaders, with a live fullscreen preview updating in real time. Think Shadertoy meets Blender's shader nodes, in the browser.
+**Sombra** is a browser-based, node-based shader builder. Users wire visual nodes together on a React Flow canvas to create fragment shaders, with a live fullscreen preview updating in real time. Think Shadertoy meets Blender's shader nodes, in the browser.
 
-**Repository:** `spendolas/sombra`
-**Deploy target:** `spendolas.github.io/sombra` via GitHub Pages
-**Tech:** Vite, React 19 + TypeScript (strict mode), React Flow, Zustand, Tailwind CSS v4, Raw WebGL2
+**Repository:** `spendolas/sombra` · **Deploy:** GitHub Pages at `spendolas.github.io/sombra` (Vite `base: '/sombra/'`)
+**Tech:** Vite, React 19 + TypeScript (strict), @xyflow/react (React Flow v12), Zustand, Tailwind CSS v4, **WebGPU-first rendering with WebGL2 fallback**, GLSL ES 3.0 + WGSL, @dagrejs/dagre for auto-layout, no backend (localStorage + `.sombra` files + shareable URLs).
 
-## Tech Stack
-
-| Layer | Choice | Notes |
-|---|---|---|
-| Build | Vite | Fast dev server, ESM-native |
-| UI Framework | React 19 + TypeScript | Strict mode enabled |
-| Node Canvas | @xyflow/react (React Flow v12) | Purpose-built node editor |
-| State | Zustand | Lightweight, integrates well with React Flow |
-| UI Components | shadcn/ui + react-resizable-panels | Headless components, resizable layout |
-| Styling | Tailwind CSS v4 | Utility-first, Vite plugin integration |
-| WebGL | Raw WebGL2 | No Three.js - output is fragment shaders only |
-| Layout | @dagrejs/dagre | DAG auto-layout for node positioning |
-| GLSL | GLSL ES 3.0 | Modern syntax, 97%+ browser support |
-| Backend | None (Phase 0-4) | localStorage + JSON export, static site |
-| Deploy | GitHub Pages | Free hosting at `/sombra/` base path |
-
-## Project Structure
-
-```
-sombra/
-├── tokens/
-│   └── sombra.ds.json          # THE design system database (tokens + components)
-├── scripts/
-│   ├── generate-tokens.ts      # DB → index.css + ds.ts + port-colors.ts generator
-│   ├── figma-pull.ts           # Figma REST API → DB sync
-│   └── figma-audit.ts          # Figma↔DB parity comparison (tokens:audit)
-├── src/
-│   ├── components/      # React components (panels, toolbar, UI widgets)
-│   │   ├── ui/          # shadcn/ui primitives (button, slider, input, etc.)
-│   │   ├── base-node.tsx       # React Flow BaseNode wrapper
-│   │   ├── labeled-handle.tsx  # React Flow typed handle with label
-│   │   ├── zoom-slider.tsx     # React Flow zoom control
-│   │   ├── PreviewToolbar.tsx  # Preview mode switcher (4 view modes)
-│   │   ├── PreviewPanel.tsx    # Docked preview container
-│   │   ├── FloatingPreview.tsx # Draggable/resizable floating preview window
-│   │   ├── FullWindowOverlay.tsx # Fullscreen preview overlay
-│   │   └── GraphToolbar.tsx    # Save/Open .sombra file toolbar (top-left canvas pill)
-│   ├── generated/
-│   │   └── ds.ts               # Generated component Tailwind class strings
-│   ├── lib/             # Utility functions (cn helper, etc.)
-│   ├── nodes/           # Node type definitions (one file per category or node)
-│   ├── compiler/        # Graph-to-GLSL compiler logic
-│   ├── stores/          # Zustand stores for app state
-│   ├── utils/           # Graph layout, test presets, port-colors.ts (generated), sombra-file.ts
-│   ├── webgl/           # WebGL renderer (fullscreen quad, offscreen preview)
-│   ├── App.tsx          # Root layout component
-│   ├── main.tsx         # Entry point (inits node library + dev bridge)
-│   ├── dev-bridge.ts    # Exposes window.__sombra for browser automation
-│   └── index.css        # Tailwind imports + dark theme (marker regions generated from DB)
-├── .env                 # FIGMA_TOKEN for Figma REST API (gitignored)
-├── components.json      # shadcn/ui configuration
-├── public/              # Static assets
-├── ROADMAP.md           # Detailed roadmap (Phases 0-5)
-├── BROWSER-AUTOMATION.md # Full API reference for window.__sombra
-├── CLAUDE.md            # This file
-└── package.json
-```
-
-## Key Conventions
-
-- **TypeScript strict mode** everywhere - no implicit any, strict null checks
-- **Tailwind utility classes only** - no per-component CSS files, no inline `style={{}}` for colors
-- **Dark theme** - base background `#0f0f1a`, Sombra tokens registered in Tailwind `@theme inline`
-- **Imperative WebGL** - direct WebGL2 API, no abstraction libraries
-- **Single offscreen context** - for node previews, avoids context limit (8-16)
-- **Component naming** - PascalCase for React components, camelCase for utilities
-- **File organization** - one node type per file in `src/nodes/`, grouped by category
+`AGENTS.md` is the Codex copy of this guide — keep the two in sync when updating project-level guidance.
 
 ## Commands
 
 ```bash
-npm run dev          # Start dev server (auto-generates tokens first)
-npm run build        # Production build (auto-generates tokens first)
-npm run lint         # Run ESLint
-npm run preview      # Preview production build locally
-npm run tokens       # Generate CSS + ds.ts + port-colors from sombra.ds.json
-npm run tokens:pull  # Fetch latest values from Figma REST API → update DB
-npm run tokens:sync  # Pull from Figma + regenerate code (the main workflow)
-npm run tokens:check # CI guard: fail if generated files diverge from DB
-npm run tokens:audit # Compare DB component parts against Figma REST API (requires FIGMA_TOKEN)
-npm run tokens:audit -- --fix-dry-run  # Preview --fix patches without writing to disk
-npm run tokens:audit -- --strict       # Exit code 1 on unresolved vars, missing textStyles, unexpected node types
+npm run dev            # Dev server (predev runs check-deps + token generation)
+npm run build          # tsc -b && vite build (prebuild same as predev)
+npm run lint           # ESLint
+npm run preview        # Preview production build
+
+# Design system (Figma → tokens/sombra.ds.json → generated code)
+npm run tokens         # Generate index.css marker regions + src/generated/ds.ts + port-colors.ts from DB
+npm run tokens:sync    # Pull from Figma REST API + regenerate (main workflow; needs FIGMA_TOKEN in .env)
+npm run tokens:check   # CI guard: fail if generated files diverge from DB
+npm run tokens:audit   # Figma↔DB parity audit (-- --fix-dry-run to preview patches, -- --strict for CI)
+npm run audit:full     # audit:collect + tokens:audit + audit:visual
+npm run drift:collect  # / drift:check — token drift detection
+
+# Verification scripts (no test framework — these are the test suite)
+npx tsx scripts/verify-ir-poc.ts              # GLSL vs IR-generated output parity (--verbose for full output)
+npx tsx scripts/validate-wgsl-multipass.ts    # WGSL GPU compilation tests for all nodes/passes
+npx tsx scripts/schema.ts                     # Zod validation of tokens/sombra.ds.json
 ```
+
+There are no unit tests. Verification = the scripts above + manual testing via dev server + browser automation through `window.__sombra` (see `BROWSER-AUTOMATION.md`).
+
+### Machine setup (Dropbox + multi-arch)
+
+This repo lives in Dropbox and is used from both an Intel Mac Pro (x64) and an Apple Silicon Mac (arm64). `node_modules` must NOT sync between them — native binaries (esbuild, @swc/core, rollup, @tailwindcss/oxide) are arch-specific and break the other machine. On any machine where `node_modules` is missing, was synced from the other arch (symptom: `bad CPU type in executable` / `Cannot find module @rollup/rollup-darwin-*`), or lacks the Dropbox-ignore flag (`xattr -l node_modules` shows nothing):
+
+```bash
+rm -rf node_modules && mkdir node_modules
+xattr -w com.dropbox.ignored 1 node_modules   # official Dropbox ignore; local-only, set per machine
+npm install
+```
+
+Note: `npm run check-deps` only hashes package-lock.json — it does not catch wrong-arch node_modules.
+
+## Documentation Map
+
+| File | What it covers |
+|---|---|
+| `NODE_AUTHORING_GUIDE.md` | **Read before adding/editing nodes.** NodeDefinition reference, GLSL + IR authoring, copy-paste skeleton, pitfalls |
+| `BROWSER-AUTOMATION.md` | Full `window.__sombra` dev-bridge API (createNode, connect, compile, describeGraph…) |
+| `PHASE6-MULTIPASS.md` | Multi-pass RenderPlan architecture spec (texture boundaries, spatial transforms) |
+| `docs/migration/` | WebGPU migration history: `architecture-snapshot.md` (deep module map + data flows), phase reports, agent handoffs |
+| `ROADMAP.md` | Phase history and future phases |
+| `.figma/IMPLEMENTATION_GUIDE.md`, `.figma/wiki/` | Figma design system structure and component wiki |
 
 ## Architecture
 
-### WebGL Rendering
+### Compile pipeline (runs in a Web Worker)
 
-- **Fullscreen quad**: 2 triangles covering clip space (-1 to 1), vertex shader passes through, fragment shader does all the work
-- **Shader compilation**: Graph nodes → topological sort → GLSL code generation → WebGL program compilation
-- **Uniforms**: Built-in `u_time`, `u_resolution`, `u_mouse`, `u_ref_size`; user-defined uniforms from node parameters
-- **Frozen reference sizing**: `u_ref_size` captures `min(width, height)` on first render and never changes. The UV node uses `(v_uv - 0.5) * u_resolution / u_ref_size + 0.5` so each axis scales independently — resizing reveals/hides edges without zoom or distortion
-- **Preview rendering**: Single offscreen WebGL context captures frames to `<img>` for per-node previews
+```
+graph (nodes+edges) → topological sort → codegen → RenderPlan → renderer
+```
 
-### Node System
+- `src/compiler/compiler.worker.ts` — all codegen runs off-thread; the worker calls `initializeNodeLibrary()` itself. Maps don't survive `postMessage` — serialize to plain objects.
+- **Two codegen paths, kept in parity:**
+  - `glsl-generator.ts` — legacy string-based GLSL codegen (each node's `glsl(ctx)`)
+  - `ir-compiler.ts` + `src/compiler/ir/` — IR-based path (each node's `ir(ctx)`) with `wgsl-backend.ts`/`glsl-backend.ts` and `wgsl-assembler.ts`. This feeds the WebGPU renderer. Worker takes a `useIR` flag and returns both.
+- **Multi-pass:** the compiler outputs a `RenderPlan` (ordered `RenderPass[]`), not a single shader. Ports marked `textureInput: true` trigger pass boundaries — upstream renders to a texture, the effect node samples it. Spatial nodes declare `spatial: SpatialConfig` for framework-managed SRT transforms. Single-pass graphs are just a one-pass plan.
+- `subgraph-compiler.ts` / `ir-subgraph-compiler.ts` — compile the subgraph up to a target node for per-node preview thumbnails.
 
-Nodes have:
-- **Type** (e.g., `noise`, `mix`, `uv_coords`)
-- **Inputs/Outputs** with typed ports (float, vec2, vec3, vec4, color, sampler2D)
-- **Parameters** with default values
-- **GLSL generator function** - emits GLSL code snippet given inputs/outputs/params
-- **Optional custom UI** - React component for node body (e.g., color picker, sliders)
+### Live update tiers (`use-live-compiler.ts`)
 
-### Preview Mode System
+Three change classes, keyed separately, to avoid needless recompiles:
+1. **Semantic key** (structure, `updateMode: 'recompile'` params like enums) → debounced worker recompile
+2. **Uniform key** (`updateMode: 'uniform'` params — slider drags) → fast path: no recompile, uniform values pushed straight to renderer (WebGL `gl.uniform1f` / WebGPU `queue.writeBuffer`)
+3. **Renderer settings** → no recompile, no uniform upload
 
-The shader preview supports three modes, switchable via a 4-icon toolbar pill:
-- **Docked (vertical/horizontal split)**: Preview panel alongside the node canvas in a resizable split. Split sizes are persisted per direction in the settings store.
-- **Floating**: Draggable, resizable window overlaid on the canvas. Resize from all 4 corners and edges with viewport clamping. Position and size persisted.
-- **Fullwindow**: Full-screen overlay. Esc returns to the previous mode (not always docked).
+### Renderer abstraction (`src/renderer/`)
 
-Canvas reparenting: A single `<canvas>` element is moved between target refs (`dockTargetRef`, `floatTargetRef`, `fullTargetRef`) via `useEffect` depending on `previewMode` and `splitDirection`.
+- `types.ts` — `ShaderRenderer` / `PreviewRenderer` interfaces; `CompiledPreview` is an opaque backend-specific union.
+- `create-renderer.ts` — factory: tries WebGPU (`src/webgpu/renderer.ts`), falls back to WebGL2 (`src/webgl/renderer.ts`). Preview renderer shares the main renderer's `GPUDevice` when on WebGPU.
+- `preview-scheduler.ts` — batches/schedules per-node thumbnail renders (staleness, time-live re-render). Previews use one offscreen context to avoid the browser's WebGL context limit.
+- `src/viewer.ts` — standalone no-React viewer: decode URL hash → compile → render (used by `viewer.html` / embed URLs).
 
-### State Management
+**Status:** WebGPU migration complete for both main renderer (167/167 WGSL GPU compilation tests) and preview thumbnails (shared `GPUDevice`, 80×80 render texture, async readback with 512 `bytesPerRow` alignment, LRU pipeline cache). WebGL2 remains the fallback for both and must keep working.
 
-- **Zustand stores** for app-wide state (nodes, edges, settings)
-- **React Flow** manages canvas state (pan, zoom, selection)
-- **Settings store** persisted to `localStorage` (preview mode, split sizes, floating position/size)
+### Node system (41 nodes)
 
-### Dev Bridge (`window.__sombra`)
+Each node is one file in `src/nodes/<category>/`, registered in `src/nodes/index.ts` `ALL_NODES`. A `NodeDefinition` has typed ports (float, vec2, vec3, vec4, color, sampler2D), params, and **both** a `glsl(ctx)` and an `ir(ctx)` generator — new nodes need both so they work on both backends. Key mechanics (full detail in `NODE_AUTHORING_GUIDE.md`):
 
-At startup, `main.tsx` calls `installDevBridge()` which mounts a programmatic API on `window.__sombra`. This allows the Claude Chrome extension, browser console, or any automation tool to create, wire, and manipulate nodes via JavaScript injection.
+- **Connectable params** (`connectable: true`) render as handle + inline slider; always read them via `ctx.inputs.<id>`, never `ctx.params`.
+- **Shared functions** via `ctx.addFunction()` (idempotent dedup) — never push to `ctx.functions` directly.
+- **`auto_uv` sentinel** on vec2 input defaults — compiler generates frozen-ref UV inline when unconnected.
+- **Dynamic ports** via `dynamicInputs`, conditional param visibility via `showWhen`, hidden params via `hidden`.
+- **GLSL float literals** must have decimals (`5.0`, not `5`); loops need constant bounds (fixed max + early break).
+- Type coercion between port types lives in `src/nodes/type-coercion.ts`; connection validity in `FlowCanvas.tsx` `isValidConnection`.
 
-Key methods: `createNode()`, `connect()`, `setParams()`, `moveNode()`, `removeNode()`, `clearGraph()`, `compile()`, `describeGraph()`, `describeNode()`, `listNodeTypes()`, `exportGraph()`, `importGraph()`, `getFragmentShader()`.
+### Rendering model
 
-Raw store access: `sombra.stores.graph`, `sombra.stores.compiler`, `sombra.stores.settings`.
+- Fullscreen quad (2 triangles), all work in the fragment shader.
+- Built-in uniforms: `u_time`, `u_resolution`, `u_mouse`, `u_ref_size`, `u_dpr`, `u_viewport`.
+- **Frozen reference sizing:** `u_ref_size` captures `min(width, height)` on first render and never changes; UV math `(v_uv - 0.5) * u_resolution / u_ref_size + 0.5` means resizing reveals/hides edges without zoom or distortion.
 
-See [`BROWSER-AUTOMATION.md`](BROWSER-AUTOMATION.md) for the full API reference with examples.
+### State + UI
 
-## Development Workflow
+- Zustand stores: `graphStore` (nodes/edges/undo-redo, persisted), `compilerStore` (shader output/errors), `settingsStore` (layout/preview mode, persisted), `previewStore` (per-node ImageBitmaps).
+- **Preview modes:** docked (vertical/horizontal split), floating (PiP), fullwindow (Esc returns to previous mode). A single `<canvas>` is reparented between target refs via `useEffect` — the effect must depend on both `previewMode` and `splitDirection`. FlowCanvas always stays mounted at the same JSX tree position to prevent viewport jumps.
+- Layout: react-resizable-panels — palette (12%) | center | properties (12%); split sizes persisted per direction. Resize handles invisible (`bg-transparent hover:bg-border`). Note: `react-resizable-panels` v4 API differs from shadcn's v3 wrapper — see `resizable.tsx` patch.
+- `Cmd+K` command palette for node search.
 
-1. **Adding a new node type**:
-   - Create a file in `src/nodes/<category>/` (e.g., `src/nodes/noise/simplex.ts`)
-   - Define `NodeDefinition` with inputs, outputs, defaults, GLSL generator
-   - Register in node registry
-   - Add to node palette UI
+### Dev bridge (`window.__sombra`)
 
-2. **Updating the compiler**:
-   - Modify `src/compiler/` to handle new port types or conversions
-   - Ensure topological sort handles new edge cases
-   - Map shader errors back to nodes for debugging
+`main.tsx` calls `installDevBridge()` exposing a programmatic API for browser automation: `createNode()`, `connect()`, `setParams()`, `compile()`, `describeGraph()`, `exportGraph()`, `importGraph()`, `getFragmentShader()`, `validateAllSubgraphWGSL()` (GPU-validates every node's preview WGSL), plus raw store access at `sombra.stores.*`. Use it when testing via the Chrome extension.
 
-3. **Adding UI components**:
-   - Use `npx shadcn@latest add <component>` to add new shadcn/ui primitives
-   - Components land in `src/components/ui/`; configure via `components.json`
-   - Note: `react-resizable-panels` v4 API differs from shadcn's v3 wrapper — see `resizable.tsx` patch
+## Key Conventions
 
-4. **Styling**:
-   - Use Tailwind utility classes directly in JSX — never inline `style={{}}` for Sombra tokens
-   - Use Sombra design tokens: `bg-surface`, `text-fg-dim`, `border-edge`, etc. (see Design Tokens below)
-   - shadcn/ui components use their own oklch tokens (`--background`, `--foreground`, etc.) — don't mix
-   - React Flow components that only accept `style` props (not `className`) may use `var(--surface)` etc.
-   - Base dark theme colors defined in `src/index.css` `:root` block
+- TypeScript strict mode everywhere.
+- **Tailwind utility classes only** — no per-component CSS, no inline `style={{}}` for Sombra token colors. Exceptions: React Flow props that only accept `style` (may use `var(--surface)` etc.) and runtime-dynamic values like `handleColor`.
+- No raw hex values outside `port-colors.ts` and `bg-black` containers.
+- Imperative WebGL2/WebGPU — no Three.js or abstraction libraries.
+- PascalCase React components, camelCase utilities; one node type per file grouped by category.
 
-5. **Testing**:
-   - Manual testing via dev server (`npm run dev`)
-   - Shader compilation errors logged to console with node IDs
-   - Future: Unit tests for compiler, integration tests for rendering
+## Design System
+
+**Golden Rule: Figma is the source of truth.** All visual additions (color, spacing, size, radius, text style, component) start as a Figma variable/component, flow into the DB, then into generated code:
+
+```
+Figma ──(REST API)──► tokens/sombra.ds.json ──(npm run tokens)──► src/index.css marker regions
+                        (single source of truth)                   src/generated/ds.ts
+                                                                   src/utils/port-colors.ts
+```
+
+- Components import `ds` from `@/generated/ds` and use its class strings; only runtime-conditional classes stay inline. If you must add inline visual Tailwind classes, append a migration task to `.claude/ds-queue.md`.
+- DB contains colors, portColors, spacing, radius, sizes, textStyles, components (parts → generated Tailwind strings), nodeTemplates, scenes. Schema validated by `scripts/schema.ts` (Zod).
+- After manual DB edits: `npm run tokens`. After Figma edits: `npm run tokens:sync`, then `npm run tokens:audit` to verify parity.
+
+### Sombra design tokens (Tailwind classes via `@theme inline`)
+
+| Tailwind class | Hex | Usage |
+|---|---|---|
+| `bg-surface` | `#0f0f1a` | App background, canvas |
+| `bg-surface-alt` | `#1a1a2e` | Side panels |
+| `bg-surface-raised` | `#252538` | Cards, node headers, inputs |
+| `bg-surface-elevated` | `#2d2d44` | Hover states, node body, dropdowns |
+| `text-fg` / `text-fg-dim` / `text-fg-subtle` / `text-fg-muted` | `#e8e8f0` / `#b8b8c8` / `#88889a` / `#5a5a6e` | Text hierarchy |
+| `border-edge` / `border-edge-subtle` | `#3a3a52` / `#2a2a3e` | Borders, dividers |
+| `border-edge-card` | `oklch(1 0 0 / 10%)` | Node card border |
+| `bg-indigo` / `bg-indigo-hover` / `bg-indigo-active` | `#6366f1` / `#818cf8` / `#4f46e5` | Accent states |
+
+All tokens work with any prefix (`bg-`, `text-`, `border-`, `ring-`). **shadcn tokens** (`--background`, `--foreground`, oklch) are separate — used only by shadcn/ui primitives; don't remap between the two systems.
 
 ## System-Wide Change Checklist
 
-Every non-trivial change should propagate across these layers. Check each that applies:
+Non-trivial changes propagate across layers. Check what applies:
 
-### Code
-- [ ] New node type: create `src/nodes/<category>/<name>.ts`, register in `src/nodes/index.ts`
-- [ ] New UI component: identify atomic level (atom/molecule/organism), reuse existing DS components first
-- [ ] Token compliance: no raw hex values outside `port-colors.ts` and `bg-black` containers
-- [ ] Connectable params / new port types: update `isValidConnection` in `FlowCanvas.tsx`
-- [ ] New port type: add to `src/utils/port-colors.ts` + update Figma Port Types variable collection
+- **New node type:** file in `src/nodes/<category>/` with `glsl()` + `ir()`, register in `index.ts`, add to `BROWSER-AUTOMATION.md` node tables, Figma node template, `.figma/wiki/templates/node-templates.md`, node count in CLAUDE.md/ROADMAP.md, test preset in `src/utils/test-graph.ts` if it shows a key capability.
+- **New port type:** `src/utils/port-colors.ts` (via DB), `isValidConnection` in `FlowCanvas.tsx`, Figma Port Types variable collection, `BROWSER-AUTOMATION.md` compatibility table.
+- **New UI component:** reuse existing DS components first; add entry to `sombra.ds.json` (dsKey, parts with all visual fields, figmaNodeId), `npm run tokens`, wire to `ds.*`; Figma component (atomic hierarchy, variable-bound); wiki page + parity table.
+- **New `window.__sombra` method or store shape change:** update `BROWSER-AUTOMATION.md`.
+- **New token:** Figma variable collection first, then sync.
 
-### Design System Database
-- [ ] New UI component: add component entry to `sombra.ds.json` with `dsKey`, `parts`, `figmaNodeId`
-- [ ] Component parts: include all visual fields (textStyle, textColor, cursor, hover states, etc.) — not just structural
-- [ ] After DB changes: run `npm run tokens` to regenerate, then wire component to `ds.*` references
-- [ ] After Figma changes: run `npm run tokens:audit` to verify Figma↔DB parity
-- [ ] Inline visual classes: if adding visual Tailwind classes directly (not from `ds.*`), append a task to `.claude/ds-queue.md` for DS migration
+## Tips
 
-### Browser Automation (`BROWSER-AUTOMATION.md`)
-- [ ] New node type: add to Node Types tables (inputs, outputs, key params)
-- [ ] New port type: add to Port Types & Compatibility table
-- [ ] New API method on `window.__sombra`: document in API Reference section
-- [ ] Changed store shape: update Raw Store Access section
+- Read `ROADMAP.md` before starting a new phase; mimic existing patterns in `src/nodes/` when adding nodes.
+- Shader errors are mapped back to node IDs — check console logs.
+- `npm run lint` before committing.
+- Test WebGL/WebGPU changes in Chrome, Firefox, Safari — shader compilation varies; WebGL2 fallback path must keep working.
+- Figma pull uses version-check optimization (`lastFigmaVersion` in DB) — unchanged version exits early.
 
-### Figma Design System
-- [ ] New UI component: create Figma component following atomic hierarchy (atom → molecule → organism), bind all fills/strokes/spacing to existing Figma variables — see [`.figma/IMPLEMENTATION_GUIDE.md`](.figma/IMPLEMENTATION_GUIDE.md)
-- [ ] New node type: create node template on Templates page using Node Card component instance with correct handles and params
-- [ ] New token/variable: add to the appropriate Figma variable collection (UI Colors / Port Types / Spacing / Radius / Sizes)
-- [ ] Reuse first: check existing Figma components before creating new ones — compose existing atoms/molecules
+## Status
 
-### Figma Wiki (`.figma/wiki/`)
-- [ ] New component: add wiki page at appropriate level (`atoms/`, `molecules/`, `organisms/`)
-- [ ] New node type: update `templates/node-templates.md` inventory
-- [ ] Update `README.md` parity table and Table of Contents
-- [ ] Update `.figma/IMPLEMENTATION_GUIDE.md` Section 4 Code Connect table if new named React component
-
-### Project Documentation
-- [ ] Update node count in CLAUDE.md and ROADMAP.md
-- [ ] Update phase status / sprint notes if delivering a tracked feature
-- [ ] Add new node to test graph presets in `src/utils/test-graph.ts` if it demonstrates a key capability
-
-### Cross-Session Memory
-- [ ] Update memory files if new conventions, architecture decisions, or workflow patterns were introduced
-
-## Deployment
-
-- **GitHub Actions workflow** (`.github/workflows/deploy.yml`) builds on push to `main`
-- Outputs `dist/` to `gh-pages` branch
-- Site available at `https://spendolas.github.io/sombra/`
-- Vite config has `base: '/sombra/'` for correct asset paths
-
-## Phase 0 Status
-
-✅ Complete — Scaffold, React Flow canvas, WebGL2 renderer, GitHub Pages deployment.
-
-## Next Steps (Phase 3 — remaining)
-
-Save/Load is complete (`.sombra` file format + GraphToolbar). Remaining Phase 3 items:
-
-- "Copy GLSL" button — exports the compiled fragment shader to clipboard
-- Embed HTML snippet generator
-- `/embed.html?material=<base64>` shareable URLs (still static, no backend)
-
-See `ROADMAP.md` for full Phase 3 checklist.
-
-## Design Decisions (Why We Did It This Way)
-
-**Why no Three.js?**
-All output is 2D fragment shaders on a fullscreen quad. Three.js adds complexity (scene graph, cameras, mesh management) we don't need. Raw WebGL2 is simpler and more direct.
-
-**Why Zustand over Redux/Context?**
-Lightweight, minimal boilerplate, pairs naturally with React Flow's own state. Redux would be overkill for this project's scope.
-
-**Why Tailwind v4 (Vite plugin)?**
-Faster than PostCSS setup, cleaner integration. v4's Vite plugin is the recommended approach for new projects.
-
-**Why static site / no backend initially?**
-Keeps architecture simple. localStorage + JSON export covers MVP use cases. Backend added later (Phase 5) only when sharing/gallery features demand it.
-
-**Why GitHub Pages?**
-Free, simple, integrates well with GitHub Actions. Custom domain can be added later if needed.
-
-## Resources
-
-- [React Flow docs](https://reactflow.dev/)
-- [Zustand docs](https://zustand-demo.pmnd.rs/)
-- [Tailwind CSS v4 docs](https://tailwindcss.com/docs)
-- [WebGL2 fundamentals](https://webgl2fundamentals.org/)
-- [GLSL ES 3.0 spec](https://www.khronos.org/registry/OpenGL/specs/es/3.0/GLSL_ES_Specification_3.00.pdf)
-
-## Tips for Future Sessions
-
-- Always read `ROADMAP.md` before starting a new phase
-- Check `src/` structure before creating new files - follow existing patterns
-- When adding nodes, mimic existing node structure in `src/nodes/`
-- Shader errors are mapped back to node IDs - look for console logs
-- Use `npm run lint` before committing to catch TypeScript errors early
-- Test WebGL changes in multiple browsers (Chrome, Firefox, Safari) - shader compilation can vary
-- After any change, run through the **System-Wide Change Checklist** above — it covers code, Figma DS, wiki, browser automation, and project docs
-
-## Current Phase
-
-**Phase 0** - ✅ Complete
-**Phase 1** - ✅ Complete (16 nodes, compiler, live preview, full reactive pipeline)
-**Phase 1.2** - ✅ Complete (UI polish, resizable layout, frozen-ref preview)
-**Phase 2** - ✅ Complete (Spectra Mode + UX Polish — 23 nodes, all spectra presets reproducible)
-**Phase 2.5** - ✅ Complete (Preview Mode System + UI Polish)
-**Dev Bridge** - ✅ Complete (`window.__sombra` API for browser automation)
-**Phase 3** - ✅ Complete (Save/Load .sombra files, viewer URLs)
-**Phase 4** - ✅ Complete (Node Library Expansion — 39 nodes + Cmd+K search palette)
-**Phase 5** - ✅ Complete (Compact URLs + Per-Node Mini-Previews)
-
-### Phase 2.5 — Preview Mode System + UI Polish ✅ Complete
-
-Multi-mode preview system with toolbar, floating window, and layout refinements.
-
-- **Preview modes**: Docked (vertical/horizontal split), Floating (PiP), Fullwindow (overlay with Esc to return to previous mode)
-- **Preview toolbar**: 4-icon pill (Rows2, Columns2, PictureInPicture2, Scan) — active state `bg-indigo`, inactive hover `bg-white/15`, cursor-pointer on inactive, cursor-default on active
-- **Floating preview**: Draggable via invisible top strip, resizable from all 4 corners + 4 edges, viewport-clamped resize, position/size persisted
-- **Per-direction split sizes**: `verticalSplitPct`/`horizontalSplitPct` in settings store, persisted independently via `onLayoutChanged`
-- **Canvas reparenting**: Single `<canvas>` moved between dock/float/fullwindow target refs. Reparenting effect depends on both `previewMode` and `splitDirection`
-- **Stable FlowCanvas mount**: FlowCanvas always renders at the same JSX tree position (inside a single `ResizablePanelGroup`) regardless of preview mode. The docked preview panel is conditionally rendered beside it. This prevents viewport jumping when switching modes.
-- **Esc behavior**: Fullwindow Esc returns to `previousPreviewMode` (tracked in store), guards against looping back to fullwindow
-- **Borderless panels**: Resize handles `bg-transparent hover:bg-border`, no panel border classes
-- **Default layout**: Side panels at 12% minimum, simple 4-node default graph (Time → Noise → Color Ramp → Output), fit-to-view on init
-- Files: `PreviewToolbar.tsx`, `PreviewPanel.tsx`, `FloatingPreview.tsx`, `FullWindowOverlay.tsx`, `App.tsx`, `settingsStore.ts`, `resizable.tsx`
-
-### Phase 2 — Spectra Mode + UX Polish
-
-Replicate the full spectra-pixel-bg experience as composable node-graph features, plus connection UX polish. See `ROADMAP.md` for the full brief with sprint breakdown.
-
-**Sprint 1 — Infrastructure + UX Polish** ✅ Complete
-- Compiler: `functionRegistry` on `GLSLContext` with `addFunction()` for shared GLSL deduplication
-- `'enum'` parameter type with shadcn `<Select>` renderer
-- Handle colors: `BaseHandle` uses `handleColor` + `connected` props (filled/hollow)
-- `TypedEdge` component with port-type edge coloring, `sourcePortType` in `EdgeData`
-- Reconnectable edges, delete-on-drop, proximity connect (`connectionRadius=20`), single-wire-per-input swap in `onConnect`
-
-**Sprint 2 — Noise Primitives** ✅ Complete
-- Simplex 3D (upgrade), Value 3D, Worley, Box noise — all with `coords` + `z` + `scale` → `value`
-
-**Sprint 3 — Fractal & Warp** ✅ Complete
-- FBM (with `noiseType` enum + `fractalMode` enum), Turbulence, Ridged, Domain Warp
-
-**Sprint 4 — Unified Noise Node + Cleanup** ✅ Complete
-- Unified **Noise** node (`noise.ts`) with `noiseType` dropdown (simplex/value/worley/box)
-- Turbulence & Ridged moved to Math category
-- `NodeParameter.showWhen` for conditional param visibility (boxFreq only shown for box noise)
-- Right-aligned output labels
-
-**Sprint 4.5 — Connectable Parameters** ✅ Complete
-- `connectable?: boolean` flag on `NodeParameter` — inline handle + slider, dims when wired
-- Compiler: connectable params resolved as inputs (wired → source var, unwired → slider value)
-- `ShaderNode.tsx` layout rework: pure inputs → connectable param rows → outputs → regular params
-- `formatDefaultValue` outputs proper GLSL float literals (5 → "5.0")
-- FBM refactor: lacunarity/gain as function args (wirable)
-- Domain Warp: strength/frequency connectable
-- Mix: factor connectable
-- Brightness/Contrast: brightness/contrast connectable
-- `isValidConnection` checks connectable params as valid connection targets
-
-**Sprint 4.75 — Math Consolidation + UX Polish** ✅ Complete
-- Unified **Arithmetic** node (add/sub/mul/div + dynamic 2-8 inputs via +/- buttons)
-- Unified **Trig** node (sin/cos/tan/abs + connectable freq/amp)
-- `dynamicInputs?: (params) => PortDefinition[]` on `NodeDefinition` for variable port count
-- `hidden?: boolean` on `NodeParameter` for internal params (inputCount)
-- Node layout: outputs above inputs, category removed from header
-- Source value resolution: connected params show actual source value (constants) or "← SourceLabel" (dynamic)
-- `PropertiesPanel` connection awareness: reads edges, builds `connectedSources` map with resolved values
-- Noise `boxFreq` now connectable; FBM `octaves` now connectable (max-bound loop with early break)
-- Node count: 18 (was 20 — delete add/multiply/sin/cos, add arithmetic/trig)
-
-**Sprint 5 — UV Transform + Vec2 Constant** ✅ Complete
-- Extended **UV Coordinates** node with 5 connectable SRT params: scaleX, scaleY (non-uniform), rotate, offsetX, offsetY
-- GLSL: center → scale → rotate (2D matrix) → offset + re-center. Frozen-ref sizing preserved.
-- New **Vec2 Constant** node: X/Y float sliders → vec2 output
-- Follows Redshift UV Projection pattern: transform controls on the coordinate source, not separate nodes
-- Files: modified `uv-coords.ts`, created `vec2-constant.ts`, updated `index.ts`
-- Node count: 19 (was 18 — 1 new Vec2 Constant, UV Coords modified not added)
-
-**Sprint 5.5 — Auto UV Default + Phase Rename** ✅ Complete
-- **Compiler `auto_uv` sentinel**: `PortDefinition.default: 'auto_uv'` on vec2 inputs. Compiler generates frozen-ref UV inline when unconnected. Noise nodes produce visible patterns without wiring UV Coordinates.
-- **Rename `z` → `phase`**: All 3 noise nodes (Noise, FBM, Domain Warp). Port id, label, GLSL refs. Communicates animation/evolution purpose.
-- Default test graph simplified: removed UV Coordinates node (auto_uv makes it unnecessary)
-- Node count: still 19 (no new nodes)
-
-**Sprint 5.75 — Design Token Unification** ✅ Complete
-- Renamed 13 CSS vars: `--bg-primary` → `--surface`, `--text-primary` → `--fg`, `--border-primary` → `--edge`, `--accent-primary` → `--indigo`, etc.
-- Registered all tokens in Tailwind `@theme inline` as `--color-*` entries
-- Converted 48 inline `style={{}}` to Tailwind utility classes across 8 files
-- Only justified inline styles remain: React Flow component props + dynamic runtime `handleColor`
-- shadcn oklch tokens kept separate (no visual regressions in shadcn primitives)
-
-**Sprint 6 — Color Ramp** ✅ Complete
-- Color Ramp node: multi-stop gradient mapper (`float 0-1 → vec3 color`) with smooth/linear/constant interpolation
-- `ColorRampEditor` component: draggable stops, per-stop color picker, 6 palette presets (Cobalt Drift, Violet Ember, Teal Afterglow, Solar Ember, Citrus Pulse, Rose Heat)
-- Figma DS: Gradient Editor molecule (`50:4208`), Color Ramp template (`50:4226`), Palette Item (`50:4260`) — all variable-bound
-- Files: `src/nodes/color/color-ramp.ts`, `src/components/ColorRampEditor.tsx`, modified `src/nodes/index.ts`
-
-**Sprint 7 — Pixel Rendering** ✅ Complete
-- **Pixel Grid** node: quantization + Bayer 8×8 dithering + shape SDF masking (circle/diamond/triangle)
-- **Bayer Dither** node: standalone 8×8 ordered dither threshold pattern
-- New `Post-process` category with shared `bayer8x8` function (bit-interleave, deduped via `addFunction`)
-- Shape SDFs registered with per-shape keys (`sdf_circle`, `sdf_diamond`, `sdf_triangle`) for multi-instance safety
-- Connectable params: `pixelSize`, `dither` on Pixel Grid
-- Files: `src/nodes/postprocess/pixel-grid.ts`, `src/nodes/postprocess/bayer-dither.ts`, modified `src/nodes/index.ts`
-
-**Visual Parity Fix** ✅ Complete
-- **Pixel Grid** + **Bayer Dither**: removed `coords` input, now use `gl_FragCoord.xy` directly (fixes non-square pixels from double aspect correction)
-- **Quantize UV** node: snaps `gl_FragCoord.xy` to pixel-grid cell centers, outputs frozen-ref UV space coordinates. Wire to noise `coords` for uniform color per cell (chunky pixel look). Connectable `pixelSize` param (2-64).
-- Spectra Value FBM preset updated: Quantize UV → Noise.coords for per-cell noise sampling
-- Files: modified `pixel-grid.ts`, `bayer-dither.ts`, created `postprocess/quantize-uv.ts`, modified `index.ts`, `test-graph.ts`
-
-**Acceptance test:** All 4 spectra presets (Value FBM, Simplex FBM, Worley Ridged, Box None) reproducible as node graphs. ✅
-
-**Auto-Layout Utility** ✅ Complete
-- **Dagre auto-layout** (`src/utils/layout.ts`): two-pass layout for test graph presets
-  - Pass 1: `@dagrejs/dagre` LR layout with estimated node dimensions from `NodeDefinition` port counts
-  - Pass 2: handle-order post-processing — reorders siblings in the same dagre rank feeding the same target so nodes match the target's input handle order (top handle → topmost node)
-- Node size estimation: header + outputs + inputs + connectable params + regular params + custom component area
-- All 4 spectra presets and utility test graphs use `layoutGraph()` — no manual positions needed
-- Files: `src/utils/layout.ts` (new), `src/utils/test-graph.ts` (all presets use layoutGraph), `package.json` (+@dagrejs/dagre)
-
-**Node count after Sprint 4.75:** 18 nodes (down from 20 — merged 4 math nodes into 2)
-**Node count after Sprint 5:** 19 nodes (18 + Vec2 Constant; UV Coords modified, not added)
-**Node count after Sprint 5.5:** 19 nodes (no new nodes — compiler change + rename only)
-**Node count after Sprint 6:** 20 nodes (19 + Color Ramp)
-**Node count after Sprint 7:** 22 nodes (20 + Pixel Grid + Bayer Dither)
-**Node count after Visual Parity Fix:** 23 nodes (22 + Quantize UV) — **Phase 2 complete**
-
-## Design Tokens
-
-Sombra uses custom CSS variables registered with Tailwind v4's `@theme inline` block in `src/index.css`. Always use the Tailwind utility classes — never inline `style={{}}` for these colors.
-
-| CSS Variable | Tailwind Class | Hex | Usage |
-|---|---|---|---|
-| `--surface` | `bg-surface` | `#0f0f1a` | App background, canvas |
-| `--surface-alt` | `bg-surface-alt` | `#1a1a2e` | Side panels, secondary bg |
-| `--surface-raised` | `bg-surface-raised` | `#252538` | Cards, node headers, inputs |
-| `--surface-elevated` | `bg-surface-elevated` | `#2d2d44` | Hover states, node body, dropdowns |
-| `--fg` | `text-fg` | `#e8e8f0` | Primary text, node titles |
-| `--fg-dim` | `text-fg-dim` | `#b8b8c8` | Secondary text, descriptions |
-| `--fg-subtle` | `text-fg-subtle` | `#88889a` | Labels, category headers |
-| `--fg-muted` | `text-fg-muted` | `#5a5a6e` | Disabled text, IDs, hints |
-| `--edge` | `border-edge` | `#3a3a52` | Primary borders, dividers |
-| `--edge-subtle` | `border-edge-subtle` | `#2a2a3e` | Subtle borders, node separators |
-| `--edge-card` | `border-edge-card` | `oklch(1 0 0 / 10%)` | Node card border (white 10%) |
-| `--indigo` | `bg-indigo` / `text-indigo` | `#6366f1` | Accent, selection highlight |
-| `--indigo-hover` | `bg-indigo-hover` | `#818cf8` | Accent hover state |
-| `--indigo-active` | `bg-indigo-active` | `#4f46e5` | Accent active/pressed state |
-
-All tokens work with any Tailwind color utility prefix: `bg-`, `text-`, `border-`, `ring-`, etc.
-
-**shadcn tokens** (`--background`, `--foreground`, etc.) are separate oklch values used by shadcn/ui primitives. Don't remap Sombra tokens to shadcn tokens.
-
-## Design System Database
-
-**Golden Rule: Figma is the source of truth.** ALL visual additions start in Figma first. Any new color, spacing, size, radius, text style, or component MUST be created as a Figma variable/component and connected to the token system BEFORE writing code. The flow is always: **Figma → DB → generated code → components.**
-
-### Architecture
-
-```
-Figma  ──(REST API)──►  tokens/sombra.ds.json  ──(generate)──►  src/index.css (CSS vars)
-                           (single source                        src/generated/ds.ts (component classes)
-                            of truth)                             src/utils/port-colors.ts
-```
-
-**One database. Two generators. Zero manual CSS for design tokens.**
-
-### Database (`tokens/sombra.ds.json`)
-
-The unified DS database contains:
-- **colors** (14): UI Colors with CSS vars + Tailwind mappings (keyed by Figma VariableID)
-- **portColors** (7): Port type colors for handles/edges
-- **spacing** (7): Spacing tokens with CSS vars
-- **radius** (4): Border radius tokens
-- **sizes** (10): Component size tokens
-- **computed** (1): Derived tokens (e.g., `handle-offset`)
-- **textStyles** (11): Typography utilities (keyed by Figma style key)
-- **components** (22): Component parts with full visual properties (see ComponentPart below)
-- **nodeTemplates** (23): Node type reference data
-- **scenes** (5): Scene/layout reference data
-
-### ComponentPart Schema
-
-Each component part in the DB maps to a generated Tailwind class string in `ds.ts`. The generator converts structured fields to Tailwind utilities:
-
-| Field | Example | Output |
-|---|---|---|
-| `layout` | `"horizontal"` | `flex flex-row` |
-| `fill` | `"surface/raised"` | `bg-surface-raised` |
-| `stroke` | `{ color: "edge/default" }` | `border border-edge` |
-| `radius` | `"md"` | `rounded-md` |
-| `padding` | `{ x: "lg", y: "md" }` | `px-lg py-md` |
-| `gap` | `"sm"` | `gap-sm` |
-| `textStyle` | `"text-body"` | `text-body` |
-| `textColor` | `"fg-dim"` | `text-fg-dim` |
-| `cursor` | `"move"` | `cursor-move` |
-| `transition` | `"colors"` | `transition-colors` |
-| `userSelect` | `"none"` | `select-none` |
-| `position` | `"relative"` | `relative` |
-| `z` | `50` | `z-50` |
-| `overflow` | `"hidden"` | `overflow-hidden` |
-| `width` / `height` | `"full"` | `w-full` / `h-full` |
-| `hover.fill` | `"surface/elevated"` | `hover:bg-surface-elevated` |
-| `hover.textColor` | `"fg"` | `hover:text-fg` |
-| `extra` | `"nodrag nowheel"` | `nodrag nowheel` (passthrough) |
-
-Design classes (everything above) come from `ds.*`. Only runtime-dynamic classes (conditional on JS state, React Flow selectors) stay inline in component code.
-
-### Generated Files
-
-| File | Generated from | Purpose |
-|---|---|---|
-| `src/index.css` (4 marker regions) | tokens: colors, spacing, sizes, radius, text styles | CSS variables + Tailwind `@theme inline` + `@utility` blocks |
-| `src/generated/ds.ts` | components | Typed Tailwind class string objects for each component |
-| `src/utils/port-colors.ts` | portColors | Port type → color constant map |
-
-Components import `ds` and use class strings directly:
-```tsx
-import { ds } from '@/generated/ds';
-<BaseNode className={cn(ds.nodeCard.root, "min-w-node")}>
-```
-
-All visual classes (fill, stroke, radius, spacing, text styles, colors, hover states, cursors, transitions) come from `ds.*`. Only runtime-dynamic classes (conditional on JS state) stay inline.
-
-### Figma Sync Workflow
-
-The daily flow: **`npm run tokens:sync`** — pulls from Figma REST API, updates DB, regenerates code. Requires `FIGMA_TOKEN` in `.env` (personal access token from figma.com/developers).
-
-| Scenario | Command |
-|---|---|
-| Token changed in Figma | `npm run tokens:sync` |
-| Component changed in Figma | `npm run tokens:sync` (for token values) + manual DB component part update |
-| New token added in Figma | `npm run tokens:sync` → auto-detected, needs manual DB entry |
-| DB edited manually | `npm run tokens` |
-| CI drift check | `npm run tokens:check` |
-| Figma↔DB parity audit | `npm run tokens:audit` (compares DB component parts against Figma REST API) |
-
-The pull script (`scripts/figma-pull.ts`) uses version-check optimization: compares Figma file version to `lastFigmaVersion` in DB. If unchanged, exits early (1 API call). Only does full scan when version bumps.
-
-## Important Layout Notes
-
-The app uses react-resizable-panels for the main layout:
-- Outer horizontal group: palette (12%) | center | properties (12%) — panels start at minimum width
-- When docked: inner split group (vertical or horizontal) with canvas + preview. Split sizes persisted per direction via `verticalSplitPct`/`horizontalSplitPct` in settings store. FlowCanvas always stays mounted at the same tree position — only the preview panel is conditionally rendered.
-- When floating/fullwindow: center is full-width canvas only; preview renders in separate overlay components
-- Panel resize handles are invisible by default (`bg-transparent`), visible on hover (`hover:bg-border`)
-- No visible borders between panels — clean seamless look
-- React Flow requires its parent to have explicit width/height — the panel system provides this
-- Canvas reparenting `useEffect` must depend on both `previewMode` and `splitDirection` to re-attach canvas after panel remounts
-- See [src/App.tsx](src/App.tsx) and [src/components/ui/resizable.tsx](src/components/ui/resizable.tsx)
+Phases 0–5 complete: editor, compiler, 41 nodes, save/load `.sombra` files, compact share URLs, per-node mini-previews, Cmd+K palette, design-system pipeline. **WebGPU migration complete** (main + preview renderers; WebGL2 fallback retained). Recent work: **Phase 6 multi-pass composable effects** (`PHASE6-MULTIPASS.md`) — relay passes for fragColor conflicts, ping-pong aliasing fixes for deep pass chains, 9-point anchor pin on Fragment Output. Sprint-by-sprint history lives in `ROADMAP.md`.
