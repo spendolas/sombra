@@ -9,6 +9,7 @@ import { compileGraph } from './compiler/glsl-generator'
 import { compileGraphIR } from './compiler/ir-compiler'
 import { decodeGraphFromHash, decodeCompactHash } from './utils/sombra-file'
 import { createShaderRenderer } from './renderer/create-renderer'
+import { anchorToVec2 } from './nodes/output/fragment-output'
 import type { QualityTier } from './renderer/types'
 
 function showError(message: string) {
@@ -96,14 +97,37 @@ async function main() {
       )
     }
 
+    // Anchor from the Fragment Output node (editor parity — applyCompileResult)
+    const outputNode = nodes.find((n) => n.data.type === 'fragment_output')
+    renderer.setAnchor(anchorToVec2((outputNode?.data.params?.anchor as string) ?? 'center'))
+
+    const isAnimated = result.isTimeLiveAtOutput
+
+    // Image-node textures decode async — re-render as each one lands
+    for (const node of nodes) {
+      if (node.data.type !== 'image') continue
+      const imageData = node.data.params?.imageData as string | undefined
+      if (!imageData) continue
+      const samplerName = `u_${node.id.replace(/-/g, '_')}_image`
+      const img = new Image()
+      img.onload = () => {
+        renderer.uploadImageTexture(samplerName, img)
+        renderer.notifyChange()
+        if (!isAnimated) renderer.requestRender()
+      }
+      img.src = imageData
+    }
+
     // Render once immediately before animation starts
     renderer.render()
 
     // Apply quality tier and animation state
-    const isAnimated = result.isTimeLiveAtOutput
     renderer.setAnimated(isAnimated)
     renderer.setQualityTier((result.qualityTier ?? 'adaptive') as QualityTier)
     if (isAnimated) {
+      // Time-node speed (editor parity)
+      const timeNode = nodes.find((n) => n.data.type === 'time')
+      renderer.setAnimationSpeed((timeNode?.data.params?.speed as number) ?? 1.0)
       renderer.startAnimation()
     } else {
       renderer.notifyChange()
@@ -114,3 +138,10 @@ async function main() {
 }
 
 main()
+
+// Hash-only navigation (share link → share link) doesn't reload the page,
+// so the previous shader stayed on screen. The viewer is stateless — a full
+// reload is the simplest correct teardown of renderer/GPU state.
+window.addEventListener('hashchange', () => {
+  window.location.reload()
+})
