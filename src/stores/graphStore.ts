@@ -60,6 +60,7 @@ interface GraphState {
 
   addEdge: (edge: Edge<EdgeData>) => void
   removeEdge: (edgeId: string) => void
+  replaceEdge: (oldEdgeId: string, newEdge: Edge<EdgeData>) => void
 
   setSelectedNodes: (nodeIds: string[]) => void
   setSelectedEdges: (edgeIds: string[]) => void
@@ -220,6 +221,30 @@ export const useGraphStore = create<GraphState>()(
         set({
           edges: state.edges.filter((e) => e.id !== edgeId),
           selectedEdgeIds: state.selectedEdgeIds.filter((id) => id !== edgeId),
+          _past: past,
+          _future: [],
+          canUndo: true,
+          canRedo: false,
+        })
+      },
+
+      replaceEdge: (oldEdgeId, newEdge) => {
+        // Atomic reconnect: drop the old edge AND any edge already occupying
+        // the new target handle (single-wire-per-input rule), then add the new
+        // one — a single history entry, so one undo restores pre-reconnect
+        // wiring exactly.
+        const state = get()
+        const past = pushHistory(state._past, snapshot(state))
+        set({
+          edges: [
+            ...state.edges.filter(
+              (e) =>
+                e.id !== oldEdgeId &&
+                !(e.target === newEdge.target && e.targetHandle === newEdge.targetHandle),
+            ),
+            newEdge,
+          ],
+          selectedEdgeIds: [],
           _past: past,
           _future: [],
           canUndo: true,

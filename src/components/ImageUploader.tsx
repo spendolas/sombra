@@ -9,6 +9,7 @@
 
 import { useRef, useCallback, useMemo, useState, useEffect, useId } from 'react'
 import { useGraphStore } from '@/stores/graphStore'
+import { usePreviewStore } from '@/stores/previewStore'
 
 const ACCEPTED_TYPES = 'image/png,image/jpeg,image/webp,image/gif'
 const CORNER_ZONE = 8
@@ -243,24 +244,17 @@ function hitTestPolygon(
 // Canvas size hook
 // ---------------------------------------------------------------------------
 
-/** Returns physical pixel dimensions matching u_resolution in GLSL. */
+/**
+ * Returns physical pixel dimensions matching u_resolution in GLSL.
+ * Reads previewStore's mainCanvasSize (fed by App's ResizeObserver on the one
+ * true, reparented main canvas). The previous implementation did a one-shot
+ * `document.querySelector('canvas')` per mounted instance — the node-card and
+ * properties-panel copies of this component each grabbed whichever canvas
+ * existed at their own mount moment (often an 80×80 thumbnail), so their SRT
+ * overlays visibly disagreed for the same node.
+ */
 function useCanvasSize(): [number, number] {
-  const [size, setSize] = useState<[number, number]>([1920, 1080])
-  useEffect(() => {
-    const canvas = document.querySelector('canvas')
-    if (!canvas) return
-    const dpr = Math.min(window.devicePixelRatio || 1, 2)
-    setSize([Math.floor(canvas.clientWidth * dpr), Math.floor(canvas.clientHeight * dpr)])
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const d = Math.min(window.devicePixelRatio || 1, 2)
-        setSize([Math.floor(entry.contentRect.width * d), Math.floor(entry.contentRect.height * d)])
-      }
-    })
-    observer.observe(canvas)
-    return () => observer.disconnect()
-  }, [])
-  return size
+  return usePreviewStore((s) => s.mainCanvasSize)
 }
 
 // ---------------------------------------------------------------------------

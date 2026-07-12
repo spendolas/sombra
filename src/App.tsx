@@ -9,6 +9,7 @@ import { useLiveCompiler } from './compiler'
 import { useGraphStore } from './stores/graphStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useCompilerStore } from './stores/compilerStore'
+import { usePreviewStore } from './stores/previewStore'
 import { createDefaultGraph } from './utils/test-graph'
 import { nodeRegistry } from './nodes/registry'
 import { ShaderNode } from './components/ShaderNode'
@@ -260,7 +261,10 @@ function App() {
     schedulerRef.current?.onGraphChange(nodes, edges)
   }, [nodes, edges])
 
-  // Sync main canvas resolution to preview renderer so pixel-based params scale correctly
+  // Sync main canvas resolution to the preview renderer AND previewStore —
+  // the store is the single source of truth for live u_resolution consumers
+  // (e.g. ImageUploader overlay math); the ResizeObserver follows the canvas
+  // element across preview-mode reparenting automatically.
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -268,10 +272,10 @@ function App() {
       for (const entry of entries) {
         const { width, height } = entry.contentRect
         const dpr = Math.min(window.devicePixelRatio || 1, 2)
-        schedulerRef.current?.setMainResolution(
-          Math.floor(width * dpr),
-          Math.floor(height * dpr),
-        )
+        const w = Math.floor(width * dpr)
+        const h = Math.floor(height * dpr)
+        schedulerRef.current?.setMainResolution(w, h)
+        usePreviewStore.getState().setMainCanvasSize(w, h)
       }
     })
     observer.observe(canvas)
@@ -502,7 +506,6 @@ function App() {
                     nodeTypes={nodeTypes}
                     onNodesChange={onNodesChange}
                     onEdgesChange={onEdgesChange}
-                    setEdges={setEdges}
                     onConnect={onConnect}
                     onAddNode={addNode}
                   />

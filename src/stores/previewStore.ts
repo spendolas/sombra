@@ -8,6 +8,15 @@ import { create } from 'zustand'
 interface PreviewState {
   /** nodeId → ImageBitmap */
   previews: Record<string, ImageBitmap>
+  /**
+   * Main canvas physical pixel size — the live u_resolution. Written by App's
+   * ResizeObserver on the (single, reparented) main canvas; read by components
+   * needing resolution-dependent math (e.g. ImageUploader's SRT overlay).
+   * Never `document.querySelector('canvas')` instead — an 80×80 node thumbnail
+   * canvas can match first and every mounted instance gets a different answer.
+   */
+  mainCanvasSize: [number, number]
+  setMainCanvasSize: (w: number, h: number) => void
   /** Set a preview ImageBitmap for a node */
   setPreview: (nodeId: string, bitmap: ImageBitmap) => void
   /** Set multiple preview ImageBitmaps in one store update (one React re-render). */
@@ -20,6 +29,13 @@ interface PreviewState {
 
 export const usePreviewStore = create<PreviewState>((set) => ({
   previews: {},
+  mainCanvasSize: [1920, 1080] as [number, number],
+  setMainCanvasSize: (w, h) =>
+    set((s) =>
+      s.mainCanvasSize[0] === w && s.mainCanvasSize[1] === h
+        ? s
+        : { mainCanvasSize: [w, h] as [number, number] },
+    ),
   setPreview: (nodeId, bitmap) =>
     set((s) => {
       // Close the old bitmap to free GPU memory

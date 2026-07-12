@@ -3,11 +3,12 @@
  */
 
 import { useCallback, useRef } from 'react'
-import { ReactFlow, Background, MiniMap, useReactFlow, reconnectEdge } from '@xyflow/react'
+import { ReactFlow, Background, MiniMap, useReactFlow } from '@xyflow/react'
 import type { Node, Edge, OnNodesChange, OnEdgesChange, OnReconnect, Connection, IsValidConnection } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { areTypesCompatible } from '../nodes/type-coercion'
+import { useGraphStore } from '../stores/graphStore'
 import { ZoomSlider } from '@/components/zoom-slider'
 import { GraphToolbar } from '@/components/GraphToolbar'
 import { TypedEdge } from './TypedEdge'
@@ -21,7 +22,6 @@ interface FlowCanvasProps {
   nodeTypes: Record<string, React.ComponentType<any>>
   onNodesChange: OnNodesChange<Node<NodeData>>
   onEdgesChange: OnEdgesChange<Edge<EdgeData>>
-  setEdges: (edges: Edge<EdgeData>[]) => void
   onConnect: (connection: Connection) => void
   onAddNode: (node: Node<NodeData>) => void
 }
@@ -32,7 +32,6 @@ export function FlowCanvas({
   nodeTypes,
   onNodesChange,
   onEdgesChange,
-  setEdges,
   onConnect,
   onAddNode,
 }: FlowCanvasProps) {
@@ -47,13 +46,38 @@ export function FlowCanvas({
   // Track whether a reconnect succeeded
   const reconnectSuccessful = useRef(false)
 
-  // Handle edge reconnection (drag endpoint to new port)
+  const replaceEdge = useGraphStore((s) => s.replaceEdge)
+
+  // Handle edge reconnection (drag endpoint to new port).
+  // Mirrors onConnect: rebuild edge data (fresh sourcePortType for coloring),
+  // enforce single-wire-per-input, and record ONE undoable history entry —
+  // React Flow's reconnectEdge() helper did none of that (kept stale data,
+  // allowed duplicate edges into one handle, bypassed history).
   const onReconnect: OnReconnect = useCallback(
     (oldEdge, newConnection) => {
+      if (!newConnection.source || !newConnection.target) return
+      if (!newConnection.sourceHandle || !newConnection.targetHandle) return
       reconnectSuccessful.current = true
-      setEdges(reconnectEdge(oldEdge, newConnection, edges) as Edge<EdgeData>[])
+
+      const sourceNode = nodes.find((n) => n.id === newConnection.source)
+      const sourceDef = sourceNode && nodeRegistry.get(sourceNode.data.type)
+      const sourcePortType = sourceDef?.outputs.find((p) => p.id === newConnection.sourceHandle)?.type
+
+      replaceEdge(oldEdge.id, {
+        id: `${newConnection.source}-${newConnection.sourceHandle}-${newConnection.target}-${newConnection.targetHandle}`,
+        source: newConnection.source,
+        target: newConnection.target,
+        sourceHandle: newConnection.sourceHandle,
+        targetHandle: newConnection.targetHandle,
+        type: 'typed',
+        data: {
+          sourcePort: newConnection.sourceHandle,
+          targetPort: newConnection.targetHandle,
+          sourcePortType,
+        },
+      } as Edge<EdgeData>)
     },
-    [edges, setEdges]
+    [nodes, replaceEdge]
   )
 
   // Start of reconnect attempt
