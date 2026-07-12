@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import type { Connection } from '@xyflow/react'
-import type { ShaderRenderer, QualityTier } from './renderer/types'
-import { createShaderRenderer, createPreviewRenderer } from './renderer/create-renderer'
+import type { ShaderRenderer, PreviewRenderer, QualityTier } from './renderer/types'
+import { createShaderRenderer, createPreviewRenderer, isWebGL2Forced } from './renderer/create-renderer'
 import type { RenderPlan, RenderPass } from './compiler/glsl-generator'
 import { PreviewScheduler } from './renderer/preview-scheduler'
 import { useLiveCompiler } from './compiler'
@@ -224,6 +224,7 @@ function App() {
   // Initialize preview scheduler for per-node thumbnails
   // Waits for the main renderer so we can share its GPUDevice when available.
   const schedulerRef = useRef<PreviewScheduler | null>(null)
+  const previewRendererRef = useRef<PreviewRenderer | null>(null)
   useEffect(() => {
     let disposed = false
     let scheduler: PreviewScheduler | null = null
@@ -241,10 +242,28 @@ function App() {
         if (disposed) { previewRenderer.dispose(); return }
         scheduler = new PreviewScheduler(previewRenderer)
         schedulerRef.current = scheduler
+        previewRendererRef.current = previewRenderer
         scheduler.start()
         // Feed the current graph state so previews render on initial load
         const { nodes: currentNodes, edges: currentEdges } = useGraphStore.getState()
         scheduler.onGraphChange(currentNodes, currentEdges)
+        // WebGL preview: seed image textures already in the graph — the image
+        // sync effect may have run before this renderer existed
+        if (previewRenderer.uploadImageTexture) {
+          for (const n of currentNodes) {
+            if (n.data.type !== 'image') continue
+            const imageData = n.data.params?.imageData as string | undefined
+            if (!imageData) continue
+            const samplerName = `u_${n.id.replace(/-/g, '_')}_image`
+            const nodeId = n.id
+            const img = new Image()
+            img.onload = () => {
+              previewRendererRef.current?.uploadImageTexture?.(samplerName, img)
+              schedulerRef.current?.invalidateNode(nodeId)
+            }
+            img.src = imageData
+          }
+        }
       })
     }
     tryInit()
@@ -253,6 +272,7 @@ function App() {
       disposed = true
       scheduler?.destroy()
       schedulerRef.current = null
+      previewRendererRef.current = null
     }
   }, [])
 
@@ -422,8 +442,9 @@ function App() {
     []
   )
 
-  // Enable IR→WGSL compilation when WebGPU is available
-  const useIR = typeof navigator !== 'undefined' && !!navigator.gpu
+  // Enable IR→WGSL compilation when WebGPU is available (and not forced off —
+  // otherwise a spurious IR failure would banner-error a working WebGL render)
+  const useIR = typeof navigator !== 'undefined' && !!navigator.gpu && !isWebGL2Forced()
   useLiveCompiler(handleCompile, handleUniformUpdate, handleRendererUpdate, useIR)
 
   // Sync image node textures to the WebGL renderer
@@ -446,6 +467,8 @@ function App() {
     for (const [samplerName] of prevImageSamplersRef.current) {
       if (!currentMap.has(samplerName)) {
         renderer.deleteImageTexture(samplerName)
+        // WebGL preview context holds its own copies (no cross-context sharing)
+        previewRendererRef.current?.deleteImageTexture?.(samplerName)
       }
     }
 
@@ -462,6 +485,9 @@ function App() {
       const img = new Image()
       img.onload = () => {
         rendererRef.current?.uploadImageTexture(samplerName, img)
+        // WebGL preview context needs its own copy (WebGPU preview reads the
+        // main renderer's textures via provider and omits this method)
+        previewRendererRef.current?.uploadImageTexture?.(samplerName, img)
         // Thumbnails may have rendered (or bailed) before the texture existed —
         // re-render this node and everything downstream now that it's live.
         schedulerRef.current?.invalidateNode(nodeId)

@@ -119,11 +119,13 @@ function compileSinglePassPreview(
   const functionRegistry = new Map<string, string>()
   const userUniforms: UniformSpec[] = []
   const glslLines: string[] = []
+  const imageSamplers = new Set<string>()
 
   for (const nodeId of executionOrder) {
     const result = generateNodeGlsl(
       nodeId, nodeMap, edgesByTarget,
       uniforms, functions, functionRegistry, userUniforms,
+      undefined, imageSamplers,
     )
     glslLines.push(...result.glslLines)
     errors.push(...result.errors)
@@ -136,7 +138,10 @@ function compileSinglePassPreview(
   const targetVar = `node_${targetNodeId.replace(/-/g, '_')}_${targetOutput.id}`
   glslLines.push(outputTypeToFragColor(targetVar, targetOutput.type))
 
-  const fragmentShader = assembleFragmentShader(uniforms, functions, functionRegistry, glslLines, userUniforms)
+  const fragmentShader = assembleFragmentShader(
+    uniforms, functions, functionRegistry, glslLines, userUniforms,
+    undefined, imageSamplers,
+  )
 
   return {
     success: true,
@@ -162,6 +167,8 @@ function compileMultiPassPreview(
   const allUserUniforms: UniformSpec[] = []
   let globalTimeLive = false
   const samplerCompiledIndex = new Map<string, number>()
+  // Image-node samplers accumulate across passes (shared with every assemble)
+  const imageSamplers = new Set<string>()
 
   // nodeId → passIndex lookup (for cross-pass re-emission)
   const nodePassIndex = new Map<string, number>()
@@ -182,15 +189,8 @@ function compileMultiPassPreview(
     const passUserUniforms: UniformSpec[] = []
     const glslLines: string[] = []
 
-    const passBoundaries = boundaries.filter(b => passNodeIds.includes(b.consumerId))
-    const samplerNames = passBoundaries.map(b => b.samplerName)
-
-    const inputTextures: Record<string, number> = {}
-    for (const b of passBoundaries) {
-      inputTextures[b.samplerName] = samplerCompiledIndex.get(b.samplerName) ?? b.sourcePassIndex
-    }
-
     // Re-emit nodes from earlier passes that are referenced via non-texture edges
+    // (computed BEFORE passBoundaries — the boundary filter needs it)
     const reEmitSet = new Set<string>()
     if (passIdx > 0) {
       const queue: string[] = []
@@ -220,6 +220,20 @@ function compileMultiPassPreview(
       }
     }
     const reEmitNodes = passPartition.slice(0, passIdx).flat().filter(id => reEmitSet.has(id))
+
+    // Boundaries consumed by nodes in this pass OR by re-emitted nodes.
+    // Re-emitted textureInput nodes need their boundaries so they sample
+    // the intermediate texture instead of emitting fallback code.
+    // (Mirrors glsl-generator.ts and ir-subgraph-compiler.ts.)
+    const passBoundaries = boundaries.filter(b =>
+      passNodeIds.includes(b.consumerId) || reEmitSet.has(b.consumerId)
+    )
+    const samplerNames = passBoundaries.map(b => b.samplerName)
+
+    const inputTextures: Record<string, number> = {}
+    for (const b of passBoundaries) {
+      inputTextures[b.samplerName] = samplerCompiledIndex.get(b.samplerName) ?? b.sourcePassIndex
+    }
     const combinedNodeIds = [...reEmitNodes, ...passNodeIds]
 
     const allErrors: Array<{ message: string; nodeId?: string }> = []
@@ -227,7 +241,7 @@ function compileMultiPassPreview(
       const result = generateNodeGlsl(
         nodeId, nodeMap, edgesByTarget,
         uniforms, functions, functionRegistry, passUserUniforms,
-        passBoundaries,
+        passBoundaries, imageSamplers,
       )
       glslLines.push(...result.glslLines)
       allErrors.push(...result.errors)
@@ -261,7 +275,7 @@ function compileMultiPassPreview(
       if (primaryResolved) glslLines.push(primaryResolved.fragLine)
 
       const fragmentShader = assembleFragmentShader(
-        uniforms, functions, functionRegistry, glslLines, passUserUniforms, samplerNames,
+        uniforms, functions, functionRegistry, glslLines, passUserUniforms, samplerNames, imageSamplers,
       )
 
       if (uniforms.has('u_time')) globalTimeLive = true
@@ -279,7 +293,7 @@ function compileMultiPassPreview(
         if (!resolved) continue
         const relayLines = [...bodyLines, resolved.fragLine]
         const relayShader = assembleFragmentShader(
-          uniforms, functions, functionRegistry, relayLines, passUserUniforms, samplerNames,
+          uniforms, functions, functionRegistry, relayLines, passUserUniforms, samplerNames, imageSamplers,
         )
         const relayIdx = passes.length
         for (const b of groups[g]) samplerCompiledIndex.set(b.samplerName, relayIdx)
@@ -292,7 +306,7 @@ function compileMultiPassPreview(
       glslLines.push(outputTypeToFragColor(targetVar, targetOutput.type))
 
       const fragmentShader = assembleFragmentShader(
-        uniforms, functions, functionRegistry, glslLines, passUserUniforms, samplerNames,
+        uniforms, functions, functionRegistry, glslLines, passUserUniforms, samplerNames, imageSamplers,
       )
 
       if (uniforms.has('u_time')) globalTimeLive = true

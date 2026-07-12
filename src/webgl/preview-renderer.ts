@@ -92,6 +92,58 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
     // No-op: preview now uses PREVIEW_SIZE for all uniforms
   }
 
+  // Image-node textures. WebGL contexts can't share textures (unlike the
+  // WebGPU preview, which reads the main renderer's GPUDevice via a
+  // provider), so images are uploaded into this context separately.
+  private imageTextures = new Map<string, WebGLTexture>()
+
+  uploadImageTexture(samplerName: string, image: HTMLImageElement): void {
+    const gl = this.gl
+    if (gl.isContextLost()) return
+
+    const existing = this.imageTextures.get(samplerName)
+    if (existing) gl.deleteTexture(existing)
+
+    const tex = gl.createTexture()
+    if (!tex) return
+
+    gl.bindTexture(gl.TEXTURE_2D, tex)
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image)
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+    gl.bindTexture(gl.TEXTURE_2D, null)
+
+    this.imageTextures.set(samplerName, tex)
+  }
+
+  deleteImageTexture(samplerName: string): void {
+    const gl = this.gl
+    const tex = this.imageTextures.get(samplerName)
+    if (tex) {
+      if (!gl.isContextLost()) gl.deleteTexture(tex)
+      this.imageTextures.delete(samplerName)
+    }
+  }
+
+  /** Bind image textures whose sampler uniform exists in the program. Returns next free unit. */
+  private bindImageTextures(program: WebGLProgram, startUnit: number): number {
+    const gl = this.gl
+    let unit = startUnit
+    for (const [samplerName, tex] of this.imageTextures) {
+      const loc = gl.getUniformLocation(program, samplerName)
+      if (!loc) continue
+      gl.activeTexture(gl.TEXTURE0 + unit)
+      gl.bindTexture(gl.TEXTURE_2D, tex)
+      gl.uniform1i(loc, unit)
+      unit++
+    }
+    return unit
+  }
+
   /**
    * Render a fragment shader and return an ImageBitmap, or null on compile error.
    */
@@ -158,6 +210,9 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
         gl.uniform4f(loc, u.value[0], u.value[1], u.value[2], u.value[3])
       }
     }
+
+    // Bind image-node textures (units from 0 — single pass has no input textures)
+    this.bindImageTextures(program, 0)
 
     // Render to FBO
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo)
@@ -228,7 +283,10 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
   }
 
   /**
-   * Render a multi-pass preview chain. Uses a pair of 80×80 FBOs for ping-pong. [P8]
+   * Render a multi-pass preview chain. One 80×80 FBO per intermediate pass —
+   * relay passes read from non-adjacent passes, so ping-pong (index % 2)
+   * aliases sources and creates GL feedback loops. Mirrors the main renderer
+   * and the WebGPU preview (commit f4aabdf). [P8]
    */
   async renderMultiPassPreview(
     passes: Array<{ fragmentShader: string; uniforms: UniformUpload[]; inputTextures: Record<string, number> }>,
@@ -241,8 +299,8 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
       return this.renderPreview(passes[0].fragmentShader, passes[0].uniforms)
     }
 
-    // Allocate temp FBO pair for ping-pong (lazy, reused across calls)
-    this.ensurePingPongFBOs()
+    // One FBO per intermediate pass (lazy, grows and is reused across calls)
+    this.ensurePassFBOs(passes.length - 1)
 
     const time = (Date.now() - this.startTime) / 1000
 
@@ -271,11 +329,11 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
         this.cacheOrder.push(pass.fragmentShader)
       }
 
-      // Bind target: last pass → main FBO, intermediate → ping-pong FBO
+      // Bind target: last pass → main FBO, intermediate → its own pass FBO
       if (isLast) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo)
       } else {
-        gl.bindFramebuffer(gl.FRAMEBUFFER, this.pingPongFBOs![i % 2].framebuffer)
+        gl.bindFramebuffer(gl.FRAMEBUFFER, this.passFBOs[i].framebuffer)
       }
 
       gl.viewport(0, 0, PREVIEW_SIZE, PREVIEW_SIZE)
@@ -305,16 +363,20 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
         else if (u.value.length === 4) gl.uniform4f(loc, u.value[0], u.value[1], u.value[2], u.value[3])
       }
 
-      // Bind input textures from previous passes
+      // Bind input textures from previous passes (absolute pass indices)
       let texUnit = 0
       for (const [samplerName, sourcePassIdx] of Object.entries(pass.inputTextures)) {
-        const sourceFbo = this.pingPongFBOs![sourcePassIdx % 2]
+        const sourceFbo = this.passFBOs[sourcePassIdx]
+        if (!sourceFbo) continue
         gl.activeTexture(gl.TEXTURE0 + texUnit)
         gl.bindTexture(gl.TEXTURE_2D, sourceFbo.texture)
         const samplerLoc = gl.getUniformLocation(program, samplerName)
         if (samplerLoc) gl.uniform1i(samplerLoc, texUnit)
         texUnit++
       }
+
+      // Image-node textures after pass inputs
+      this.bindImageTextures(program, texUnit)
 
       // Draw
       gl.bindVertexArray(this.vao)
@@ -339,13 +401,12 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
     return this.renderToImageBitmap(imageData)
   }
 
-  // Ping-pong FBOs for multi-pass preview (shared, allocated once) [P8]
-  private pingPongFBOs: Array<{ framebuffer: WebGLFramebuffer; texture: WebGLTexture }> | null = null
+  // Per-pass FBOs for multi-pass preview (shared, grown on demand) [P8]
+  private passFBOs: Array<{ framebuffer: WebGLFramebuffer; texture: WebGLTexture }> = []
 
-  private ensurePingPongFBOs() {
-    if (this.pingPongFBOs) return
+  private ensurePassFBOs(count: number) {
     const gl = this.gl
-    this.pingPongFBOs = [0, 1].map(() => {
+    while (this.passFBOs.length < count) {
       const tex = gl.createTexture()!
       gl.bindTexture(gl.TEXTURE_2D, tex)
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, PREVIEW_SIZE, PREVIEW_SIZE, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
@@ -359,8 +420,8 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
       gl.bindFramebuffer(gl.FRAMEBUFFER, fb)
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0)
       gl.bindFramebuffer(gl.FRAMEBUFFER, null)
-      return { framebuffer: fb, texture: tex }
-    })
+      this.passFBOs.push({ framebuffer: fb, texture: tex })
+    }
   }
 
   dispose() {
@@ -369,12 +430,13 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
     this.programCache.clear()
     gl.deleteFramebuffer(this.fbo)
     gl.deleteTexture(this.fboTexture)
-    if (this.pingPongFBOs) {
-      for (const fbo of this.pingPongFBOs) {
-        gl.deleteFramebuffer(fbo.framebuffer)
-        gl.deleteTexture(fbo.texture)
-      }
+    for (const fbo of this.passFBOs) {
+      gl.deleteFramebuffer(fbo.framebuffer)
+      gl.deleteTexture(fbo.texture)
     }
+    this.passFBOs = []
+    for (const tex of this.imageTextures.values()) gl.deleteTexture(tex)
+    this.imageTextures.clear()
     gl.deleteShader(this.vertexShader)
   }
 }

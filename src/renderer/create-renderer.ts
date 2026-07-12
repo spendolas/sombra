@@ -10,10 +10,16 @@ import type { ShaderRenderer, PreviewRenderer } from './types'
  * Create and initialize a main shader renderer on the given canvas.
  * Tries WebGPU first. Falls back to WebGL2 on failure or when WebGPU is unavailable.
  */
+/** `?backend=webgl2` forces the WebGL2 fallback — the only way to exercise it in a WebGPU-capable browser. */
+export function isWebGL2Forced(): boolean {
+  return typeof location !== 'undefined' &&
+    new URLSearchParams(location.search).get('backend') === 'webgl2'
+}
+
 export async function createShaderRenderer(
   canvas: HTMLCanvasElement,
 ): Promise<ShaderRenderer> {
-  if (typeof navigator !== 'undefined' && navigator.gpu) {
+  if (typeof navigator !== 'undefined' && navigator.gpu && !isWebGL2Forced()) {
     try {
       const { WebGPUShaderRenderer } = await import('../webgpu/renderer')
       const renderer = new WebGPUShaderRenderer()

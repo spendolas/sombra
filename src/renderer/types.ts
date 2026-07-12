@@ -119,6 +119,14 @@ export interface PreviewRenderer {
   /** Forward main canvas resolution for pixel-based uniform calculations. */
   setMainResolution(width: number, height: number): void
 
+  /**
+   * Upload/delete image-node textures. WebGL2 only: GL contexts can't share
+   * textures, so the preview context needs its own copies. The WebGPU preview
+   * reads the main renderer's textures via a provider and omits these.
+   */
+  uploadImageTexture?(samplerName: string, image: HTMLImageElement): void
+  deleteImageTexture?(samplerName: string): void
+
   /** Which backend is active. */
   readonly backend: 'webgl2' | 'webgpu'
 }
