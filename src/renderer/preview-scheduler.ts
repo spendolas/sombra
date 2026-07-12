@@ -47,7 +47,7 @@ type CachedShader = CachedShaderWebGL2 | CachedShaderWebGPU
 export class PreviewScheduler {
   private renderer: PreviewRenderer
   private isWebGPU: boolean
-  private worker: Worker
+  private worker!: Worker
   private rafId: number | null = null
   private running = false
 
@@ -57,7 +57,12 @@ export class PreviewScheduler {
 
   // Staleness tracking
   private staleNodes = new Set<string>()
-  private pendingCompile = new Set<string>() // nodes awaiting Worker response
+  private pendingCompile = new Map<string, number>() // nodeId → dispatch timestamp
+
+  // Worker failure recovery — a crashed/hung worker never answers, so without
+  // this every pending thumbnail stays frozen for the rest of the session
+  private consecutiveWorkerFailures = 0
+  private readonly PENDING_TIMEOUT_MS = 10_000
 
   // Dependency map: nodeId → set of downstream nodeIds
   private downstreamMap = new Map<string, Set<string>>()
@@ -83,8 +88,41 @@ export class PreviewScheduler {
   constructor(renderer: PreviewRenderer) {
     this.renderer = renderer
     this.isWebGPU = renderer.backend === 'webgpu'
+    this.spawnWorker()
+  }
+
+  private spawnWorker() {
+    this.worker?.terminate()
     this.worker = new CompilerWorker()
     this.worker.onmessage = this.onWorkerMessage.bind(this)
+    this.worker.onerror = (event) => {
+      console.error('[preview] compiler worker crashed — respawning:', event.message, event)
+      this.recoverFromWorkerFailure()
+    }
+  }
+
+  /**
+   * Crash/hang recovery: respawn the worker and requeue what was in flight.
+   * One retry only — a second failure without a successful response in
+   * between means the graph itself likely kills the worker, so the pending
+   * nodes are dropped (they re-mark stale on the next edit) instead of
+   * entering a crash loop.
+   */
+  private recoverFromWorkerFailure() {
+    this.consecutiveWorkerFailures++
+    const pending = [...this.pendingCompile.keys()]
+    this.pendingCompile.clear()
+    this.spawnWorker()
+
+    if (this.consecutiveWorkerFailures <= 1) {
+      for (const id of pending) this.staleNodes.add(id)
+    } else {
+      for (const id of pending) this.staleNodes.delete(id)
+      console.error(
+        '[preview] worker failed twice in a row — dropping pending thumbnails:',
+        pending
+      )
+    }
   }
 
   /**
@@ -141,7 +179,7 @@ export class PreviewScheduler {
     for (const id of [...this.staleNodes]) {
       if (!currentNodeIds.has(id)) this.staleNodes.delete(id)
     }
-    for (const id of [...this.pendingCompile]) {
+    for (const id of [...this.pendingCompile.keys()]) {
       if (!currentNodeIds.has(id)) this.pendingCompile.delete(id)
     }
 
@@ -214,6 +252,7 @@ export class PreviewScheduler {
    */
   private async onWorkerMessage(event: MessageEvent<PreviewResponse | PreviewIRResponse>) {
     const data = event.data
+    this.consecutiveWorkerFailures = 0
 
     if (data.type === 'preview-ir') {
       await this.handleIRPreviewResult(data)
@@ -366,6 +405,17 @@ export class PreviewScheduler {
       }
     }
 
+    // Hung-worker sweep: a compile that never answers (runaway codegen) would
+    // otherwise pin its node in pendingCompile forever — and since the worker
+    // is single-threaded, stall every other pending thumbnail with it.
+    for (const [, since] of this.pendingCompile) {
+      if (now - since > this.PENDING_TIMEOUT_MS) {
+        console.error('[preview] compile hung >10s — restarting preview worker')
+        this.recoverFromWorkerFailure()
+        break
+      }
+    }
+
     // Batch multiple stale nodes per frame within a time budget
     const FRAME_BUDGET_MS = 8
     // Remove hidePreview nodes from stale set
@@ -381,7 +431,7 @@ export class PreviewScheduler {
       if (this.pendingCompile.has(nodeId)) continue
 
       // Request compilation from Worker
-      this.pendingCompile.add(nodeId)
+      this.pendingCompile.set(nodeId, performance.now())
       const id = `preview-${++this.compileIdCounter}`
 
       if (this.isWebGPU) {
