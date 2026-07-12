@@ -102,6 +102,14 @@ function App() {
     passes?: RenderPass[]
   } | null>(null)
 
+  // Last successful compile result — replayed onto a fresh device after
+  // GPU device/context loss (all GPU-side state is gone at that point).
+  const lastCompileResultRef = useRef<typeof pendingCompileRef.current>(null)
+
+  // Bumped on device loss: the preview renderer + scheduler share the main
+  // renderer's GPUDevice, so they must be rebuilt on the replacement device.
+  const [previewEpoch, setPreviewEpoch] = useState(0)
+
   // Target refs for canvas reparenting
   const dockTargetRef = useRef<HTMLDivElement>(null)
   const floatTargetRef = useRef<HTMLDivElement>(null)
@@ -201,9 +209,27 @@ function App() {
       renderer = r
       rendererRef.current = r
 
-      // Expose backend info on dev bridge
+      // Expose the renderer on the dev bridge (`.backend` plus full instance
+      // for automation — e.g. exercising device-loss recovery)
       const sombra = (window as unknown as Record<string, unknown>).__sombra as Record<string, unknown> | undefined
-      if (sombra) sombra.renderer = { backend: r.backend }
+      if (sombra) sombra.renderer = r
+
+      // Recovery: fires after the renderer rebuilt itself on a fresh
+      // device/context — replay the plan, re-upload images, rebuild previews.
+      r.onDeviceLost(() => {
+        const last = lastCompileResultRef.current
+        if (last) applyCompileResult(r, last)
+        for (const node of useGraphStore.getState().nodes) {
+          if (node.data.type !== 'image') continue
+          const imageData = node.data.params?.imageData as string | undefined
+          if (!imageData) continue
+          const samplerName = `u_${node.id.replace(/-/g, '_')}_image`
+          const img = new Image()
+          img.onload = () => rendererRef.current?.uploadImageTexture(samplerName, img)
+          img.src = imageData
+        }
+        setPreviewEpoch((e) => e + 1)
+      })
 
       // Replay any compile result that arrived while the factory was resolving.
       if (pendingCompileRef.current) {
@@ -228,6 +254,7 @@ function App() {
   useEffect(() => {
     let disposed = false
     let scheduler: PreviewScheduler | null = null
+    let previewRenderer: PreviewRenderer | null = null
 
     // Poll for the main renderer (it initializes asynchronously in a sibling effect).
     // Once available, create the preview renderer sharing its device.
@@ -238,11 +265,12 @@ function App() {
         requestAnimationFrame(tryInit)
         return
       }
-      createPreviewRenderer(mainRenderer).then((previewRenderer) => {
-        if (disposed) { previewRenderer.dispose(); return }
-        scheduler = new PreviewScheduler(previewRenderer)
+      createPreviewRenderer(mainRenderer).then((pr) => {
+        if (disposed) { pr.dispose(); return }
+        previewRenderer = pr
+        scheduler = new PreviewScheduler(pr)
         schedulerRef.current = scheduler
-        previewRendererRef.current = previewRenderer
+        previewRendererRef.current = pr
         scheduler.start()
         // Feed the current graph state so previews render on initial load
         const { nodes: currentNodes, edges: currentEdges } = useGraphStore.getState()
@@ -271,10 +299,12 @@ function App() {
     return () => {
       disposed = true
       scheduler?.destroy()
+      previewRenderer?.dispose()
       schedulerRef.current = null
       previewRendererRef.current = null
     }
-  }, [])
+    // previewEpoch bump = device loss: rebuild on the replacement GPUDevice
+  }, [previewEpoch])
 
   // Feed graph changes to the preview scheduler
   useEffect(() => {
@@ -402,6 +432,10 @@ function App() {
         const wgslPasses = result.wgsl?.passes
         cs.setShaders('', result.fragmentShader, wgslPasses?.[wgslPasses.length - 1]?.shaderCode)
         cs.markCompileSuccess()
+      }
+
+      if (result.success) {
+        lastCompileResultRef.current = result
       }
 
       if (result.success && rendererRef.current) {

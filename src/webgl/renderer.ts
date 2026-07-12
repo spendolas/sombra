@@ -211,10 +211,11 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
       this.buffer = null
       this.uniforms.clear()
       this.passStates = []
-      // Notify consumer of device loss
-      this.deviceLostCallback?.()
       this.fboPool = []
       this.programCache.clear()
+      // Image textures died with the context — drop the stale handles;
+      // the consumer re-uploads via the restore callback below.
+      this.imageTextures.clear()
     })
 
     this.canvas.addEventListener('webglcontextrestored', () => {
@@ -223,6 +224,9 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
       this.detectGPUCaps()
       this.updateShader(DEFAULT_FRAGMENT_SHADER)
       if (this.animated) this.startAnimation()
+      // Fire AFTER restore (parity with the WebGPU recovery path): the
+      // consumer re-applies the render plan and re-uploads image textures.
+      this.deviceLostCallback?.()
     })
   }
 

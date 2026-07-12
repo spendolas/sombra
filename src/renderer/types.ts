@@ -29,7 +29,12 @@ export interface ShaderRenderer {
   /** Release all GPU resources. */
   dispose(): void
 
-  /** Register a callback for GPU device/context loss. */
+  /**
+   * Register a callback invoked AFTER the renderer auto-recovers from GPU
+   * device/context loss (fresh device or restored GL context). All GPU-side
+   * state is gone at that point — the consumer must re-apply the render plan
+   * and re-upload image textures.
+   */
   onDeviceLost(callback: () => void): void
 
   /** Apply a compiled render plan (from the compiler output). */

@@ -194,6 +194,12 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     this.pipeline = null
     this.uniformBindGroup = null
     this.textureBindGroup = null
+
+    // Release the GPUDevice itself — browsers cap devices per page, and
+    // StrictMode double-init would otherwise leak one per mount cycle.
+    // (The lost-handler ignores reason 'destroyed'. The shared preview
+    // renderer is torn down alongside this in App.)
+    this.device?.destroy()
   }
 
   // -----------------------------------------------------------------------
@@ -220,7 +226,6 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
       if (info.reason === 'destroyed') return
 
       this.stopAnimation()
-      this.deviceLostCallback?.()
 
       this.adapter.requestDevice().then((device: GPUDevice) => {
         this.device = device
@@ -241,8 +246,15 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
         this.textureBindGroup = null
         this.uniformBuffer = null
         this.destroyMultiPassState()
+        // Image textures belonged to the dead device — drop them so binds
+        // don't reference invalid objects; the consumer re-uploads below.
+        this.imageTextures.clear()
 
         if (this.animated) this.startAnimation()
+
+        // Fire AFTER recovery: the consumer re-applies the render plan and
+        // re-uploads image textures onto the fresh device.
+        this.deviceLostCallback?.()
       }).catch((err: unknown) => {
         console.error('[Sombra WebGPU] Failed to recover from device loss:', err)
       })
