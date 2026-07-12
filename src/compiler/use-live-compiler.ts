@@ -4,7 +4,7 @@
  * take a synchronous fast path on the main thread (no recompile).
  */
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useGraphStore } from '../stores/graphStore'
 import { useCompilerStore } from '../stores/compilerStore'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -50,7 +50,11 @@ export function useLiveCompiler(
   const setCompiling = useCompilerStore((state) => state.setCompiling)
   const markCompileSuccess = useCompilerStore((state) => state.markCompileSuccess)
 
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  // Separate timers: a slider drag must not reset a pending semantic compile
+  // (starvation) and a structural edit must not swallow a pending uniform push.
+  const semanticTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const uniformTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const workerRef = useRef<Worker | null>(null)
   const currentCompileId = useRef<string | null>(null)
 
@@ -63,7 +67,6 @@ export function useLiveCompiler(
   // Track last compiled uniform specs for the fast path
   const lastUniformsRef = useRef<UniformSpec[]>([])
   const lastSemanticKeyRef = useRef('')
-  const lastRendererKeyRef = useRef('')
 
   // Dynamic debounce — adapts to actual compile duration
   const lastCompileDuration = useRef(initialDebounceMs)
@@ -76,8 +79,45 @@ export function useLiveCompiler(
   onUniformUpdateRef.current = onUniformUpdate
   onRendererUpdateRef.current = onRendererUpdate
 
-  // --- Worker lifecycle: create once on mount, terminate on unmount ---
-  useEffect(() => {
+  /**
+   * Resolve the CURRENT value of every unwired uniform param from the live
+   * graph. Used by the fast path and by the post-compile re-apply: the plan
+   * the renderer just received carries dispatch-time values, so any slider
+   * moved while the compile was in flight would otherwise snap back.
+   */
+  const collectCurrentUniformValues = useCallback(() => {
+    const specs = lastUniformsRef.current
+    if (!specs.length) return []
+
+    const wiredTargets = new Set(
+      edgesRef.current.map((e) => `${e.target}:${e.targetHandle}`)
+    )
+    const nodeMap = new Map(nodesRef.current.map((n) => [n.id, n]))
+
+    const values: Array<{ name: string; value: number | number[] }> = []
+    for (const spec of specs) {
+      // Skip if this param is now wired (no uniform needed)
+      if (wiredTargets.has(`${spec.nodeId}:${spec.paramId}`)) continue
+
+      const node = nodeMap.get(spec.nodeId)
+      if (!node) continue
+
+      const currentValue = node.data.params?.[spec.paramId]
+      if (currentValue !== undefined) {
+        values.push({ name: spec.name, value: currentValue as number | number[] })
+      } else {
+        values.push({ name: spec.name, value: spec.value })
+      }
+    }
+    return values
+  }, [])
+
+  // --- Worker lifecycle: spawn on mount, respawn on crash/hang, terminate on unmount ---
+  const spawnWorkerRef = useRef<() => void>(() => {})
+  const dispatchCompileRef = useRef<() => void>(() => {})
+  const consecutiveCrashesRef = useRef(0)
+  spawnWorkerRef.current = () => {
+    workerRef.current?.terminate()
     const worker = new CompilerWorker()
     workerRef.current = worker
 
@@ -87,6 +127,11 @@ export function useLiveCompiler(
       // Discard stale results — a newer compile was dispatched
       if (id !== currentCompileId.current) return
 
+      if (watchdogRef.current) {
+        clearTimeout(watchdogRef.current)
+        watchdogRef.current = undefined
+      }
+      consecutiveCrashesRef.current = 0
       lastCompileDuration.current = durationMs
 
       if (error) {
@@ -126,6 +171,11 @@ export function useLiveCompiler(
           passes: result.passes,
           wgsl: result.wgsl,
         })
+
+        // Params may have moved while the compile was in flight — the plan
+        // applied above baked dispatch-time values, so push the live ones.
+        const live = collectCurrentUniformValues()
+        if (live.length) onUniformUpdateRef.current?.(live)
       } else {
         setErrors(
           (result?.errors ?? []).map((err) => ({
@@ -143,15 +193,42 @@ export function useLiveCompiler(
     }
 
     worker.onerror = (event) => {
-      console.error('[Sombra] Compiler worker error:', event.message, event)
-      setCompiling(false)
-    }
+      // A crashed worker never answers again — without a respawn every future
+      // compile would silently go nowhere.
+      console.error('[Sombra] Compiler worker crashed — respawning:', event.message, event)
+      if (watchdogRef.current) {
+        clearTimeout(watchdogRef.current)
+        watchdogRef.current = undefined
+      }
+      currentCompileId.current = null
+      consecutiveCrashesRef.current += 1
+      spawnWorkerRef.current()
 
-    return () => {
-      worker.terminate()
-      workerRef.current = null
+      if (consecutiveCrashesRef.current <= 1) {
+        // Transient crash — retry the lost compile once on the fresh worker
+        dispatchCompileRef.current()
+      } else {
+        // Crashed again without a successful response in between — the graph
+        // itself likely kills the worker; stop retrying to avoid a crash loop.
+        setErrors([
+          {
+            message: 'Shader compiler crashed repeatedly — this graph may trigger a compiler bug. Undo the last edit.',
+            severity: 'error' as const,
+          },
+        ])
+        setCompiling(false)
+      }
     }
-  }, [setShaders, setErrors, setCompiling, markCompileSuccess])
+  }
+
+  useEffect(() => {
+    spawnWorkerRef.current()
+    return () => {
+      workerRef.current?.terminate()
+      workerRef.current = null
+      if (watchdogRef.current) clearTimeout(watchdogRef.current)
+    }
+  }, [])
 
   // Derive semantic key from only structural (recompile-mode) data
   const semanticKey = useMemo(() => {
@@ -213,96 +290,98 @@ export function useLiveCompiler(
       .join('|')
   }, [nodes])
 
-  // --- Dispatch effect: compile via Worker or fast-path uniform upload ---
+  // Dispatch the current graph to the Worker. Shared by the semantic effect's
+  // debounce timer and the crash-retry path; reassigned each render so it
+  // always compiles the latest graph and records the latest semantic key.
+  dispatchCompileRef.current = () => {
+    const id = crypto.randomUUID()
+    currentCompileId.current = id
+    lastSemanticKeyRef.current = semanticKey
+    workerRef.current?.postMessage({
+      id,
+      nodes: nodesRef.current,
+      edges: edgesRef.current,
+      useIR: useIR ?? false,
+    })
+
+    // Watchdog: a hung worker (runaway codegen) never errors and never
+    // answers — without this the spinner sticks forever.
+    if (watchdogRef.current) clearTimeout(watchdogRef.current)
+    watchdogRef.current = setTimeout(() => {
+      console.error('[Sombra] Compile timed out after 10s — restarting compiler worker')
+      currentCompileId.current = null
+      spawnWorkerRef.current()
+      setErrors([
+        {
+          message: 'Shader compile timed out — compiler restarted. Undo the last edit.',
+          severity: 'error' as const,
+        },
+      ])
+      setCompiling(false)
+    }, 10_000)
+  }
+
+  // --- Semantic effect: structural change → debounced Worker recompile ---
   useEffect(() => {
     if (!autoCompile) return
 
-    // Clear existing timeout
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current)
-    }
-
-    const rendererChanged = rendererKey !== lastRendererKeyRef.current
-    const semanticChanged = semanticKey !== lastSemanticKeyRef.current
-
-    // Renderer-only path — no debounce, no recompile, no uniform upload
-    if (rendererChanged && !semanticChanged) {
-      lastRendererKeyRef.current = rendererKey
-      const outputNode = nodesRef.current.find((n) => n.data.type === 'fragment_output')
-      const qualityTier = (outputNode?.data.params?.quality as string) ?? 'adaptive'
-      const anchor = (outputNode?.data.params?.anchor as string) ?? 'center'
-      onRendererUpdateRef.current?.({ qualityTier, anchor })
+    if (semanticKey === lastSemanticKeyRef.current) {
+      // Reverted to the already-dispatched graph (undo during debounce) — the
+      // pending timer was cleared by this effect's own cleanup; drop the
+      // spinner too or it sticks forever. (If a compile of this same key is
+      // still in flight, its response re-clears — harmless.)
+      setCompiling(false)
       return
     }
 
+    setCompiling(true)
+
     // Dynamic debounce: clamp(lastDuration * 0.8, 50, 300)
-    const delay = Math.min(
-      300,
-      Math.max(50, lastCompileDuration.current * 0.8)
-    )
+    const delay = Math.min(300, Math.max(50, lastCompileDuration.current * 0.8))
 
-    if (semanticChanged) {
-      // Full recompile path — dispatch to Worker
-      setCompiling(true)
-
-      timeoutRef.current = setTimeout(() => {
-        const id = crypto.randomUUID()
-        currentCompileId.current = id
-        lastSemanticKeyRef.current = semanticKey
-        workerRef.current?.postMessage({
-          id,
-          nodes: nodesRef.current,
-          edges: edgesRef.current,
-          useIR: useIR ?? false,
-        })
-      }, delay)
-    } else {
-      // Fast uniform-only path — no recompile, stays on main thread
-      timeoutRef.current = setTimeout(() => {
-        const specs = lastUniformsRef.current
-        if (!specs.length || !onUniformUpdateRef.current) return
-
-        // Build current edge set for wired-param detection
-        const currentEdges = edgesRef.current
-        const wiredTargets = new Set(
-          currentEdges.map((e) => `${e.target}:${e.targetHandle}`)
-        )
-
-        const values: Array<{ name: string; value: number | number[] }> = []
-        const currentNodes = nodesRef.current
-        const nodeMap = new Map(currentNodes.map((n) => [n.id, n]))
-
-        for (const spec of specs) {
-          // Skip if this param is now wired (no uniform needed)
-          if (wiredTargets.has(`${spec.nodeId}:${spec.paramId}`)) continue
-
-          const node = nodeMap.get(spec.nodeId)
-          if (!node) continue
-
-          const currentValue = node.data.params?.[spec.paramId]
-          if (currentValue !== undefined) {
-            values.push({ name: spec.name, value: currentValue as number | number[] })
-          } else {
-            values.push({ name: spec.name, value: spec.value })
-          }
-        }
-
-        if (values.length > 0) {
-          onUniformUpdateRef.current(values)
-        }
-      }, delay)
-    }
+    if (semanticTimerRef.current) clearTimeout(semanticTimerRef.current)
+    semanticTimerRef.current = setTimeout(() => {
+      semanticTimerRef.current = undefined
+      dispatchCompileRef.current()
+    }, delay)
 
     return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
+      if (semanticTimerRef.current) {
+        clearTimeout(semanticTimerRef.current)
+        semanticTimerRef.current = undefined
       }
     }
-  }, [
-    semanticKey,
-    uniformKey,
-    rendererKey,
-    autoCompile,
-    setCompiling,
-  ])
+  }, [semanticKey, autoCompile, setCompiling])
+
+  // --- Uniform effect: slider drag → fast-path upload, no recompile ---
+  // Fixed short debounce: upload cost is trivial (no codegen), so tying it to
+  // compile duration only made sliders laggy.
+  useEffect(() => {
+    if (!autoCompile) return
+
+    if (uniformTimerRef.current) clearTimeout(uniformTimerRef.current)
+    uniformTimerRef.current = setTimeout(() => {
+      uniformTimerRef.current = undefined
+      const values = collectCurrentUniformValues()
+      if (values.length > 0) onUniformUpdateRef.current?.(values)
+    }, 50)
+
+    return () => {
+      if (uniformTimerRef.current) {
+        clearTimeout(uniformTimerRef.current)
+        uniformTimerRef.current = undefined
+      }
+    }
+  }, [uniformKey, autoCompile, collectCurrentUniformValues])
+
+  // --- Renderer effect: quality/anchor change → direct renderer call ---
+  // Unconditional on key change: the old combined effect skipped this branch
+  // whenever a semantic change landed in the same pass, dropping the update.
+  useEffect(() => {
+    if (!autoCompile) return
+    const outputNode = nodesRef.current.find((n) => n.data.type === 'fragment_output')
+    const qualityTier = (outputNode?.data.params?.quality as string) ?? 'adaptive'
+    const anchor = (outputNode?.data.params?.anchor as string) ?? 'center'
+    onRendererUpdateRef.current?.({ qualityTier, anchor })
+  }, [rendererKey, autoCompile])
 }
