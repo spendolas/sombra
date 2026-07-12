@@ -30,3 +30,5 @@ binding-audit.ndjson
 tokens/figma-components.json
 tokens/.figma-vars-cache.json
 .figma-eval-tmp.*
+reports/self-validate/
+tsconfig.tsbuildinfo
