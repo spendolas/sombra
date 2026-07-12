@@ -2,13 +2,14 @@
  * ShaderNode - Visual component for shader nodes on the canvas
  */
 
-import { memo, useCallback, useRef, useEffect } from 'react'
+import { memo, useCallback, useMemo, useRef, useEffect } from 'react'
 import { Position, useEdges, type NodeProps } from '@xyflow/react'
 import type { NodeData, NodeParameter } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { NodeParameters, FloatSlider } from './NodeParameters'
 import { useGraphStore } from '../stores/graphStore'
 import { usePreviewStore } from '../stores/previewStore'
+import { useCompilerStore } from '../stores/compilerStore'
 import { BaseNode, BaseNodeHeader, BaseNodeHeaderTitle, BaseNodeContent } from '@/components/base-node'
 import { LabeledHandle } from '@/components/labeled-handle'
 import { BaseHandle } from '@/components/base-handle'
@@ -122,6 +123,10 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
       params: { ...currentValues, inputCount: newCount },
     })
   }, [id, currentValues, inputCount, edges, updateNodeData, onEdgesChange])
+
+  // Compile errors attributed to this node (before early return — hook order)
+  const allErrors = useCompilerStore((s) => s.errors)
+  const nodeErrors = useMemo(() => allErrors.filter((e) => e.nodeId === id), [allErrors, id])
 
   if (!definition) {
     return (
@@ -258,11 +263,19 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   }, [showPreview]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <BaseNode className="min-w-node">
+    <BaseNode className={cn('min-w-node', nodeErrors.length > 0 && 'ring-2 ring-error')}>
       <BaseNodeHeader>
         <BaseNodeHeaderTitle>
           {definition.label}
         </BaseNodeHeaderTitle>
+        {nodeErrors.length > 0 && (
+          <span
+            className="text-error text-param shrink-0"
+            title={nodeErrors.map((e) => e.message).join('\n')}
+          >
+            ⚠︎
+          </span>
+        )}
       </BaseNodeHeader>
       {/* Preview: conditional nodes get animated wrapper, others render directly */}
       {!definition.hidePreview && (definition.conditionalPreview ? (

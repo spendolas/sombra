@@ -58,6 +58,8 @@ export interface RenderPlan {
   fragmentShader: string
   userUniforms: UniformSpec[]
   // WebGPU/WGSL data (optional — present when IR path is active)
+  /** Set when the IR/WGSL path was requested but failed while GLSL succeeded. */
+  wgslError?: string
   wgsl?: {
     passes: Array<{
       shaderCode: string

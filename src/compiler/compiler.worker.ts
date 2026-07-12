@@ -153,8 +153,13 @@ self.onmessage = (event: MessageEvent<CompileRequest | PreviewRequest | PreviewI
       const wgslResult = compileGraphIR(nodes, edges)
       if (wgslResult) {
         result.wgsl = { passes: wgslResult.passes }
+      } else {
+        // IR failure with GLSL success: on a WebGPU renderer the canvas keeps
+        // the previous shader — surface it instead of reporting clean success
+        // (plan.wgsl stays undefined).
+        result.wgslError =
+          'WebGPU shader generation (IR) failed — preview may be stale. See console for details.'
       }
-      // If wgslResult is null (IR failure), plan.wgsl stays undefined
     }
 
     const durationMs = performance.now() - start

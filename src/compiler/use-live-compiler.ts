@@ -109,6 +109,12 @@ export function useLiveCompiler(
       if (result?.success && outputConnected) {
         setShaders(result.vertexShader, result.fragmentShader)
         markCompileSuccess()
+        // GLSL compiled but the WGSL/IR path failed — on a WebGPU renderer the
+        // canvas silently keeps the previous shader, so surface it as an error
+        // (markCompileSuccess above cleared the error list; set after).
+        if (result.wgslError) {
+          setErrors([{ message: result.wgslError, severity: 'error' as const }])
+        }
         lastUniformsRef.current = result.userUniforms
 
         onCompileRef.current?.({
