@@ -43,6 +43,9 @@ interface GraphState {
   // Undo/redo
   _past: HistoryEntry[]
   _future: HistoryEntry[]
+  /** Coalescing: last history-pushing action key (e.g. "param:<nodeId>") + time */
+  _lastActionKey: string | null
+  _lastActionTime: number
   canUndo: boolean
   canRedo: boolean
   undo: () => void
@@ -56,6 +59,8 @@ interface GraphState {
 
   addNode: (node: Node<NodeData>) => void
   removeNode: (nodeId: string) => void
+  /** Atomic multi-element delete (node + connected edges = ONE history entry). */
+  removeElements: (nodeIds: string[], edgeIds: string[]) => void
   updateNodeData: (nodeId: string, data: Partial<NodeData>) => void
 
   addEdge: (edge: Edge<EdgeData>) => void
@@ -99,6 +104,8 @@ export const useGraphStore = create<GraphState>()(
 
       _past: [],
       _future: [],
+      _lastActionKey: null,
+      _lastActionTime: 0,
       canUndo: false,
       canRedo: false,
 
@@ -111,6 +118,7 @@ export const useGraphStore = create<GraphState>()(
           edges: prev.edges,
           _past: _past.slice(0, -1),
           _future: [..._future, { nodes, edges }],
+          _lastActionKey: null,
           canUndo: _past.length > 1,
           canRedo: true,
         })
@@ -125,6 +133,7 @@ export const useGraphStore = create<GraphState>()(
           edges: next.edges,
           _past: [..._past, { nodes, edges }],
           _future: _future.slice(0, -1),
+          _lastActionKey: null,
           canUndo: true,
           canRedo: _future.length > 1,
         })
@@ -174,6 +183,7 @@ export const useGraphStore = create<GraphState>()(
           nodes: [...state.nodes, node],
           _past: past,
           _future: [],
+          _lastActionKey: null,
           canUndo: true,
           canRedo: false,
         })
@@ -188,19 +198,66 @@ export const useGraphStore = create<GraphState>()(
           selectedNodeIds: state.selectedNodeIds.filter((id) => id !== nodeId),
           _past: past,
           _future: [],
+          _lastActionKey: null,
+          canUndo: true,
+          canRedo: false,
+        })
+      },
+
+      removeElements: (nodeIds, edgeIds) => {
+        // Atomic delete: React Flow's default deletion emits node removes and
+        // connected-edge removes as SEPARATE change events → two history
+        // entries → one undo restored the node without its edges. FlowCanvas
+        // routes deletion here instead (one snapshot).
+        if (nodeIds.length === 0 && edgeIds.length === 0) return
+        const state = get()
+        const past = pushHistory(state._past, snapshot(state))
+        const removedNodes = new Set(nodeIds)
+        const removedEdges = new Set(edgeIds)
+        set({
+          nodes: state.nodes.filter((n) => !removedNodes.has(n.id)),
+          edges: state.edges.filter(
+            (e) =>
+              !removedEdges.has(e.id) &&
+              !removedNodes.has(e.source) &&
+              !removedNodes.has(e.target)
+          ),
+          selectedNodeIds: state.selectedNodeIds.filter((id) => !removedNodes.has(id)),
+          selectedEdgeIds: state.selectedEdgeIds.filter((id) => !removedEdges.has(id)),
+          _past: past,
+          _future: [],
+          _lastActionKey: null,
           canUndo: true,
           canRedo: false,
         })
       },
 
       updateNodeData: (nodeId, data) => {
-        set((state) => ({
+        // Undoable, with coalescing: a slider drag emits a burst of updates —
+        // consecutive edits to the same node within the window share the
+        // pre-edit snapshot, so one undo reverts the whole drag.
+        const state = get()
+        const key = `param:${nodeId}`
+        const now = Date.now()
+        const coalesce =
+          state._lastActionKey === key && now - state._lastActionTime < 800
+        set({
           nodes: state.nodes.map((node) =>
             node.id === nodeId
               ? { ...node, data: { ...node.data, ...data } }
               : node
           ),
-        }))
+          ...(coalesce
+            ? {}
+            : {
+                _past: pushHistory(state._past, snapshot(state)),
+                _future: [],
+                canUndo: true,
+                canRedo: false,
+              }),
+          _lastActionKey: key,
+          _lastActionTime: now,
+        })
       },
 
       addEdge: (edge) => {
@@ -210,6 +267,7 @@ export const useGraphStore = create<GraphState>()(
           edges: [...state.edges, edge],
           _past: past,
           _future: [],
+          _lastActionKey: null,
           canUndo: true,
           canRedo: false,
         })
@@ -223,6 +281,7 @@ export const useGraphStore = create<GraphState>()(
           selectedEdgeIds: state.selectedEdgeIds.filter((id) => id !== edgeId),
           _past: past,
           _future: [],
+          _lastActionKey: null,
           canUndo: true,
           canRedo: false,
         })
@@ -247,6 +306,7 @@ export const useGraphStore = create<GraphState>()(
           selectedEdgeIds: [],
           _past: past,
           _future: [],
+          _lastActionKey: null,
           canUndo: true,
           canRedo: false,
         })
@@ -266,6 +326,7 @@ export const useGraphStore = create<GraphState>()(
           selectedEdgeIds: [],
           _past: past,
           _future: [],
+          _lastActionKey: null,
           canUndo: true,
           canRedo: false,
         })
@@ -284,6 +345,7 @@ export const useGraphStore = create<GraphState>()(
           selectedEdgeIds: [],
           _past: past,
           _future: [],
+          _lastActionKey: null,
           canUndo: true,
           canRedo: false,
         })

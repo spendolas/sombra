@@ -47,6 +47,19 @@ export function FlowCanvas({
   const reconnectSuccessful = useRef(false)
 
   const replaceEdge = useGraphStore((s) => s.replaceEdge)
+  const removeElements = useGraphStore((s) => s.removeElements)
+
+  // Intercept deletion: React Flow's default flow emits node removes and
+  // connected-edge removes as separate change events, producing TWO history
+  // entries — one undo restored the node without its wires. Do the removal
+  // atomically in the store and cancel React Flow's own deletion.
+  const onBeforeDelete = useCallback(
+    async ({ nodes: delNodes, edges: delEdges }: { nodes: Node<NodeData>[]; edges: Edge<EdgeData>[] }) => {
+      removeElements(delNodes.map((n) => n.id), delEdges.map((e) => e.id))
+      return false
+    },
+    [removeElements]
+  )
 
   // Handle edge reconnection (drag endpoint to new port).
   // Mirrors onConnect: rebuild edge data (fresh sourcePortType for coloring),
@@ -180,6 +193,7 @@ export function FlowCanvas({
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
       onConnect={onConnect}
+      onBeforeDelete={onBeforeDelete}
       onReconnect={onReconnect}
       onReconnectStart={onReconnectStart}
       onReconnectEnd={onReconnectEnd}
