@@ -84,7 +84,10 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   const updateNodeData = useGraphStore((state) => state.updateNodeData)
   const onEdgesChange = useGraphStore((state) => state.onEdgesChange)
 
-  const currentValues = nodeData.params || ({} as Record<string, unknown>)
+  const currentValues = useMemo(
+    () => nodeData.params || ({} as Record<string, unknown>),
+    [nodeData.params]
+  )
 
   const handleParamChange = useCallback(
     (paramId: string, value: unknown) => {
@@ -128,53 +131,11 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   const allErrors = useCompilerStore((s) => s.errors)
   const nodeErrors = useMemo(() => allErrors.filter((e) => e.nodeId === id), [allErrors, id])
 
-  if (!definition) {
-    return (
-      <div className={ds.shaderNode.errorState}>
-        Unknown node: {nodeData.type}
-      </div>
-    )
-  }
-
-  const allParams = definition.params || []
-
-  // Build sets of connected port IDs for this node
-  const connectedInputs = new Set(
-    edges.filter((e) => e.target === id).map((e) => e.targetHandle)
-  )
-  const connectedOutputs = new Set(
-    edges.filter((e) => e.source === id).map((e) => e.sourceHandle)
-  )
-
-  // Resolve inputs: use dynamicInputs when available
-  const resolvedInputs = definition.dynamicInputs
-    ? definition.dynamicInputs(currentValues)
-    : definition.inputs
-
-  // Partition: connectable params that are visible
-  const connectableParams = allParams.filter(
-    (p) => p.connectable && isParamVisible(p, currentValues, allParams)
-  )
-  const connectableIds = new Set(connectableParams.map((p) => p.id))
-
-  // Split connectable params: framework SRT (_srt_*) vs node-specific
-  const srtParams = connectableParams.filter((p) => p.id.startsWith('srt_'))
-  const nodeConnectableParams = connectableParams.filter((p) => !p.id.startsWith('srt_'))
-
-  // Pure inputs: those NOT shadowed by a connectable param
-  const pureInputs = resolvedInputs.filter((inp) => !connectableIds.has(inp.id))
-
-  // Non-connectable, visible params (enums, non-connectable floats, colors)
-  const regularParams = allParams.filter(
-    (p) => !p.connectable && isParamVisible(p, currentValues, allParams)
-  )
-
-  // Dynamic input flag
-  const hasDynamicInputs = !!definition.dynamicInputs
-
-  // Determine if preview should show via upstream graph traversal
-  // BFS backward: if ANY always-visual node exists upstream, show preview
-  const showPreview = !definition.hidePreview && (!definition.conditionalPreview || (() => {
+  // Determine if preview should show via upstream graph traversal.
+  // BFS backward: if ANY always-visual node exists upstream, show preview.
+  // Computed before the early return so the animation hooks below stay
+  // unconditional (rules of hooks).
+  const showPreview = !!definition && !definition.hidePreview && (!definition.conditionalPreview || (() => {
     const visited = new Set<string>()
     const queue = edges.filter(e => e.target === id).map(e => e.source)
     while (queue.length > 0) {
@@ -260,7 +221,51 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
     }
 
     return () => cancelAnimationFrame(animRef.current)
-  }, [showPreview]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [showPreview])
+
+  if (!definition) {
+    return (
+      <div className={ds.shaderNode.errorState}>
+        Unknown node: {nodeData.type}
+      </div>
+    )
+  }
+
+  const allParams = definition.params || []
+
+  // Build sets of connected port IDs for this node
+  const connectedInputs = new Set(
+    edges.filter((e) => e.target === id).map((e) => e.targetHandle)
+  )
+  const connectedOutputs = new Set(
+    edges.filter((e) => e.source === id).map((e) => e.sourceHandle)
+  )
+
+  // Resolve inputs: use dynamicInputs when available
+  const resolvedInputs = definition.dynamicInputs
+    ? definition.dynamicInputs(currentValues)
+    : definition.inputs
+
+  // Partition: connectable params that are visible
+  const connectableParams = allParams.filter(
+    (p) => p.connectable && isParamVisible(p, currentValues, allParams)
+  )
+  const connectableIds = new Set(connectableParams.map((p) => p.id))
+
+  // Split connectable params: framework SRT (_srt_*) vs node-specific
+  const srtParams = connectableParams.filter((p) => p.id.startsWith('srt_'))
+  const nodeConnectableParams = connectableParams.filter((p) => !p.id.startsWith('srt_'))
+
+  // Pure inputs: those NOT shadowed by a connectable param
+  const pureInputs = resolvedInputs.filter((inp) => !connectableIds.has(inp.id))
+
+  // Non-connectable, visible params (enums, non-connectable floats, colors)
+  const regularParams = allParams.filter(
+    (p) => !p.connectable && isParamVisible(p, currentValues, allParams)
+  )
+
+  // Dynamic input flag
+  const hasDynamicInputs = !!definition.dynamicInputs
 
   return (
     <BaseNode className={cn('min-w-node', nodeErrors.length > 0 && 'ring-2 ring-error')}>
