@@ -64,7 +64,14 @@ function applyCompileResult(
 
   const updateResult = r.updateRenderPlan(plan)
   if (!updateResult.success) {
-    console.error('WebGL shader update failed:', updateResult.error)
+    console.error('[Sombra] Renderer rejected render plan:', updateResult.error)
+    // Surface it — otherwise the canvas just silently keeps the old shader
+    useCompilerStore.getState().setErrors([
+      {
+        message: `Renderer rejected shader: ${updateResult.error ?? 'unknown error'}`,
+        severity: 'error' as const,
+      },
+    ])
     return
   }
   if (result.userUniforms?.length) {

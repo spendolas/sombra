@@ -88,8 +88,12 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
   private isMultiPass = false
   /** Map uniform name → pass indices for routing uniform updates (multi-pass re-emission). */
   private uniformPassMap = new Map<string, number[]>()
-  /** Max intermediate textures (desktop). */
-  private static readonly MAX_INTERMEDIATE_TEXTURES = 8
+  /**
+   * Safety ceiling on intermediate textures (memory guard, not a GPU limit —
+   * each is a full-canvas RGBA8 render target). Exceeding it fails the plan
+   * loudly in updateMultiPass; the WebGL backend's FBO pool is uncapped.
+   */
+  private static readonly MAX_INTERMEDIATE_TEXTURES = 32
   /** Last rendered intermediate texture dimensions. */
   private lastIntermediateWidth = 0
   private lastIntermediateHeight = 0
@@ -336,6 +340,16 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
   }
 
   private updateMultiPass(wgslPasses: NonNullable<RenderPlan['wgsl']>['passes']): { success: boolean; error?: string } {
+    // Fail loudly instead of silently breaking: past this point every frame
+    // would thrash the texture pool and the final canvas pass would never run.
+    const numIntermediate = wgslPasses.length - 1
+    if (numIntermediate > WebGPUShaderRenderer.MAX_INTERMEDIATE_TEXTURES) {
+      return {
+        success: false,
+        error: `Graph needs ${numIntermediate} intermediate render targets (max ${WebGPUShaderRenderer.MAX_INTERMEDIATE_TEXTURES}) — reduce effect chain depth`,
+      }
+    }
+
     this.destroyMultiPassState()
     this.isMultiPass = true
     this.pipeline = null  // Clear single-pass pipeline
@@ -437,8 +451,11 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     const numIntermediate = this.passStates.length - 1
     if (numIntermediate <= 0) return
 
-    // Check if resize needed
-    if (this.intermediateTextures.length === numIntermediate &&
+    // Compare against the ALLOCATED count: comparing against the uncapped
+    // pass count made this mismatch permanently for over-cap graphs — the
+    // pool was destroyed and recreated every single frame.
+    const cap = Math.min(numIntermediate, WebGPUShaderRenderer.MAX_INTERMEDIATE_TEXTURES)
+    if (this.intermediateTextures.length === cap &&
         this.lastIntermediateWidth === width &&
         this.lastIntermediateHeight === height) {
       return
@@ -448,8 +465,6 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     for (const tex of this.intermediateTextures) tex.destroy()
     this.intermediateTextures = []
     this.intermediateSamplers = []
-
-    const cap = Math.min(numIntermediate, WebGPUShaderRenderer.MAX_INTERMEDIATE_TEXTURES)
 
     for (let i = 0; i < cap; i++) {
       const texture = this.device.createTexture({
