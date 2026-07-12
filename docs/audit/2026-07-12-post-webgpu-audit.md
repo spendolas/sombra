@@ -254,6 +254,8 @@ Checks: **matrix** — per-node codegen over the full param space (every enum co
 
 **Fix-session addendum 4 (same day, commit `34718c2`):** viewer parity (fix-order #8 / P0#9) shipped — image-node textures uploaded (async decode, re-render on land), Fragment Output anchor applied, time-node speed applied, and `hashchange` → full reload (viewer is stateless; share-link → share-link in the same tab previously kept the stale shader). Live-verified except the image pixel check (hidden-tab `createImageBitmap` allocation failure — automation artifact; upload wiring confirmed via console trace).
 
+**Fix-session addendum 5 (same day, commit `7b57580`):** undo model fixed — connected-node delete now atomic (FlowCanvas `onBeforeDelete` → new `graphStore.removeElements`, one snapshot for node+edges, RF's two-event deletion cancelled; keyboard-path verified: 1 entry, single undo restores both) and param edits are undoable with sliding-window coalescing (800ms, keyed `param:<nodeId>`; a 10-update drag burst = 1 entry; any other action breaks the chain). Closes the executed-repro undo items; node MOVES remain non-undoable (unflagged, unchanged).
+
 **Baseline run (pre-fix): 416 FAIL / 1 WARN**, machine-confirming the audit:
 - 191 unique GLSL shaders fail real GL compile — all `u_anchor` (P0#1, at full param-space scale)
 - WGSL GPU: `unresolved value 'u_…_image_tex'` (R1) **plus** `no matching call to clamp(vec2<f32>, abstract-float, abstract-float)` — the image.ts cover-mode landmine, now GPU-confirmed
