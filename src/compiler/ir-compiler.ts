@@ -254,7 +254,9 @@ export function generateNodeIR(
     outputs,
     params: node.data.params || {},
     textureSamplers: Object.keys(textureSamplers).length > 0 ? textureSamplers : undefined,
-    imageSamplers: imageSamplers.size > 0 ? imageSamplers : undefined,
+    // Always pass the set — nodes REGISTER their samplers into it. Gating on
+    // `size > 0` made registration impossible (first image node saw undefined).
+    imageSamplers,
   }
 
   // Framework SRT injection — build IRSpatialTransform if applicable

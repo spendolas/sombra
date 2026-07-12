@@ -72,7 +72,7 @@ function migrateV1ToV2(nodes: Node<NodeData>[]): Node<NodeData>[] {
         delete params.scale
       }
       if ('angle' in params) {
-        params.srt_rotate = Number(params.angle)  // already degrees, new SRT rotate is also degrees
+        params.srt_rotate = Number(params.angle) || 0  // already degrees, new SRT rotate is also degrees
         delete params.angle
       }
     }
@@ -164,6 +164,8 @@ export function importFromFile(json: unknown): {
     'domain_warp': 'warp',
     'quantize_uv': 'pixelate',
     'quantize': 'pixelate',
+    'uv_coords': 'uv_transform',
+    'pixel_grid': 'dither',
   }
   for (const node of obj.nodes) {
     if (node && typeof node === 'object') {
@@ -216,7 +218,37 @@ export function importFromFile(json: unknown): {
     nodes = migrateV1ToV2(nodes)
   }
 
-  return { nodes, edges }
+  // Merge definition defaults for params added after the file was saved —
+  // mirrors decodeCompactHash; without this a missing param arrives undefined
+  // and bakes NaN/fallback garbage into generated shaders.
+  nodes = nodes.map((node) => {
+    const def = nodeRegistry.get(node.data.type)
+    if (!def) return node
+    const params = { ...(node.data.params || {}) }
+    for (const p of def.params ?? []) {
+      if (!(p.id in params)) params[p.id] = p.default
+    }
+    return { ...node, data: { ...node.data, params } }
+  })
+
+  // Strip edges pointing at handles that no longer exist (mirrors the
+  // localStorage migrate path — old files may reference removed ports).
+  const validEdges = edges.filter((e) => {
+    const src = nodes.find((n) => n.id === e.source)
+    const tgt = nodes.find((n) => n.id === e.target)
+    if (!src || !tgt) return false
+    const srcDef = nodeRegistry.get(src.data.type)
+    const tgtDef = nodeRegistry.get(tgt.data.type)
+    if (!srcDef || !tgtDef) return false
+    const srcOk = !e.sourceHandle || srcDef.outputs.some((p) => p.id === e.sourceHandle)
+    const tgtInputs = tgtDef.dynamicInputs ? tgtDef.dynamicInputs(tgt.data.params || {}) : tgtDef.inputs
+    const tgtOk = !e.targetHandle
+      || tgtInputs.some((p) => p.id === e.targetHandle)
+      || (tgtDef.params ?? []).some((p) => p.connectable && p.id === e.targetHandle)
+    return srcOk && tgtOk
+  })
+
+  return { nodes, edges: validEdges }
 }
 
 /**
@@ -246,6 +278,23 @@ export function downloadSombraFile(
 /**
  * Compress a graph into a URL-safe base64url string (legacy full format).
  */
+/**
+ * Uint8Array → base64url. Chunked: `String.fromCharCode(...arr)` spreads the
+ * whole buffer as call arguments and throws RangeError past ~64k elements
+ * (e.g. graphs with image data).
+ */
+function toBase64Url(bytes: Uint8Array): string {
+  const CHUNK = 0x8000
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK))
+  }
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '')
+}
+
 export function encodeGraphToHash(
   nodes: Node<NodeData>[],
   edges: Edge<EdgeData>[],
@@ -253,12 +302,7 @@ export function encodeGraphToHash(
   const file = exportToFile(nodes, edges)
   const json = JSON.stringify(file)
   const compressed = pako.deflate(new TextEncoder().encode(json))
-  // base64url: replace +/ with -_, strip = padding
-  const base64 = btoa(String.fromCharCode(...compressed))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '')
-  return base64
+  return toBase64Url(compressed)
 }
 
 /**
@@ -367,11 +411,7 @@ export function encodeCompactHash(
   const compact: CompactGraph = { v: 1, n: compactNodes, e: compactEdges }
   const json = JSON.stringify(compact)
   const compressed = pako.deflate(new TextEncoder().encode(json))
-  const base64 = btoa(String.fromCharCode(...compressed))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '')
-  return base64
+  return toBase64Url(compressed)
 }
 
 /**

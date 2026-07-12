@@ -60,6 +60,11 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
   /** Expose the GPUDevice for sharing with the preview renderer. */
   getDevice(): GPUDevice { return this.device }
 
+  /** Expose uploaded image textures so the preview renderer can bind them too. */
+  getImageTexture(samplerName: string): { texture: GPUTexture; sampler: GPUSampler } | null {
+    return this.imageTextures.get(samplerName) ?? null
+  }
+
   // Fullscreen quad
   private quadBuffer!: GPUBuffer
 

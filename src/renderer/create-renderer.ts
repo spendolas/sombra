@@ -46,6 +46,10 @@ export async function createPreviewRenderer(
       const device = (mainRenderer as any).getDevice() as GPUDevice
       const { WebGPUPreviewRenderer } = await import('../webgpu/preview-renderer')
       const renderer = new WebGPUPreviewRenderer(device)
+      // Image-node textures live on the main renderer; previews bind the same
+      // GPUTexture objects (shared device) instead of re-uploading.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      renderer.setImageTextureProvider((name) => (mainRenderer as any).getImageTexture(name))
       await renderer.init()
       console.log('[Sombra] Preview renderer backend: webgpu (shared device)')
       return renderer

@@ -561,12 +561,12 @@ export function ImageUploader({ nodeId, data }: {
           </div>
 
           <div className="flex flex-row items-center gap-sm">
-            <span className="text-caption text-fg-dim truncate flex-1" title={imageName}>
+            <span className="text-body text-fg-dim truncate flex-1" title={imageName}>
               {imageName || 'Image'}
             </span>
             <button
               onClick={handleClear}
-              className="text-caption text-fg-muted hover:text-fg transition-colors cursor-pointer shrink-0"
+              className="text-body text-fg-muted hover:text-fg transition-colors cursor-pointer shrink-0"
             >
               Clear
             </button>
@@ -575,7 +575,7 @@ export function ImageUploader({ nodeId, data }: {
       ) : (
         <button
           onClick={handleClick}
-          className="flex items-center justify-center w-full py-md rounded-sm bg-surface-raised border border-edge-subtle text-caption text-fg-dim hover:bg-hover hover:text-fg transition-colors cursor-pointer"
+          className="flex items-center justify-center w-full py-md rounded-sm bg-surface-raised border border-edge-subtle text-body text-fg-dim hover:bg-hover hover:text-fg transition-colors cursor-pointer"
         >
           Upload Image
         </button>

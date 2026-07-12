@@ -3,7 +3,15 @@
  * Estimates node dimensions from NodeDefinition port counts.
  */
 
-import Dagre from '@dagrejs/dagre'
+// Interop-safe import: dagre ships a default-only ESM build; bundlers/loaders wrap it
+// in one or two `default` layers depending on environment (vite: one, tsx/node: two).
+import * as DagreModule from '@dagrejs/dagre'
+function unwrapDagre(mod: unknown): typeof import('@dagrejs/dagre') {
+  let m = mod as { graphlib?: unknown; default?: unknown }
+  while (m && typeof m === 'object' && !m.graphlib && m.default) m = m.default as typeof m
+  return m as typeof import('@dagrejs/dagre')
+}
+const Dagre = unwrapDagre(DagreModule)
 import type { Node, Edge } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'

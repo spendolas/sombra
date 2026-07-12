@@ -15,7 +15,9 @@ export const pixelateNode: NodeDefinition = {
 
   inputs: [
     { id: 'source', label: 'Source', type: 'vec3', textureInput: true, default: [0, 0, 0] },
-    { id: 'coords', label: 'Coords', type: 'vec2', default: 'screen_uv' },
+    // NOTE: a 'coords' input existed here but was never read by either generator
+    // (grid is computed from gl_FragCoord) — removed as a dead handle.
+    // Old saves wiring it are cleaned up by importFromFile's stale-handle filter.
   ],
 
   outputs: [

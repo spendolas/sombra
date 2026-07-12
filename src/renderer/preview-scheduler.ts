@@ -151,6 +151,15 @@ export class PreviewScheduler {
   }
 
   /**
+   * Force a node (and everything downstream) to re-render — used when an
+   * external async resource lands (e.g. image texture finished uploading
+   * after the thumbnail already rendered/bailed without it).
+   */
+  invalidateNode(nodeId: string) {
+    this.markStaleWithDownstream(nodeId)
+  }
+
+  /**
    * Mark a node and all its downstream dependents as stale.
    */
   private markStaleWithDownstream(nodeId: string) {

@@ -123,43 +123,84 @@ export const imageNode: NodeDefinition = {
     const stmts: IRStmt[] = []
 
     if (hasImage) {
-      // Fit mode UV adjustment + texture sampling
-      // Uses raw() for conditional if/else fit logic — complex branching
+      // Fit mode UV adjustment + texture sampling.
+      // Explicit WGSL variants throughout: the mechanical translation would emit
+      // `clamp(vec2, 0.0, 0.0)` (no scalar-splat overload in WGSL) and
+      // `textureSample` inside non-uniform control flow (derivative_uniformity
+      // error) — so WGSL samples unconditionally and masks with select().
       const fitUV = `img_uv_${sanitizedId}`
       const ratio = `img_ratio_${sanitizedId}`
       const sampleVar = `node_${sanitizedId}_sample`
+      const insideVar = `img_inside_${sanitizedId}`
+      const coords = ctx.inputs.coords
+      const aspect = ctx.inputs.imageAspect
 
       stmts.push(
-        raw(`float ${ratio} = ${ctx.inputs.imageAspect} / (u_resolution.x / u_resolution.y);`),
-        raw(`vec2 ${fitUV} = ${ctx.inputs.coords};`),
+        raw(
+          `float ${ratio} = ${aspect} / (u_resolution.x / u_resolution.y);`,
+          `let ${ratio}: f32 = ${aspect} / (u_resolution.x / u_resolution.y);`,
+        ),
+        raw(
+          `vec2 ${fitUV} = ${coords};`,
+          `var ${fitUV}: vec2f = ${coords};`,
+        ),
       )
 
       if (fitMode === 'contain') {
-        stmts.push(raw(`if (${ratio} > 1.0) {
-    ${fitUV}.y = (${ctx.inputs.coords}.y - 0.5) * ${ratio} + 0.5;
+        stmts.push(raw(
+          `if (${ratio} > 1.0) {
+    ${fitUV}.y = (${coords}.y - 0.5) * ${ratio} + 0.5;
   } else {
-    ${fitUV}.x = (${ctx.inputs.coords}.x - 0.5) / ${ratio} + 0.5;
-  }`))
+    ${fitUV}.x = (${coords}.x - 0.5) / ${ratio} + 0.5;
+  }`,
+          `if (${ratio} > 1.0) {
+    ${fitUV}.y = (${coords}.y - 0.5) * ${ratio} + 0.5;
+  } else {
+    ${fitUV}.x = (${coords}.x - 0.5) / ${ratio} + 0.5;
+  }`,
+        ))
 
-        // Clamp to image bounds — black outside
-        stmts.push(raw(`vec4 ${sampleVar} = vec4(0.0);
+        // Clamp to image bounds — black outside.
+        // WGSL: sample unconditionally (uniform control flow), then mask.
+        stmts.push(raw(
+          `vec4 ${sampleVar} = vec4(0.0);
   if (${fitUV}.x >= 0.0 && ${fitUV}.x <= 1.0 && ${fitUV}.y >= 0.0 && ${fitUV}.y <= 1.0) {
     ${sampleVar} = texture(${samplerName}, ${fitUV});
-  }`))
+  }`,
+          `var ${sampleVar}: vec4f = textureSample(${samplerName}_tex, ${samplerName}_samp, clamp(${fitUV}, vec2f(0.0), vec2f(1.0)));
+  let ${insideVar}: bool = ${fitUV}.x >= 0.0 && ${fitUV}.x <= 1.0 && ${fitUV}.y >= 0.0 && ${fitUV}.y <= 1.0;
+  ${sampleVar} = select(vec4f(0.0), ${sampleVar}, ${insideVar});`,
+        ))
       } else {
         // Cover
-        stmts.push(raw(`if (${ratio} > 1.0) {
-    ${fitUV}.x = (${ctx.inputs.coords}.x - 0.5) / ${ratio} + 0.5;
+        stmts.push(raw(
+          `if (${ratio} > 1.0) {
+    ${fitUV}.x = (${coords}.x - 0.5) / ${ratio} + 0.5;
   } else {
-    ${fitUV}.y = (${ctx.inputs.coords}.y - 0.5) * ${ratio} + 0.5;
-  }`))
+    ${fitUV}.y = (${coords}.y - 0.5) * ${ratio} + 0.5;
+  }`,
+          `if (${ratio} > 1.0) {
+    ${fitUV}.x = (${coords}.x - 0.5) / ${ratio} + 0.5;
+  } else {
+    ${fitUV}.y = (${coords}.y - 0.5) * ${ratio} + 0.5;
+  }`,
+        ))
 
-        stmts.push(raw(`vec4 ${sampleVar} = texture(${samplerName}, clamp(${fitUV}, 0.0, 1.0));`))
+        stmts.push(raw(
+          `vec4 ${sampleVar} = texture(${samplerName}, clamp(${fitUV}, 0.0, 1.0));`,
+          `let ${sampleVar}: vec4f = textureSample(${samplerName}_tex, ${samplerName}_samp, clamp(${fitUV}, vec2f(0.0), vec2f(1.0)));`,
+        ))
       }
 
       stmts.push(
-        raw(`vec3 ${ctx.outputs.color} = ${sampleVar}.rgb;`),
-        raw(`float ${ctx.outputs.alpha} = ${sampleVar}.a;`),
+        raw(
+          `vec3 ${ctx.outputs.color} = ${sampleVar}.rgb;`,
+          `let ${ctx.outputs.color}: vec3f = ${sampleVar}.rgb;`,
+        ),
+        raw(
+          `float ${ctx.outputs.alpha} = ${sampleVar}.a;`,
+          `let ${ctx.outputs.alpha}: f32 = ${sampleVar}.a;`,
+        ),
       )
     } else {
       // No image loaded — mid-gray placeholder

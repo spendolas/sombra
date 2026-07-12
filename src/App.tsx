@@ -299,7 +299,11 @@ function App() {
   const redo = useGraphStore((state) => state.redo)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+      // Shift+Z reports key 'Z' — compare case-insensitively or redo never fires
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+        // Don't hijack native text undo while typing in a field
+        const tag = (e.target as HTMLElement)?.tagName
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
         e.preventDefault()
         if (e.shiftKey) redo()
         else undo()
@@ -442,13 +446,21 @@ function App() {
     }
 
     // Upload new or changed textures
-    for (const [samplerName, imageData] of currentMap) {
+    for (const node of nodes) {
+      if (node.data.type !== 'image') continue
+      const samplerName = `u_${node.id.replace(/-/g, '_')}_image`
+      const imageData = currentMap.get(samplerName)
+      if (!imageData) continue
       const prev = prevImageSamplersRef.current.get(samplerName)
       if (prev === imageData) continue // unchanged
 
+      const nodeId = node.id
       const img = new Image()
       img.onload = () => {
         rendererRef.current?.uploadImageTexture(samplerName, img)
+        // Thumbnails may have rendered (or bailed) before the texture existed —
+        // re-render this node and everything downstream now that it's live.
+        schedulerRef.current?.invalidateNode(nodeId)
       }
       img.src = imageData
     }

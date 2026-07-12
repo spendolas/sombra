@@ -991,6 +991,9 @@ export function assembleFragmentShader(
   if (uniforms.has('u_viewport')) {
     uniformDeclarations.push('uniform vec2 u_viewport;')
   }
+  if (uniforms.has('u_anchor')) {
+    uniformDeclarations.push('uniform vec2 u_anchor;')
+  }
 
   // User-defined uniforms from uniform-mode params
   for (const spec of userUniforms) {

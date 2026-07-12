@@ -108,8 +108,15 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
   // Each render awaits this promise before starting, then replaces it.
   private renderLock: Promise<void> = Promise.resolve()
 
+  /** Resolves image-node textures uploaded to the main renderer (shared device). */
+  private imageTextureProvider: ((samplerName: string) => { texture: GPUTexture; sampler: GPUSampler } | null) | null = null
+
   constructor(device: GPUDevice) {
     this.device = device
+  }
+
+  setImageTextureProvider(provider: (samplerName: string) => { texture: GPUTexture; sampler: GPUSampler } | null): void {
+    this.imageTextureProvider = provider
   }
 
   async init(): Promise<void> {
@@ -223,6 +230,29 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
       entries: [{ binding: 0, resource: { buffer: uniformBuffer } }],
     })
 
+    // Image-node textures (group 1) — shader declares them, so the draw is
+    // invalid without a complete bind group. Texture may not be uploaded yet
+    // (async decode on the main renderer) — bail gracefully, scheduler retries.
+    let textureBindGroup: GPUBindGroup | null = null
+    if (pass.textureBindings.length > 0) {
+      const entries: GPUBindGroupEntry[] = []
+      for (const binding of pass.textureBindings) {
+        const img = this.imageTextureProvider?.(binding.samplerName)
+        if (!img) { uniformBuffer.destroy(); return null }
+        entries.push({ binding: binding.textureBinding, resource: img.texture.createView() })
+        entries.push({ binding: binding.samplerBinding, resource: img.sampler })
+      }
+      try {
+        textureBindGroup = this.device.createBindGroup({
+          layout: pipeline.getBindGroupLayout(1),
+          entries,
+        })
+      } catch {
+        uniformBuffer.destroy()
+        return null
+      }
+    }
+
     // Render
     const encoder = this.device.createCommandEncoder()
     const renderPass = encoder.beginRenderPass({
@@ -236,6 +266,7 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
 
     renderPass.setPipeline(pipeline)
     renderPass.setBindGroup(0, uniformBindGroup)
+    if (textureBindGroup) renderPass.setBindGroup(1, textureBindGroup)
     renderPass.setVertexBuffer(0, this.quadBuffer)
     renderPass.draw(6)
     renderPass.end()
@@ -295,10 +326,14 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
         entries: [{ binding: 0, resource: { buffer: uniformBuffer } }],
       })
 
-      // Build texture bind group for inter-pass textures
+      // Build texture bind group: inter-pass textures + image-node textures.
+      // The shader's group(1) layout requires EVERY declared binding — a
+      // partial bind group is invalid, so bail if anything is unresolvable
+      // (e.g. image not uploaded yet; scheduler retries later).
       let textureBindGroup: GPUBindGroup | null = null
-      if (pass.textureBindings.length > 0 && intermediateTextures.length > 0) {
+      if (pass.textureBindings.length > 0) {
         const entries: GPUBindGroupEntry[] = []
+        let complete = true
         for (const binding of pass.textureBindings) {
           const passInput = pass.inputTextures.find(it => it.samplerName === binding.samplerName)
           if (passInput && passInput.passIndex < intermediateTextures.length) {
@@ -310,7 +345,22 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
               binding: binding.samplerBinding,
               resource: intermediateSampler!,
             })
+            continue
           }
+          const img = this.imageTextureProvider?.(binding.samplerName)
+          if (img) {
+            entries.push({ binding: binding.textureBinding, resource: img.texture.createView() })
+            entries.push({ binding: binding.samplerBinding, resource: img.sampler })
+            continue
+          }
+          complete = false
+          break
+        }
+        if (!complete) {
+          for (const ps of passStates) ps.uniformBuffer.destroy()
+          uniformBuffer.destroy()
+          for (const t of intermediateTextures) t.destroy()
+          return null
         }
         if (entries.length > 0) {
           try {

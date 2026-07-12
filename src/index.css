@@ -7,6 +7,9 @@
   line-height: 1.5;
   font-weight: 400;
 
+  /* Interaction-state vars (hand-written — see .claude/ds-queue.md for Figma migration) */
+  --disabled-opacity: 0.45;
+
   /* === GENERATED:START root-vars === */
   /* Sombra color palette */
   --surface: #0f0f1a;

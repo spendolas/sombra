@@ -25,7 +25,7 @@ export function createDefaultGraph(): {
       id: 'def-noise',
       type: 'shaderNode',
       position: { x: 0, y: 0 },
-      data: { type: 'noise', params: { scale: 3.0, noiseType: 'simplex' } },
+      data: { type: 'noise', params: { srt_scale: 1 / 3, noiseType: 'simplex' } },
     },
     {
       id: 'def-ramp',
@@ -193,7 +193,7 @@ export function createSpectraValueFBM(): {
       position: { x: 280, y: 40 },
       data: {
         type: 'fbm',
-        params: { scale: 1.0, noiseType: 'value', fractalMode: 'standard', octaves: 1, lacunarity: 2.0, gain: 0.5 },
+        params: { srt_scale: 1.0, noiseType: 'value', fractalMode: 'standard', octaves: 1, lacunarity: 2.0, gain: 0.5 },
       },
     },
     // Cobalt Drift color ramp
@@ -303,7 +303,7 @@ export function createSpectraSimplexFBM(): {
       position: { x: 280, y: 40 },
       data: {
         type: 'fbm',
-        params: { scale: 1.0, noiseType: 'simplex', fractalMode: 'standard', octaves: 1, lacunarity: 2.0, gain: 0.5 },
+        params: { srt_scale: 1.0, noiseType: 'simplex', fractalMode: 'standard', octaves: 1, lacunarity: 2.0, gain: 0.5 },
       },
     },
     {
@@ -417,7 +417,7 @@ export function createSpectraWorleyRidged(): {
       position: { x: 260, y: 206 },
       data: {
         type: 'uv_transform',
-        params: { scaleX: 0.1, scaleY: 0.1, offsetX: 95.7, offsetY: 79.98 },
+        params: { srt_scaleX: 10, srt_scaleY: 10, srt_translateX: 95700, srt_translateY: 79980 },
       },
     },
     {
@@ -426,7 +426,7 @@ export function createSpectraWorleyRidged(): {
       position: { x: 520, y: 156 },
       data: {
         type: 'warp',
-        params: { strength: 0.2, frequency: 1.0 },
+        params: { strength: 0.2, srt_scale: 1.0 },
       },
     },
     {
@@ -435,7 +435,7 @@ export function createSpectraWorleyRidged(): {
       position: { x: 780, y: 128 },
       data: {
         type: 'fbm',
-        params: { scale: 1.0, noiseType: 'worley2d', fractalMode: 'ridged', octaves: 1, lacunarity: 2.0, gain: 0.1 },
+        params: { srt_scale: 1.0, noiseType: 'worley2d', fractalMode: 'ridged', octaves: 1, lacunarity: 2.0, gain: 0.1 },
       },
     },
     {
@@ -590,7 +590,7 @@ export function createSpectraBoxNone(): {
       position: { x: 150, y: 0 },
       data: {
         type: 'uv_transform',
-        params: { scaleX: 0.5, scaleY: 0.5, offsetX: 42.3, offsetY: 167.5 },
+        params: { srt_scaleX: 2, srt_scaleY: 2, srt_translateX: 42300, srt_translateY: 167500 },
       },
     },
     // Domain Warp: heavy distortion (spectra warpStrength=5)
@@ -600,7 +600,7 @@ export function createSpectraBoxNone(): {
       position: { x: 300, y: 0 },
       data: {
         type: 'warp',
-        params: { strength: 5.0, frequency: 1.0 },
+        params: { strength: 5.0, srt_scale: 1.0 },
       },
     },
     {
@@ -616,7 +616,7 @@ export function createSpectraBoxNone(): {
       position: { x: 600, y: 0 },
       data: {
         type: 'noise',
-        params: { scale: 50.0, noiseType: 'box' },
+        params: { srt_scale: 0.02, noiseType: 'box' },
       },
     },
     // Smoothstep range compression: smoothstep(0.2, 0.8, noise)
@@ -753,7 +753,7 @@ export function createNoiseTestGraph(): {
     data: {
       type: 'noise',
       params: {
-        scale: 5.0,
+        srt_scale: 0.2,
         noiseType: 'simplex',
       },
     },
