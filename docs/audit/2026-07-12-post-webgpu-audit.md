@@ -256,6 +256,8 @@ Checks: **matrix** — per-node codegen over the full param space (every enum co
 
 **Fix-session addendum 5 (same day, commit `7b57580`):** undo model fixed — connected-node delete now atomic (FlowCanvas `onBeforeDelete` → new `graphStore.removeElements`, one snapshot for node+edges, RF's two-event deletion cancelled; keyboard-path verified: 1 entry, single undo restores both) and param edits are undoable with sliding-window coalescing (800ms, keyed `param:<nodeId>`; a 10-update drag burst = 1 entry; any other action breaks the chain). Closes the executed-repro undo items; node MOVES remain non-undoable (unflagged, unchanged).
 
+**Fix-session addendum 6 (same day, commit `06a204f`):** ShaderNode rules-of-hooks fixed (P0#8) — preview-animation refs + effect hoisted above the unknown-type early return, `showPreview` computed null-safe before it, `currentValues` memoized. File lints clean; repo lint 45→38 problems (remaining = eslint-config hygiene batch). All render paths live-verified incl. unknown-type error state, error badge, dynamic-input buttons + undo.
+
 **Baseline run (pre-fix): 416 FAIL / 1 WARN**, machine-confirming the audit:
 - 191 unique GLSL shaders fail real GL compile — all `u_anchor` (P0#1, at full param-space scale)
 - WGSL GPU: `unresolved value 'u_…_image_tex'` (R1) **plus** `no matching call to clamp(vec2<f32>, abstract-float, abstract-float)` — the image.ts cover-mode landmine, now GPU-confirmed
