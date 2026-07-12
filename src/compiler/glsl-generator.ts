@@ -423,23 +423,27 @@ export function generateNodeGlsl(
 
     if (edge) {
       const sourceNode = nodeMap.get(edge.source)
-      if (sourceNode) {
-        const sourceDefinition = nodeRegistry.get(sourceNode.data.type)
-        if (sourceDefinition) {
-          const sourcePort = sourceDefinition.outputs.find(
-            (p) => p.id === edge.sourceHandle
-          )
-          if (sourcePort) {
-            const sourceVarName = `node_${edge.source.replace(/-/g, '_')}_${edge.sourceHandle}`
-            if (sourcePort.type !== inputPort.type) {
-              inputs[inputPort.id] = coerceType(sourceVarName, sourcePort.type, inputPort.type)
-            } else {
-              inputs[inputPort.id] = sourceVarName
-            }
-          }
+      const sourceDefinition = sourceNode ? nodeRegistry.get(sourceNode.data.type) : undefined
+      const sourcePort = sourceDefinition?.outputs.find(
+        (p) => p.id === edge.sourceHandle
+      )
+      if (sourcePort) {
+        const sourceVarName = `node_${edge.source.replace(/-/g, '_')}_${edge.sourceHandle}`
+        if (sourcePort.type !== inputPort.type) {
+          inputs[inputPort.id] = coerceType(sourceVarName, sourcePort.type, inputPort.type)
+        } else {
+          inputs[inputPort.id] = sourceVarName
         }
       } else {
+        // Edge references a nonexistent source node/port (stale or
+        // programmatically-created handle) — without this fallback the node's
+        // template stringifies `undefined` into the shader and the compile
+        // still reports success.
         resolveInputDefault(inputPort, sanitizedNodeId, preambleLines, inputs, uniforms)
+        errors.push({
+          message: `Invalid connection into "${inputPort.label}" on ${definition.label}: source port "${edge.sourceHandle}" not found`,
+          nodeId: node.id,
+        })
       }
     } else {
       // In texture mode, use gl_FragCoord.xy/viewport (screen space 0-1) instead of auto_uv
@@ -469,27 +473,28 @@ export function generateNodeGlsl(
 
       if (edge) {
         const sourceNode = nodeMap.get(edge.source)
-        if (sourceNode) {
-          const sourceDefinition = nodeRegistry.get(sourceNode.data.type)
-          if (sourceDefinition) {
-            const sourcePort = sourceDefinition.outputs.find(
-              (p) => p.id === edge.sourceHandle
+        const sourceDefinition = sourceNode ? nodeRegistry.get(sourceNode.data.type) : undefined
+        const sourcePort = sourceDefinition?.outputs.find(
+          (p) => p.id === edge.sourceHandle
+        )
+        if (sourcePort) {
+          const sourceVarName = `node_${edge.source.replace(/-/g, '_')}_${edge.sourceHandle}`
+          if (sourcePort.type !== param.type) {
+            inputs[param.id] = coerceType(
+              sourceVarName,
+              sourcePort.type,
+              param.type as import('../nodes/types').PortType
             )
-            if (sourcePort) {
-              const sourceVarName = `node_${edge.source.replace(/-/g, '_')}_${edge.sourceHandle}`
-              if (sourcePort.type !== param.type) {
-                inputs[param.id] = coerceType(
-                  sourceVarName,
-                  sourcePort.type,
-                  param.type as import('../nodes/types').PortType
-                )
-              } else {
-                inputs[param.id] = sourceVarName
-              }
-            }
+          } else {
+            inputs[param.id] = sourceVarName
           }
         } else {
+          // Invalid edge (see input resolution above) — fall back and report
           resolveParamFallback(param, node, sanitizedNodeId, inputs, userUniforms)
+          errors.push({
+            message: `Invalid connection into "${param.label}" on ${definition.label}: source port "${edge.sourceHandle}" not found`,
+            nodeId: node.id,
+          })
         }
       } else {
         resolveParamFallback(param, node, sanitizedNodeId, inputs, userUniforms)

@@ -42,11 +42,13 @@ export function coerceTypeForIR(varName: string, from: PortType, to: PortType): 
     float: {
       vec2: (v) => `vec2f(${v})`,
       vec3: (v) => `vec3f(${v})`,
+      color: (v) => `vec3f(${v})`,
       vec4: (v) => `vec4f(${v})`,
     },
     vec2: {
       float: (v) => `${v}.x`,
       vec3: (v) => `vec3f(${v}, 0.0)`,
+      color: (v) => `vec3f(${v}, 0.0)`,
       vec4: (v) => `vec4f(${v}, 0.0, 1.0)`,
     },
     vec3: {
@@ -63,6 +65,7 @@ export function coerceTypeForIR(varName: string, from: PortType, to: PortType): 
       float: (v) => `${v}.x`,
       vec2: (v) => `${v}.xy`,
       vec3: (v) => `${v}.rgb`,
+      color: (v) => `${v}.rgb`,
     },
   }
 
@@ -157,19 +160,22 @@ export function generateNodeIR(
 
     if (edge) {
       const sourceNode = nodeMap.get(edge.source)
-      if (sourceNode) {
-        const sourceDefinition = nodeRegistry.get(sourceNode.data.type)
-        if (sourceDefinition) {
-          const sourcePort = sourceDefinition.outputs.find(
-            (p) => p.id === edge.sourceHandle,
-          )
-          if (sourcePort) {
-            const sourceVarName = `node_${edge.source.replace(/-/g, '_')}_${edge.sourceHandle}`
-            inputs[inputPort.id] = coerceTypeForIR(sourceVarName, sourcePort.type, inputPort.type)
-          }
-        }
+      const sourceDefinition = sourceNode ? nodeRegistry.get(sourceNode.data.type) : undefined
+      const sourcePort = sourceDefinition?.outputs.find(
+        (p) => p.id === edge.sourceHandle,
+      )
+      if (sourcePort) {
+        const sourceVarName = `node_${edge.source.replace(/-/g, '_')}_${edge.sourceHandle}`
+        inputs[inputPort.id] = coerceTypeForIR(sourceVarName, sourcePort.type, inputPort.type)
       } else {
+        // Edge references a nonexistent source node/port — without this
+        // fallback the IR emits an empty expression (e.g. `vec4f(, 1.0)`)
+        // and the compile still reports success.
         resolveInputDefaultIR(inputPort, sanitizedNodeId, preambleStatements, inputs, collectedStandardUniforms)
+        errors.push({
+          message: `Invalid connection into "${inputPort.label}" on ${definition.label}: source port "${edge.sourceHandle}" not found`,
+          nodeId: node.id,
+        })
       }
     } else {
       // In texture mode, use gl_FragCoord.xy/viewport (screen space 0-1) instead of auto_uv.
@@ -200,23 +206,24 @@ export function generateNodeIR(
 
       if (edge) {
         const sourceNode = nodeMap.get(edge.source)
-        if (sourceNode) {
-          const sourceDefinition = nodeRegistry.get(sourceNode.data.type)
-          if (sourceDefinition) {
-            const sourcePort = sourceDefinition.outputs.find(
-              (p) => p.id === edge.sourceHandle,
-            )
-            if (sourcePort) {
-              const sourceVarName = `node_${edge.source.replace(/-/g, '_')}_${edge.sourceHandle}`
-              inputs[param.id] = coerceTypeForIR(
-                sourceVarName,
-                sourcePort.type,
-                param.type as PortType,
-              )
-            }
-          }
+        const sourceDefinition = sourceNode ? nodeRegistry.get(sourceNode.data.type) : undefined
+        const sourcePort = sourceDefinition?.outputs.find(
+          (p) => p.id === edge.sourceHandle,
+        )
+        if (sourcePort) {
+          const sourceVarName = `node_${edge.source.replace(/-/g, '_')}_${edge.sourceHandle}`
+          inputs[param.id] = coerceTypeForIR(
+            sourceVarName,
+            sourcePort.type,
+            param.type as PortType,
+          )
         } else {
+          // Invalid edge (see input resolution above) — fall back and report
           resolveParamFallbackIR(param, node, sanitizedNodeId, inputs, userUniforms)
+          errors.push({
+            message: `Invalid connection into "${param.label}" on ${definition.label}: source port "${edge.sourceHandle}" not found`,
+            nodeId: node.id,
+          })
         }
       } else {
         resolveParamFallbackIR(param, node, sanitizedNodeId, inputs, userUniforms)
