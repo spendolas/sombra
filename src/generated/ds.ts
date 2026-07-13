@@ -149,6 +149,15 @@ export const ds = {
     warnText: "text-fg-muted text-[10px]",
     paramDivider: "border-t border-edge-subtle w-full",
   },
+  anchorGrid: {
+    root: "flex flex-col gap-sm",
+    label: "text-param text-fg-subtle",
+    grid: "bg-surface-raised rounded-sm border border-edge p-2xs gap-2xs grid grid-cols-3 w-fit",
+    cell: "rounded-xs cursor-pointer transition-colors w-icon-md h-icon-md hover:bg-highlight flex items-center justify-center",
+    cellActive: "bg-indigo rounded-xs cursor-pointer transition-colors w-icon-md h-icon-md hover:bg-indigo-hover flex items-center justify-center",
+    dot: "bg-fg-muted size-1.5 rounded-full",
+    dotActive: "bg-fg size-1.5 rounded-full",
+  },
 } as const;
 
 export type DSComponent = keyof typeof ds;

@@ -36,6 +36,12 @@ export interface NodeParameter {
   max?: number                  // For numeric types
   step?: number                 // Step increment for sliders
   options?: Array<{ value: string; label: string }>  // For enum type
+  /**
+   * Alternate UI control for an enum param. 'anchor-grid' renders a 3×3
+   * pin-position toggle grid instead of a dropdown — requires exactly 9
+   * options in row-major order (tl..br).
+   */
+  control?: 'anchor-grid'
   showWhen?: Record<string, string | string[]>        // Only show when other params match (array = any of)
   connectable?: boolean                              // If true, renders as wirable handle + inline slider
   hidden?: boolean                                   // If true, param is not rendered in UI (internal state)

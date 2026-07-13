@@ -23,7 +23,7 @@ V2 was rebuilt from scratch using a **code-driven approach**: every Figma compon
 |---|---|---|---|
 | Tokens | 5 collections + 11 text styles | All | 40 variables + 11 text styles, dark mode only |
 | Atoms | 7 | 7 | Handle, Separator, Category Header, Palette Item, Plus Minus Button, Node Header, Node Footer |
-| Molecules | 11 | 11 | Labeled Handle, Float Slider (SombraSlider), Enum Select, Color Input, Connectable Param Row, Preview Toolbar, Zoom Bar, Gradient Editor, Random Display, MiniMap, Graph Toolbar |
+| Molecules | 12 | 12 | Labeled Handle, Float Slider (SombraSlider), Enum Select, Anchor Grid, Color Input, Connectable Param Row, Preview Toolbar, Zoom Bar, Gradient Editor, Random Display, MiniMap, Graph Toolbar |
 | Organisms | 5 | 5 | Node Card, Node Palette, Properties Panel, Floating Preview, Full Window Overlay |
 | Templates | 23 | 23 | All node types (Bayer Dither removed, Domain Warp → Warp UV, Pixel Grid → Dither) |
 | Scenes | 5 | 5 | All preview modes |
@@ -58,6 +58,7 @@ V2 was rebuilt from scratch using a **code-driven approach**: every Figma compon
 | [labeled-handle.md](molecules/labeled-handle.md) | `106:269` | 32 | labeled-handle.tsx | ✅ |
 | [float-slider.md](molecules/float-slider.md) | `106:282` | — | NodeParameters.tsx | ✅ |
 | [enum-select.md](molecules/enum-select.md) | `106:288` | — | NodeParameters.tsx | ✅ |
+| [anchor-grid.md](molecules/anchor-grid.md) | `717:15` | — | NodeParameters.tsx | ✅ |
 | [color-input.md](molecules/color-input.md) | `106:292` | — | NodeParameters.tsx | ✅ |
 | [connectable-param-row.md](molecules/connectable-param-row.md) | `106:311` | 2 | ShaderNode.tsx (inline) | ✅ |
 | [preview-toolbar.md](molecules/preview-toolbar.md) | `106:352` | 4 | PreviewToolbar.tsx | ✅ |
@@ -103,6 +104,7 @@ The 18 component mappings below are documented for reference but not activated i
 | Labeled Handle | `LabeledHandle` | `src/components/labeled-handle.tsx` |
 | Float Slider | `FloatSlider` | `src/components/NodeParameters.tsx` |
 | Enum Select | `EnumSelect` | `src/components/NodeParameters.tsx` |
+| Anchor Grid | `AnchorGrid` | `src/components/NodeParameters.tsx` |
 | Color Input | `ColorInput` | `src/components/NodeParameters.tsx` |
 | Zoom Bar | `ZoomSlider` | `src/components/zoom-slider.tsx` |
 | Gradient Editor | `ColorRampEditor` | `src/components/ColorRampEditor.tsx` |

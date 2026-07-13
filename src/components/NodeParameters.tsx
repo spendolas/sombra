@@ -84,11 +84,19 @@ export function NodeParameters({ nodeId, parameters, currentValues, connectedInp
               />
             )}
             {param.type === 'enum' && param.options && (
-              <EnumSelect
-                param={param}
-                value={(currentValues[param.id] as string) ?? param.default}
-                onChange={(value) => handleChange(param.id, value)}
-              />
+              param.control === 'anchor-grid' ? (
+                <AnchorGrid
+                  param={param}
+                  value={(currentValues[param.id] as string) ?? (param.default as string)}
+                  onChange={(value) => handleChange(param.id, value)}
+                />
+              ) : (
+                <EnumSelect
+                  param={param}
+                  value={(currentValues[param.id] as string) ?? param.default}
+                  onChange={(value) => handleChange(param.id, value)}
+                />
+              )
             )}
           </div>
         )
@@ -123,6 +131,41 @@ interface ColorInputProps {
   param: NodeParameter
   value: [number, number, number]
   onChange: (value: [number, number, number]) => void
+}
+
+interface AnchorGridProps {
+  param: NodeParameter
+  value: string
+  onChange: (value: string) => void
+}
+
+/**
+ * 3×3 pin-position toggle grid for anchor-style enum params
+ * (param.control === 'anchor-grid'; options in row-major order tl..br).
+ */
+function AnchorGrid({ param, value, onChange }: AnchorGridProps) {
+  return (
+    <div className={ds.anchorGrid.root}>
+      <Label className={ds.anchorGrid.label}>{param.label}</Label>
+      <div className={`${ds.anchorGrid.grid} nodrag`}>
+        {param.options!.map((opt) => {
+          const active = opt.value === value
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              title={opt.label}
+              aria-pressed={active}
+              className={active ? ds.anchorGrid.cellActive : ds.anchorGrid.cell}
+              onClick={() => onChange(opt.value)}
+            >
+              <span className={active ? ds.anchorGrid.dotActive : ds.anchorGrid.dot} />
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 interface EnumSelectProps {

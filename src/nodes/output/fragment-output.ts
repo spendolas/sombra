@@ -56,6 +56,7 @@ export const fragmentOutputNode: NodeDefinition = {
       id: 'anchor',
       label: 'Anchor',
       type: 'enum',
+      control: 'anchor-grid',
       default: 'center',
       options: [
         { value: 'tl', label: '↖' }, { value: 'tc', label: '↑' }, { value: 'tr', label: '↗' },
