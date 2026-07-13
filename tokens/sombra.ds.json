@@ -173,6 +173,15 @@
         "namespace": "color",
         "key": "active"
       }
+    },
+    "VariableID:106:16": {
+      "figmaName": "white",
+      "cssVar": "--white",
+      "value": "#ffffff",
+      "tailwind": {
+        "namespace": "color",
+        "key": "white"
+      }
     }
   },
   "portColors": {
@@ -639,7 +648,11 @@
           "padding": "lg",
           "gap": {
             "y": "md"
-          }
+          },
+          "auditIgnore": [
+            "width.mode",
+            "width.px"
+          ]
         },
         "footer": {
           "figmaNodeId": "111:491",
@@ -1082,7 +1095,7 @@
         },
         "solidHover": {
           "figmaNodeId": "329:2",
-          "fill": "surface/raised",
+          "fill": "interactive/highlight",
           "textColor": "fg",
           "cursor": "pointer",
           "layout": "vertical",
@@ -1095,7 +1108,7 @@
         },
         "ghostHover": {
           "figmaNodeId": "329:5",
-          "fill": "hover",
+          "fill": "interactive/highlight",
           "textColor": "fg",
           "cursor": "pointer",
           "layout": "vertical",
@@ -1109,7 +1122,7 @@
         "textGhostHover": {
           "figmaNodeId": "329:7",
           "textStyle": "text-mono-value",
-          "fill": "hover",
+          "fill": "interactive/highlight",
           "textColor": "fg",
           "cursor": "pointer",
           "extra": "h-btn-md w-auto px-sm",
@@ -1165,13 +1178,24 @@
           "figmaNodeId": "325:23",
           "fill": "surface/raised",
           "radius": "full",
-          "extra": "relative w-full h-slider-track"
+          "extra": "relative w-full",
+          "height": "slider-track",
+          "auditIgnore": [
+            "width.mode",
+            "width.px"
+          ]
         },
         "fill": {
           "figmaNodeId": "325:24",
           "fill": "indigo",
           "radius": "full",
-          "extra": "absolute top-0 bottom-0"
+          "extra": "absolute top-0 bottom-0",
+          "auditIgnore": [
+            "width.mode",
+            "width.px",
+            "height.mode",
+            "height.px"
+          ]
         }
       }
     },
@@ -1378,12 +1402,20 @@
             "weight": 1
           },
           "cursor": "crosshair",
-          "fill": "gradient:linear"
+          "fill": "gradient:linear",
+          "auditIgnore": [
+            "width.mode",
+            "width.px"
+          ]
         },
         "stopMarkers": {
           "figmaNodeId": "111:933",
           "position": "relative",
-          "height": "icon-sm"
+          "height": "icon-sm",
+          "auditIgnore": [
+            "width.mode",
+            "width.px"
+          ]
         },
         "stopHandle": {
           "figmaNodeId": "111:934",
@@ -1421,7 +1453,11 @@
           "layout": "horizontal",
           "gap": "md",
           "align": "center",
-          "overflow": "hidden"
+          "overflow": "hidden",
+          "auditIgnore": [
+            "width.mode",
+            "width.px"
+          ]
         },
         "positionText": {
           "figmaNodeId": "111:940",
@@ -1537,7 +1573,7 @@
       "codeFile": null,
       "parts": {
         "root": {
-          "figmaNodeId": "326:36",
+          "figmaNodeId": null,
           "radius": "sm",
           "layout": "vertical",
           "justify": "center",
@@ -1703,7 +1739,11 @@
           "radius": "sm",
           "padding": "2xs",
           "gap": "2xs",
-          "extra": "grid grid-cols-3 w-fit"
+          "extra": "grid grid-cols-3 w-fit",
+          "auditIgnore": [
+            "layout",
+            "overflow"
+          ]
         },
         "cell": {
           "figmaNodeId": "717:8",
@@ -1712,10 +1752,12 @@
           "radius": "xs",
           "cursor": "pointer",
           "transition": "colors",
-          "extra": "flex items-center justify-center",
           "hover": {
             "fill": "interactive/highlight"
-          }
+          },
+          "layout": "horizontal",
+          "justify": "center",
+          "align": "center"
         },
         "cellActive": {
           "figmaNodeId": "717:11",
@@ -1725,10 +1767,12 @@
           "cursor": "pointer",
           "transition": "colors",
           "fill": "indigo/default",
-          "extra": "flex items-center justify-center",
           "hover": {
             "fill": "indigo/hover"
-          }
+          },
+          "layout": "horizontal",
+          "justify": "center",
+          "align": "center"
         },
         "dot": {
           "figmaNodeId": "717:10",

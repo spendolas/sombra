@@ -943,7 +943,12 @@ function extractDbProps(part: ComponentPart, db: DB, maps: Maps): PropMap {
       props['stroke.color'] = dbStrokeKey
     }
     if (part.stroke.weight != null) {
-      props['stroke.weight'] = part.stroke.weight
+      if (part.stroke.side) {
+        // `side` shorthand (border-b etc.): the weight applies to one side only
+        props[`stroke.${part.stroke.side}Weight`] = part.stroke.weight
+      } else {
+        props['stroke.weight'] = part.stroke.weight
+      }
     }
     // Per-side stroke weights
     if (part.stroke.topWeight != null) props['stroke.topWeight'] = part.stroke.topWeight

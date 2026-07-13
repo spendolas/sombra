@@ -38,6 +38,8 @@
   --hover: rgba(255, 255, 255, 0.06);
   --active: #6366f1;
 
+  --white: #ffffff;
+
   /* ── Sombra spacing tokens (Figma: Spacing collection) ── */
   --sp-2xs: 2px;   /* spacing/2xs  VariableID:216:1079 */
   --sp-xs: 4px;   /* spacing/xs  VariableID:106:27 */
@@ -211,6 +213,7 @@ input[type="color"]::-webkit-color-swatch {
   --color-highlight: var(--highlight);
   --color-hover: var(--hover);
   --color-active: var(--active);
+  --color-white: var(--white);
 
   /* ── Sombra spacing → Tailwind utilities ── */
   --spacing-2xs: var(--sp-2xs);

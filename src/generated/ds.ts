@@ -60,9 +60,9 @@ export const ds = {
     textGhost: "flex flex-col items-center justify-center rounded-sm px-sm text-mono-value text-fg-dim cursor-pointer transition-colors hover:bg-hover hover:text-fg h-btn-md w-auto px-sm",
     textGhostDisabled: "flex flex-col items-center justify-center rounded-sm px-sm text-mono-value text-fg-muted cursor-default h-btn-md w-auto px-sm",
     textGhostActive: "flex flex-col items-center justify-center bg-active rounded-sm px-sm text-mono-value text-fg cursor-default hover:bg-active h-btn-md w-auto px-sm",
-    solidHover: "flex flex-col items-center justify-center bg-surface-raised rounded-sm text-fg cursor-pointer",
-    ghostHover: "flex flex-col items-center justify-center bg-hover rounded-sm text-fg cursor-pointer",
-    textGhostHover: "flex flex-col items-center justify-center bg-hover rounded-sm px-sm text-mono-value text-fg cursor-pointer h-btn-md w-auto px-sm",
+    solidHover: "flex flex-col items-center justify-center bg-highlight rounded-sm text-fg cursor-pointer",
+    ghostHover: "flex flex-col items-center justify-center bg-highlight rounded-sm text-fg cursor-pointer",
+    textGhostHover: "flex flex-col items-center justify-center bg-highlight rounded-sm px-sm text-mono-value text-fg cursor-pointer h-btn-md w-auto px-sm",
   },
   handle: {
     root: "rounded-full !h-3 !w-3 border-2 transition",
@@ -71,7 +71,7 @@ export const ds = {
     root: "bg-edge-subtle shrink-0 data-[orientation=horizontal]:h-px data-[orientation=horizontal]:w-full data-[orientation=vertical]:h-full data-[orientation=vertical]:w-px",
   },
   sliderTrack: {
-    track: "bg-surface-raised rounded-full relative w-full h-slider-track",
+    track: "bg-surface-raised rounded-full h-slider-track relative w-full",
     fill: "bg-indigo rounded-full absolute top-0 bottom-0",
   },
   labeledHandle: {
@@ -153,8 +153,8 @@ export const ds = {
     root: "flex flex-col gap-sm",
     label: "text-param text-fg-subtle",
     grid: "bg-surface-raised rounded-sm border border-edge p-2xs gap-2xs grid grid-cols-3 w-fit",
-    cell: "rounded-xs cursor-pointer transition-colors w-icon-md h-icon-md hover:bg-highlight flex items-center justify-center",
-    cellActive: "bg-indigo rounded-xs cursor-pointer transition-colors w-icon-md h-icon-md hover:bg-indigo-hover flex items-center justify-center",
+    cell: "flex flex-row items-center justify-center rounded-xs cursor-pointer transition-colors w-icon-md h-icon-md hover:bg-highlight",
+    cellActive: "flex flex-row items-center justify-center bg-indigo rounded-xs cursor-pointer transition-colors w-icon-md h-icon-md hover:bg-indigo-hover",
     dot: "bg-fg-muted size-1.5 rounded-full",
     dotActive: "bg-fg size-1.5 rounded-full",
   },
