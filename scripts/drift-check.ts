@@ -231,12 +231,16 @@ function detectComponentDrift(db: DB, snapshot: FigmaSnapshot): ComponentDriftIt
     }
   }
 
-  // Add variant child IDs from tracked COMPONENT_SETs
+  // Add variant child IDs from tracked COMPONENT_SETs — and the inverse:
+  // a COMPONENT_SET whose variant children are tracked as DB parts is
+  // itself tracked (e.g. Anchor Cell: the anchorGrid entry's cell/cellActive
+  // parts point at the variants, not the set).
   for (const fc of snapshot.components) {
-    if (fc.type === 'COMPONENT_SET' && trackedNodeIds.has(fc.id) && fc.variants) {
-      for (const v of fc.variants) {
-        trackedNodeIds.add(v.id)
-      }
+    if (fc.type !== 'COMPONENT_SET' || !fc.variants) continue
+    if (trackedNodeIds.has(fc.id)) {
+      for (const v of fc.variants) trackedNodeIds.add(v.id)
+    } else if (fc.variants.some(v => trackedNodeIds.has(v.id))) {
+      trackedNodeIds.add(fc.id)
     }
   }
 

@@ -1,5 +1,5 @@
 # Sombra DS Drift Report
-Generated: 2026-07-13 00:18:41 UTC
+Generated: 2026-07-13 00:34:35 UTC
 
 ## Token Drift
 
@@ -7,9 +7,16 @@ No token drift detected.
 
 ## Component Drift
 
+### In Figma, not in DB
+
+- "Image Viewport Overlay" (node `556:1144`)
+- "Cursor Icon" (node `569:201`)
+- "Node Preview" (node `619:1950`)
+- "Image" (node `551:977`)
+
 ### In DB, not found in Figma
 
-- "Anchor Grid" (dsKey: `anchorGrid`, node `717:15`)
+- "Text Ghost Button" (dsKey: `textGhostButton`, node `326:36`)
 
 ## Variant Drift
 

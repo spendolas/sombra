@@ -1,16 +1,22 @@
 /**
- * drift-collect.ts — Fetches Figma component data via REST API
- * and writes tokens/figma-components.json for drift-check.ts to consume.
+ * drift-collect.ts — Snapshots Figma component data into
+ * tokens/figma-components.json for drift-check.ts to consume.
  *
- * Requires FIGMA_TOKEN in .env (personal access token with file_content:read scope).
+ * Sources (tried in order):
+ *   1. Grip bridge (local Figma plugin — no token; needs the Grip plugin
+ *      open in the Sombra file in the Figma desktop app)
+ *   2. REST API (FIGMA_TOKEN in .env, file_content:read scope)
+ *
  * Reads figmaFileKey from tokens/sombra.ds.json.
  *
  * Usage:
- *   npx tsx scripts/drift-collect.ts
+ *   npx tsx scripts/drift-collect.ts          # Grip if available, else REST
+ *   npx tsx scripts/drift-collect.ts --rest   # force REST path
  */
 
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
+import { GripClient, withGrip } from './lib/grip-client'
 
 // ─── Load .env if present ────────────────────────────────────────────────────
 
@@ -36,10 +42,14 @@ const DB_PATH = resolve(ROOT, 'tokens/sombra.ds.json')
 const OUTPUT_PATH = resolve(ROOT, 'tokens/figma-components.json')
 
 const FIGMA_TOKEN = process.env.FIGMA_TOKEN
+const FORCE_REST = process.argv.includes('--rest')
 
-if (!FIGMA_TOKEN) {
-  console.error('Missing FIGMA_TOKEN. Set it in .env or export FIGMA_TOKEN=...')
-  console.error('Get a personal access token at https://www.figma.com/developers/api#access-tokens')
+const useGrip = !FORCE_REST && GripClient.available()
+
+if (!useGrip && !FIGMA_TOKEN) {
+  console.error('No data source: Grip bridge socket not found AND FIGMA_TOKEN missing.')
+  console.error('Either open the Grip plugin in the Sombra Figma file (desktop app),')
+  console.error('or set FIGMA_TOKEN in .env (personal access token from figma.com/developers).')
   process.exit(1)
 }
 
@@ -137,18 +147,72 @@ function collectComponents(node: FigmaNode, parent: FigmaNode | null, results: S
   }
 }
 
+// ─── Grip collection (Plugin API via local bridge — no token) ────────────────
+
+async function collectViaGrip(): Promise<SnapshotComponent[]> {
+  return withGrip(FILE_KEY, async (grip) => {
+    // One plugin-side script builds the exact snapshot shape — same fields
+    // the REST tree-walk produces.
+    const result = await grip.callTool('run_script', {
+      code: `
+const nodes = figma.root.findAllWithCriteria({ types: ['COMPONENT', 'COMPONENT_SET'] })
+const out = []
+for (const node of nodes) {
+  const parent = node.parent
+  const isVariantChild = node.type === 'COMPONENT' && parent && parent.type === 'COMPONENT_SET'
+  const entry = {
+    id: node.id,
+    name: node.name,
+    type: node.type,
+    parentId: parent ? parent.id : null,
+    parentName: parent ? parent.name : null,
+    isVariantChild: !!isVariantChild,
+    properties: {},
+  }
+  if (!isVariantChild) {
+    let defs = null
+    try { defs = node.componentPropertyDefinitions } catch (e) { defs = null }
+    if (defs) {
+      for (const key of Object.keys(defs)) {
+        const def = defs[key]
+        entry.properties[key] = {
+          type: def.type,
+          defaultValue: def.defaultValue,
+          options: def.variantOptions ?? null,
+        }
+      }
+    }
+  }
+  if (node.type === 'COMPONENT_SET') {
+    entry.variants = node.children
+      .filter((c) => c.type === 'COMPONENT')
+      .map((c) => ({ id: c.id, name: c.name }))
+  }
+  out.push(entry)
+}
+return out
+`,
+    }) as { result?: SnapshotComponent[] } | SnapshotComponent[]
+    return Array.isArray(result) ? result : (result.result ?? [])
+  })
+}
+
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log('Figma component snapshot (REST API)')
+  console.log(`Figma component snapshot (${useGrip ? 'Grip bridge / Plugin API' : 'REST API'})`)
   console.log('====================================\n')
 
-  console.log('Fetching file tree from Figma...')
-
-  const fileData = await figmaGet(`/files/${FILE_KEY}`) as { document: FigmaNode }
-
-  const allComponents: SnapshotComponent[] = []
-  collectComponents(fileData.document, null, allComponents)
+  let allComponents: SnapshotComponent[]
+  if (useGrip) {
+    console.log('Collecting components via Grip...')
+    allComponents = await collectViaGrip()
+  } else {
+    console.log('Fetching file tree from Figma...')
+    const fileData = await figmaGet(`/files/${FILE_KEY}`) as { document: FigmaNode }
+    allComponents = []
+    collectComponents(fileData.document, null, allComponents)
+  }
 
   // Exclude variant children from top-level list — they're already referenced
   // inside their parent COMPONENT_SET's `variants` array

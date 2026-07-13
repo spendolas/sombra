@@ -24,7 +24,7 @@
 
   --edge: #3a3a52;
   --edge-subtle: #2a2a3e;
-  --edge-card: oklch(1 0 0 / 10%); /* edge/card  VariableID:254:632 — white 10% */
+  --edge-card: rgba(255, 255, 255, 0.1);
 
   --indigo: #6366f1;
   --indigo-hover: #818cf8;

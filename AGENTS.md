@@ -408,7 +408,7 @@ Sombra uses custom CSS variables registered with Tailwind v4's `@theme inline` b
 | `--fg-muted` | `text-fg-muted` | `#5a5a6e` | Disabled text, IDs, hints |
 | `--edge` | `border-edge` | `#3a3a52` | Primary borders, dividers |
 | `--edge-subtle` | `border-edge-subtle` | `#2a2a3e` | Subtle borders, node separators |
-| `--edge-card` | `border-edge-card` | `oklch(1 0 0 / 10%)` | Node card border (white 10%) |
+| `--edge-card` | `border-edge-card` | `rgba(255,255,255,0.1)` | Node card border (white 10%) |
 | `--indigo` | `bg-indigo` / `text-indigo` | `#6366f1` | Accent, selection highlight |
 | `--indigo-hover` | `bg-indigo-hover` | `#818cf8` | Accent hover state |
 | `--indigo-active` | `bg-indigo-active` | `#4f46e5` | Accent active/pressed state |

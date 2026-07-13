@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "lastSync": "2026-03-23T00:07:53.492Z",
+  "lastSync": "2026-07-13T00:36:05.505Z",
   "figmaFileKey": "gq5i0l617YkXy0GzAZPtqz",
   "colors": {
     "VariableID:106:3": {
@@ -96,7 +96,7 @@
     "VariableID:254:632": {
       "figmaName": "edge/card",
       "cssVar": "--edge-card",
-      "value": "oklch(1 0 0 / 10%)",
+      "value": "rgba(255, 255, 255, 0.1)",
       "tailwind": {
         "namespace": "color",
         "key": "edge-card"
