@@ -376,10 +376,15 @@ export function encodeCompactHash(
   nodes: Node<NodeData>[],
   edges: Edge<EdgeData>[],
 ): string {
-  // Strip disconnected nodes — they don't affect the output
+  // Strip disconnected nodes — they don't affect the output. Fragment Output
+  // is always kept: dropping it when unwired turned the share link into a
+  // confusing viewer compile error, and it carries renderer settings
+  // (anchor/quality) besides.
   const connectedIds = new Set<string>()
   for (const e of edges) { connectedIds.add(e.source); connectedIds.add(e.target) }
-  const connectedNodes = nodes.filter(n => connectedIds.has(n.id))
+  const connectedNodes = nodes.filter(
+    n => connectedIds.has(n.id) || n.data.type === 'fragment_output'
+  )
 
   const compactNodes: CompactNode[] = connectedNodes.map(node => {
     const cn: CompactNode = { i: node.id, t: node.data.type }

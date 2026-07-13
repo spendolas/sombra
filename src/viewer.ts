@@ -64,6 +64,18 @@ async function main() {
     }
   }
 
+  // Friendly message instead of a raw compile error when there is nothing
+  // to render (no Fragment Output, or one with nothing wired into it)
+  const outputNode = nodes.find((n) => n.data.type === 'fragment_output')
+  const outputWired = outputNode && edges.some((e) => e.target === outputNode.id)
+  if (!outputWired) {
+    showError(
+      'Nothing to render: the shared graph has no connected Fragment Output.\n\n' +
+      'Wire a node into Fragment Output in the editor and share again.'
+    )
+    return
+  }
+
   // Compile to GLSL
   const result = compileGraph(nodes, edges)
   if (!result.success) {
