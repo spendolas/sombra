@@ -460,7 +460,7 @@ export function ImageUploader({ nodeId, data }: {
         params: { ...dataRef.current, srt_rotate: Math.round(newRotate) },
       })
     }
-  }, [clientToSvg, polygon, polyCenter, tw, th, canvasW, canvasH, imageAspect, fitMode, imageWidth, imageHeight, nodeId, updateNodeData])
+  }, [clientToSvg, polygon, tw, th, canvasW, canvasH, imageAspect, fitMode, imageWidth, imageHeight, nodeId, updateNodeData])
 
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
     if (!dragRef.current) return

@@ -195,7 +195,6 @@ function generateRootVars(): string {
   lines.push('')
   lines.push('  /* ── Sombra spacing tokens (Figma: Spacing collection) ── */')
   for (const [varId, entry] of Object.entries(db.spacing)) {
-    const id = varId.replace('VariableID:', '')
     const key = entry.cssVar.replace('--sp-', '')
     lines.push(`  ${entry.cssVar}: ${entry.value}${entry.unit};   /* spacing/${key}  ${varId} */`)
   }

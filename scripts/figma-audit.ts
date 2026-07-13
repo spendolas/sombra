@@ -1362,7 +1362,6 @@ async function main() {
   // ── Cache-based text style identity check ──
   // Uses componentTextMap from .figma-vars-cache.json to verify that
   // the Figma text style matches the DB's textStyle utility name
-  let textStyleMismatches = 0
   if (cacheLoaded) {
     try {
       const cache = JSON.parse(readFileSync(CACHE_PATH, 'utf-8'))
@@ -1396,7 +1395,6 @@ async function main() {
           const firstText = cacheEntry.texts[0]
           const dbFigmaName = utilToFigmaName.get(dbPart.textStyle)
           if (dbFigmaName && firstText.textStyle && firstText.textStyle !== dbFigmaName) {
-            textStyleMismatches++
             // Inject a MISMATCH diff into the report
             const report = reports.find(r => r.nodeId === nodeId)
             if (report) {

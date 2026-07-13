@@ -44,7 +44,7 @@ const WGSL_ISSUES: Array<{ pattern: RegExp; msg: string }> = [
   { pattern: /\bvec4\(/, msg: 'vec4( should be vec4f(' },
   { pattern: /(?<!\w)float\s+\w/, msg: '"float x" should be "var x: f32"' },
   { pattern: /(?<!\w)int\s+\w/, msg: '"int x" should be "var x: i32"' },
-  { pattern: /[^\/]\?[^?].*:(?!:)/, msg: 'Possible GLSL ternary (? :) — should be select()' },
+  { pattern: /[^/]\?[^?].*:(?!:)/, msg: 'Possible GLSL ternary (? :) — should be select()' },
   { pattern: /\btexture\s*\(/, msg: 'texture( should be textureSample(' },
   { pattern: /\bmod\s*\(/, msg: 'mod( should be sombra_mod(' },
 ]

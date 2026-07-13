@@ -150,7 +150,7 @@ export function CommandPalette({ onClose, mousePosition }: CommandPaletteProps) 
 
       onClose()
     },
-    [screenToFlowPosition, addNode, onClose, isDisabled, triggerShake, recents],
+    [screenToFlowPosition, mousePosition, addNode, onClose, isDisabled, triggerShake, recents],
   )
 
   const onKeyDown = useCallback(

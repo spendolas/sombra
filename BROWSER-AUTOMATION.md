@@ -32,6 +32,11 @@ If `window.__sombra` is `undefined`, the page hasn't finished loading or the bri
 | Export graph (.sombra) | `sombra.exportGraph()` → `{ sombra: 1, nodes, edges }` |
 | Import graph (.sombra) | `sombra.importGraph({sombra?, nodes, edges})` |
 | Manual compile | `sombra.compile()` |
+| Share URL for current graph | `sombra.shareGraph()` |
+| Compile IR→WGSL directly | `sombra.compileGraphIR(nodes, edges)` |
+| GPU-validate WGSL | `sombra.validateWGSL(code)` / `validateAllWGSL()` / `validateAllSubgraphWGSL()` |
+| Renderer instance | `sombra.renderer` (`.backend`, full ShaderRenderer API) |
+| Raw store access | `sombra.stores.graph/compiler/settings` (zustand: `.getState()`) |
 
 ---
 
@@ -155,6 +160,29 @@ Import is undoable — the previous graph is pushed to the undo stack. Validates
 
 ---
 
+### `sombra.shareGraph() → url`
+
+Returns a compact share URL (`viewer.html#g=<base64url(deflate)>`) for the current graph. Image nodes embed their `imageData` (chunked base64 — large but functional).
+
+### `sombra.renderer`
+
+The live `ShaderRenderer` instance (WebGPU or WebGL2). `sombra.renderer.backend` reports which. Full interface (`src/renderer/types.ts`): `render()`, `updateUniforms()`, `setAnchor()`, `uploadImageTexture()`, etc. Useful for automation that must force a frame (`render()`) since rAF does not fire in hidden tabs.
+
+### Store actions worth knowing (`sombra.stores.graph.getState()`)
+
+| Action | Notes |
+|---|---|
+| `undo()` / `redo()` | Param edits are undoable (coalesced per node within a sliding 800ms window); deletes are atomic (node + connected edges = one entry) |
+| `removeElements(nodeIds, edgeIds)` | Atomic multi-delete — one history entry |
+| `replaceEdge(oldEdgeId, newEdge)` | Atomic reconnect (enforces single-wire-per-input) |
+| `updateNodeData(id, {params})` | What `setParams` calls under the hood |
+
+### Forcing the WebGL2 backend
+
+Append `?backend=webgl2` to the editor URL — the only way to exercise the fallback in a WebGPU-capable browser. Disables the IR/WGSL path (`useIR=false`) so IR failures can't false-flag a working GL render.
+
+---
+
 ## `.sombra` File Format
 
 Sombra graphs are saved as `.sombra` files — JSON with a version envelope:
@@ -176,71 +204,93 @@ The **GraphToolbar** in the top-left of the canvas provides Save (download) and 
 
 ---
 
-## Node Types (23 total)
+## Node Types (41 total)
 
 ### Input
 
-| Type | Label | Outputs | Key Params |
-|---|---|---|---|
-| `uv_transform` | UV Transform | `uv` (vec2) | `scaleX`, `scaleY`, `rotate`, `offsetX`, `offsetY` (all connectable) |
-| `color_constant` | Color | `color` (color/vec3) | `value` ([r,g,b] 0-1) |
-| `float_constant` | Number | `value` (float) | `value` (float) |
-| `vec2_constant` | Vec2 | `value` (vec2) | `x`, `y` (floats) |
-| `time` | Time | `time` (float) | `speed` (float) |
-| `resolution` | Resolution | `resolution` (vec2) | — |
-| `random` | Random | `value` (float) | `seed` (float) |
+| Type | Label | Inputs | Outputs | Params |
+|---|---|---|---|---|
+| `uv_transform` | UV Transform | `coords` (vec2, auto_uv) | `uv` (vec2) | `srt_scaleX` (connectable), `srt_scaleY` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable) |
+| `color_constant` | Color | — | `color` (vec3) | `color` |
+| `float_constant` | Number | — | `value` (float) | `value` |
+| `vec2_constant` | Vec2 | — | `value` (vec2) | `x`, `y` |
+| `time` | Time | — | `time` (float) | `speed` (connectable) |
+| `resolution` | Resolution | — | `resolution` (vec2) | — |
+| `random` | Random | — | `value` (float) | `min` (connectable), `max` (connectable), `decimals` |
+| `image` | Image | `coords` (vec2) | `color` (vec3), `alpha` (float) | `fitMode` (enum: contain/cover), `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable) |
 
 ### Math
 
-| Type | Label | Inputs | Outputs | Key Params |
+| Type | Label | Inputs | Outputs | Params |
 |---|---|---|---|---|
-| `arithmetic` | Arithmetic | `in_0`..`in_N` (float, dynamic 2-8) | `result` (float) | `operation` (enum: add/subtract/multiply/divide), `inputCount` (hidden) |
-| `trig` | Trig | `input` (float) | `result` (float) | `function` (enum: sin/cos/tan/abs), `frequency` (connectable), `amplitude` (connectable) |
-| `mix` | Mix | `a` (float), `b` (float) | `result` (float) | `factor` (connectable, 0-1) |
-| `smoothstep` | Smoothstep | `input` (float) | `result` (float) | `edge0`, `edge1` |
-| `remap` | Remap | `input` (float) | `result` (float) | `inMin`, `inMax`, `outMin`, `outMax` |
-| `turbulence` | Turbulence | `input` (float) | `result` (float) | — |
-| `ridged` | Ridged | `input` (float) | `result` (float) | — |
+| `arithmetic` | Arithmetic | `in_0`..`in_N` (float, dynamic) | `result` (float) | `operation` (enum: add/subtract/multiply/divide) |
+| `trig` | Trig | `value` (float) | `result` (float) | `func` (enum: sin/cos/tan/abs), `frequency` (connectable), `amplitude` (connectable) |
+| `mix` | Mix | `a` (vec3), `b` (vec3) | `result` (vec3) | `factor` (connectable) |
+| `remap` | Remap | `value` (float), `inMin` (float), `inMax` (float), `outMin` (float), `outMax` (float) | `result` (float) | — |
+| `clamp` | Clamp | `value` (float) | `result` (float) | `min` (connectable), `max` (connectable) |
+| `power` | Power | `base` (float) | `result` (float) | `exponent` (connectable) |
+| `round` | Round | `value` (float) | `result` (float) | `mode` (enum: floor/ceil/fract/round/sign) |
+| `smoothstep` | Smoothstep | `x` (float) | `result` (float) | `min` (connectable), `max` (connectable) |
 
 ### Noise
 
-| Type | Label | Inputs | Outputs | Key Params |
+| Type | Label | Inputs | Outputs | Params |
 |---|---|---|---|---|
-| `noise` | Noise | `coords` (vec2, auto_uv), `phase` (float) | `value` (float) | `scale` (connectable), `noiseType` (enum: simplex/value/worley/worley2d/box), `boxFreq` (connectable, shown for box), `seed` (connectable) |
-| `fbm` | FBM | `coords` (vec2, auto_uv), `phase` (float) | `value` (float) | `scale` (connectable), `noiseType` (enum: simplex/value/worley/worley2d/box), `octaves` (connectable), `lacunarity` (connectable), `gain` (connectable), `fractalMode` (enum: standard/turbulence/ridged) |
-| `domain_warp` | Domain Warp | `coords` (vec2, auto_uv), `phase` (float) | `warped` (vec2) | `noiseType` (enum: simplex/value/worley/worley2d/box), `strength` (connectable), `frequency` (connectable) |
+| `noise` | Noise | `coords` (vec2, auto_uv), `phase` (float) | `value` (float) | `srt_scale` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `noiseType` (enum: simplex/value/worley/worley_fast/worley2d/box), `seed` (connectable) |
+| `fbm` | FBM | `coords` (vec2, auto_uv), `phase` (float) | `value` (float) | `srt_scale` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `noiseType` (enum: simplex/value/worley/worley_fast/worley2d/box), `fractalMode` (enum: standard/turbulence/ridged), `octaves` (connectable), `lacunarity` (connectable), `gain` (connectable), `seed` (connectable) |
 
 ### Color
 
-| Type | Label | Inputs | Outputs | Key Params |
+| Type | Label | Inputs | Outputs | Params |
 |---|---|---|---|---|
 | `hsv_to_rgb` | HSV to RGB | `h` (float), `s` (float), `v` (float) | `rgb` (vec3) | — |
-| `brightness_contrast` | Brightness/Contrast | `color` (vec3) | `color` (vec3) | `brightness` (connectable), `contrast` (connectable) |
-| `color_ramp` | Color Ramp | `t` (float) | `color` (vec3) | `interpolation` (enum: smooth/linear/constant), `stops` (hidden, array of `{position, color}`) |
-
-
+| `brightness_contrast` | Brightness/Contrast | `color` (vec3) | `result` (vec3) | `brightness` (connectable), `contrast` (connectable) |
+| `color_ramp` | Color Ramp | `t` (float) | `color` (vec3) | `interpolation` (enum: smooth/linear/constant) |
+| `invert` | Invert | `color` (vec3) | `result` (vec3) | — |
+| `grayscale` | Grayscale | `color` (vec3) | `result` (float) | `mode` (enum: luminance/average/lightness) |
+| `posterize` | Posterize | `color` (vec3) | `result` (vec3) | `levels` (connectable) |
 
 ### Distort
 
-| Type | Label | Inputs | Outputs | Key Params |
+| Type | Label | Inputs | Outputs | Params |
 |---|---|---|---|---|
-| `warp` | Warp | `source` (vec3, textureInput), `coords` (vec2, auto_uv), `phase` (float) | `color` (vec3), `warped` (vec2), `warpedPhase` (float) | `noiseType` (enum), `strength` (connectable), `seed` (connectable), `warpDepth` (enum: 2/3), `edge` (enum: clamp/repeat/mirror) |
+| `turbulence` | Turbulence | `value` (float) | `result` (float) | — |
+| `ridged` | Ridged | `value` (float) | `result` (float) | — |
+| `warp` | Warp | `source` (vec3, textureInput), `coords` (vec2, auto_uv), `phase` (float) | `color` (vec3), `warped` (vec2), `warpedPhase` (float) | `srt_scale` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `noiseType` (enum: simplex/value/worley/worley_fast/worley2d/box), `strength` (connectable), `seed` (connectable), `warpDepth` (enum: 2/3), `edge` (enum: clamp/repeat/mirror) |
 | `polar_coords` | Polar Coordinates | `source` (vec3, textureInput), `coords` (vec2, auto_uv) | `color` (vec3), `polar` (vec2) | `mode` (enum: forward/inverse), `centerX` (connectable), `centerY` (connectable) |
 | `tile` | Tile | `source` (vec3, textureInput), `coords` (vec2, auto_uv) | `color` (vec3), `uv` (vec2) | `countX` (connectable), `countY` (connectable), `mirror` (enum: none/x/y/xy) |
 
 ### Effect
 
-| Type | Label | Inputs | Outputs | Key Params |
+| Type | Label | Inputs | Outputs | Params |
 |---|---|---|---|---|
-| `dither` | Dither | `color` (vec3) | `result` (vec3) | `pixelSize` (connectable), `shape` (enum: square/circle/diamond/triangle), `threshold` (connectable), `dither` (connectable, shown for circle) |
-| `pixelate` | Pixelate | `source` (vec3, textureInput), `coords` (vec2, screen_uv) | `color` (vec3), `uv` (vec2) | `pixelSize` (connectable) |
-| `reeded_glass` | Reeded Glass | `source` (vec3, textureInput), `coords` (vec2, auto_uv) | `color` (vec3), `coords` (vec2) | `ribWidth`, `ior`, `curvature`, `frost` |
+| `pixelate` | Pixelate | `source` (vec3, textureInput) | `color` (vec3), `uv` (vec2) | `pixelSize` (connectable) |
+| `reeded_glass` | Reeded Glass | `source` (vec3, textureInput) | `color` (vec3), `coords` (vec2) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `ribWidth` (connectable), `ior` (connectable), `curvature` (connectable), `frost` (connectable), `direction` (enum: vertical/horizontal), `ribType` (enum: straight/wave/circular/noise), `waveShape` (enum: sine/triangle/square/sawtooth/chevron/u_shape; when ribType=wave), `noiseType` (enum: simplex/value/worley; when ribType=noise), `amplitude` (connectable; when ribType=wave|circular|noise), `wavelength` (connectable; when ribType=wave|circular|noise) |
+| `dither` | Dither | `color` (vec3) | `result` (vec3) | `pixelSize` (connectable), `shape` (enum: square/circle/diamond/triangle), `threshold` (connectable), `dither` (connectable; when shape=circle) |
 
 ### Output
 
-| Type | Label | Inputs |
-|---|---|---|
-| `fragment_output` | Fragment Output | `color` (vec3) |
+| Type | Label | Inputs | Outputs | Params |
+|---|---|---|---|---|
+| `fragment_output` | Fragment Output | `color` (vec3) | — | `quality` (enum: adaptive/low/medium/high), `anchor` (enum: tl/tc/tr/cl/center/cr/bl/bc/br; anchor-grid) |
+
+### Pattern
+
+| Type | Label | Inputs | Outputs | Params |
+|---|---|---|---|---|
+| `checkerboard` | Checkerboard | `coords` (vec2, auto_uv) | `value` (float) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable) |
+| `stripes` | Stripes | `coords` (vec2, auto_uv) | `value` (float) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `softness` (connectable) |
+| `dots` | Dots | `coords` (vec2, auto_uv) | `value` (float) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `radius` (connectable), `softness` (connectable) |
+| `gradient` | Gradient | `coords` (vec2, auto_uv) | `value` (float) | `gradientType` (enum: linear/radial/angular/diamond) |
+
+### Vector
+
+| Type | Label | Inputs | Outputs | Params |
+|---|---|---|---|---|
+| `split_vec3` | Split Vec3 | `vector` (vec3) | `x` (float), `y` (float), `z` (float) | — |
+| `combine_vec3` | Combine Vec3 | `x` (float), `y` (float), `z` (float) | `vector` (vec3) | — |
+| `split_vec2` | Split Vec2 | `vector` (vec2) | `x` (float), `y` (float) | — |
+| `combine_vec2` | Combine Vec2 | `x` (float), `y` (float) | `vector` (vec2) | — |
 
 ---
 
@@ -248,13 +298,17 @@ The **GraphToolbar** in the top-left of the canvas provides Save (download) and 
 
 | Type | Color | Can connect to |
 |---|---|---|
-| `float` | `#d4d4d8` (gray) | float, vec2, vec3, vec4 (auto-expanded) |
-| `vec2` | `#34d399` (green) | vec2, vec3, vec4 |
-| `vec3` | `#60a5fa` (blue) | vec3, vec4, color |
-| `vec4` | `#a78bfa` (purple) | vec4 |
-| `color` | `#fbbf24` (amber) | color, vec3 |
+| `float` | `#d4d4d8` (gray) | float, vec2, vec3, vec4, color (broadcast) |
+| `vec2` | `#34d399` (green) | float (.x), vec2, vec3, vec4, color |
+| `vec3` | `#60a5fa` (blue) | float (.x), vec2 (.xy), vec3, vec4, color |
+| `vec4` | `#a78bfa` (purple) | float (.x), vec2 (.xy), vec3 (.rgb), vec4, color (.rgb) |
+| `color` | `#fbbf24` (amber) | float (.x), vec2 (.xy), vec3, vec4, color |
+| `sampler2D` | `#f472b6` (pink) | sampler2D (texture-input ports; creates a pass boundary) |
 
-Type coercion is automatic. `float → vec3` becomes `vec3(v, v, v)`.
+Type coercion is automatic and symmetric between `color` and `vec3` (alias):
+`float → vec3/color` broadcasts, `vec4 → vec3/color` drops alpha, `vec3/color → vec4`
+appends alpha 1.0. Rules live in `src/nodes/type-coercion.ts` (GLSL) and
+`coerceTypeForIR` in `src/compiler/ir-compiler.ts` (WGSL) — keep in parity.
 
 ---
 

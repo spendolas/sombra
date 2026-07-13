@@ -4,7 +4,7 @@
 
 import { useCallback, useRef } from 'react'
 import { ReactFlow, Background, MiniMap, useReactFlow } from '@xyflow/react'
-import type { Node, Edge, OnNodesChange, OnEdgesChange, OnReconnect, Connection, IsValidConnection } from '@xyflow/react'
+import type { Node, Edge, NodeTypes, OnNodesChange, OnEdgesChange, OnReconnect, Connection, IsValidConnection } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { areTypesCompatible } from '../nodes/type-coercion'
@@ -19,7 +19,7 @@ const EDGE_TYPES = { typed: TypedEdge } as const
 interface FlowCanvasProps {
   nodes: Node<NodeData>[]
   edges: Edge<EdgeData>[]
-  nodeTypes: Record<string, React.ComponentType<any>>
+  nodeTypes: NodeTypes
   onNodesChange: OnNodesChange<Node<NodeData>>
   onEdgesChange: OnEdgesChange<Edge<EdgeData>>
   onConnect: (connection: Connection) => void

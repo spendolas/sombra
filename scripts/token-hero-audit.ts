@@ -369,17 +369,6 @@ function auditLayer(
 
 // ─── WebSocket client ───────────────────────────────────────────────────────
 
-function createMessage(type: string, payload: unknown): string {
-  const msg: BridgeMessage = {
-    id: randomUUID(),
-    protocolVersion: 1,
-    type,
-    payload,
-    timestamp: Date.now(),
-  }
-  return JSON.stringify(msg)
-}
-
 async function queryComponentProperties(
   ws: WebSocket,
   figmaNodeId: string,
@@ -462,10 +451,10 @@ async function main() {
     ws = new WebSocket(url)
     await new Promise<void>((resolve, reject) => {
       ws.addEventListener('open', () => resolve())
-      ws.addEventListener('error', (e) => reject(new Error(`WebSocket connection failed: ${url}`)))
+      ws.addEventListener('error', () => reject(new Error(`WebSocket connection failed: ${url}`)))
       setTimeout(() => reject(new Error(`Connection timeout: ${url}`)), 5000)
     })
-  } catch (err) {
+  } catch {
     process.stderr.write(`Failed to connect to Token Hero bridge at ${url}\n`)
     process.stderr.write(`Make sure the bridge app is running.\n`)
     process.exit(1)

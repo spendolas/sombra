@@ -124,9 +124,6 @@ function makeGLSLContext(
   }
 }
 
-function makeIRContext(overrides: IRContext): IRContext {
-  return overrides
-}
 
 /** Shared context builder — creates matching GLSL + IR contexts from a single spec. */
 function ctx(
@@ -164,7 +161,7 @@ const WGSL_ISSUES: Array<{ pattern: RegExp; msg: string }> = [
   { pattern: /(?<!\w)float\s+\w/, msg: '"float x" should be "var x: f32"' },
   { pattern: /(?<!\w)int\s+\w/, msg: '"int x" should be "var x: i32"' },
   // Don't flag ternaries inside comments or strings — just in code
-  { pattern: /[^\/]\?[^?].*:(?!:)/, msg: 'Possible GLSL ternary (? :) — should be select()' },
+  { pattern: /[^/]\?[^?].*:(?!:)/, msg: 'Possible GLSL ternary (? :) — should be select()' },
   // NOTE: gl_FragCoord is NOT flagged here — the WGSL assembler rewrites it to in.position
   // as a post-pass (see wgsl-assembler.ts:rewriteFragCoord). Nodes use gl_FragCoord intentionally.
   { pattern: /\btexture\s*\(/, msg: 'texture( should be textureSample(' },

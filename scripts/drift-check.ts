@@ -251,9 +251,11 @@ function detectComponentDrift(db: DB, snapshot: FigmaSnapshot): ComponentDriftIt
     }
   }
 
-  // In DB (top-level) but not in Figma
-  const dbComponentNodeIds = new Set(Object.keys(db.components))
+  // In DB (top-level) but not in Figma.
+  // Synthetic keys (non-"N:N", e.g. np:1, sn:1) are code-only components
+  // with no Figma counterpart by design — not drift.
   for (const [nodeId, comp] of Object.entries(db.components)) {
+    if (!/^\d+:\d+$/.test(nodeId)) continue
     if (!figmaNodeIds.has(nodeId)) {
       drift.push({
         name: comp.name,

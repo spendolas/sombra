@@ -1,5 +1,5 @@
 # Sombra DS Drift Report
-Generated: 2026-03-08 00:54:25 UTC
+Generated: 2026-07-13 00:18:41 UTC
 
 ## Token Drift
 
@@ -7,7 +7,9 @@ No token drift detected.
 
 ## Component Drift
 
-No component drift detected.
+### In DB, not found in Figma
+
+- "Anchor Grid" (dsKey: `anchorGrid`, node `717:15`)
 
 ## Variant Drift
 
@@ -35,6 +37,16 @@ No component drift detected.
 - `nodeInfo`
 - `portRow`
 - `paramSection`
+- `sectionHeader`
+- `emptyText`
+- `errorText`
+- `categoryMeta`
+- `nodeTitle`
+- `description`
+- `nodeIdText`
+- `portList`
+- `portLabel`
+- `portTypeText`
 
 ### Preview Toolbar (`previewToolbar`, node `106:352`)
 
