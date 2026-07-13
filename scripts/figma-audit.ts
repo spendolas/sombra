@@ -10,10 +10,16 @@
  * blend mode, effects (shadows), text style (fontSize, fontWeight, lineHeight,
  * letterSpacing, alignment, decoration, case), text color.
  *
- * Requires FIGMA_TOKEN env var.
+ * Sources (tried in order):
+ *   1. Grip bridge (local Figma plugin — no token; needs the Grip plugin
+ *      open in the Sombra file in the Figma desktop app). A plugin-side
+ *      script serializes each audited node subtree into the same shape the
+ *      REST /nodes endpoint returns, so extraction/diff/fix logic is shared.
+ *   2. REST API (FIGMA_TOKEN in .env)
  *
  * Usage:
- *   npx tsx scripts/figma-audit.ts                # report diffs
+ *   npx tsx scripts/figma-audit.ts                # report diffs (Grip if available, else REST)
+ *   npx tsx scripts/figma-audit.ts --rest         # force REST path (needs FIGMA_TOKEN)
  *   npx tsx scripts/figma-audit.ts --json out     # write JSON report to file
  *   npx tsx scripts/figma-audit.ts --fix          # auto-patch DB from Figma
  *   npx tsx scripts/figma-audit.ts --fix-dry-run  # compute patches, print what would change, don't write
@@ -22,6 +28,7 @@
 
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { resolve } from 'path'
+import { GripClient, withGrip } from './lib/grip-client'
 
 // ─── Load .env if present ────────────────────────────────────────────────────
 
@@ -45,9 +52,14 @@ if (existsSync(ENV_PATH)) {
 
 const DB_PATH = resolve(ROOT, 'tokens/sombra.ds.json')
 const FIGMA_TOKEN = process.env.FIGMA_TOKEN
+const FORCE_REST = process.argv.includes('--rest')
 
-if (!FIGMA_TOKEN) {
-  console.error('Missing FIGMA_TOKEN. Set it in .env or export FIGMA_TOKEN=...')
+const useGrip = !FORCE_REST && GripClient.available()
+
+if (!useGrip && !FIGMA_TOKEN) {
+  console.error('No data source: Grip bridge socket not found AND FIGMA_TOKEN missing.')
+  console.error('Either open the Grip plugin in the Sombra Figma file (desktop app),')
+  console.error('or set FIGMA_TOKEN in .env (personal access token from figma.com/developers).')
   process.exit(1)
 }
 
@@ -246,6 +258,181 @@ async function figmaGet(path: string): Promise<unknown> {
     throw new Error(`Figma API ${res.status}: ${res.statusText} — ${url}`)
   }
   return res.json()
+}
+
+// ─── Grip fetch (Plugin API via local bridge — no token) ─────────────────────
+//
+// One plugin-side script finds the audited nodes and serializes each subtree
+// into the REST /nodes document shape (field names + units figma-audit's
+// extraction expects). Differences bridged in the shim:
+//   - lineHeight {unit,value} → lineHeightPx; letterSpacing PERCENT → px
+//   - paint-level boundVariables.color → node-level boundVariables.fills/strokes
+//   - dashPattern → strokeDashes; figma.mixed guarded to undefined
+//   - openTypeFeatures {TAG:bool} → style.opentypeFlags {TAG:1}
+function buildGripSerializeScript(nodeIds: string[]): string {
+  return `
+const IDS = ${JSON.stringify(nodeIds)}
+const want = new Set(IDS)
+const found = {}
+figma.root.findAll((n) => {
+  if (want.has(n.id)) found[n.id] = n
+  return false
+})
+
+function g(fn) { try { return fn() } catch (e) { return undefined } }
+function num(v) { return typeof v === 'number' ? v : undefined }
+function str(v) { return typeof v === 'string' ? v : undefined }
+
+function paintsToRest(v) {
+  if (!Array.isArray(v)) return undefined
+  return v.map((p) => {
+    const o = { type: p.type, visible: p.visible !== false }
+    if (p.type === 'SOLID' && p.color) {
+      o.color = { r: p.color.r, g: p.color.g, b: p.color.b, a: 1 }
+    }
+    if (typeof p.opacity === 'number') o.opacity = p.opacity
+    if (p.blendMode) o.blendMode = p.blendMode
+    return o
+  })
+}
+
+function paintAliases(v) {
+  if (!Array.isArray(v)) return undefined
+  const arr = []
+  for (const p of v) {
+    const a = p.boundVariables && p.boundVariables.color
+    if (a && a.id) arr.push({ type: 'VARIABLE_ALIAS', id: a.id })
+  }
+  return arr.length ? arr : undefined
+}
+
+function ser(node) {
+  const o = { id: node.id, name: node.name, type: node.type }
+
+  const bvRaw = g(() => node.boundVariables)
+  const bv = bvRaw ? JSON.parse(JSON.stringify(bvRaw)) : {}
+  // Plugin API keeps paint bindings on the paint itself; REST puts them at
+  // node.boundVariables.fills/strokes — synthesize when absent.
+  if (!bv.fills) {
+    const fa = paintAliases(g(() => node.fills))
+    if (fa) bv.fills = fa
+  }
+  if (!bv.strokes) {
+    const sa = paintAliases(g(() => node.strokes))
+    if (sa) bv.strokes = sa
+  }
+  if (Object.keys(bv).length) o.boundVariables = bv
+
+  const lm = g(() => node.layoutMode)
+  if (lm) o.layoutMode = lm
+  o.primaryAxisAlignItems = str(g(() => node.primaryAxisAlignItems))
+  o.counterAxisAlignItems = str(g(() => node.counterAxisAlignItems))
+  o.paddingLeft = num(g(() => node.paddingLeft))
+  o.paddingRight = num(g(() => node.paddingRight))
+  o.paddingTop = num(g(() => node.paddingTop))
+  o.paddingBottom = num(g(() => node.paddingBottom))
+  o.itemSpacing = num(g(() => node.itemSpacing))
+  o.counterAxisSpacing = num(g(() => node.counterAxisSpacing))
+
+  o.cornerRadius = num(g(() => node.cornerRadius))
+  o.topLeftRadius = num(g(() => node.topLeftRadius))
+  o.topRightRadius = num(g(() => node.topRightRadius))
+  o.bottomLeftRadius = num(g(() => node.bottomLeftRadius))
+  o.bottomRightRadius = num(g(() => node.bottomRightRadius))
+
+  o.fills = paintsToRest(g(() => node.fills))
+  o.strokes = paintsToRest(g(() => node.strokes))
+  o.strokeWeight = num(g(() => node.strokeWeight))
+  o.strokeTopWeight = num(g(() => node.strokeTopWeight))
+  o.strokeRightWeight = num(g(() => node.strokeRightWeight))
+  o.strokeBottomWeight = num(g(() => node.strokeBottomWeight))
+  o.strokeLeftWeight = num(g(() => node.strokeLeftWeight))
+  const dash = g(() => node.dashPattern)
+  if (Array.isArray(dash) && dash.length) o.strokeDashes = dash
+
+  o.layoutSizingVertical = str(g(() => node.layoutSizingVertical))
+  o.layoutSizingHorizontal = str(g(() => node.layoutSizingHorizontal))
+  const bb = g(() => node.absoluteBoundingBox)
+  if (bb) o.absoluteBoundingBox = { x: bb.x, y: bb.y, width: bb.width, height: bb.height }
+
+  if (g(() => node.clipsContent)) o.clipsContent = true
+  o.opacity = num(g(() => node.opacity))
+  o.blendMode = str(g(() => node.blendMode))
+
+  const eff = g(() => node.effects)
+  if (Array.isArray(eff) && eff.length) {
+    o.effects = eff.map((e) => ({
+      type: e.type,
+      visible: e.visible !== false,
+      radius: num(e.radius),
+      spread: num(e.spread),
+      color: e.color ? { r: e.color.r, g: e.color.g, b: e.color.b, a: typeof e.color.a === 'number' ? e.color.a : 1 } : undefined,
+      offset: e.offset ? { x: e.offset.x, y: e.offset.y } : undefined,
+    }))
+  }
+
+  if (node.type === 'TEXT') {
+    const style = {}
+    const fontSize = num(g(() => node.fontSize))
+    if (fontSize != null) style.fontSize = fontSize
+    const fontWeight = num(g(() => node.fontWeight))
+    if (fontWeight != null) style.fontWeight = fontWeight
+    const lh = g(() => node.lineHeight)
+    if (lh && typeof lh === 'object' && fontSize != null) {
+      if (lh.unit === 'PIXELS') style.lineHeightPx = lh.value
+      else if (lh.unit === 'PERCENT') style.lineHeightPx = (lh.value / 100) * fontSize
+      // AUTO: omit — no explicit px value to compare
+    }
+    const ls = g(() => node.letterSpacing)
+    if (ls && typeof ls === 'object' && typeof ls.value === 'number' && fontSize != null) {
+      style.letterSpacing = ls.unit === 'PERCENT' ? (ls.value / 100) * fontSize : ls.value
+    }
+    const tc = str(g(() => node.textCase))
+    if (tc) style.textCase = tc
+    const td = str(g(() => node.textDecoration))
+    if (td) style.textDecoration = td
+    const ot = g(() => node.openTypeFeatures)
+    if (ot && typeof ot === 'object') {
+      const flags = {}
+      for (const k of Object.keys(ot)) { if (ot[k]) flags[k] = 1 }
+      if (Object.keys(flags).length) style.opentypeFlags = flags
+    }
+    o.style = style
+    o.textAlignHorizontal = str(g(() => node.textAlignHorizontal))
+    o.textAlignVertical = str(g(() => node.textAlignVertical))
+    if (td) o.textDecoration = td
+    const tsId = g(() => node.textStyleId)
+    if (typeof tsId === 'string' && tsId) o.styles = { text: tsId }
+  }
+
+  const children = g(() => node.children)
+  if (Array.isArray(children) && children.length) {
+    o.children = children.map(ser)
+  }
+
+  return o
+}
+
+const out = {}
+for (const id of IDS) out[id] = found[id] ? ser(found[id]) : null
+return out
+`
+}
+
+async function fetchNodesViaGrip(fileKey: string, nodeIds: string[]): Promise<Map<string, FigmaNode>> {
+  const raw = await withGrip(fileKey, async (grip) => {
+    return await grip.callTool('run_script', { code: buildGripSerializeScript(nodeIds) })
+  }) as Record<string, FigmaNode | null> | { result?: Record<string, FigmaNode | null> }
+
+  const nodes = (raw && typeof raw === 'object' && 'result' in raw && raw.result)
+    ? raw.result
+    : raw as Record<string, FigmaNode | null>
+
+  const map = new Map<string, FigmaNode>()
+  for (const [id, node] of Object.entries(nodes ?? {})) {
+    if (node) map.set(id, node)
+  }
+  return map
 }
 
 // ─── Reverse maps ────────────────────────────────────────────────────────────
@@ -1244,7 +1431,7 @@ function patchDb(
 // ─── Main ────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log('Figma Design Audit')
+  console.log(`Figma Design Audit (${useGrip ? 'Grip bridge / Plugin API' : 'REST API'})`)
   console.log('==================\n')
 
   const db: DB = JSON.parse(readFileSync(DB_PATH, 'utf-8'))
@@ -1300,32 +1487,40 @@ async function main() {
     return
   }
 
-  // Batch-fetch nodes (Figma allows up to 50 ids per request)
-  const BATCH_SIZE = 50
-  const allNodes = new Map<string, FigmaNode>()
+  let allNodes: Map<string, FigmaNode>
 
-  for (let i = 0; i < nodeIds.length; i += BATCH_SIZE) {
-    const batch = nodeIds.slice(i, i + BATCH_SIZE)
-    const idsParam = batch.join(',')
-    console.log(`Fetching batch ${Math.floor(i / BATCH_SIZE) + 1} (${batch.length} nodes)...`)
+  if (useGrip) {
+    console.log('Fetching nodes via Grip (Plugin API)...')
+    allNodes = await fetchNodesViaGrip(fileKey, nodeIds)
+  } else {
+    // Batch-fetch nodes (Figma allows up to 50 ids per request)
+    const BATCH_SIZE = 50
+    allNodes = new Map<string, FigmaNode>()
 
-    const data = await figmaGet(`/files/${fileKey}/nodes?ids=${idsParam}&geometry=paths`) as {
-      nodes: Record<string, { document: FigmaNode }>
-    }
+    for (let i = 0; i < nodeIds.length; i += BATCH_SIZE) {
+      const batch = nodeIds.slice(i, i + BATCH_SIZE)
+      const idsParam = batch.join(',')
+      console.log(`Fetching batch ${Math.floor(i / BATCH_SIZE) + 1} (${batch.length} nodes)...`)
 
-    for (const [nodeId, nodeData] of Object.entries(data.nodes)) {
-      if (nodeData?.document) {
-        let node = nodeData.document
-
-        // Handle COMPONENT_SET: drill into first child (default variant)
-        // Tag the drilled node so diffProps knows the root was a COMPONENT_SET
-        if (node.type === 'COMPONENT_SET' && node.children?.length) {
-          node = node.children[0]
-          ;(node as FigmaNode & { _drilledFromSet?: boolean })._drilledFromSet = true
-        }
-
-        allNodes.set(nodeId, node)
+      const data = await figmaGet(`/files/${fileKey}/nodes?ids=${idsParam}&geometry=paths`) as {
+        nodes: Record<string, { document: FigmaNode }>
       }
+
+      for (const [nodeId, nodeData] of Object.entries(data.nodes)) {
+        if (nodeData?.document) {
+          allNodes.set(nodeId, nodeData.document)
+        }
+      }
+    }
+  }
+
+  // Handle COMPONENT_SET: drill into first child (default variant)
+  // Tag the drilled node so diffProps knows the root was a COMPONENT_SET
+  for (const [nodeId, node] of allNodes) {
+    if (node.type === 'COMPONENT_SET' && node.children?.length) {
+      const drilled = node.children[0]
+      ;(drilled as FigmaNode & { _drilledFromSet?: boolean })._drilledFromSet = true
+      allNodes.set(nodeId, drilled)
     }
   }
 
