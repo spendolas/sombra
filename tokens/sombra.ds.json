@@ -1566,7 +1566,7 @@
         }
       }
     },
-    "326:36": {
+    "tgb:1": {
       "name": "Text Ghost Button",
       "type": "atom",
       "dsKey": "textGhostButton",
@@ -1785,6 +1785,103 @@
           "extra": "size-1.5 rounded-full"
         }
       }
+    },
+    "619:1950": {
+      "name": "Node Preview",
+      "type": "atom",
+      "dsKey": "nodePreview",
+      "codeFile": "src/components/ShaderNode.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "619:1950",
+          "extra": "w-full aspect-square nowheel",
+          "auditIgnore": [
+            "fill",
+            "width.mode",
+            "width.px",
+            "height.mode",
+            "height.px"
+          ],
+          "overflow": "hidden"
+        }
+      }
+    },
+    "556:1144": {
+      "name": "Image Viewport Overlay",
+      "type": "molecule",
+      "dsKey": "imageViewportOverlay",
+      "codeFile": "src/components/ImageUploader.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "556:1144",
+          "extra": "relative rounded-sm",
+          "auditIgnore": [
+            "fill",
+            "width.mode",
+            "width.px",
+            "height.mode",
+            "height.px",
+            "radius"
+          ],
+          "overflow": "hidden"
+        }
+      }
+    },
+    "569:201": {
+      "name": "Cursor Icon",
+      "type": "atom",
+      "dsKey": "cursorIcon",
+      "codeFile": "src/components/ImageUploader.tsx",
+      "parts": {
+        "move": {
+          "figmaNodeId": "569:8",
+          "auditIgnore": [
+            "fill",
+            "layout",
+            "width.mode",
+            "width.px",
+            "height.mode",
+            "height.px",
+            "radius",
+            "padding",
+            "gap",
+            "align",
+            "justify"
+          ]
+        },
+        "scale": {
+          "figmaNodeId": "569:13",
+          "auditIgnore": [
+            "fill",
+            "layout",
+            "width.mode",
+            "width.px",
+            "height.mode",
+            "height.px",
+            "radius",
+            "padding",
+            "gap",
+            "align",
+            "justify"
+          ]
+        },
+        "rotate": {
+          "figmaNodeId": "569:17",
+          "auditIgnore": [
+            "fill",
+            "layout",
+            "width.mode",
+            "width.px",
+            "height.mode",
+            "height.px",
+            "radius",
+            "padding",
+            "gap",
+            "align",
+            "justify"
+          ]
+        }
+      }
     }
   },
   "nodeTemplates": {
@@ -1992,6 +2089,11 @@
       "name": "Reeded Glass",
       "category": "Effect",
       "nodeFile": "src/nodes/transform/reeded-glass.ts"
+    },
+    "551:977": {
+      "name": "Image",
+      "category": "Input",
+      "nodeFile": "src/nodes/input/image.ts"
     }
   },
   "scenes": {

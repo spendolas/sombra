@@ -44,7 +44,7 @@ const NodePreview = memo(({ nodeId }: { nodeId: string }) => {
       ref={canvasRef}
       width={PREVIEW_SIZE}
       height={PREVIEW_SIZE}
-      className="w-full aspect-square nowheel"
+      className={ds.nodePreview.root}
       style={{ imageRendering: 'pixelated' }}
     />
   )

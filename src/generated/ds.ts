@@ -158,6 +158,12 @@ export const ds = {
     dot: "bg-fg-muted size-1.5 rounded-full",
     dotActive: "bg-fg size-1.5 rounded-full",
   },
+  nodePreview: {
+    root: "overflow-hidden w-full aspect-square nowheel",
+  },
+  imageViewportOverlay: {
+    root: "overflow-hidden relative rounded-sm",
+  },
 } as const;
 
 export type DSComponent = keyof typeof ds;

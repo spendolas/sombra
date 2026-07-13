@@ -10,6 +10,7 @@
 import { useRef, useCallback, useMemo, useState, useEffect, useId } from 'react'
 import { useGraphStore } from '@/stores/graphStore'
 import { usePreviewStore } from '@/stores/previewStore'
+import { ds } from '@/generated/ds'
 
 const ACCEPTED_TYPES = 'image/png,image/jpeg,image/webp,image/gif'
 const CORNER_ZONE = 8
@@ -512,7 +513,7 @@ export function ImageUploader({ nodeId, data }: {
         <>
           <div
             ref={thumbRef}
-            className="relative rounded-sm overflow-hidden"
+            className={ds.imageViewportOverlay.root}
             style={{ aspectRatio: imageAspect, width: '100%', maxWidth: '100%' }}
           >
             <img src={imageData} alt={imageName || 'Uploaded image'} className="absolute inset-0 w-full h-full" />
