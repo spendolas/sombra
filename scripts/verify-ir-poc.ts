@@ -620,7 +620,7 @@ function verify(
 {
   const [g, i] = ctx({
     nodeId: 'out-xxx444',
-    inputs: { color: 'node_mix_abc_result' },
+    inputs: { color: 'node_mix_abc_result', alpha: 'u_out_xxx444_alpha' },
     outputs: {},
     params: { quality: 'adaptive' },
   })
@@ -651,6 +651,17 @@ function verify(
     params: { color: [1.0, 0.0, 1.0] },
   })
   verify('Color Constant', colorConstantNode, g, i)
+}
+
+// Fragment Output — alpha op (subtract) + premultiplied write
+{
+  const [g, i] = ctx({
+    nodeId: 'fo-eee555',
+    inputs: { color: 'node_src_color', alpha: 'u_fo_eee555_alpha' },
+    outputs: {},
+    params: { alphaOp: 'subtract', quality: 'adaptive', anchor: 'center', alpha: 0.5 },
+  })
+  verify('Fragment Output (alpha subtract)', fragmentOutputNode, g, i)
 }
 
 // 29. Vec2 Constant
