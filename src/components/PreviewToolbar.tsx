@@ -14,6 +14,8 @@ export function PreviewToolbar({ className }: PreviewToolbarProps) {
   const setPreviewMode = useSettingsStore((s) => s.setPreviewMode)
   const setSplitDirection = useSettingsStore((s) => s.setSplitDirection)
   const toggleSplitSwapped = useSettingsStore((s) => s.toggleSplitSwapped)
+  const previewBackground = useSettingsStore((s) => s.previewBackground)
+  const setPreviewBackground = useSettingsStore((s) => s.setPreviewBackground)
 
   const isDockedH = previewMode === 'docked' && splitDirection === 'horizontal'
   const isDockedV = previewMode === 'docked' && splitDirection === 'vertical'
@@ -63,6 +65,35 @@ export function PreviewToolbar({ className }: PreviewToolbarProps) {
           className={previewMode === 'floating' ? active : inactive}
           onClick={() => setPreviewMode('floating')}
         />
+      </div>
+      <div className={ds.previewToolbar.root}>
+        <IconButton
+          icon="grid"
+          title="Background: checker"
+          className={previewBackground.mode === 'checker' ? active : inactive}
+          onClick={() => setPreviewBackground({ mode: 'checker' })}
+        />
+        <IconButton
+          icon="square"
+          title="Background: solid"
+          className={previewBackground.mode === 'solid' ? active : inactive}
+          onClick={() => setPreviewBackground({ mode: 'solid' })}
+        />
+        <IconButton
+          icon="ban"
+          title="Background: none"
+          className={previewBackground.mode === 'none' ? active : inactive}
+          onClick={() => setPreviewBackground({ mode: 'none' })}
+        />
+        {previewBackground.mode === 'solid' && (
+          <input
+            type="color"
+            value={previewBackground.color}
+            onChange={(e) => setPreviewBackground({ color: e.target.value })}
+            title="Background color"
+            className="size-btn-md rounded-sm border border-edge bg-transparent cursor-pointer"
+          />
+        )}
       </div>
       <div className={ds.previewToolbar.root}>
         <IconButton
