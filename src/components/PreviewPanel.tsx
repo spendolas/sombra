@@ -35,7 +35,7 @@ function CompileErrorBanner() {
 
 export function PreviewPanel({ targetRef }: PreviewPanelProps) {
   return (
-    <div className={ds.previewPanel.root}>
+    <div className={ds.previewPanel.root + ' isolate'}>
       <PreviewBackdrop />
       <PreviewToolbar className="absolute top-xl right-xl z-10" />
       <div ref={targetRef} className="w-full h-full" />

@@ -10,7 +10,7 @@ interface FullWindowOverlayProps {
 
 export function FullWindowOverlay({ targetRef }: FullWindowOverlayProps) {
   return (
-    <div className={ds.fullWindowOverlay.root}>
+    <div className={ds.fullWindowOverlay.root + ' isolate'}>
       <PreviewBackdrop />
       <div ref={targetRef} className="w-full h-full" />
       <ShaderPlaceholder />

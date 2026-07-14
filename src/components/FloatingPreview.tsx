@@ -284,7 +284,7 @@ export function FloatingPreview({ targetRef }: FloatingPreviewProps) {
       }}
     >
       {/* Inner: visual styling + overflow-hidden for content — z-10 so resize handles (z-30) sit on top */}
-      <div className={ds.floatingPreview.root + ' w-full h-full !relative z-10'}>
+      <div className={ds.floatingPreview.root + ' w-full h-full !relative z-10 isolate'}>
         <PreviewBackdrop />
         <PreviewToolbar className="absolute top-xl right-xl z-10" />
         {/* Invisible drag surface */}

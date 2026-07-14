@@ -6,9 +6,9 @@ import { useSettingsStore } from '@/stores/settingsStore'
 const checkerStyle = {
   backgroundColor: 'var(--surface-elevated)',
   backgroundImage:
-    'linear-gradient(45deg,transparent 75%,var(--border-edge) 0),linear-gradient(45deg,var(--border-edge) 25%,transparent 0),linear-gradient(-45deg,transparent 75%,var(--border-edge) 0),linear-gradient(-45deg,var(--border-edge) 25%,transparent 0)',
-  backgroundSize: '16px 16px',
-  backgroundPosition: '0 0,8px 0,8px -8px,0 8px',
+    'linear-gradient(45deg, var(--fg-muted) 25%, transparent 0), linear-gradient(-45deg, var(--fg-muted) 25%, transparent 0), linear-gradient(45deg, transparent 75%, var(--fg-muted) 0), linear-gradient(-45deg, transparent 75%, var(--fg-muted) 0)',
+  backgroundSize: '20px 20px',
+  backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0',
 }
 
 /**
