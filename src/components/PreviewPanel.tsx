@@ -1,5 +1,6 @@
 import type { RefObject } from 'react'
 import { PreviewToolbar } from './PreviewToolbar'
+import { BackgroundModeControl } from './BackgroundModeControl'
 import { ShaderPlaceholder } from './ShaderPlaceholder'
 import { PreviewBackdrop } from './PreviewBackdrop'
 import { useCompilerStore } from '../stores/compilerStore'
@@ -37,6 +38,7 @@ export function PreviewPanel({ targetRef }: PreviewPanelProps) {
   return (
     <div className={ds.previewPanel.root + ' isolate'}>
       <PreviewBackdrop />
+      <BackgroundModeControl className="absolute top-xl left-xl z-10" />
       <PreviewToolbar className="absolute top-xl right-xl z-10" />
       <div ref={targetRef} className="w-full h-full" />
       <ShaderPlaceholder />

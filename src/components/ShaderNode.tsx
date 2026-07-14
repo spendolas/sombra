@@ -14,6 +14,7 @@ import { BaseNode, BaseNodeHeader, BaseNodeHeaderTitle, BaseNodeContent } from '
 import { LabeledHandle } from '@/components/labeled-handle'
 import { BaseHandle } from '@/components/base-handle'
 import { IconButton } from '@/components/IconButton'
+import { BackgroundModeControl } from './BackgroundModeControl'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
 
@@ -454,6 +455,15 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
             !definition.hidePreview && regularParams.length === 0 && ds.shaderNode.paramDivider,
           )}>
             <definition.component nodeId={id} data={currentValues} />
+          </div>
+        )}
+
+        {/* Mirrored preview-background control on the master output node —
+            shares the previewBackground setting with the preview overlay. */}
+        {definition.type === 'fragment_output' && (
+          <div className={cn("w-full mt-md pt-md flex flex-col gap-xs", ds.shaderNode.paramDivider)}>
+            <span className="text-param text-fg-subtle uppercase">Preview Background</span>
+            <BackgroundModeControl className="w-fit" />
           </div>
         )}
 
