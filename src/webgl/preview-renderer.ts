@@ -129,6 +129,25 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
     }
   }
 
+  /**
+   * True if the shader declares an image-node sampler (`u_*_image`) with no
+   * texture uploaded yet. We scan the source rather than ACTIVE_UNIFORMS
+   * because an empty image node declares the sampler but never samples it, so
+   * the driver strips it from the active list — yet the node still renders its
+   * gray placeholder, diverging from WebGPU (whose preview bails on the
+   * unfilled binding and shows no thumbnail). Bailing here matches WebGPU;
+   * invalidateNode() re-renders once the texture uploads. Pass-boundary
+   * samplers are `u_passN_tex`, so `_image` uniquely identifies image nodes.
+   */
+  private hasMissingImageTexture(fragmentShader: string): boolean {
+    const re = /\buniform\s+sampler2D\s+(u_\w+_image)\b/g
+    let m: RegExpExecArray | null
+    while ((m = re.exec(fragmentShader)) !== null) {
+      if (!this.imageTextures.has(m[1])) return true
+    }
+    return false
+  }
+
   /** Bind image textures whose sampler uniform exists in the program. Returns next free unit. */
   private bindImageTextures(program: WebGLProgram, startUnit: number): number {
     const gl = this.gl
@@ -171,6 +190,9 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
       this.programCache.set(fragmentShader, program)
       this.cacheOrder.push(fragmentShader)
     }
+
+    // Image texture may not be uploaded yet — bail, invalidateNode() retries.
+    if (this.hasMissingImageTexture(fragmentShader)) return null
 
     gl.useProgram(program)
 
@@ -328,6 +350,9 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
         this.programCache.set(pass.fragmentShader, program)
         this.cacheOrder.push(pass.fragmentShader)
       }
+
+      // Image texture may not be uploaded yet — bail, invalidateNode() retries.
+      if (this.hasMissingImageTexture(pass.fragmentShader)) return null
 
       // Bind target: last pass → main FBO, intermediate → its own pass FBO
       if (isLast) {
