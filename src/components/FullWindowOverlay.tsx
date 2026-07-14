@@ -1,6 +1,7 @@
 import type { RefObject } from 'react'
 import { PreviewToolbar } from './PreviewToolbar'
 import { ShaderPlaceholder } from './ShaderPlaceholder'
+import { PreviewBackdrop } from './PreviewBackdrop'
 import { ds } from '@/generated/ds'
 
 interface FullWindowOverlayProps {
@@ -10,6 +11,7 @@ interface FullWindowOverlayProps {
 export function FullWindowOverlay({ targetRef }: FullWindowOverlayProps) {
   return (
     <div className={ds.fullWindowOverlay.root}>
+      <PreviewBackdrop />
       <div ref={targetRef} className="w-full h-full" />
       <ShaderPlaceholder />
       <PreviewToolbar className="absolute top-xl right-xl z-10" />

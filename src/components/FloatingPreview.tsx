@@ -1,6 +1,7 @@
 import { useRef, useCallback, useEffect, useMemo, type RefObject } from 'react'
 import { PreviewToolbar } from './PreviewToolbar'
 import { ShaderPlaceholder } from './ShaderPlaceholder'
+import { PreviewBackdrop } from './PreviewBackdrop'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { ds } from '@/generated/ds'
 
@@ -284,6 +285,7 @@ export function FloatingPreview({ targetRef }: FloatingPreviewProps) {
     >
       {/* Inner: visual styling + overflow-hidden for content — z-10 so resize handles (z-30) sit on top */}
       <div className={ds.floatingPreview.root + ' w-full h-full !relative z-10'}>
+        <PreviewBackdrop />
         <PreviewToolbar className="absolute top-xl right-xl z-10" />
         {/* Invisible drag surface */}
         <div

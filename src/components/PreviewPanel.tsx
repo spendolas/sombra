@@ -1,21 +1,12 @@
 import type { RefObject } from 'react'
 import { PreviewToolbar } from './PreviewToolbar'
 import { ShaderPlaceholder } from './ShaderPlaceholder'
+import { PreviewBackdrop } from './PreviewBackdrop'
 import { useCompilerStore } from '../stores/compilerStore'
-import { useSettingsStore } from '../stores/settingsStore'
 import { ds } from '@/generated/ds'
 
 interface PreviewPanelProps {
   targetRef: RefObject<HTMLDivElement | null>
-}
-
-// Runtime-dynamic backdrop values (checker tile + user-picked solid color) —
-// documented CLAUDE.md exception to the "no inline style" rule.
-const checkerStyle = {
-  backgroundImage:
-    'linear-gradient(45deg,#0000 75%,#00000022 0),linear-gradient(45deg,#00000022 25%,#0000 0),linear-gradient(-45deg,#0000 75%,#00000022 0),linear-gradient(-45deg,#00000022 25%,#0000 0)',
-  backgroundSize: '16px 16px',
-  backgroundPosition: '0 0,8px 0,8px -8px,0 8px',
 }
 
 /**
@@ -43,20 +34,9 @@ function CompileErrorBanner() {
 }
 
 export function PreviewPanel({ targetRef }: PreviewPanelProps) {
-  const previewBackground = useSettingsStore((s) => s.previewBackground)
-
   return (
     <div className={ds.previewPanel.root}>
-      {previewBackground.mode !== 'none' && (
-        <div
-          aria-hidden
-          // The canvas host below is a plain (non-positioned) div, so an absolutely
-          // positioned sibling with z-index >= 0 would actually paint ABOVE it per
-          // CSS stacking rules — a negative z-index is required to stay behind it.
-          className="absolute inset-0 -z-10 pointer-events-none"
-          style={previewBackground.mode === 'checker' ? checkerStyle : { background: previewBackground.color }}
-        />
-      )}
+      <PreviewBackdrop />
       <PreviewToolbar className="absolute top-xl right-xl z-10" />
       <div ref={targetRef} className="w-full h-full" />
       <ShaderPlaceholder />
