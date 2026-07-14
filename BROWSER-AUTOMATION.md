@@ -272,7 +272,7 @@ The **GraphToolbar** in the top-left of the canvas provides Save (download) and 
 
 | Type | Label | Inputs | Outputs | Params |
 |---|---|---|---|---|
-| `fragment_output` | Fragment Output | `color` (vec3) | — | `quality` (enum: adaptive/low/medium/high), `anchor` (enum: tl/tc/tr/cl/center/cr/bl/bc/br; anchor-grid) |
+| `fragment_output` | Fragment Output | `color` (vec4, default `[0,0,0,1]`) | — | `alpha` (connectable; default 1.0), `alphaOp` (enum: replace/multiply/max/add/subtract/min/difference; default multiply), `quality` (enum: adaptive/low/medium/high), `anchor` (enum: tl/tc/tr/cl/center/cr/bl/bc/br; anchor-grid) |
 
 ### Pattern
 
@@ -351,6 +351,17 @@ sombra.setParams(rampId, {
   ]
 })
 ```
+
+### Fragment Output: Color, Alpha & Premultiplication
+
+The `color` input is `vec4`. A `vec3`/`color` source coerces with alpha `1.0`; a `vec4` source's alpha passes through unchanged. The connectable `alpha` input (default `1.0`) is combined with that color-derived alpha via the `alphaOp` param (`replace/multiply/max/add/subtract/min/difference`, default `multiply`) to produce the final alpha `a`. The node's actual write is premultiplied: `vec4(rgb * a, a)`. Graphs that never touch alpha (`a = 1`) render pixel-identical to before — output stays opaque.
+
+```js
+sombra.setParams(outputId, { alphaOp: 'multiply' })
+sombra.connect(alphaSourceId, outputId, 'value', 'alpha')
+```
+
+Both the WebGL2 and WebGPU renderers clear the canvas to transparent (`a = 0`) before drawing, so any non-opaque output composites over the host page — relevant for embeds, shared-link previews, and `viewer.html`. This is separate from the editor's own backdrop (see **Settings Control** — `previewBackground`), which is a view-only checker/solid/none backdrop behind the preview canvas and never affects the rendered/exported output.
 
 ---
 
@@ -483,4 +494,8 @@ settings.setSplitDirection('horizontal') // or 'vertical' (for docked mode)
 settings.setSplitPct('vertical', 40)    // 40% preview in vertical split
 settings.setFloatingPosition({x: 100, y: 100})
 settings.setFloatingSize({width: 600, height: 400})
+
+// Preview backdrop (view-only — never baked into the render/export)
+settings.previewBackground   // { mode: 'checker' | 'solid' | 'none', color: string }, default { mode: 'checker', color: '#1a1a2e' }
+settings.setPreviewBackground({ mode: 'solid', color: '#000000' })
 ```
