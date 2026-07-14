@@ -132,7 +132,7 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
 
   async init(canvas: HTMLCanvasElement): Promise<void> {
     this.canvas = canvas
-    const gl = canvas.getContext('webgl2')
+    const gl = canvas.getContext('webgl2', { alpha: true, premultipliedAlpha: true })
     if (!gl) throw new Error('WebGL2 not supported')
     this.gl = gl
 
@@ -954,7 +954,7 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
     const gl = this.gl
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
     gl.viewport(0, 0, this.canvas.width, this.canvas.height)
-    gl.clearColor(0, 0, 0, 1)
+    gl.clearColor(0, 0, 0, 0)
     gl.clear(gl.COLOR_BUFFER_BIT)
     this.setAnimated(false)
   }
