@@ -462,7 +462,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
             shares the previewBackground setting with the preview overlay. */}
         {definition.type === 'fragment_output' && (
           <div className={cn("w-full mt-md pt-md flex flex-col gap-xs", ds.shaderNode.paramDivider)}>
-            <span className="text-param text-fg-subtle uppercase">Preview Background</span>
+            <span className="text-param text-fg-subtle">Preview Background</span>
             <BackgroundModeControl className="w-fit" />
           </div>
         )}

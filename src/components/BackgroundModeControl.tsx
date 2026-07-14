@@ -22,7 +22,7 @@ export function BackgroundModeControl({ className }: BackgroundModeControlProps)
   const inactive = ds.button.ghost
 
   return (
-    <div className={cn(ds.previewToolbar.root, className)}>
+    <div className={cn(ds.previewToolbar.root, 'nodrag nowheel', className)}>
       <IconButton
         icon="grid"
         title="Background: checker"

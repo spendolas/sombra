@@ -8,6 +8,7 @@ import type { NodeData, NodeParameter } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { useGraphStore } from '../stores/graphStore'
 import { NodeParameters, type SourceInfo } from './NodeParameters'
+import { BackgroundModeControl } from './BackgroundModeControl'
 import { Separator } from '@/components/ui/separator'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
@@ -203,6 +204,18 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
           </Label>
           <div className={ds.propertiesPanel.paramSection}>
             <definition.component nodeId={selectedNode.id} data={selectedNode.data.params || {}} />
+          </div>
+        </div>
+      )}
+
+      {/* Preview background — mirrors the on-node / preview control (shared setting) */}
+      {selectedNode.data.type === 'fragment_output' && (
+        <div className="mb-xl">
+          <Label className={cn(ds.propertiesPanel.sectionHeader, "mb-lg block")}>
+            Preview Background
+          </Label>
+          <div className={ds.propertiesPanel.paramSection}>
+            <BackgroundModeControl className="w-fit" />
           </div>
         </div>
       )}
