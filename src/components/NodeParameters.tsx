@@ -231,9 +231,9 @@ function ColorInput({ param, value, onChange }: ColorInputProps) {
   // Old saves may store a 3-tuple (RGB, pre-alpha-migration); pad with a=1.
   const rgba: Rgba = [value[0] ?? 0, value[1] ?? 0, value[2] ?? 0, value[3] ?? 1]
 
-  return (
-    <div className={ds.colorInput.root}>
-      <RgbaColorPicker label={param.label} value={rgba} onChange={onChange} />
-    </div>
-  )
+  // Always inline: this renders in the Properties panel (via NodeParameters).
+  // color_constant's node-body param row is suppressed in ShaderNode — its
+  // own inline picker (the node body itself) is the only other consumer of
+  // this param, so there is no double-render.
+  return <RgbaColorPicker label={param.label} value={rgba} onChange={onChange} mode="inline" />
 }

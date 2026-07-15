@@ -347,6 +347,7 @@ export function ColorRampEditor({
       {/* Controls row */}
       <div className={ds.gradientEditor.controlsRow}>
         <RgbaColorPicker
+          mode="popover"
           value={normalizeStopColor(selectedStop.color)}
           onChange={handleColorChange}
         />
