@@ -1331,6 +1331,34 @@ function verify(
     params: { pixelSize: 8, shape: 'square', threshold: 1.0, dither: 0.5 },
   })
   verify('Dither (square)', ditherNode, g, i, 'loose')
+
+  // RGBA assertion — Spatial: mask multiplies the full vec4 color, alpha included
+  // (see rgba-node-audit.md).
+  testNum++
+  console.log(`\n  ${testNum}. Dither (square) — RGBA mask-multiply assertion`)
+  let dithOk = true
+  const refGLSL = ditherNode.glsl(g)
+  if (!/vec4 node_dith_qqq777_result = node_noise_xyz_color \* pg_m_dith_qqq777;/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected vec4 mask-multiply assignment (masks alpha too). Got:\n    ${refGLSL}`)
+    dithOk = false
+  }
+  const irOut = ditherNode.ir!(i)
+  const irGLSL = lowerNodeOutputToGLSL(irOut).join('\n')
+  if (!/vec4 node_dith_qqq777_result = node_noise_xyz_color \* pg_m_dith_qqq777;/.test(irGLSL)) {
+    console.log(`  [FAIL] IR->GLSL: expected vec4 mask-multiply assignment. Got:\n    ${irGLSL}`)
+    dithOk = false
+  }
+  const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
+  if (!/var node_dith_qqq777_result: vec4f = \(node_noise_xyz_color \* pg_m_dith_qqq777\);/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected vec4f mask-multiply assignment. Got:\n    ${irWGSL}`)
+    dithOk = false
+  }
+  if (dithOk) {
+    console.log('  [PASS] dither: color/result are RGBA (vec4/vec4f), mask multiplies alpha too')
+    passed++
+  } else {
+    failed++
+  }
 }
 
 // 44. Reeded Glass (straight, vertical, non-texture)
