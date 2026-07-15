@@ -1786,6 +1786,65 @@
         }
       }
     },
+    "765:3924": {
+      "name": "Checkbox",
+      "type": "atom",
+      "dsKey": "boolCheckbox",
+      "codeFile": "src/components/NodeParameters.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": null,
+          "layout": "horizontal",
+          "align": "center",
+          "gap": "sm",
+          "cursor": "pointer",
+          "extra": "nodrag nowheel"
+        },
+        "box": {
+          "figmaNodeId": "765:3880",
+          "width": "icon-sm",
+          "height": "icon-sm",
+          "radius": "xs",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "fill": "surface/raised",
+          "overflow": "hidden"
+        },
+        "boxChecked": {
+          "figmaNodeId": "765:3902",
+          "layout": "horizontal",
+          "align": "center",
+          "justify": "center",
+          "width": "icon-sm",
+          "height": "icon-sm",
+          "radius": "xs",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "fill": "indigo/default",
+          "overflow": "hidden"
+        },
+        "indicator": {
+          "figmaNodeId": "764:3878",
+          "textColor": "fg",
+          "textAlign": "center",
+          "textAlignVertical": "center",
+          "extra": "text-[11px] leading-none",
+          "auditIgnore": [
+            "text.fontSize",
+            "text.fontWeight"
+          ]
+        },
+        "label": {
+          "figmaNodeId": null,
+          "textStyle": "text-param",
+          "textColor": "fg-subtle"
+        }
+      }
+    },
     "619:1950": {
       "name": "Node Preview",
       "type": "atom",

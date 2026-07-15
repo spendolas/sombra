@@ -158,6 +158,13 @@ export const ds = {
     dot: "bg-fg-muted size-1.5 rounded-full",
     dotActive: "bg-fg size-1.5 rounded-full",
   },
+  boolCheckbox: {
+    root: "flex flex-row items-center gap-sm cursor-pointer nodrag nowheel",
+    box: "bg-surface-raised rounded-xs border border-edge overflow-hidden w-icon-sm h-icon-sm",
+    boxChecked: "flex flex-row items-center justify-center bg-indigo rounded-xs border border-edge overflow-hidden w-icon-sm h-icon-sm",
+    indicator: "text-fg text-center text-[11px] leading-none",
+    label: "text-param text-fg-subtle",
+  },
   nodePreview: {
     root: "overflow-hidden w-full aspect-square nowheel",
   },
