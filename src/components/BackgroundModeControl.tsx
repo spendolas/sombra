@@ -77,6 +77,12 @@ export function BackgroundModeControl({ className }: BackgroundModeControlProps)
         onClick={() => setPreviewBackground({ mode: 'checker' })}
       />
       <IconButton
+        icon="eye"
+        title="Background: see-through (transparent — shows the UI behind)"
+        className={previewBackground.mode === 'none' ? active : inactive}
+        onClick={() => setPreviewBackground({ mode: 'none' })}
+      />
+      <IconButton
         icon="square"
         title="Background: solid"
         className={previewBackground.mode === 'solid' ? active : inactive}
@@ -90,12 +96,6 @@ export function BackgroundModeControl({ className }: BackgroundModeControlProps)
           onChange={(rgba) => setPreviewBackground({ color: rgbaToCssColor(rgba) })}
         />
       )}
-      <IconButton
-        icon="eye"
-        title="Background: see-through (transparent — shows the UI behind)"
-        className={previewBackground.mode === 'none' ? active : inactive}
-        onClick={() => setPreviewBackground({ mode: 'none' })}
-      />
     </div>
   )
 }
