@@ -471,6 +471,33 @@ function verify(
     params: { brightness: 0.0, contrast: 0.0 },
   })
   verify('Brightness/Contrast', brightnessContrastNode, g, i)
+
+  // RGBA assertion — Channel transform: brightness/contrast applies to all 4 channels (incl. alpha).
+  testNum++
+  console.log(`\n  ${testNum}. Brightness/Contrast — RGBA channel-transform assertion`)
+  const refGLSL = brightnessContrastNode.glsl(g)
+  let bcOk = true
+  if (!/^vec4 node_bc_iii999_result = /.test(refGLSL) || /vec3/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected vec4 declaration, no vec3 remnants. Got:\n    ${refGLSL}`)
+    bcOk = false
+  }
+  const irOut = brightnessContrastNode.ir!(i)
+  const irGLSL = lowerNodeOutputToGLSL(irOut).join('\n')
+  if (!/^vec4 node_bc_iii999_result = /.test(irGLSL) || /vec3/.test(irGLSL)) {
+    console.log(`  [FAIL] IR->GLSL: expected vec4 declaration, no vec3 remnants. Got:\n    ${irGLSL}`)
+    bcOk = false
+  }
+  const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
+  if (!/^var node_bc_iii999_result: vec4f = /.test(irWGSL) || /vec3f/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected vec4f declaration, no vec3f remnants. Got:\n    ${irWGSL}`)
+    bcOk = false
+  }
+  if (bcOk) {
+    console.log('  [PASS] brightness_contrast: color/result are RGBA (vec4/vec4f), formula covers alpha')
+    passed++
+  } else {
+    failed++
+  }
 }
 
 // 12. Invert

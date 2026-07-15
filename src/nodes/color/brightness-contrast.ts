@@ -15,7 +15,7 @@ export const brightnessContrastNode: NodeDefinition = {
     {
       id: 'color',
       label: 'Color',
-      type: 'vec3',
+      type: 'color',
       default: [0.5, 0.5, 0.5],
     },
   ],
@@ -24,7 +24,7 @@ export const brightnessContrastNode: NodeDefinition = {
     {
       id: 'result',
       label: 'Result',
-      type: 'vec3',
+      type: 'color',
     },
   ],
 
@@ -56,25 +56,26 @@ export const brightnessContrastNode: NodeDefinition = {
   glsl: (ctx) => {
     const { inputs, outputs } = ctx
     // inputs.brightness and inputs.contrast are always GLSL expressions (connectable params)
-    return `vec3 ${outputs.result} = (${inputs.color} - 0.5) * (1.0 + ${inputs.contrast}) + 0.5 + ${inputs.brightness};`
+    // Applies to all four channels, including alpha (channel transform — see rgba-node-audit.md).
+    return `vec4 ${outputs.result} = (${inputs.color} - 0.5) * (1.0 + ${inputs.contrast}) + 0.5 + ${inputs.brightness};`
   },
 
   ir: (ctx) => ({
     statements: [
       // (color - 0.5) * (1.0 + contrast) + 0.5 + brightness
-      declare(ctx.outputs.result, 'vec3',
+      declare(ctx.outputs.result, 'vec4',
         binary('+',
           binary('+',
             binary('*',
-              binary('-', variable(ctx.inputs.color), literal('float', 0.5), 'vec3'),
+              binary('-', variable(ctx.inputs.color), literal('float', 0.5), 'vec4'),
               binary('+', literal('float', 1.0), variable(ctx.inputs.contrast), 'float'),
-              'vec3',
+              'vec4',
             ),
             literal('float', 0.5),
-            'vec3',
+            'vec4',
           ),
           variable(ctx.inputs.brightness),
-          'vec3',
+          'vec4',
         ),
       ),
     ],
