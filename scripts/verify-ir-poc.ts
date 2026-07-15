@@ -527,6 +527,44 @@ function verify(
   }
 }
 
+// 11b. Brightness/Contrast — preserveAlpha=true
+{
+  const [g, i] = ctx({
+    nodeId: 'bc-iii999pa',
+    inputs: { color: 'node_noise_xyz_color', brightness: 'u_bc_iii999pa_brightness', contrast: 'u_bc_iii999pa_contrast' },
+    outputs: { result: 'node_bc_iii999pa_result' },
+    params: { brightness: 0.0, contrast: 0.0, preserveAlpha: true },
+  })
+  verify('Brightness/Contrast (preserveAlpha)', brightnessContrastNode, g, i)
+
+  // preserveAlpha assertion — rgb transformed, input alpha passed through untouched.
+  testNum++
+  console.log(`\n  ${testNum}. Brightness/Contrast — preserveAlpha alpha-passthrough assertion`)
+  const refGLSL = brightnessContrastNode.glsl(g)
+  let bcPaOk = true
+  if (!/^vec4 node_bc_iii999pa_result = vec4\(/.test(refGLSL) || !/node_noise_xyz_color\.rgb/.test(refGLSL) || !/,\s*node_noise_xyz_color\.a\)/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected vec4(<rgb formula>, color.a). Got:\n    ${refGLSL}`)
+    bcPaOk = false
+  }
+  const irOut = brightnessContrastNode.ir!(i)
+  const irGLSL = lowerNodeOutputToGLSL(irOut).join('\n')
+  if (!/node_noise_xyz_color\.rgb/.test(irGLSL) || !/node_noise_xyz_color\.a/.test(irGLSL)) {
+    console.log(`  [FAIL] IR->GLSL: expected rgb formula + alpha passthrough. Got:\n    ${irGLSL}`)
+    bcPaOk = false
+  }
+  const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
+  if (!/^var node_bc_iii999pa_result: vec4f = /.test(irWGSL) || !/\.rgb/.test(irWGSL) || !/\.a/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected vec4f from rgb formula + alpha passthrough. Got:\n    ${irWGSL}`)
+    bcPaOk = false
+  }
+  if (bcPaOk) {
+    console.log('  [PASS] brightness_contrast: preserveAlpha transforms rgb only, passes input alpha through')
+    passed++
+  } else {
+    failed++
+  }
+}
+
 // 12. Invert
 {
   const [g, i] = ctx({
@@ -559,6 +597,44 @@ function verify(
   }
   if (invOk) {
     console.log('  [PASS] invert: color/result are RGBA (vec4/vec4f), alpha inverted too')
+    passed++
+  } else {
+    failed++
+  }
+}
+
+// 12b. Invert — preserveAlpha=true
+{
+  const [g, i] = ctx({
+    nodeId: 'inv-jjj000pa',
+    inputs: { color: 'node_noise_xyz_color' },
+    outputs: { result: 'node_inv_jjj000pa_result' },
+    params: { preserveAlpha: true },
+  })
+  verify('Invert (preserveAlpha)', invertNode, g, i)
+
+  // preserveAlpha assertion — rgb inverted, input alpha passed through untouched.
+  testNum++
+  console.log(`\n  ${testNum}. Invert — preserveAlpha alpha-passthrough assertion`)
+  const refGLSL = invertNode.glsl(g)
+  let invPaOk = true
+  if (!/vec4 node_inv_jjj000pa_result = vec4\(vec3\(1\.0\) - node_noise_xyz_color\.rgb, node_noise_xyz_color\.a\);/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected vec4(vec3(1.0) - color.rgb, color.a). Got:\n    ${refGLSL}`)
+    invPaOk = false
+  }
+  const irOut = invertNode.ir!(i)
+  const irGLSL = lowerNodeOutputToGLSL(irOut).join('\n')
+  if (!/node_noise_xyz_color\.rgb/.test(irGLSL) || !/node_noise_xyz_color\.a/.test(irGLSL)) {
+    console.log(`  [FAIL] IR->GLSL: expected rgb inversion + alpha passthrough. Got:\n    ${irGLSL}`)
+    invPaOk = false
+  }
+  const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
+  if (!/^var node_inv_jjj000pa_result: vec4f = /.test(irWGSL) || !/\.rgb/.test(irWGSL) || !/\.a/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected vec4f from rgb inversion + alpha passthrough. Got:\n    ${irWGSL}`)
+    invPaOk = false
+  }
+  if (invPaOk) {
+    console.log('  [PASS] invert: preserveAlpha inverts rgb only, passes input alpha through')
     passed++
   } else {
     failed++
@@ -636,6 +712,44 @@ function verify(
   }
   if (postOk) {
     console.log('  [PASS] posterize: color/result are RGBA (vec4/vec4f), quantization covers alpha')
+    passed++
+  } else {
+    failed++
+  }
+}
+
+// 14b. Posterize — preserveAlpha=true
+{
+  const [g, i] = ctx({
+    nodeId: 'post-lll222pa',
+    inputs: { color: 'node_noise_xyz_color', levels: 'u_post_lll222pa_levels' },
+    outputs: { result: 'node_post_lll222pa_result' },
+    params: { levels: 4, preserveAlpha: true },
+  })
+  verify('Posterize (preserveAlpha)', posterizeNode, g, i)
+
+  // preserveAlpha assertion — rgb quantized, input alpha passed through untouched.
+  testNum++
+  console.log(`\n  ${testNum}. Posterize — preserveAlpha alpha-passthrough assertion`)
+  const refGLSL = posterizeNode.glsl(g)
+  let postPaOk = true
+  if (!/^vec4 node_post_lll222pa_result = vec4\(floor\(/.test(refGLSL) || !/node_noise_xyz_color\.rgb/.test(refGLSL) || !/,\s*node_noise_xyz_color\.a\)/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected vec4(floor(color.rgb * levels) / (levels - 1.0), color.a). Got:\n    ${refGLSL}`)
+    postPaOk = false
+  }
+  const irOut = posterizeNode.ir!(i)
+  const irGLSL = lowerNodeOutputToGLSL(irOut).join('\n')
+  if (!/node_noise_xyz_color\.rgb/.test(irGLSL) || !/node_noise_xyz_color\.a/.test(irGLSL)) {
+    console.log(`  [FAIL] IR->GLSL: expected rgb quantization + alpha passthrough. Got:\n    ${irGLSL}`)
+    postPaOk = false
+  }
+  const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
+  if (!/^var node_post_lll222pa_result: vec4f = /.test(irWGSL) || !/\.rgb/.test(irWGSL) || !/\.a/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected vec4f from rgb quantization + alpha passthrough. Got:\n    ${irWGSL}`)
+    postPaOk = false
+  }
+  if (postPaOk) {
+    console.log('  [PASS] posterize: preserveAlpha quantizes rgb only, passes input alpha through')
     passed++
   } else {
     failed++
