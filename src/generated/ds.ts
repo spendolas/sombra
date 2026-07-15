@@ -165,6 +165,16 @@ export const ds = {
     indicator: "text-fg text-center text-[11px] leading-none",
     label: "text-param text-fg-subtle",
   },
+  colorPicker: {
+    root: "flex flex-col gap-sm overflow-hidden",
+    label: "text-param text-fg-subtle",
+    swatch: "bg-surface-alt rounded-sm border border-edge cursor-pointer transition-colors w-6 h-6 hover:border-active",
+    panel: "flex flex-col bg-surface-raised rounded-sm border border-edge p-md gap-sm overflow-hidden",
+    svArea: "rounded-sm border border-edge cursor-crosshair w-[180px] h-[140px]",
+    hueSlider: "rounded-sm border border-edge cursor-pointer w-[180px] h-[12px]",
+    alphaSlider: "rounded-sm border border-edge cursor-pointer w-[180px] h-[12px]",
+    readout: "text-mono-value text-fg",
+  },
   nodePreview: {
     root: "overflow-hidden w-full aspect-square nowheel",
   },

@@ -1845,6 +1845,101 @@
         }
       }
     },
+    "767:3955": {
+      "name": "Color Picker",
+      "type": "molecule",
+      "dsKey": "colorPicker",
+      "codeFile": "src/components/RgbaColorPicker.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "767:3955",
+          "layout": "vertical",
+          "gap": "sm",
+          "overflow": "hidden"
+        },
+        "label": {
+          "figmaNodeId": "767:3927",
+          "textStyle": "text-param",
+          "textColor": "fg-subtle"
+        },
+        "swatch": {
+          "figmaNodeId": "767:3928",
+          "fill": "surface/alt",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "radius": "sm",
+          "width": "6",
+          "height": "6",
+          "cursor": "pointer",
+          "transition": "colors",
+          "hover": {
+            "stroke": "active"
+          }
+        },
+        "panel": {
+          "figmaNodeId": "767:3929",
+          "layout": "vertical",
+          "fill": "surface/raised",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "radius": "sm",
+          "padding": "md",
+          "gap": "sm",
+          "overflow": "hidden"
+        },
+        "svArea": {
+          "figmaNodeId": "767:3951",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "radius": "sm",
+          "width": "[180px]",
+          "height": "[140px]",
+          "cursor": "crosshair",
+          "auditIgnore": [
+            "fill"
+          ]
+        },
+        "hueSlider": {
+          "figmaNodeId": "767:3952",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "radius": "sm",
+          "width": "[180px]",
+          "height": "[12px]",
+          "cursor": "pointer",
+          "auditIgnore": [
+            "fill"
+          ]
+        },
+        "alphaSlider": {
+          "figmaNodeId": "767:3953",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "radius": "sm",
+          "width": "[180px]",
+          "height": "[12px]",
+          "cursor": "pointer",
+          "auditIgnore": [
+            "fill"
+          ]
+        },
+        "readout": {
+          "figmaNodeId": "767:3954",
+          "textStyle": "text-mono-value",
+          "textColor": "fg"
+        }
+      }
+    },
     "619:1950": {
       "name": "Node Preview",
       "type": "atom",
