@@ -706,6 +706,33 @@ function verify(
     params: {},
   })
   verify('HSV to RGB', hsvToRgbNode, g, i, 'loose')
+
+  // RGBA assertion — `rgb` output port migrated to `color` (vec4); opaque generator, a=1.0.
+  testNum++
+  console.log(`\n  ${testNum}. HSV to RGB — RGBA output assertion`)
+  const refGLSL = hsvToRgbNode.glsl(g)
+  let hsvOk = true
+  if (!/vec4 node_hsv_eee555_rgb = vec4\(rgb_hsv_eee555, 1\.0\);/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected vec4 output assignment. Got:\n    ${refGLSL}`)
+    hsvOk = false
+  }
+  const irOut = hsvToRgbNode.ir!(i)
+  const irGLSL = lowerNodeOutputToGLSL(irOut).join('\n')
+  if (!/vec4 node_hsv_eee555_rgb = vec4\(rgb_hsv_eee555, 1\.0\);/.test(irGLSL)) {
+    console.log(`  [FAIL] IR->GLSL: expected vec4 output assignment. Got:\n    ${irGLSL}`)
+    hsvOk = false
+  }
+  const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
+  if (!/var node_hsv_eee555_rgb: vec4f = vec4f\(rgb_hsv_eee555, 1\.0\);/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected vec4f output assignment. Got:\n    ${irWGSL}`)
+    hsvOk = false
+  }
+  if (hsvOk) {
+    console.log('  [PASS] hsv_to_rgb: rgb output is RGBA (vec4/vec4f) on both backends')
+    passed++
+  } else {
+    failed++
+  }
 }
 
 // 32. Color Ramp (smooth, 2 stops)
