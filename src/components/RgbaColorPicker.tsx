@@ -1,10 +1,17 @@
 /**
  * RgbaColorPicker — self-contained HSV + alpha color picker.
  *
- * A swatch button (current color composited over a checkerboard so alpha is
- * visible) opens a popover with a saturation/value area, a hue slider, and
- * an alpha slider. Controlled: value/onChange are normalized [r,g,b,a] floats
- * (0-1). No external dependency — HSV<->RGB conversion is done inline.
+ * Two modes:
+ * - `popover` (default): a swatch button (current color composited over a
+ *   checkerboard so alpha is visible) opens a portaled, viewport-clamped
+ *   panel with a saturation/value area, a hue slider, and an alpha slider.
+ * - `inline`: the panel renders directly in-flow (no swatch trigger, no
+ *   portal, always open, no outside-click/Escape/scroll dismiss) — used when
+ *   the picker IS the control (e.g. the Color node body, the Properties
+ *   panel color param).
+ *
+ * Controlled: value/onChange are normalized [r,g,b,a] floats (0-1). No
+ * external dependency — HSV<->RGB conversion is done inline.
  */
 
 import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react'
@@ -19,6 +26,8 @@ interface RgbaColorPickerProps {
   onChange: (value: Rgba) => void
   label?: string
   className?: string
+  /** 'popover' (default) or 'inline' — see file header. */
+  mode?: 'inline' | 'popover'
 }
 
 interface Hsv {
@@ -96,7 +105,16 @@ const RANGE_CLASS =
 const VIEWPORT_MARGIN = 8
 const TRIGGER_GAP = 4
 
-export function RgbaColorPicker({ value, onChange, label, className }: RgbaColorPickerProps) {
+/**
+ * Shared panel chrome. The DB/Figma mock for `panel` carries `overflow-hidden`
+ * (a static mock artifact) — override to visible at runtime so the
+ * saturation/value drag handle, which can extend a few px past the SV area's
+ * own box at the extreme corners, is never clipped.
+ */
+const PANEL_BASE = cn(ds.colorPicker.panel, 'overflow-visible')
+
+export function RgbaColorPicker({ value, onChange, label, className, mode = 'popover' }: RgbaColorPickerProps) {
+  const inline = mode === 'inline'
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
   const [hsv, setHsv] = useState<Hsv>(() => rgbToHsv(value[0], value[1], value[2]))
@@ -126,9 +144,9 @@ export function RgbaColorPicker({ value, onChange, label, className }: RgbaColor
 
   // Once the popover has mounted (still portaled to <body>) measure its real
   // size and the trigger's current position, then flip/clamp so it always
-  // stays fully inside the viewport.
+  // stays fully inside the viewport. Popover-only.
   useLayoutEffect(() => {
-    if (!open) return
+    if (inline || !open) return
     const trigger = triggerRef.current
     const popover = popoverRef.current
     if (!trigger || !popover) return
@@ -152,11 +170,11 @@ export function RgbaColorPicker({ value, onChange, label, className }: RgbaColor
     // Intentionally keyed only on `open` — this should re-measure once per
     // open, not on every pos change (which would just re-measure the
     // position we ourselves just set).
-  }, [open])
+  }, [inline, open])
 
-  // Close on outside click, Escape, or scroll (position would go stale).
+  // Close on outside click, Escape, or scroll (position would go stale). Popover-only.
   useEffect(() => {
-    if (!open) return
+    if (inline || !open) return
     const onDown = (e: PointerEvent) => {
       const target = e.target as Node
       if (
@@ -180,7 +198,7 @@ export function RgbaColorPicker({ value, onChange, label, className }: RgbaColor
       window.removeEventListener('scroll', onScroll, true)
       window.removeEventListener('resize', onScroll)
     }
-  }, [open])
+  }, [inline, open])
 
   const emit = useCallback(
     (next: Hsv, a: number) => {
@@ -239,82 +257,99 @@ export function RgbaColorPicker({ value, onChange, label, className }: RgbaColor
 
   const [r, g, b] = hsvToRgb(hsv)
 
-  return (
-    <div ref={rootRef} className={cn('relative nodrag nowheel', className)}>
-      {label && <label className={ds.colorInput.label}>{label}</label>}
-      <button
-        ref={triggerRef}
-        type="button"
-        className={cn(ds.colorSwatch.root, 'relative overflow-hidden block')}
-        style={CHECKER_STYLE}
-        onClick={() => (open ? setOpen(false) : openPopover())}
-        aria-label={label ?? 'Color'}
+  const panelContent = (
+    <>
+      {/* Saturation/Value area — width overridden to fill the panel at runtime
+          (the DB/Figma mock's fixed 180px is a static preview dimension). */}
+      <div
+        ref={svRef}
+        className={cn(ds.colorPicker.svArea, 'relative w-full touch-none')}
+        style={{
+          backgroundColor: `hsl(${hsv.h}, 100%, 50%)`,
+          backgroundImage:
+            'linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent)',
+        }}
+        onPointerDown={handleSvPointer}
       >
-        <span className="absolute inset-0" style={{ backgroundColor: rgbaCss(r, g, b, a) }} />
-      </button>
+        <div
+          className="absolute w-3 h-3 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)] -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+          style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%` }}
+        />
+      </div>
 
-      {open &&
+      {/* Hue slider */}
+      <input
+        type="range"
+        min={0}
+        max={360}
+        step={1}
+        value={hsv.h}
+        onChange={(e) => handleHueChange(Number(e.target.value))}
+        className={cn(RANGE_CLASS, ds.colorPicker.hueSlider, 'w-full')}
+        style={{ backgroundImage: 'linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)' }}
+      />
+
+      {/* Alpha slider */}
+      <div className={cn(ds.colorPicker.alphaSlider, 'relative w-full overflow-hidden')} style={CHECKER_STYLE}>
+        <div
+          className="absolute inset-0"
+          style={{ backgroundImage: `linear-gradient(to right, ${rgbaCss(r, g, b, 0)}, ${rgbaCss(r, g, b, 1)})` }}
+        />
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={a}
+          onChange={(e) => handleAlphaChange(Number(e.target.value))}
+          className={RANGE_CLASS}
+        />
+      </div>
+
+      <div className="flex flex-row items-center justify-between text-param text-fg-subtle">
+        <span>RGBA</span>
+        <span className={ds.colorPicker.readout}>
+          {Math.round(r * 255)}, {Math.round(g * 255)}, {Math.round(b * 255)}, {a.toFixed(2)}
+        </span>
+      </div>
+    </>
+  )
+
+  return (
+    <div ref={rootRef} className={cn(ds.colorPicker.root, 'relative nodrag nowheel', className)}>
+      {label && <label className={ds.colorPicker.label}>{label}</label>}
+
+      {!inline && (
+        <button
+          ref={triggerRef}
+          type="button"
+          className={cn(ds.colorPicker.swatch, 'relative overflow-hidden block')}
+          style={CHECKER_STYLE}
+          onClick={() => (open ? setOpen(false) : openPopover())}
+          aria-label={label ?? 'Color'}
+        >
+          <span className="absolute inset-0" style={{ backgroundColor: rgbaCss(r, g, b, a) }} />
+        </button>
+      )}
+
+      {inline && (
+        <div className={cn(PANEL_BASE, 'w-full')}>
+          {panelContent}
+        </div>
+      )}
+
+      {!inline &&
+        open &&
         pos &&
         createPortal(
           <div
             ref={popoverRef}
-            className="fixed z-[1000] flex flex-col gap-sm bg-surface-raised border border-edge rounded-md p-md w-[180px] shadow-lg"
+            className={cn(PANEL_BASE, 'fixed z-[1000] w-[180px] shadow-lg')}
             style={{ top: pos.top, left: pos.left }}
             onPointerDown={(e) => e.stopPropagation()}
             onWheel={(e) => e.stopPropagation()}
           >
-            {/* Saturation/Value area */}
-            <div
-              ref={svRef}
-              className="relative w-full h-[110px] rounded-sm cursor-crosshair touch-none"
-              style={{
-                backgroundColor: `hsl(${hsv.h}, 100%, 50%)`,
-                backgroundImage:
-                  'linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent)',
-              }}
-              onPointerDown={handleSvPointer}
-            >
-              <div
-                className="absolute w-3 h-3 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)] -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-                style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%` }}
-              />
-            </div>
-
-            {/* Hue slider */}
-            <input
-              type="range"
-              min={0}
-              max={360}
-              step={1}
-              value={hsv.h}
-              onChange={(e) => handleHueChange(Number(e.target.value))}
-              className={RANGE_CLASS}
-              style={{ backgroundImage: 'linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)' }}
-            />
-
-            {/* Alpha slider */}
-            <div className="relative rounded-sm overflow-hidden" style={CHECKER_STYLE}>
-              <div
-                className="absolute inset-0"
-                style={{ backgroundImage: `linear-gradient(to right, ${rgbaCss(r, g, b, 0)}, ${rgbaCss(r, g, b, 1)})` }}
-              />
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={a}
-                onChange={(e) => handleAlphaChange(Number(e.target.value))}
-                className={RANGE_CLASS}
-              />
-            </div>
-
-            <div className="flex flex-row items-center justify-between text-param text-fg-subtle">
-              <span>RGBA</span>
-              <span className="text-mono-value text-fg">
-                {Math.round(r * 255)}, {Math.round(g * 255)}, {Math.round(b * 255)}, {a.toFixed(2)}
-              </span>
-            </div>
+            {panelContent}
           </div>,
           document.body
         )}
