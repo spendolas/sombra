@@ -1818,6 +1818,99 @@ function verify(
   }
 }
 
+// ===========================================================================
+// Regression: legacy 3-tuple `color` param pads to opaque RGBA (a=1.0)
+// ===========================================================================
+//
+// Saved `.sombra` files from before the RGBA migration store `color` params
+// as 3-tuples `[r, g, b]`. `padColorUniformValue()` (glsl-generator.ts) is
+// what pads these to `[r, g, b, 1.0]` before upload so a legacy graph still
+// renders fully opaque instead of reading a garbage/undefined 4th component.
+// This drives `color_constant` with a legacy 3-tuple through the REAL
+// node-graph compile path — `generateNodeGlsl` / `generateNodeIR`, the exact
+// functions `compileGraph()` / `compileGraphIR()` call per node — and asserts
+// the *uploaded uniform value* (not just its declared GLSL type) is a padded
+// 4-element array ending in `1.0`. If `padColorUniformValue()` regresses
+// (e.g. the `value.length === 3` branch is removed or its `a` fallback
+// changes from `1.0` to something else), this test fails because the
+// uniform's `value` array stays length-3 or its 4th element isn't `1.0`.
+{
+  testNum++
+  console.log(`\n${'='.repeat(60)}`)
+  console.log(`  ${testNum}. REGRESSION: legacy 3-tuple color param pads to opaque (a=1.0)`)
+  console.log('='.repeat(60))
+
+  const nodeId = 'regress-color-legacy-1'
+  const legacyRgb = [0.2, 0.6, 0.9]
+  const node: Node<NodeData> = {
+    id: nodeId,
+    type: 'shaderNode',
+    position: { x: 0, y: 0 },
+    data: { type: 'color_constant', params: { color: legacyRgb } }, // legacy 3-tuple, no alpha
+  }
+  const nodeMap = new Map<string, Node<NodeData>>([[nodeId, node]])
+  const edgesByTarget = new Map<string, Edge<EdgeData>[]>()
+
+  let legacyOk = true
+
+  const assertPadded = (label: string, uniform: UniformSpec | undefined) => {
+    if (!uniform) {
+      console.log(`  [FAIL] ${label}: no "color" uniform found`)
+      return false
+    }
+    if (uniform.glslType !== 'vec4') {
+      console.log(`  [FAIL] ${label}: uniform type not vec4 — got: ${uniform.glslType}`)
+      return false
+    }
+    const value = uniform.value
+    if (!Array.isArray(value) || value.length !== 4) {
+      console.log(`  [FAIL] ${label}: uniform value not padded to 4 components — got: ${JSON.stringify(value)}`)
+      return false
+    }
+    if (value[0] !== legacyRgb[0] || value[1] !== legacyRgb[1] || value[2] !== legacyRgb[2]) {
+      console.log(`  [FAIL] ${label}: rgb components mutated during padding — got: ${JSON.stringify(value)}`)
+      return false
+    }
+    if (value[3] !== 1.0) {
+      console.log(`  [FAIL] ${label}: alpha not padded to 1.0 — got: ${JSON.stringify(value)}`)
+      return false
+    }
+    console.log(`  [PASS] ${label}: [${legacyRgb.join(', ')}] padded to [${value.join(', ')}] (opaque)`)
+    return true
+  }
+
+  // --- Real GLSL path ---
+  const glslUserUniforms: UniformSpec[] = []
+  const glslResult = generateNodeGlsl(
+    nodeId, nodeMap, edgesByTarget,
+    new Set<string>(), [], new Map<string, string>(), glslUserUniforms,
+  )
+  if (glslResult.errors.length > 0) {
+    console.log(`  [FAIL] generateNodeGlsl errors: ${glslResult.errors.map((e) => e.message).join('; ')}`)
+    legacyOk = false
+  }
+  if (!assertPadded('GLSL', glslUserUniforms.find((u) => u.paramId === 'color'))) legacyOk = false
+
+  // --- Real IR path (same padColorUniformValue() call, ir-compiler.ts) ---
+  const irUserUniforms: UniformSpec[] = []
+  const irResult = generateNodeIR(
+    nodeId, nodeMap, edgesByTarget,
+    new Set<string>(), irUserUniforms, new Set<string>(),
+  )
+  if (irResult.errors.length > 0 || !irResult.output) {
+    console.log(`  [FAIL] generateNodeIR errors: ${irResult.errors.map((e) => e.message).join('; ')}`)
+    legacyOk = false
+  }
+  if (!assertPadded('IR', irUserUniforms.find((u) => u.paramId === 'color'))) legacyOk = false
+
+  if (legacyOk) {
+    console.log('  [PASS] legacy 3-tuple color param pads to opaque RGBA')
+    passed++
+  } else {
+    failed++
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Summary
 // ---------------------------------------------------------------------------
