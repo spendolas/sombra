@@ -87,8 +87,8 @@ That's it. The node appears in the palette, compiles to GLSL, and renders on the
 |---|---|---|---|
 | `id` | `string` | Yes | Unique within params |
 | `label` | `string` | Yes | UI label |
-| `type` | `'float' \| 'vec2' \| 'vec3' \| 'color' \| 'enum'` | Yes | Control type |
-| `default` | `number \| string \| [n,n] \| [n,n,n]` | Yes | Initial value |
+| `type` | `'float' \| 'vec2' \| 'vec3' \| 'color' \| 'enum' \| 'bool'` | Yes | Control type |
+| `default` | `number \| string \| boolean \| [n,n] \| [n,n,n] \| [n,n,n,n]` | Yes | Initial value (`color` accepts a 3-tuple, alpha defaults to `1.0`, or a 4-tuple) |
 | `min` | `number` | No | Slider minimum (float only) |
 | `max` | `number` | No | Slider maximum (float only) |
 | `step` | `number` | No | Slider step increment (float only) |
@@ -105,7 +105,7 @@ That's it. The node appears in the palette, compiles to GLSL, and renders on the
 | `vec2` | `vec2` | `vec2(0.0, 0.0)` | `#34d399` | `#059669` |
 | `vec3` | `vec3` | `vec3(0.0, 0.0, 0.0)` | `#60a5fa` | `#2563eb` |
 | `vec4` | `vec4` | `vec4(0.0, 0.0, 0.0, 1.0)` | `#a78bfa` | `#7c3aed` |
-| `color` | `vec3` (alias) | `vec3(r, g, b)` | `#fbbf24` | `#d97706` |
+| `color` | `vec4` (RGBA — distinct type, not a `vec3` alias) | `vec4(r, g, b, a)`; legacy 3-tuples pad `a=1.0` | `#fbbf24` | `#d97706` |
 | `sampler2D` | `sampler2D` | — | `#f472b6` | `#db2777` |
 
 ### Type coercion (auto-conversion between connected ports)
@@ -118,7 +118,11 @@ That's it. The node appears in the palette, compiles to GLSL, and renders on the
 | `vec3` | `vec4` | `vec4(v, 1.0)` |
 | `vec4` | `vec3` | `v.rgb` |
 | `vec3` / `vec4` | `vec2` | `v.xy` |
-| `color` | `vec3` | no-op (alias) |
+| `vec3` | `color` | `vec4(v, 1.0)` (append alpha) |
+| `color` | `vec3` | `v.rgb` (drop alpha) |
+| `color` | `vec4` / `vec4` → `color` | no-op (same underlying shape) |
+
+Full rule set (incl. `float`/`vec2` ↔ `color`) lives in `src/nodes/type-coercion.ts`.
 
 ---
 
@@ -146,13 +150,29 @@ Renders as label + numeric input + slider. Value accessed via `ctx.params.scale`
 
 Renders as label + shadcn Select. Value accessed via `ctx.params.operation`.
 
+### Bool checkbox
+
+```ts
+{ id: 'preserveAlpha', label: 'Preserve Alpha', type: 'bool', default: false, updateMode: 'recompile' }
+```
+
+Renders as a checkbox. Like `enum`, a `bool` param is never `connectable` and
+is not uploaded as a uniform — it's read directly via `ctx.params.<id>` in
+`glsl()`/`ir()` to branch codegen (e.g. `ctx.params.preserveAlpha === true`),
+the same pattern used for `enum` params. `updateMode: 'recompile'` is
+required since the branch changes generated code, not just a value.
+
+**See:** `src/nodes/color/invert.ts` for the `preserveAlpha` pattern.
+
 ### Color picker
 
 ```ts
-{ id: 'color', label: 'Color', type: 'color', default: [1.0, 0.0, 1.0] }
+{ id: 'color', label: 'Color', type: 'color', default: [1.0, 0.0, 1.0, 1.0] }
 ```
 
-Default is `[r, g, b]` in 0-1 range. Value accessed via `ctx.params.color`.
+Default is `[r, g, b, a]` in 0-1 range (RGBA — `color` is vec4-backed).
+A 3-tuple `[r, g, b]` is also accepted for legacy defaults; alpha pads to
+`1.0`. Value accessed via `ctx.params.color`.
 
 ### Connectable param
 

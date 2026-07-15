@@ -211,13 +211,13 @@ The **GraphToolbar** in the top-left of the canvas provides Save (download) and 
 | Type | Label | Inputs | Outputs | Params |
 |---|---|---|---|---|
 | `uv_transform` | UV Transform | `coords` (vec2, auto_uv) | `uv` (vec2) | `srt_scaleX` (connectable), `srt_scaleY` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable) |
-| `color_constant` | Color | — | `color` (vec3) | `color` |
+| `color_constant` | Color | — | `color` (color, RGBA) | `color` |
 | `float_constant` | Number | — | `value` (float) | `value` |
 | `vec2_constant` | Vec2 | — | `value` (vec2) | `x`, `y` |
 | `time` | Time | — | `time` (float) | `speed` (connectable) |
 | `resolution` | Resolution | — | `resolution` (vec2) | — |
 | `random` | Random | — | `value` (float) | `min` (connectable), `max` (connectable), `decimals` |
-| `image` | Image | `coords` (vec2) | `color` (vec3), `alpha` (float) | `fitMode` (enum: contain/cover), `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable) |
+| `image` | Image | `coords` (vec2) | `color` (color, RGBA — sampled rgb+a), `alpha` (float, unchanged separate alpha port) | `fitMode` (enum: contain/cover), `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable) |
 
 ### Math
 
@@ -225,7 +225,7 @@ The **GraphToolbar** in the top-left of the canvas provides Save (download) and 
 |---|---|---|---|---|
 | `arithmetic` | Arithmetic | `in_0`..`in_N` (float, dynamic) | `result` (float) | `operation` (enum: add/subtract/multiply/divide) |
 | `trig` | Trig | `value` (float) | `result` (float) | `func` (enum: sin/cos/tan/abs), `frequency` (connectable), `amplitude` (connectable) |
-| `mix` | Mix | `a` (vec3), `b` (vec3) | `result` (vec3) | `factor` (connectable) |
+| `mix` | Mix | `a` (color), `b` (color) | `result` (color) | `factor` (connectable) |
 | `remap` | Remap | `value` (float), `inMin` (float), `inMax` (float), `outMin` (float), `outMax` (float) | `result` (float) | — |
 | `clamp` | Clamp | `value` (float) | `result` (float) | `min` (connectable), `max` (connectable) |
 | `power` | Power | `base` (float) | `result` (float) | `exponent` (connectable) |
@@ -243,12 +243,12 @@ The **GraphToolbar** in the top-left of the canvas provides Save (download) and 
 
 | Type | Label | Inputs | Outputs | Params |
 |---|---|---|---|---|
-| `hsv_to_rgb` | HSV to RGB | `h` (float), `s` (float), `v` (float) | `rgb` (vec3) | — |
-| `brightness_contrast` | Brightness/Contrast | `color` (vec3) | `result` (vec3) | `brightness` (connectable), `contrast` (connectable) |
-| `color_ramp` | Color Ramp | `t` (float) | `color` (vec3) | `interpolation` (enum: smooth/linear/constant) |
-| `invert` | Invert | `color` (vec3) | `result` (vec3) | — |
-| `grayscale` | Grayscale | `color` (vec3) | `result` (float) | `mode` (enum: luminance/average/lightness) |
-| `posterize` | Posterize | `color` (vec3) | `result` (vec3) | `levels` (connectable) |
+| `hsv_to_rgb` | HSV to RGB | `h` (float), `s` (float), `v` (float) | `rgb` (color, RGBA — alpha always 1.0) | — |
+| `brightness_contrast` | Brightness/Contrast | `color` (color) | `result` (color) | `brightness` (connectable), `contrast` (connectable), `preserveAlpha` (bool, default false — when true, only rgb channels are affected and alpha passes through unchanged) |
+| `color_ramp` | Color Ramp | `t` (float) | `color` (color, RGBA — stops carry alpha) | `interpolation` (enum: smooth/linear/constant) |
+| `invert` | Invert | `color` (color) | `result` (color) | `preserveAlpha` (bool, default false — when true, only rgb channels are inverted and alpha passes through unchanged) |
+| `grayscale` | Grayscale | `color` (color, RGBA in) | `result` (float, unchanged) | `mode` (enum: luminance/average/lightness) |
+| `posterize` | Posterize | `color` (color) | `result` (color) | `levels` (connectable), `preserveAlpha` (bool, default false — when true, only rgb channels are posterized and alpha passes through unchanged) |
 
 ### Distort
 
@@ -256,17 +256,17 @@ The **GraphToolbar** in the top-left of the canvas provides Save (download) and 
 |---|---|---|---|---|
 | `turbulence` | Turbulence | `value` (float) | `result` (float) | — |
 | `ridged` | Ridged | `value` (float) | `result` (float) | — |
-| `warp` | Warp | `source` (vec3, textureInput), `coords` (vec2, auto_uv), `phase` (float) | `color` (vec3), `warped` (vec2), `warpedPhase` (float) | `srt_scale` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `noiseType` (enum: simplex/value/worley/worley_fast/worley2d/box), `strength` (connectable), `seed` (connectable), `warpDepth` (enum: 2/3), `edge` (enum: clamp/repeat/mirror) |
-| `polar_coords` | Polar Coordinates | `source` (vec3, textureInput), `coords` (vec2, auto_uv) | `color` (vec3), `polar` (vec2) | `mode` (enum: forward/inverse), `centerX` (connectable), `centerY` (connectable) |
-| `tile` | Tile | `source` (vec3, textureInput), `coords` (vec2, auto_uv) | `color` (vec3), `uv` (vec2) | `countX` (connectable), `countY` (connectable), `mirror` (enum: none/x/y/xy) |
+| `warp` | Warp | `source` (color, textureInput), `coords` (vec2, auto_uv), `phase` (float) | `color` (color, RGBA — full vec4 sampled), `warped` (vec2), `warpedPhase` (float) | `srt_scale` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `noiseType` (enum: simplex/value/worley/worley_fast/worley2d/box), `strength` (connectable), `seed` (connectable), `warpDepth` (enum: 2/3), `edge` (enum: clamp/repeat/mirror) |
+| `polar_coords` | Polar Coordinates | `source` (color, textureInput), `coords` (vec2, auto_uv) | `color` (color, RGBA — full vec4 sampled), `polar` (vec2) | `mode` (enum: forward/inverse), `centerX` (connectable), `centerY` (connectable) |
+| `tile` | Tile | `source` (color, textureInput), `coords` (vec2, auto_uv) | `color` (color, RGBA — full vec4 sampled), `uv` (vec2) | `countX` (connectable), `countY` (connectable), `mirror` (enum: none/x/y/xy) |
 
 ### Effect
 
 | Type | Label | Inputs | Outputs | Params |
 |---|---|---|---|---|
-| `pixelate` | Pixelate | `source` (vec3, textureInput) | `color` (vec3), `uv` (vec2) | `pixelSize` (connectable) |
-| `reeded_glass` | Reeded Glass | `source` (vec3, textureInput) | `color` (vec3), `coords` (vec2) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `ribWidth` (connectable), `ior` (connectable), `curvature` (connectable), `frost` (connectable), `direction` (enum: vertical/horizontal), `ribType` (enum: straight/wave/circular/noise), `waveShape` (enum: sine/triangle/square/sawtooth/chevron/u_shape; when ribType=wave), `noiseType` (enum: simplex/value/worley; when ribType=noise), `amplitude` (connectable; when ribType=wave|circular|noise), `wavelength` (connectable; when ribType=wave|circular|noise) |
-| `dither` | Dither | `color` (vec3) | `result` (vec3) | `pixelSize` (connectable), `shape` (enum: square/circle/diamond/triangle), `threshold` (connectable), `dither` (connectable; when shape=circle) |
+| `pixelate` | Pixelate | `source` (color, textureInput) | `color` (color, RGBA — full vec4 sampled), `uv` (vec2) | `pixelSize` (connectable) |
+| `reeded_glass` | Reeded Glass | `source` (color, textureInput) | `color` (color, RGBA — full vec4 sampled/frosted), `coords` (vec2) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `ribWidth` (connectable), `ior` (connectable), `curvature` (connectable), `frost` (connectable), `direction` (enum: vertical/horizontal), `ribType` (enum: straight/wave/circular/noise), `waveShape` (enum: sine/triangle/square/sawtooth/chevron/u_shape; when ribType=wave), `noiseType` (enum: simplex/value/worley; when ribType=noise), `amplitude` (connectable; when ribType=wave|circular|noise), `wavelength` (connectable; when ribType=wave|circular|noise) |
+| `dither` | Dither | `color` (color) | `result` (color, RGBA — alpha masked through) | `pixelSize` (connectable), `shape` (enum: square/circle/diamond/triangle), `threshold` (connectable), `dither` (connectable; when shape=circle) |
 
 ### Output
 
@@ -301,14 +301,17 @@ The **GraphToolbar** in the top-left of the canvas provides Save (download) and 
 | `float` | `#d4d4d8` (gray) | float, vec2, vec3, vec4, color (broadcast) |
 | `vec2` | `#34d399` (green) | float (.x), vec2, vec3, vec4, color |
 | `vec3` | `#60a5fa` (blue) | float (.x), vec2 (.xy), vec3, vec4, color |
-| `vec4` | `#a78bfa` (purple) | float (.x), vec2 (.xy), vec3 (.rgb), vec4, color (.rgb) |
+| `vec4` | `#a78bfa` (purple) | float (.x), vec2 (.xy), vec3 (.rgb), vec4, color |
 | `color` | `#fbbf24` (amber) | float (.x), vec2 (.xy), vec3, vec4, color |
 | `sampler2D` | `#f472b6` (pink) | sampler2D (texture-input ports; creates a pass boundary) |
 
-Type coercion is automatic and symmetric between `color` and `vec3` (alias):
-`float → vec3/color` broadcasts, `vec4 → vec3/color` drops alpha, `vec3/color → vec4`
-appends alpha 1.0. Rules live in `src/nodes/type-coercion.ts` (GLSL) and
-`coerceTypeForIR` in `src/compiler/ir-compiler.ts` (WGSL) — keep in parity.
+`color` is RGBA — a distinct, vec4-backed port type (not a `vec3` alias). It
+coerces symmetrically with `vec3`: `vec3 → color` appends alpha `1.0`,
+`color → vec3` drops alpha (`.rgb`). `color ↔ vec4` pass through unchanged
+(same underlying shape). `float → color` broadcasts to an opaque gray
+(`vec4(vec3(v), 1.0)`); `color → float` extracts `.x`. Rules live in
+`src/nodes/type-coercion.ts` (GLSL) and `coerceTypeForIR` in
+`src/compiler/ir-compiler.ts` (WGSL) — keep in parity.
 
 ---
 
@@ -339,14 +342,16 @@ const math = sombra.createNode('arithmetic', {x:0, y:0}, {
 
 ### Color Ramp Stops
 
-The Color Ramp node stores gradient stops in `params.stops`:
+The Color Ramp node stores gradient stops in `params.stops`. Each stop's `color`
+is RGBA — a 3-tuple `[r, g, b]` (legacy, alpha defaults to `1.0`) or a
+4-tuple `[r, g, b, a]`:
 
 ```js
 sombra.setParams(rampId, {
   interpolation: 'smooth',
   stops: [
     { position: 0.0, color: [0.1, 0.0, 0.2] },
-    { position: 0.5, color: [0.4, 0.2, 0.8] },
+    { position: 0.5, color: [0.4, 0.2, 0.8, 0.6] },
     { position: 1.0, color: [1.0, 0.9, 0.3] },
   ]
 })
@@ -354,7 +359,7 @@ sombra.setParams(rampId, {
 
 ### Fragment Output: Color, Alpha & Premultiplication
 
-The `color` input is `vec4`. A `vec3`/`color` source coerces with alpha `1.0`; a `vec4` source's alpha passes through unchanged. The connectable `alpha` input (default `1.0`) is combined with that color-derived alpha via the `alphaOp` param (`replace/multiply/max/add/subtract/min/difference`, default `multiply`) to produce the final alpha `a`. The node's actual write is premultiplied: `vec4(rgb * a, a)`. Graphs that never touch alpha (`a = 1`) render pixel-identical to before — output stays opaque.
+The `color` input is `vec4`. A `vec3` source coerces with alpha `1.0`; a `vec4` or `color` source's real alpha passes through unchanged. The connectable `alpha` input (default `1.0`) is combined with that color-derived alpha via the `alphaOp` param (`replace/multiply/max/add/subtract/min/difference`, default `multiply`) to produce the final alpha `a`. The node's actual write is premultiplied: `vec4(rgb * a, a)`. Graphs that never touch alpha (`a = 1`) render pixel-identical to before — output stays opaque.
 
 ```js
 sombra.setParams(outputId, { alphaOp: 'multiply' })
