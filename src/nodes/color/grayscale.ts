@@ -13,7 +13,7 @@ export const grayscaleNode: NodeDefinition = {
   description: 'Convert color to grayscale float',
 
   inputs: [
-    { id: 'color', label: 'Color', type: 'vec3', default: [0.5, 0.5, 0.5] },
+    { id: 'color', label: 'Color', type: 'color', default: [0.5, 0.5, 0.5] },
   ],
 
   outputs: [
@@ -32,23 +32,26 @@ export const grayscaleNode: NodeDefinition = {
     },
   ],
 
+  // Color-space op: alpha isn't in this space (output is a scalar), so we read only `.rgb`
+  // from the RGBA input and preserve nothing to preserve — output stays `float` (see rgba-node-audit.md).
   glsl: (ctx) => {
     const { inputs, outputs, params } = ctx
     const mode = (params.mode as string) || 'luminance'
+    const rgb = `${inputs.color}.rgb`
 
     switch (mode) {
       case 'average':
-        return `float ${outputs.result} = (${inputs.color}.r + ${inputs.color}.g + ${inputs.color}.b) / 3.0;`
+        return `float ${outputs.result} = (${rgb}.r + ${rgb}.g + ${rgb}.b) / 3.0;`
       case 'lightness':
-        return `float ${outputs.result} = (max(max(${inputs.color}.r, ${inputs.color}.g), ${inputs.color}.b) + min(min(${inputs.color}.r, ${inputs.color}.g), ${inputs.color}.b)) * 0.5;`
+        return `float ${outputs.result} = (max(max(${rgb}.r, ${rgb}.g), ${rgb}.b) + min(min(${rgb}.r, ${rgb}.g), ${rgb}.b)) * 0.5;`
       default: // luminance (Rec. 709)
-        return `float ${outputs.result} = dot(${inputs.color}, vec3(0.2126, 0.7152, 0.0722));`
+        return `float ${outputs.result} = dot(${rgb}, vec3(0.2126, 0.7152, 0.0722));`
     }
   },
 
   ir: (ctx) => {
     const mode = (ctx.params.mode as string) || 'luminance'
-    const color = variable(ctx.inputs.color)
+    const color = swizzle(variable(ctx.inputs.color), 'rgb', 'vec3')
 
     switch (mode) {
       case 'average':

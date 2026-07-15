@@ -547,6 +547,34 @@ function verify(
     params: { mode: 'luminance' },
   })
   verify('Grayscale (Luminance)', grayscaleNode, g, i)
+
+  // RGBA assertion — Color-space op: input is RGBA, but only `.rgb` feeds the luminance math;
+  // output stays `float` — alpha is irrelevant to this space (not preserved, not needed).
+  testNum++
+  console.log(`\n  ${testNum}. Grayscale — RGBA input, .rgb-only math, float output assertion`)
+  const refGLSL = grayscaleNode.glsl(g)
+  let grayOk = true
+  if (!/float node_gray_kkk111_result = dot\(node_noise_xyz_color\.rgb, vec3\(0\.2126, 0\.7152, 0\.0722\)\);/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected dot(color.rgb, ...) with float output. Got:\n    ${refGLSL}`)
+    grayOk = false
+  }
+  const irOut = grayscaleNode.ir!(i)
+  const irGLSL = lowerNodeOutputToGLSL(irOut).join('\n')
+  if (!/float node_gray_kkk111_result = dot\(node_noise_xyz_color\.rgb, vec3\(0\.2126, 0\.7152, 0\.0722\)\);/.test(irGLSL)) {
+    console.log(`  [FAIL] IR->GLSL: expected dot(color.rgb, ...) with float output. Got:\n    ${irGLSL}`)
+    grayOk = false
+  }
+  const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
+  if (!/var node_gray_kkk111_result: f32 = /.test(irWGSL) || !/\.rgb/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected f32 output reading .rgb from RGBA input. Got:\n    ${irWGSL}`)
+    grayOk = false
+  }
+  if (grayOk) {
+    console.log('  [PASS] grayscale: input is RGBA (reads .rgb only), output stays float (alpha N/A)')
+    passed++
+  } else {
+    failed++
+  }
 }
 
 // 14. Posterize
