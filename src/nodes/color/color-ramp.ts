@@ -13,7 +13,13 @@ function flt(n: number): string {
 
 interface ColorStop {
   position: number
-  color: [number, number, number]
+  /** RGB (legacy, alpha defaults to 1) or RGBA. */
+  color: [number, number, number] | [number, number, number, number]
+}
+
+/** Normalize a stop color to RGBA, defaulting alpha to 1 for legacy 3-length colors. */
+function normalizeStopColor(color: ColorStop['color']): [number, number, number, number] {
+  return color.length === 4 ? color : [color[0], color[1], color[2], 1]
 }
 
 export const colorRampNode: NodeDefinition = {
@@ -27,7 +33,7 @@ export const colorRampNode: NodeDefinition = {
   ],
 
   outputs: [
-    { id: 'color', label: 'Color', type: 'vec3' },
+    { id: 'color', label: 'Color', type: 'color' },
   ],
 
   params: [
@@ -74,15 +80,15 @@ export const colorRampNode: NodeDefinition = {
     const t = inputs.t
 
     // Initialize with first stop color
-    const [r0, g0, b0] = stops[0].color
-    lines.push(`vec3 ${c} = vec3(${flt(r0)}, ${flt(g0)}, ${flt(b0)});`)
+    const [r0, g0, b0, a0] = normalizeStopColor(stops[0].color)
+    lines.push(`vec4 ${c} = vec4(${flt(r0)}, ${flt(g0)}, ${flt(b0)}, ${flt(a0)});`)
 
     // Chain mix() calls for each subsequent stop
     for (let i = 1; i < stops.length; i++) {
       const prev = stops[i - 1]
       const curr = stops[i]
-      const [r, g, b] = curr.color
-      const colorExpr = `vec3(${flt(r)}, ${flt(g)}, ${flt(b)})`
+      const [r, g, b, a] = normalizeStopColor(curr.color)
+      const colorExpr = `vec4(${flt(r)}, ${flt(g)}, ${flt(b)}, ${flt(a)})`
 
       let factor: string
       if (Math.abs(curr.position - prev.position) < 0.0001) {
@@ -121,12 +127,13 @@ export const colorRampNode: NodeDefinition = {
     const statements: IRStmt[] = []
 
     // Initialize with first stop color
-    const [r0, g0, b0] = stops[0].color
+    const [r0, g0, b0, a0] = normalizeStopColor(stops[0].color)
     statements.push(
-      declare(c, 'vec3', construct('vec3', [
+      declare(c, 'vec4', construct('vec4', [
         literal('float', r0),
         literal('float', g0),
         literal('float', b0),
+        literal('float', a0),
       ])),
     )
 
@@ -134,11 +141,12 @@ export const colorRampNode: NodeDefinition = {
     for (let i = 1; i < stops.length; i++) {
       const prev = stops[i - 1]
       const curr = stops[i]
-      const [r, g, b] = curr.color
-      const colorExpr: IRExpr = construct('vec3', [
+      const [r, g, b, a] = normalizeStopColor(curr.color)
+      const colorExpr: IRExpr = construct('vec4', [
         literal('float', r),
         literal('float', g),
         literal('float', b),
+        literal('float', a),
       ])
 
       let factor: IRExpr
@@ -168,7 +176,7 @@ export const colorRampNode: NodeDefinition = {
       }
 
       statements.push(
-        assign(c, call('mix', [variable(c), colorExpr, factor], 'vec3')),
+        assign(c, call('mix', [variable(c), colorExpr, factor], 'vec4')),
       )
     }
 

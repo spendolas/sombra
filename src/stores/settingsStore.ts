@@ -7,6 +7,7 @@ import { persist } from 'zustand/middleware'
 
 export type PreviewMode = 'docked' | 'fullwindow' | 'floating'
 export type SplitDirection = 'vertical' | 'horizontal'
+export type PreviewBackgroundMode = 'checker' | 'solid' | 'none'
 
 /**
  * Settings state interface
@@ -31,6 +32,7 @@ interface SettingsState {
   horizontalSplitPct: number // Preview panel % when horizontal split
   verticalSplitSwapped: boolean    // Per-direction swap state
   horizontalSplitSwapped: boolean
+  previewBackground: { mode: PreviewBackgroundMode; color: string }
 
   // Node defaults
   defaultNodeWidth: number
@@ -50,6 +52,7 @@ interface SettingsState {
   setFloatingSize: (size: { width: number; height: number }) => void
   setSplitPct: (dir: SplitDirection, pct: number) => void
   toggleSplitSwapped: () => void
+  setPreviewBackground: (bg: Partial<{ mode: PreviewBackgroundMode; color: string }>) => void
   reset: () => void
 }
 
@@ -73,6 +76,7 @@ const DEFAULT_SETTINGS: Omit<SettingsState, keyof SettingsActions> = {
   horizontalSplitPct: 30,
   verticalSplitSwapped: false,
   horizontalSplitSwapped: false,
+  previewBackground: { mode: 'checker', color: '#1a1a2e' },
   defaultNodeWidth: 200,
   defaultNodeHeight: 100,
 }
@@ -91,6 +95,7 @@ type SettingsActions = {
   setFloatingSize: (size: { width: number; height: number }) => void
   setSplitPct: (dir: SplitDirection, pct: number) => void
   toggleSplitSwapped: () => void
+  setPreviewBackground: (bg: Partial<{ mode: PreviewBackgroundMode; color: string }>) => void
   reset: () => void
 }
 
@@ -115,6 +120,7 @@ export const useSettingsStore = create<SettingsState>()(
       setFloatingSize: (size) => set({ floatingSize: size }),
       setSplitPct: (dir, pct) => set(dir === 'vertical' ? { verticalSplitPct: pct } : { horizontalSplitPct: pct }),
       toggleSplitSwapped: () => set((s) => s.splitDirection === 'vertical' ? { verticalSplitSwapped: !s.verticalSplitSwapped } : { horizontalSplitSwapped: !s.horizontalSplitSwapped }),
+      setPreviewBackground: (bg) => set((s) => ({ previewBackground: { ...s.previewBackground, ...bg } })),
 
       reset: () => set(DEFAULT_SETTINGS),
     }),

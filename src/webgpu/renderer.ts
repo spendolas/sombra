@@ -871,7 +871,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
         view: currentTexture.createView(),
         loadOp: 'clear',
         storeOp: 'store',
-        clearValue: { r: 0, g: 0, b: 0, a: 1 },
+        clearValue: { r: 0, g: 0, b: 0, a: 0 },
       }],
     })
 
@@ -916,7 +916,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
           view: targetView,
           loadOp: 'clear',
           storeOp: 'store',
-          clearValue: { r: 0, g: 0, b: 0, a: 1 },
+          clearValue: { r: 0, g: 0, b: 0, a: 0 },
         }],
       })
 
@@ -943,7 +943,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
         view: this.context.getCurrentTexture().createView(),
         loadOp: 'clear',
         storeOp: 'store',
-        clearValue: { r: 0, g: 0, b: 0, a: 1 },
+        clearValue: { r: 0, g: 0, b: 0, a: 0 },
       }],
     })
     pass.end()

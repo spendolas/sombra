@@ -1333,22 +1333,6 @@
           "figmaNodeId": "106:290",
           "textStyle": "text-param",
           "textColor": "fg-subtle"
-        },
-        "input": {
-          "figmaNodeId": "354:13",
-          "radius": "sm",
-          "fill": "surface/alt",
-          "stroke": {
-            "color": "edge/default",
-            "weight": 1
-          },
-          "width": "6",
-          "height": "6",
-          "cursor": "pointer",
-          "transition": "colors",
-          "hover": {
-            "stroke": "active"
-          }
         }
       }
     },
@@ -1783,6 +1767,160 @@
           "figmaNodeId": "717:13",
           "fill": "fg/default",
           "extra": "size-1.5 rounded-full"
+        }
+      }
+    },
+    "765:3924": {
+      "name": "Checkbox",
+      "type": "atom",
+      "dsKey": "boolCheckbox",
+      "codeFile": "src/components/NodeParameters.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": null,
+          "layout": "horizontal",
+          "align": "center",
+          "gap": "sm",
+          "cursor": "pointer",
+          "extra": "nodrag nowheel"
+        },
+        "box": {
+          "figmaNodeId": "765:3880",
+          "width": "icon-sm",
+          "height": "icon-sm",
+          "radius": "xs",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "fill": "surface/raised",
+          "overflow": "hidden"
+        },
+        "boxChecked": {
+          "figmaNodeId": "765:3902",
+          "layout": "horizontal",
+          "align": "center",
+          "justify": "center",
+          "width": "icon-sm",
+          "height": "icon-sm",
+          "radius": "xs",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "fill": "indigo/default",
+          "overflow": "hidden"
+        },
+        "indicator": {
+          "figmaNodeId": "764:3878",
+          "textColor": "fg",
+          "textAlign": "center",
+          "textAlignVertical": "center",
+          "extra": "text-[11px] leading-none",
+          "auditIgnore": [
+            "text.fontSize",
+            "text.fontWeight"
+          ]
+        },
+        "label": {
+          "figmaNodeId": null,
+          "textStyle": "text-param",
+          "textColor": "fg-subtle"
+        }
+      }
+    },
+    "767:3955": {
+      "name": "Color Picker",
+      "type": "molecule",
+      "dsKey": "colorPicker",
+      "codeFile": "src/components/RgbaColorPicker.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "767:3955",
+          "layout": "vertical",
+          "gap": "sm",
+          "overflow": "hidden"
+        },
+        "label": {
+          "figmaNodeId": "767:3927",
+          "textStyle": "text-param",
+          "textColor": "fg-subtle"
+        },
+        "swatch": {
+          "figmaNodeId": "767:3928",
+          "fill": "surface/alt",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "radius": "sm",
+          "width": "6",
+          "height": "6",
+          "cursor": "pointer",
+          "transition": "colors",
+          "hover": {
+            "stroke": "active"
+          }
+        },
+        "panel": {
+          "figmaNodeId": "767:3929",
+          "layout": "vertical",
+          "fill": "surface/raised",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "radius": "sm",
+          "padding": "md",
+          "gap": "sm",
+          "overflow": "hidden"
+        },
+        "svArea": {
+          "figmaNodeId": "767:3951",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "radius": "sm",
+          "width": "[180px]",
+          "height": "[140px]",
+          "cursor": "crosshair",
+          "auditIgnore": [
+            "fill"
+          ]
+        },
+        "hueSlider": {
+          "figmaNodeId": "767:3952",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "radius": "sm",
+          "width": "[180px]",
+          "height": "[12px]",
+          "cursor": "pointer",
+          "auditIgnore": [
+            "fill"
+          ]
+        },
+        "alphaSlider": {
+          "figmaNodeId": "767:3953",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "radius": "sm",
+          "width": "[180px]",
+          "height": "[12px]",
+          "cursor": "pointer",
+          "auditIgnore": [
+            "fill"
+          ]
+        },
+        "readout": {
+          "figmaNodeId": "767:3954",
+          "textStyle": "text-mono-value",
+          "textColor": "fg"
         }
       }
     },

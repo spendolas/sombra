@@ -4,7 +4,7 @@
 
 import type { NodeDefinition } from '../types'
 import type { IRContext, IRNodeOutput, IRStmt } from '../../compiler/ir/types'
-import { variable, declare, construct, binary, literal, call, textureSample, swizzle, raw } from '../../compiler/ir/types'
+import { variable, declare, construct, binary, literal, call, textureSample, raw } from '../../compiler/ir/types'
 
 export const pixelateNode: NodeDefinition = {
   type: 'pixelate',
@@ -14,14 +14,14 @@ export const pixelateNode: NodeDefinition = {
   textureFilter: 'nearest',
 
   inputs: [
-    { id: 'source', label: 'Source', type: 'vec3', textureInput: true, default: [0, 0, 0] },
+    { id: 'source', label: 'Source', type: 'color', textureInput: true, default: [0, 0, 0] },
     // NOTE: a 'coords' input existed here but was never read by either generator
     // (grid is computed from gl_FragCoord) — removed as a dead handle.
     // Old saves wiring it are cleaned up by importFromFile's stale-handle filter.
   ],
 
   outputs: [
-    { id: 'color', label: 'Color', type: 'vec3' },
+    { id: 'color', label: 'Color', type: 'color' },
     { id: 'uv', label: 'UV', type: 'vec2' },
   ],
 
@@ -62,10 +62,11 @@ export const pixelateNode: NodeDefinition = {
     // Color output
     const samplerName = ctx.textureSamplers?.source
     if (samplerName) {
-      lines.push(`vec3 ${outputs.color} = texture(${samplerName}, pxl_screenUV_${id}).rgb;`)
+      // Full RGBA sample — alpha rides with the pixel (see rgba-node-audit.md).
+      lines.push(`vec4 ${outputs.color} = texture(${samplerName}, pxl_screenUV_${id});`)
     } else {
       lines.push(`float pxl_ck_${id} = mod(pxl_cell_${id}.x + pxl_cell_${id}.y, 2.0);`)
-      lines.push(`vec3 ${outputs.color} = mix(vec3(0.15), vec3(0.3), pxl_ck_${id});`)
+      lines.push(`vec4 ${outputs.color} = vec4(mix(vec3(0.15), vec3(0.3), pxl_ck_${id}), 1.0);`)
     }
 
     return lines.join('\n  ')
@@ -123,17 +124,18 @@ export const pixelateNode: NodeDefinition = {
     standardUniforms.add('u_anchor')
 
     if (samplerName) {
-      // Texture mode: sample from FBO at quantized screen UV (not frozen-ref UV)
+      // Texture mode: sample from FBO at quantized screen UV (not frozen-ref UV).
+      // Full RGBA sample — alpha rides with the pixel (see rgba-node-audit.md).
       stmts.push(
-        declare(ctx.outputs.color, 'vec3',
-          swizzle(textureSample(samplerName, variable(`pxl_screenUV_${id}`)), 'rgb', 'vec3'),
+        declare(ctx.outputs.color, 'vec4',
+          textureSample(samplerName, variable(`pxl_screenUV_${id}`)),
         ),
       )
     } else {
       // No source: checkerboard fallback
       stmts.push(
         raw(`float pxl_ck_${id} = mod(pxl_cell_${id}.x + pxl_cell_${id}.y, 2.0);
-  vec3 ${ctx.outputs.color} = mix(vec3(0.15), vec3(0.3), pxl_ck_${id});`),
+  vec4 ${ctx.outputs.color} = vec4(mix(vec3(0.15), vec3(0.3), pxl_ck_${id}), 1.0);`),
       )
     }
 

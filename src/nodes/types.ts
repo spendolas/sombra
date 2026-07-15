@@ -10,7 +10,7 @@ export type PortType =
   | 'vec2'       // 2D vector
   | 'vec3'       // 3D vector (RGB color)
   | 'vec4'       // 4D vector (RGBA color)
-  | 'color'      // Alias for vec3, UI shows color picker
+  | 'color'      // RGBA (vec4-backed), UI shows color picker
   | 'sampler2D'  // Texture sampler (future)
 
 /**
@@ -30,8 +30,13 @@ export interface PortDefinition {
 export interface NodeParameter {
   id: string                    // Unique identifier (e.g., "scale", "strength")
   label: string                 // Display name
-  type: 'float' | 'vec2' | 'vec3' | 'color' | 'enum'
-  default: number | string | [number, number] | [number, number, number]
+  type: 'float' | 'vec2' | 'vec3' | 'color' | 'enum' | 'bool'
+  // `color` params are RGBA (vec4-backed) — default may be a legacy 3-tuple
+  // (padded to opaque a=1.0 at uniform-upload time, see padColorUniformValue)
+  // or a full 4-tuple RGBA value.
+  // `bool` params store a JS boolean, always `updateMode: 'recompile'` — read via
+  // ctx.params.<id> in glsl()/ir() to branch codegen, like `enum`. Never a uniform.
+  default: number | string | boolean | [number, number] | [number, number, number] | [number, number, number, number]
   min?: number                  // For numeric types
   max?: number                  // For numeric types
   step?: number                 // Step increment for sliders

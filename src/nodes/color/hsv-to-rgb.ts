@@ -39,7 +39,7 @@ export const hsvToRgbNode: NodeDefinition = {
     {
       id: 'rgb',
       label: 'RGB',
-      type: 'vec3',
+      type: 'color',
     },
   ],
 
@@ -55,7 +55,9 @@ export const hsvToRgbNode: NodeDefinition = {
   return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
 }`)
 
-    return `vec3 ${outputs.rgb} = hsv2rgb(${inputs.h}, ${inputs.s}, ${inputs.v});`
+    const rgbVar = `rgb_${ctx.nodeId.replace(/-/g, '_')}`
+    return `vec3 ${rgbVar} = hsv2rgb(${inputs.h}, ${inputs.s}, ${inputs.v});
+  vec4 ${outputs.rgb} = vec4(${rgbVar}, 1.0);`
   },
 
   ir: (ctx) => {
@@ -81,14 +83,21 @@ export const hsvToRgbNode: NodeDefinition = {
       )],
     }
 
+    const sanitizedId = ctx.nodeId.replace(/-/g, '_')
+    const rgbVar = `rgb_${sanitizedId}`
+
     return {
       statements: [
-        declare(ctx.outputs.rgb, 'vec3',
+        declare(rgbVar, 'vec3',
           call('hsv2rgb', [
             variable(ctx.inputs.h),
             variable(ctx.inputs.s),
             variable(ctx.inputs.v),
           ], 'vec3'),
+        ),
+        raw(
+          `vec4 ${ctx.outputs.rgb} = vec4(${rgbVar}, 1.0);`,
+          `var ${ctx.outputs.rgb}: vec4f = vec4f(${rgbVar}, 1.0);`,
         ),
       ],
       uniforms: [],

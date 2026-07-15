@@ -7,6 +7,7 @@ import type { NodeParameter } from '../nodes/types'
 import { useGraphStore } from '../stores/graphStore'
 import { SombraSlider } from '@/components/ui/sombra-slider'
 import { Label } from '@/components/ui/label'
+import { RgbaColorPicker, type Rgba } from '@/components/RgbaColorPicker'
 import {
   Select,
   SelectContent,
@@ -79,7 +80,7 @@ export function NodeParameters({ nodeId, parameters, currentValues, connectedInp
             {param.type === 'color' && (
               <ColorInput
                 param={param}
-                value={(currentValues[param.id] as [number, number, number]) ?? param.default}
+                value={(currentValues[param.id] as number[]) ?? param.default}
                 onChange={(value) => handleChange(param.id, value)}
               />
             )}
@@ -97,6 +98,13 @@ export function NodeParameters({ nodeId, parameters, currentValues, connectedInp
                   onChange={(value) => handleChange(param.id, value)}
                 />
               )
+            )}
+            {param.type === 'bool' && (
+              <BoolCheckbox
+                param={param}
+                value={(currentValues[param.id] as boolean) ?? (param.default as boolean)}
+                onChange={(value) => handleChange(param.id, value)}
+              />
             )}
           </div>
         )
@@ -129,8 +137,8 @@ export function FloatSlider({ param, value, onChange, disabled }: FloatSliderPro
 
 interface ColorInputProps {
   param: NodeParameter
-  value: [number, number, number]
-  onChange: (value: [number, number, number]) => void
+  value: number[]
+  onChange: (value: Rgba) => void
 }
 
 interface AnchorGridProps {
@@ -196,31 +204,36 @@ function EnumSelect({ param, value, onChange }: EnumSelectProps) {
   )
 }
 
-function ColorInput({ param, value, onChange }: ColorInputProps) {
-  const [r, g, b] = value
+interface BoolCheckboxProps {
+  param: NodeParameter
+  value: boolean
+  onChange: (value: boolean) => void
+}
 
-  // Convert 0-1 float to 0-255 hex
-  const toHex = (v: number) => Math.round(v * 255).toString(16).padStart(2, '0')
-  const hexColor = `#${toHex(r)}${toHex(g)}${toHex(b)}`
-
-  const handleColorChange = (hex: string) => {
-    const r = parseInt(hex.slice(1, 3), 16) / 255
-    const g = parseInt(hex.slice(3, 5), 16) / 255
-    const b = parseInt(hex.slice(5, 7), 16) / 255
-    onChange([r, g, b])
-  }
-
+function BoolCheckbox({ param, value, onChange }: BoolCheckboxProps) {
   return (
-    <div className={ds.colorInput.root}>
-      <Label className={ds.colorInput.label}>
-        {param.label}
-      </Label>
+    <label className={ds.boolCheckbox.root}>
       <input
-        type="color"
-        value={hexColor}
-        onChange={(e) => handleColorChange(e.target.value)}
-        className={ds.colorInput.input}
+        type="checkbox"
+        checked={value}
+        onChange={(e) => onChange(e.target.checked)}
+        className="sr-only"
       />
-    </div>
+      <span className={value ? ds.boolCheckbox.boxChecked : ds.boolCheckbox.box}>
+        {value && <span className={ds.boolCheckbox.indicator}>✓</span>}
+      </span>
+      <span className={ds.boolCheckbox.label}>{param.label}</span>
+    </label>
   )
+}
+
+function ColorInput({ param, value, onChange }: ColorInputProps) {
+  // Old saves may store a 3-tuple (RGB, pre-alpha-migration); pad with a=1.
+  const rgba: Rgba = [value[0] ?? 0, value[1] ?? 0, value[2] ?? 0, value[3] ?? 1]
+
+  // Always inline: this renders in the Properties panel (via NodeParameters).
+  // color_constant's node-body param row is suppressed in ShaderNode — its
+  // own inline picker (the node body itself) is the only other consumer of
+  // this param, so there is no double-render.
+  return <RgbaColorPicker label={param.label} value={rgba} onChange={onChange} mode="inline" />
 }

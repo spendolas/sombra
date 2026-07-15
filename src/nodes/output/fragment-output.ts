@@ -18,7 +18,25 @@ export function anchorToVec2(anchor: string): [number, number] {
     default:   return [0.5, 0.5] // center
   }
 }
-import { variable, literal, construct, assign } from '../../compiler/ir/types'
+import { raw } from '../../compiler/ir/types'
+
+/**
+ * GLSL/WGSL expression combining derived alpha `d` (from Color.a) with the
+ * Alpha input `a`. Syntax is identical in both shading languages; the caller
+ * clamps the result to 0..1. `d` and `a` are already-formatted expressions.
+ */
+export function alphaCombineExpr(d: string, a: string, op: string): string {
+  switch (op) {
+    case 'replace': return a
+    case 'max': return `max(${d}, ${a})`
+    case 'add': return `${d} + ${a}`
+    case 'subtract': return `${d} - ${a}`
+    case 'min': return `min(${d}, ${a})`
+    case 'difference': return `abs(${d} - ${a})`
+    case 'multiply':
+    default: return `${d} * ${a}`
+  }
+}
 
 export const fragmentOutputNode: NodeDefinition = {
   type: 'fragment_output',
@@ -31,14 +49,42 @@ export const fragmentOutputNode: NodeDefinition = {
     {
       id: 'color',
       label: 'Color',
-      type: 'vec3',
-      default: [0.0, 0.0, 0.0], // Black default
+      type: 'color',
+      default: [0.0, 0.0, 0.0, 1.0], // opaque black. `color` (not raw vec4): non-alpha
+      // sources (float/vec2/vec3) coerce with alpha forced to 1 instead of the
+      // float->vec4 splat that leaked the value into alpha (transparent-by-brightness).
+      // Genuine color/vec4 sources still pass their real alpha through unchanged.
     },
   ],
 
   outputs: [],
 
   params: [
+    {
+      id: 'alpha',
+      label: 'Alpha',
+      type: 'float',
+      default: 1.0,
+      min: 0, max: 1, step: 0.01,
+      connectable: true,
+      updateMode: 'uniform',
+    },
+    {
+      id: 'alphaOp',
+      label: 'Alpha Op',
+      type: 'enum',
+      default: 'multiply',
+      options: [
+        { value: 'replace', label: 'Replace' },
+        { value: 'multiply', label: 'Multiply (Intersect)' },
+        { value: 'max', label: 'Union / Max' },
+        { value: 'add', label: 'Add' },
+        { value: 'subtract', label: 'Subtract' },
+        { value: 'min', label: 'Min' },
+        { value: 'difference', label: 'Difference' },
+      ],
+      updateMode: 'recompile',
+    },
     {
       id: 'quality',
       label: 'Render Quality',
@@ -68,17 +114,42 @@ export const fragmentOutputNode: NodeDefinition = {
   ],
 
   glsl: (ctx) => {
-    const { inputs } = ctx
-    return `fragColor = vec4(${inputs.color}, 1.0);`
+    const { inputs, params } = ctx
+    const id = ctx.nodeId.replace(/-/g, '_')
+    const col = `fo_col_${id}`
+    const af = `fo_a_${id}`
+    const op = (params.alphaOp as string) || 'multiply'
+    const combine = alphaCombineExpr(`${col}.a`, inputs.alpha, op)
+    return [
+      `vec4 ${col} = ${inputs.color};`,
+      `float ${af} = clamp(${combine}, 0.0, 1.0);`,
+      `fragColor = vec4(${col}.rgb * ${af}, ${af});`,
+    ].join('\n  ')
   },
 
-  ir: (ctx) => ({
-    statements: [
-      assign('fragColor',
-        construct('vec4', [variable(ctx.inputs.color), literal('float', 1.0)]),
-      ),
-    ],
-    uniforms: [],
-    standardUniforms: new Set(),
-  }),
+  ir: (ctx) => {
+    const id = ctx.nodeId.replace(/-/g, '_')
+    const col = `fo_col_${id}`
+    const af = `fo_a_${id}`
+    const op = (ctx.params.alphaOp as string) || 'multiply'
+    const combine = alphaCombineExpr(`${col}.a`, ctx.inputs.alpha, op)
+    return {
+      statements: [
+        raw(
+          `vec4 ${col} = ${ctx.inputs.color};`,
+          `var ${col}: vec4f = ${ctx.inputs.color};`,
+        ),
+        raw(
+          `float ${af} = clamp(${combine}, 0.0, 1.0);`,
+          `let ${af}: f32 = clamp(${combine}, 0.0, 1.0);`,
+        ),
+        raw(
+          `fragColor = vec4(${col}.rgb * ${af}, ${af});`,
+          `fragColor = vec4f(${col}.rgb * ${af}, ${af});`,
+        ),
+      ],
+      uniforms: [],
+      standardUniforms: new Set(),
+    }
+  },
 }

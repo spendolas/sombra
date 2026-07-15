@@ -5,7 +5,7 @@
 
 import type { NodeDefinition } from '../types'
 import type { IRContext, IRNodeOutput, IRStmt } from '../../compiler/ir/types'
-import { variable, declare, construct, binary, literal, call, textureSample, swizzle, raw } from '../../compiler/ir/types'
+import { variable, declare, construct, binary, literal, call, textureSample, raw } from '../../compiler/ir/types'
 
 export const tileNode: NodeDefinition = {
   type: 'tile',
@@ -14,12 +14,12 @@ export const tileNode: NodeDefinition = {
   description: 'Repeat coordinates with optional mirroring',
 
   inputs: [
-    { id: 'source', label: 'Source', type: 'vec3', textureInput: true, default: [0, 0, 0] },
+    { id: 'source', label: 'Source', type: 'color', textureInput: true, default: [0, 0, 0] },
     { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },
   ],
 
   outputs: [
-    { id: 'color', label: 'Color', type: 'vec3' },
+    { id: 'color', label: 'Color', type: 'color' },
     { id: 'uv', label: 'UV', type: 'vec2' },
   ],
 
@@ -59,9 +59,10 @@ export const tileNode: NodeDefinition = {
       ]
       const samplerName = ctx.textureSamplers?.source
       if (samplerName) {
-        lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${outputs.uv}).rgb;`)
+        // Full RGBA sample — alpha rides with the pixel (see rgba-node-audit.md).
+        lines.push(`vec4 ${outputs.color} = texture(${samplerName}, ${outputs.uv});`)
       } else {
-        lines.push(`vec3 ${outputs.color} = vec3(${outputs.uv}, 0.5);`)
+        lines.push(`vec4 ${outputs.color} = vec4(${outputs.uv}, 0.5, 1.0);`)
       }
       return lines.join('\n  ')
     }
@@ -88,9 +89,10 @@ export const tileNode: NodeDefinition = {
 
     const samplerName = ctx.textureSamplers?.source
     if (samplerName) {
-      lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${outputs.uv}).rgb;`)
+      // Full RGBA sample — alpha rides with the pixel (see rgba-node-audit.md).
+      lines.push(`vec4 ${outputs.color} = texture(${samplerName}, ${outputs.uv});`)
     } else {
-      lines.push(`vec3 ${outputs.color} = vec3(${outputs.uv}, 0.5);`)
+      lines.push(`vec4 ${outputs.color} = vec4(${outputs.uv}, 0.5, 1.0);`)
     }
 
     return lines.join('\n  ')
@@ -160,17 +162,17 @@ export const tileNode: NodeDefinition = {
       )
     }
 
-    // Color output
+    // Color output — full RGBA sample, alpha rides with the pixel (see rgba-node-audit.md).
     if (samplerName) {
       stmts.push(
-        declare(ctx.outputs.color, 'vec3',
-          swizzle(textureSample(samplerName, variable(ctx.outputs.uv)), 'rgb', 'vec3'),
+        declare(ctx.outputs.color, 'vec4',
+          textureSample(samplerName, variable(ctx.outputs.uv)),
         ),
       )
     } else {
       stmts.push(
-        declare(ctx.outputs.color, 'vec3',
-          construct('vec3', [variable(ctx.outputs.uv), literal('float', 0.5)]),
+        declare(ctx.outputs.color, 'vec4',
+          construct('vec4', [variable(ctx.outputs.uv), literal('float', 0.5), literal('float', 1.0)]),
         ),
       )
     }

@@ -3,7 +3,7 @@
  */
 
 import type { NodeDefinition } from '../types'
-import { variable, binary, literal, declare } from '../../compiler/ir/types'
+import { variable, binary, literal, declare, construct, swizzle } from '../../compiler/ir/types'
 
 export const brightnessContrastNode: NodeDefinition = {
   type: 'brightness_contrast',
@@ -15,7 +15,7 @@ export const brightnessContrastNode: NodeDefinition = {
     {
       id: 'color',
       label: 'Color',
-      type: 'vec3',
+      type: 'color',
       default: [0.5, 0.5, 0.5],
     },
   ],
@@ -24,7 +24,7 @@ export const brightnessContrastNode: NodeDefinition = {
     {
       id: 'result',
       label: 'Result',
-      type: 'vec3',
+      type: 'color',
     },
   ],
 
@@ -51,34 +51,66 @@ export const brightnessContrastNode: NodeDefinition = {
       connectable: true,
       updateMode: 'uniform',
     },
+    {
+      id: 'preserveAlpha', label: 'Preserve Alpha', type: 'bool', default: false,
+      updateMode: 'recompile',
+    },
   ],
 
   glsl: (ctx) => {
-    const { inputs, outputs } = ctx
+    const { inputs, outputs, params } = ctx
+    const preserveAlpha = params.preserveAlpha === true
     // inputs.brightness and inputs.contrast are always GLSL expressions (connectable params)
-    return `vec3 ${outputs.result} = (${inputs.color} - 0.5) * (1.0 + ${inputs.contrast}) + 0.5 + ${inputs.brightness};`
+    // Applies to all four channels, including alpha (channel transform — see rgba-node-audit.md).
+    // preserveAlpha=true adjusts rgb only, passing input alpha through untouched.
+    if (preserveAlpha) {
+      return `vec4 ${outputs.result} = vec4((${inputs.color}.rgb - 0.5) * (1.0 + ${inputs.contrast}) + 0.5 + ${inputs.brightness}, ${inputs.color}.a);`
+    }
+    return `vec4 ${outputs.result} = (${inputs.color} - 0.5) * (1.0 + ${inputs.contrast}) + 0.5 + ${inputs.brightness};`
   },
 
-  ir: (ctx) => ({
-    statements: [
-      // (color - 0.5) * (1.0 + contrast) + 0.5 + brightness
-      declare(ctx.outputs.result, 'vec3',
-        binary('+',
+  ir: (ctx) => {
+    const preserveAlpha = ctx.params.preserveAlpha === true
+    const color = variable(ctx.inputs.color)
+    const contrast = variable(ctx.inputs.contrast)
+    const brightness = variable(ctx.inputs.brightness)
+
+    // (color - 0.5) * (1.0 + contrast) + 0.5 + brightness
+    const value = preserveAlpha
+      ? construct('vec4', [
           binary('+',
-            binary('*',
-              binary('-', variable(ctx.inputs.color), literal('float', 0.5), 'vec3'),
-              binary('+', literal('float', 1.0), variable(ctx.inputs.contrast), 'float'),
+            binary('+',
+              binary('*',
+                binary('-', swizzle(color, 'rgb', 'vec3'), literal('float', 0.5), 'vec3'),
+                binary('+', literal('float', 1.0), contrast, 'float'),
+                'vec3',
+              ),
+              literal('float', 0.5),
               'vec3',
             ),
-            literal('float', 0.5),
+            brightness,
             'vec3',
           ),
-          variable(ctx.inputs.brightness),
-          'vec3',
-        ),
-      ),
-    ],
-    uniforms: [],
-    standardUniforms: new Set(),
-  }),
+          swizzle(color, 'a', 'float'),
+        ])
+      : binary('+',
+          binary('+',
+            binary('*',
+              binary('-', color, literal('float', 0.5), 'vec4'),
+              binary('+', literal('float', 1.0), contrast, 'float'),
+              'vec4',
+            ),
+            literal('float', 0.5),
+            'vec4',
+          ),
+          brightness,
+          'vec4',
+        )
+
+    return {
+      statements: [declare(ctx.outputs.result, 'vec4', value)],
+      uniforms: [],
+      standardUniforms: new Set(),
+    }
+  },
 }

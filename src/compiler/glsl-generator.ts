@@ -19,9 +19,21 @@ export function uniformName(sanitizedNodeId: string, paramId: string): string {
 
 export function paramGlslType(paramType: string): 'float' | 'vec2' | 'vec3' | 'vec4' {
   if (paramType === 'vec2') return 'vec2'
-  if (paramType === 'vec3' || paramType === 'color') return 'vec3'
-  if (paramType === 'vec4') return 'vec4'
+  if (paramType === 'vec3') return 'vec3'
+  if (paramType === 'color' || paramType === 'vec4') return 'vec4'
   return 'float'
+}
+
+/**
+ * `color` params upload as a vec4 uniform ([P: paramGlslType]). Legacy saved
+ * values (and defaults) may still be 3-tuples — pad to 4 with a=1.0 so we
+ * never upload a truncated/garbage 4th component.
+ */
+export function padColorUniformValue(paramType: string, value: unknown): number | number[] {
+  if (paramType === 'color' && Array.isArray(value) && value.length === 3) {
+    return [...value, 1.0]
+  }
+  return value as number | number[]
 }
 
 // ---------------------------------------------------------------------------
@@ -345,7 +357,7 @@ function resolveParamFallback(
     userUniforms.push({
       name: uName,
       glslType: paramGlslType(param.type),
-      value: paramValue as number | number[],
+      value: padColorUniformValue(param.type, paramValue),
       nodeId: node.id,
       paramId: param.id,
     })
@@ -511,7 +523,7 @@ export function generateNodeGlsl(
       userUniforms.push({
         name: uName,
         glslType: paramGlslType(param.type),
-        value: paramValue as number | number[],
+        value: padColorUniformValue(param.type, paramValue),
         nodeId: node.id,
         paramId: param.id,
       })
@@ -926,8 +938,8 @@ export function outputTypeToFragColor(varName: string, type: string): string {
     case 'vec2':
       return `  fragColor = vec4(${varName}, 0.0, 1.0);`
     case 'vec3':
-    case 'color':
       return `  fragColor = vec4(${varName}, 1.0);`
+    case 'color':
     case 'vec4':
       return `  fragColor = ${varName};`
     default:
@@ -959,6 +971,10 @@ export function formatDefaultValue(value: unknown, type: string): string {
   }
   if (type === 'vec4' && Array.isArray(value)) {
     return `vec4(${safeFloat(value[0])}, ${safeFloat(value[1])}, ${safeFloat(value[2])}, ${safeFloat(value[3])})`
+  }
+  if (type === 'color' && Array.isArray(value)) {
+    const a = value.length > 3 ? safeFloat(value[3]) : '1.0'
+    return `vec4(${safeFloat(value[0])}, ${safeFloat(value[1])}, ${safeFloat(value[2])}, ${a})`
   }
   return '0.0'
 }

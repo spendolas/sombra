@@ -6,7 +6,7 @@ import type { NodeDefinition, SpatialConfig } from '../types'
 import { getSpatialParams } from '../types'
 import { NOISE_TYPE_OPTIONS, resolveNoiseFn, registerNoiseType, getIRNoiseFunctions } from '../noise/noise-functions'
 import type { IRContext, IRNodeOutput, IRStmt } from '../../compiler/ir/types'
-import { variable, call, declare, construct, binary, literal, textureSample, swizzle, raw } from '../../compiler/ir/types'
+import { variable, call, declare, construct, binary, literal, textureSample, raw } from '../../compiler/ir/types'
 
 const EDGE_OPTIONS = [
   { value: 'clamp', label: 'Clamp' },
@@ -22,13 +22,13 @@ export const warpNode: NodeDefinition = {
   spatial: { transforms: ['scale', 'translate'] } satisfies SpatialConfig,
 
   inputs: [
-    { id: 'source', label: 'Source', type: 'vec3', textureInput: true, default: [0, 0, 0] },
+    { id: 'source', label: 'Source', type: 'color', textureInput: true, default: [0, 0, 0] },
     { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },
     { id: 'phase', label: 'Phase', type: 'float', default: 0.0 },
   ],
 
   outputs: [
-    { id: 'color', label: 'Color', type: 'vec3' },
+    { id: 'color', label: 'Color', type: 'color' },
     { id: 'warped', label: 'Warped', type: 'vec2' },
     { id: 'warpedPhase', label: 'Warped Phase', type: 'float' },
   ],
@@ -122,10 +122,11 @@ export const warpNode: NodeDefinition = {
       } else {
         lines.push(`vec2 ${edgeUV} = clamp(${outputs.warped}, 0.0, 1.0);`)
       }
-      lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${edgeUV}).rgb;`)
+      // Full RGBA sample — alpha rides with the pixel (see rgba-node-audit.md).
+      lines.push(`vec4 ${outputs.color} = texture(${samplerName}, ${edgeUV});`)
     } else {
       // No source — show warped UV as gradient to visualize distortion
-      lines.push(`vec3 ${outputs.color} = vec3(${outputs.warped}, 0.5);`)
+      lines.push(`vec4 ${outputs.color} = vec4(${outputs.warped}, 0.5, 1.0);`)
     }
 
     return lines.join('\n  ')
@@ -288,18 +289,20 @@ export const warpNode: NodeDefinition = {
           call('clamp', [variable(ctx.outputs.warped), construct('vec2', [literal('float', 0.0)]), construct('vec2', [literal('float', 1.0)])], 'vec2'),
         ))
       }
+      // Full RGBA sample — alpha rides with the pixel (see rgba-node-audit.md).
       stmts.push(
-        declare(ctx.outputs.color, 'vec3',
-          swizzle(textureSample(samplerName, variable(edgeUV)), 'rgb', 'vec3'),
+        declare(ctx.outputs.color, 'vec4',
+          textureSample(samplerName, variable(edgeUV)),
         ),
       )
     } else {
       // No source texture — show warped UV as gradient to visualize distortion
       stmts.push(
-        declare(ctx.outputs.color, 'vec3',
-          construct('vec3', [
+        declare(ctx.outputs.color, 'vec4',
+          construct('vec4', [
             variable(ctx.outputs.warped),
             literal('float', 0.5),
+            literal('float', 1.0),
           ]),
         ),
       )

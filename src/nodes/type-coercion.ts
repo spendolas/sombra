@@ -87,22 +87,31 @@ export const COERCION_RULES: CoercionRule[] = [
     glsl: (v) => `${v}.x`,
   },
 
-  // color is an alias for vec3 — same rules as vec3 in both directions,
-  // so anything wirable into a vec3 input is wirable into a color input
+  // color is RGBA (vec4-backed)
+  {
+    from: 'vec3',
+    to: 'color',
+    glsl: (v) => `vec4(${v}, 1.0)`,
+  },
   {
     from: 'color',
     to: 'vec3',
+    glsl: (v) => `${v}.rgb`,
+  },
+  {
+    from: 'color',
+    to: 'vec4',
     glsl: (v) => v,
   },
   {
-    from: 'vec3',
+    from: 'vec4',
     to: 'color',
     glsl: (v) => v,
   },
   {
     from: 'float',
     to: 'color',
-    glsl: (v) => `vec3(${v})`,
+    glsl: (v) => `vec4(vec3(${v}), 1.0)`,
   },
   {
     from: 'color',
@@ -112,22 +121,12 @@ export const COERCION_RULES: CoercionRule[] = [
   {
     from: 'vec2',
     to: 'color',
-    glsl: (v) => `vec3(${v}, 0.0)`,
+    glsl: (v) => `vec4(${v}, 0.0, 1.0)`,
   },
   {
     from: 'color',
     to: 'vec2',
     glsl: (v) => `${v}.xy`,
-  },
-  {
-    from: 'vec4',
-    to: 'color',
-    glsl: (v) => `${v}.rgb`,
-  },
-  {
-    from: 'color',
-    to: 'vec4',
-    glsl: (v) => `vec4(${v}, 1.0)`,
   },
 ]
 

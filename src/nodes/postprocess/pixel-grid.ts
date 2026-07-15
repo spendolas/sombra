@@ -58,11 +58,11 @@ export const ditherNode: NodeDefinition = {
   description: 'Pixelate with shape masking and ordered dithering',
 
   inputs: [
-    { id: 'color', label: 'Color', type: 'vec3', default: [0.5, 0.5, 0.5] },
+    { id: 'color', label: 'Color', type: 'color', default: [0.5, 0.5, 0.5] },
   ],
 
   outputs: [
-    { id: 'result', label: 'Result', type: 'vec3' },
+    { id: 'result', label: 'Result', type: 'color' },
   ],
 
   params: [
@@ -158,8 +158,8 @@ export const ditherNode: NodeDefinition = {
       lines.push(`float ${mask} = ${sm} * step(${bv}, ${inputs.threshold});`)
     }
 
-    // Output: masked color on black background
-    lines.push(`vec3 ${outputs.result} = ${inputs.color} * ${mask};`)
+    // Output: masked color on black background — mask multiplies alpha too (see rgba-node-audit.md).
+    lines.push(`vec4 ${outputs.result} = ${inputs.color} * ${mask};`)
 
     return lines.join('\n  ')
   },
@@ -320,10 +320,10 @@ export const ditherNode: NodeDefinition = {
       )
     }
 
-    // Output: masked color on black background
+    // Output: masked color on black background — mask multiplies alpha too (see rgba-node-audit.md).
     stmts.push(
-      declare(ctx.outputs.result, 'vec3',
-        binary('*', variable(ctx.inputs.color), variable(mask), 'vec3'),
+      declare(ctx.outputs.result, 'vec4',
+        binary('*', variable(ctx.inputs.color), variable(mask), 'vec4'),
       ),
     )
 

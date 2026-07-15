@@ -95,7 +95,6 @@ export const ds = {
   colorInput: {
     root: "flex flex-col gap-sm overflow-hidden",
     label: "text-param text-fg-subtle",
-    input: "bg-surface-alt rounded-sm border border-edge cursor-pointer transition-colors w-6 h-6 hover:border-active",
   },
   connectableParamRow: {
     root: "flex flex-row items-center relative",
@@ -157,6 +156,23 @@ export const ds = {
     cellActive: "flex flex-row items-center justify-center bg-indigo rounded-xs cursor-pointer transition-colors w-icon-md h-icon-md hover:bg-indigo-hover",
     dot: "bg-fg-muted size-1.5 rounded-full",
     dotActive: "bg-fg size-1.5 rounded-full",
+  },
+  boolCheckbox: {
+    root: "flex flex-row items-center gap-sm cursor-pointer nodrag nowheel",
+    box: "bg-surface-raised rounded-xs border border-edge overflow-hidden w-icon-sm h-icon-sm",
+    boxChecked: "flex flex-row items-center justify-center bg-indigo rounded-xs border border-edge overflow-hidden w-icon-sm h-icon-sm",
+    indicator: "text-fg text-center text-[11px] leading-none",
+    label: "text-param text-fg-subtle",
+  },
+  colorPicker: {
+    root: "flex flex-col gap-sm overflow-hidden",
+    label: "text-param text-fg-subtle",
+    swatch: "bg-surface-alt rounded-sm border border-edge cursor-pointer transition-colors w-6 h-6 hover:border-active",
+    panel: "flex flex-col bg-surface-raised rounded-sm border border-edge p-md gap-sm overflow-hidden",
+    svArea: "rounded-sm border border-edge cursor-crosshair w-[180px] h-[140px]",
+    hueSlider: "rounded-sm border border-edge cursor-pointer w-[180px] h-[12px]",
+    alphaSlider: "rounded-sm border border-edge cursor-pointer w-[180px] h-[12px]",
+    readout: "text-mono-value text-fg",
   },
   nodePreview: {
     root: "overflow-hidden w-full aspect-square nowheel",

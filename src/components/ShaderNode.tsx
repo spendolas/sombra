@@ -14,6 +14,8 @@ import { BaseNode, BaseNodeHeader, BaseNodeHeaderTitle, BaseNodeContent } from '
 import { LabeledHandle } from '@/components/labeled-handle'
 import { BaseHandle } from '@/components/base-handle'
 import { IconButton } from '@/components/IconButton'
+import { BackgroundModeControl } from './BackgroundModeControl'
+import { RgbaColorPicker, type Rgba } from '@/components/RgbaColorPicker'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
 
@@ -259,13 +261,28 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   // Pure inputs: those NOT shadowed by a connectable param
   const pureInputs = resolvedInputs.filter((inp) => !connectableIds.has(inp.id))
 
-  // Non-connectable, visible params (enums, non-connectable floats, colors)
+  // Non-connectable, visible params (enums, non-connectable floats, colors).
+  // color_constant's `color` param is excluded here — its node body IS the
+  // inline color picker (rendered below), so it must not also appear via the
+  // generic NodeParameters row (that would double-render the same control).
   const regularParams = allParams.filter(
-    (p) => !p.connectable && isParamVisible(p, currentValues, allParams)
+    (p) =>
+      !p.connectable &&
+      isParamVisible(p, currentValues, allParams) &&
+      !(definition.type === 'color_constant' && p.type === 'color')
   )
 
   // Dynamic input flag
   const hasDynamicInputs = !!definition.dynamicInputs
+
+  // color_constant: resolve the `color` param as an RGBA tuple for the
+  // inline picker below (pad legacy 3-tuple saves with a=1).
+  const colorConstantValue: Rgba | null = (() => {
+    if (definition.type !== 'color_constant') return null
+    const colorParamDef = allParams.find((p) => p.id === 'color')
+    const raw = (currentValues.color as number[] | undefined) ?? (colorParamDef?.default as number[] | undefined) ?? [1, 0, 1, 1]
+    return [raw[0] ?? 0, raw[1] ?? 0, raw[2] ?? 0, raw[3] ?? 1]
+  })()
 
   return (
     <BaseNode className={cn('min-w-node', nodeErrors.length > 0 && 'ring-2 ring-error')}>
@@ -454,6 +471,28 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
             !definition.hidePreview && regularParams.length === 0 && ds.shaderNode.paramDivider,
           )}>
             <definition.component nodeId={id} data={currentValues} />
+          </div>
+        )}
+
+        {/* Color node: the node body IS the inline picker (no swatch/popover) —
+            the `color` param is excluded from regularParams above so it isn't
+            also rendered as a generic NodeParameters row. */}
+        {definition.type === 'color_constant' && colorConstantValue && (
+          <div className={cn("w-full mt-xs pt-md", ds.shaderNode.paramDivider)}>
+            <RgbaColorPicker
+              mode="inline"
+              value={colorConstantValue}
+              onChange={(rgba) => handleParamChange('color', rgba)}
+            />
+          </div>
+        )}
+
+        {/* Mirrored preview-background control on the master output node —
+            shares the previewBackground setting with the preview overlay. */}
+        {definition.type === 'fragment_output' && (
+          <div className={cn("w-full mt-md pt-md flex flex-col gap-xs", ds.shaderNode.paramDivider)}>
+            <span className="text-param text-fg-subtle">Preview Background</span>
+            <BackgroundModeControl className="w-fit" />
           </div>
         )}
 

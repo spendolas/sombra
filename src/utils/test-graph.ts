@@ -67,7 +67,7 @@ export function createDefaultGraph(): {
     {
       id: 'def-e3', source: 'def-ramp', target: 'def-output',
       sourceHandle: 'color', targetHandle: 'color', type: 'typed',
-      data: { sourcePort: 'color', targetPort: 'color', sourcePortType: 'vec3' },
+      data: { sourcePort: 'color', targetPort: 'color', sourcePortType: 'color' },
     },
   ]
 
@@ -256,13 +256,13 @@ export function createSpectraValueFBM(): {
     {
       id: 'sp-e5', source: 'sp-ramp', target: 'sp-pixel',
       sourceHandle: 'color', targetHandle: 'color', type: 'typed',
-      data: { sourcePort: 'color', targetPort: 'color', sourcePortType: 'vec3' },
+      data: { sourcePort: 'color', targetPort: 'color', sourcePortType: 'color' },
     },
     // Pixel Grid → Fragment Output
     {
       id: 'sp-e6', source: 'sp-pixel', target: 'sp-output',
       sourceHandle: 'result', targetHandle: 'color', type: 'typed',
-      data: { sourcePort: 'result', targetPort: 'color', sourcePortType: 'vec3' },
+      data: { sourcePort: 'result', targetPort: 'color', sourcePortType: 'color' },
     },
   ]
 
@@ -368,13 +368,13 @@ export function createSpectraSimplexFBM(): {
     {
       id: 'sp2-e5', source: 'sp2-ramp', target: 'sp2-pixel',
       sourceHandle: 'color', targetHandle: 'color', type: 'typed',
-      data: { sourcePort: 'color', targetPort: 'color', sourcePortType: 'vec3' },
+      data: { sourcePort: 'color', targetPort: 'color', sourcePortType: 'color' },
     },
     // Pixel Grid → Fragment Output
     {
       id: 'sp2-e6', source: 'sp2-pixel', target: 'sp2-output',
       sourceHandle: 'result', targetHandle: 'color', type: 'typed',
-      data: { sourcePort: 'result', targetPort: 'color', sourcePortType: 'vec3' },
+      data: { sourcePort: 'result', targetPort: 'color', sourcePortType: 'color' },
     },
   ]
 
@@ -539,13 +539,13 @@ export function createSpectraWorleyRidged(): {
     {
       id: 'sp3-e5', source: 'sp3-ramp', target: 'sp3-pixel',
       sourceHandle: 'color', targetHandle: 'color', type: 'typed',
-      data: { sourcePort: 'color', targetPort: 'color', sourcePortType: 'vec3' },
+      data: { sourcePort: 'color', targetPort: 'color', sourcePortType: 'color' },
     },
     // Pixel Grid → Fragment Output
     {
       id: 'sp3-e6', source: 'sp3-pixel', target: 'sp3-output',
       sourceHandle: 'result', targetHandle: 'color', type: 'typed',
-      data: { sourcePort: 'result', targetPort: 'color', sourcePortType: 'vec3' },
+      data: { sourcePort: 'result', targetPort: 'color', sourcePortType: 'color' },
     },
   ]
 
@@ -714,13 +714,13 @@ export function createSpectraBoxNone(): {
     {
       id: 'sp4-e5', source: 'sp4-ramp', target: 'sp4-pixel',
       sourceHandle: 'color', targetHandle: 'color', type: 'typed',
-      data: { sourcePort: 'color', targetPort: 'color', sourcePortType: 'vec3' },
+      data: { sourcePort: 'color', targetPort: 'color', sourcePortType: 'color' },
     },
     // Pixel Grid → Fragment Output
     {
       id: 'sp4-e6', source: 'sp4-pixel', target: 'sp4-output',
       sourceHandle: 'result', targetHandle: 'color', type: 'typed',
-      data: { sourcePort: 'result', targetPort: 'color', sourcePortType: 'vec3' },
+      data: { sourcePort: 'result', targetPort: 'color', sourcePortType: 'color' },
     },
   ]
 

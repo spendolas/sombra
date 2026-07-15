@@ -1,6 +1,8 @@
 import { useRef, useCallback, useEffect, useMemo, type RefObject } from 'react'
 import { PreviewToolbar } from './PreviewToolbar'
+import { BackgroundModeControl } from './BackgroundModeControl'
 import { ShaderPlaceholder } from './ShaderPlaceholder'
+import { PreviewBackdrop } from './PreviewBackdrop'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { ds } from '@/generated/ds'
 
@@ -20,6 +22,7 @@ export function FloatingPreview({ targetRef }: FloatingPreviewProps) {
   const floatingSize = useSettingsStore((s) => s.floatingSize)
   const setFloatingPosition = useSettingsStore((s) => s.setFloatingPosition)
   const setFloatingSize = useSettingsStore((s) => s.setFloatingSize)
+  const seeThrough = useSettingsStore((s) => s.previewBackground.mode === 'none')
 
   const panelRef = useRef<HTMLDivElement>(null)
 
@@ -283,7 +286,9 @@ export function FloatingPreview({ targetRef }: FloatingPreviewProps) {
       }}
     >
       {/* Inner: visual styling + overflow-hidden for content — z-10 so resize handles (z-30) sit on top */}
-      <div className={ds.floatingPreview.root + ' w-full h-full !relative z-10'}>
+      <div className={ds.floatingPreview.root + ' w-full h-full !relative z-10 isolate' + (seeThrough ? ' !bg-transparent' : '')}>
+        <PreviewBackdrop />
+        <BackgroundModeControl className="absolute top-xl left-xl z-20" />
         <PreviewToolbar className="absolute top-xl right-xl z-10" />
         {/* Invisible drag surface */}
         <div

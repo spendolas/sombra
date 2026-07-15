@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { IconButton } from '@/components/IconButton'
+import { RgbaColorPicker } from '@/components/RgbaColorPicker'
 import { icons, type IconName } from '@/components/icons'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
@@ -519,14 +520,27 @@ function MoleculesSection() {
         </div>
       </SubSection>
 
-      {/* colorInput */}
+      {/* colorInput — swatch trigger reuses the root/label chrome; the
+          picker itself (popover) supersedes the old native `<input type=color>`. */}
       <SubSection title="colorInput">
         <Cell dsComponent="colorInput" dsVariant="default" label="default" className="w-48">
           <div className={ds.colorInput.root}>
             <label className={ds.colorInput.label}>Color</label>
-            <input type="color" defaultValue="#6366f1" className={ds.colorInput.input} />
+            <RgbaColorPicker mode="popover" value={[0.388, 0.4, 0.965, 1]} onChange={() => {}} />
           </div>
         </Cell>
+      </SubSection>
+
+      {/* colorPicker */}
+      <SubSection title="colorPicker">
+        <div className="flex gap-8">
+          <Cell dsComponent="colorPicker" dsVariant="popover" label="popover" className="w-48">
+            <RgbaColorPicker mode="popover" label="Color" value={[0.388, 0.4, 0.965, 1]} onChange={() => {}} />
+          </Cell>
+          <Cell dsComponent="colorPicker" dsVariant="inline" label="inline" className="w-48">
+            <RgbaColorPicker mode="inline" label="Color" value={[0.965, 0.271, 0.376, 1]} onChange={() => {}} />
+          </Cell>
+        </div>
       </SubSection>
 
       {/* floatSlider */}
