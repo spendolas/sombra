@@ -1017,6 +1017,91 @@ function verify(
     },
   })
   verify('Image (no data)', imageNode, g, i, 'loose')
+
+  // RGBA assertion — `color` output port migrated to `color` (vec4); no-image
+  // placeholder path is opaque (a=1.0). Separate `alpha` float output is unchanged.
+  testNum++
+  console.log(`\n  ${testNum}. Image (no data) — RGBA output assertion`)
+  let imgNoDataOk = true
+  const refGLSL = imageNode.glsl(g)
+  if (!/vec4 node_img_ttt000_color = vec4\(vec3\(0\.5\), 1\.0\);/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected opaque vec4 placeholder. Got:\n    ${refGLSL}`)
+    imgNoDataOk = false
+  }
+  if (!/float node_img_ttt000_alpha = 1\.0;/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: alpha output port regressed. Got:\n    ${refGLSL}`)
+    imgNoDataOk = false
+  }
+  const irOut = imageNode.ir!(i)
+  const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
+  if (!/var node_img_ttt000_color: vec4f = vec4f\(vec3f\(0\.5\), 1\.0\);/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected opaque vec4f placeholder. Got:\n    ${irWGSL}`)
+    imgNoDataOk = false
+  }
+  if (!/var node_img_ttt000_alpha: f32 = 1\.0;/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: alpha output port regressed. Got:\n    ${irWGSL}`)
+    imgNoDataOk = false
+  }
+  if (imgNoDataOk) {
+    console.log('  [PASS] image (no data): color output is opaque RGBA (vec4/vec4f), alpha port unchanged')
+    passed++
+  } else {
+    failed++
+  }
+}
+
+// 47. Image (loaded — texture-sample path)
+{
+  const [g, i] = ctx({
+    nodeId: 'img-uuu111',
+    inputs: {
+      coords: 'node_uv_aaa_uv',
+      imageAspect: 'u_img_uuu111_imageAspect',
+      srt_scaleX: 'u_img_uuu111_srt_scaleX',
+      srt_scaleY: 'u_img_uuu111_srt_scaleY',
+      srt_rotate: 'u_img_uuu111_srt_rotate',
+      srt_translateX: 'u_img_uuu111_srt_translateX',
+      srt_translateY: 'u_img_uuu111_srt_translateY',
+    },
+    outputs: { color: 'node_img_uuu111_color', alpha: 'node_img_uuu111_alpha' },
+    params: { imageData: 1, imageName: 1, imageAspect: 1.5, fitMode: 'contain',
+      srt_scaleX: 1, srt_scaleY: 1, srt_rotate: 0, srt_translateX: 0, srt_translateY: 0,
+    },
+    imageSamplers: new Set<string>(),
+  })
+  verify('Image (loaded, contain fit)', imageNode, g, i, 'loose')
+
+  // RGBA assertion — loaded path combines sampled rgb + alpha into the RGBA `color`
+  // output; separate `alpha` float output stays a passthrough of the same sample's `.a`.
+  testNum++
+  console.log(`\n  ${testNum}. Image (loaded) — RGBA output assertion`)
+  let imgLoadedOk = true
+  const refGLSL = imageNode.glsl(g)
+  const sampleVar = 'node_img_uuu111_sample'
+  if (!new RegExp(`vec4 node_img_uuu111_color = vec4\\(${sampleVar}\\.rgb, ${sampleVar}\\.a\\);`).test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected color output to combine sampled rgb+alpha. Got:\n    ${refGLSL}`)
+    imgLoadedOk = false
+  }
+  if (!new RegExp(`float node_img_uuu111_alpha = ${sampleVar}\\.a;`).test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: alpha output port regressed. Got:\n    ${refGLSL}`)
+    imgLoadedOk = false
+  }
+  const irOut = imageNode.ir!(i)
+  const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
+  if (!new RegExp(`let node_img_uuu111_color: vec4f = vec4f\\(${sampleVar}\\.rgb, ${sampleVar}\\.a\\);`).test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected color output to combine sampled rgb+alpha. Got:\n    ${irWGSL}`)
+    imgLoadedOk = false
+  }
+  if (!new RegExp(`let node_img_uuu111_alpha: f32 = ${sampleVar}\\.a;`).test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: alpha output port regressed. Got:\n    ${irWGSL}`)
+    imgLoadedOk = false
+  }
+  if (imgLoadedOk) {
+    console.log('  [PASS] image (loaded): color output is RGBA (sampled rgb+a), alpha port unchanged')
+    passed++
+  } else {
+    failed++
+  }
 }
 
 // ===========================================================================

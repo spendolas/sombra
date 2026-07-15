@@ -1,6 +1,7 @@
 /**
  * Image node — loads a user-uploaded image as a sampler2D texture.
- * Outputs: color (vec3), alpha (float).
+ * Outputs: color (color/RGBA — sampled rgb + alpha combined), alpha (float — same alpha,
+ * kept as a separate port for backward-compat with existing graphs wired to it).
  * The image is stored as base64 in params.imageData and bound as a uniform sampler2D.
  */
 
@@ -31,7 +32,7 @@ export const imageNode: NodeDefinition = {
   ],
 
   outputs: [
-    { id: 'color', label: 'Color', type: 'vec3' },
+    { id: 'color', label: 'Color', type: 'color' },
     { id: 'alpha', label: 'Alpha', type: 'float' },
   ],
 
@@ -98,11 +99,11 @@ export const imageNode: NodeDefinition = {
         // Cover: always sample (texture wraps/clamps at edges)
         lines.push(`vec4 ${sampleVar} = texture(${samplerName}, clamp(${fitUV}, 0.0, 1.0));`)
       }
-      lines.push(`vec3 ${outputs.color} = ${sampleVar}.rgb;`)
+      lines.push(`vec4 ${outputs.color} = vec4(${sampleVar}.rgb, ${sampleVar}.a);`)
       lines.push(`float ${outputs.alpha} = ${sampleVar}.a;`)
     } else {
-      // No image loaded — output mid-gray placeholder
-      lines.push(`vec3 ${outputs.color} = vec3(0.5);`)
+      // No image loaded — output mid-gray placeholder (opaque)
+      lines.push(`vec4 ${outputs.color} = vec4(vec3(0.5), 1.0);`)
       lines.push(`float ${outputs.alpha} = 1.0;`)
     }
 
@@ -194,8 +195,8 @@ export const imageNode: NodeDefinition = {
 
       stmts.push(
         raw(
-          `vec3 ${ctx.outputs.color} = ${sampleVar}.rgb;`,
-          `let ${ctx.outputs.color}: vec3f = ${sampleVar}.rgb;`,
+          `vec4 ${ctx.outputs.color} = vec4(${sampleVar}.rgb, ${sampleVar}.a);`,
+          `let ${ctx.outputs.color}: vec4f = vec4f(${sampleVar}.rgb, ${sampleVar}.a);`,
         ),
         raw(
           `float ${ctx.outputs.alpha} = ${sampleVar}.a;`,
@@ -203,9 +204,9 @@ export const imageNode: NodeDefinition = {
         ),
       )
     } else {
-      // No image loaded — mid-gray placeholder
+      // No image loaded — mid-gray placeholder (opaque)
       stmts.push(
-        declare(ctx.outputs.color, 'vec3', construct('vec3', [literal('float', 0.5)])),
+        declare(ctx.outputs.color, 'vec4', construct('vec4', [construct('vec3', [literal('float', 0.5)]), literal('float', 1.0)])),
         declare(ctx.outputs.alpha, 'float', literal('float', 1.0)),
       )
     }
