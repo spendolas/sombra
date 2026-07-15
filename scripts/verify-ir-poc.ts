@@ -1089,6 +1089,49 @@ function verify(
   verify('Pixelate (non-texture)', pixelateNode, g, i, 'loose')
 }
 
+// 39b. Pixelate (texture mode) — RGBA sample assertion
+{
+  const [g, i] = ctx({
+    nodeId: 'pix-mmm334',
+    inputs: {
+      source: 'node_noise_xyz_color',
+      coords: 'node_uv_aaa_uv',
+      pixelSize: 'u_pix_mmm334_pixelSize',
+    },
+    outputs: { color: 'node_pix_mmm334_color', uv: 'node_pix_mmm334_uv' },
+    params: { pixelSize: 8 },
+    textureSamplers: { source: 'u_pass0_tex' },
+  })
+  verify('Pixelate (texture mode)', pixelateNode, g, i, 'loose')
+
+  // RGBA assertion — Spatial: full vec4 sample carries alpha through (see rgba-node-audit.md).
+  testNum++
+  console.log(`\n  ${testNum}. Pixelate (texture mode) — RGBA sample assertion`)
+  let pixTexOk = true
+  const refGLSL = pixelateNode.glsl(g)
+  if (!/vec4 node_pix_mmm334_color = texture\(u_pass0_tex, pxl_screenUV_pix_mmm334\);/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected full vec4 texture() sample (no .rgb). Got:\n    ${refGLSL}`)
+    pixTexOk = false
+  }
+  const irOut = pixelateNode.ir!(i)
+  const irGLSL = lowerNodeOutputToGLSL(irOut).join('\n')
+  if (!/vec4 node_pix_mmm334_color = texture\(u_pass0_tex, pxl_screenUV_pix_mmm334\);/.test(irGLSL)) {
+    console.log(`  [FAIL] IR->GLSL: expected full vec4 sample. Got:\n    ${irGLSL}`)
+    pixTexOk = false
+  }
+  const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
+  if (!/var node_pix_mmm334_color: vec4f = textureSample\(u_pass0_tex_tex, u_pass0_tex_samp, pxl_screenUV_pix_mmm334\);/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected full vec4f sample. Got:\n    ${irWGSL}`)
+    pixTexOk = false
+  }
+  if (pixTexOk) {
+    console.log('  [PASS] pixelate (texture mode): color output is full RGBA sample (vec4/vec4f), alpha carried')
+    passed++
+  } else {
+    failed++
+  }
+}
+
 // 40. Polar Coords (forward)
 {
   const [g, i] = ctx({
