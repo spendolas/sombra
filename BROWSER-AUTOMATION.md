@@ -368,6 +368,13 @@ sombra.connect(alphaSourceId, outputId, 'value', 'alpha')
 
 Both the WebGL2 and WebGPU renderers clear the canvas to transparent (`a = 0`) before drawing, so any non-opaque output composites over the host page — relevant for embeds, shared-link previews, and `viewer.html`. This is separate from the editor's own backdrop (see **Settings Control** — `previewBackground`), which is a view-only checker/solid/none backdrop behind the preview canvas and never affects the rendered/exported output.
 
+### Legacy-graph alpha behavior changes
+
+Nodes whose alpha output changes for pre-RGBA-migration graphs (all previously assumed opaque, `a = 1.0` throughout):
+
+- `invert`, `posterize`, `brightness_contrast` — now edit alpha along with RGB by default. Set `preserveAlpha: true` to restore the old opaque-passthrough behavior (only RGB channels are affected; alpha passes through unchanged).
+- `dither` (`pixel_grid` template) — masks color by multiplying with the computed shape/dither mask (`result = color * mask`), which now also multiplies alpha. A legacy opaque dither graph gets transparent holes wherever the mask is `0` (masked-out cells). This is by-design (RGBA) and has **no `preserveAlpha` opt-out** — if opaque output is required, follow the dither node with an explicit alpha override (e.g. wire a constant `1.0` into the downstream Fragment Output's `alpha` with `alphaOp: 'replace'`).
+
 ---
 
 ## Auto-Compilation
