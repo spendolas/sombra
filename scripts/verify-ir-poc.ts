@@ -1035,6 +1035,50 @@ function verify(
   verify('Tile (no mirror)', tileNode, g, i)
 }
 
+// 36b. Tile (no mirror, texture mode) — RGBA sample assertion
+{
+  const [g, i] = ctx({
+    nodeId: 'tile-jjj001',
+    inputs: {
+      source: 'node_noise_xyz_color',
+      coords: 'node_uv_aaa_uv',
+      countX: 'u_tile_jjj001_countX',
+      countY: 'u_tile_jjj001_countY',
+    },
+    outputs: { color: 'node_tile_jjj001_color', uv: 'node_tile_jjj001_uv' },
+    params: { countX: 4, countY: 4, mirror: 'none' },
+    textureSamplers: { source: 'u_pass0_tex' },
+  })
+  verify('Tile (no mirror, texture mode)', tileNode, g, i, 'loose')
+
+  // RGBA assertion — Spatial: full vec4 sample carries alpha through (see rgba-node-audit.md).
+  testNum++
+  console.log(`\n  ${testNum}. Tile (no mirror, texture mode) — RGBA sample assertion`)
+  let tileTexOk = true
+  const refGLSL = tileNode.glsl(g)
+  if (!/vec4 node_tile_jjj001_color = texture\(u_pass0_tex, node_tile_jjj001_uv\);/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected full vec4 texture() sample (no .rgb). Got:\n    ${refGLSL}`)
+    tileTexOk = false
+  }
+  const irOut = tileNode.ir!(i)
+  const irGLSL = lowerNodeOutputToGLSL(irOut).join('\n')
+  if (!/vec4 node_tile_jjj001_color = texture\(u_pass0_tex, node_tile_jjj001_uv\);/.test(irGLSL)) {
+    console.log(`  [FAIL] IR->GLSL: expected full vec4 sample. Got:\n    ${irGLSL}`)
+    tileTexOk = false
+  }
+  const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
+  if (!/var node_tile_jjj001_color: vec4f = textureSample\(u_pass0_tex_tex, u_pass0_tex_samp, node_tile_jjj001_uv\);/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected full vec4f sample. Got:\n    ${irWGSL}`)
+    tileTexOk = false
+  }
+  if (tileTexOk) {
+    console.log('  [PASS] tile (texture mode): color output is full RGBA sample (vec4/vec4f), alpha carried')
+    passed++
+  } else {
+    failed++
+  }
+}
+
 // 37. Tile (mirror XY) — uses raw() with ternaries
 {
   const [g, i] = ctx({
