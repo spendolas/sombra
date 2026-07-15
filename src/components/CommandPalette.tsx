@@ -45,21 +45,21 @@ export function CommandPalette({ onClose, mousePosition }: CommandPaletteProps) 
   const allNodes = useMemo(() => nodeRegistry.getAll(), [])
   const recentsSet = useMemo(() => new Set(recents), [recents])
 
-  // Search results, ranked by match tier first, then recency within a tier.
-  // Tier (label > category > description) dominates so a recently-used node
-  // that only matches on its description can't leap above a near-exact label
-  // match. The recents boost only reorders items that match the SAME way.
+  // Ranked purely by match quality (searchNodes already encodes field priority
+  // + quality tier in the score). Recency is only a tiebreaker between
+  // comparable matches — when two results are within one quality tier of each
+  // other, the recently-used one wins. It never lifts a weaker match above a
+  // clearly stronger one (e.g. a recent mid-word match can't beat a prefix).
   const results = useMemo(() => {
     const raw = searchNodes(query, allNodes)
     if (!query.trim() || recentsSet.size === 0) return raw
-    const tier = (f: string) => (f === 'label' ? 0 : f === 'category' ? 1 : 2)
-    const RECENT_BOOST = 3
+    const COMPARABLE = 0.9 // < the 1.0 gap between adjacent quality tiers
     return [...raw].sort((a, b) => {
-      const t = tier(a.matchField) - tier(b.matchField)
-      if (t !== 0) return t
-      const sa = a.score - (recentsSet.has(a.definition.type) ? RECENT_BOOST : 0)
-      const sb = b.score - (recentsSet.has(b.definition.type) ? RECENT_BOOST : 0)
-      return sa - sb
+      if (Math.abs(a.score - b.score) >= COMPARABLE) return a.score - b.score
+      const ra = recentsSet.has(a.definition.type) ? 0 : 1
+      const rb = recentsSet.has(b.definition.type) ? 0 : 1
+      if (ra !== rb) return ra - rb
+      return a.score - b.score
     })
   }, [query, allNodes, recentsSet])
 
