@@ -7,6 +7,7 @@ import type { NodeParameter } from '../nodes/types'
 import { useGraphStore } from '../stores/graphStore'
 import { SombraSlider } from '@/components/ui/sombra-slider'
 import { Label } from '@/components/ui/label'
+import { RgbaColorPicker, type Rgba } from '@/components/RgbaColorPicker'
 import {
   Select,
   SelectContent,
@@ -79,7 +80,7 @@ export function NodeParameters({ nodeId, parameters, currentValues, connectedInp
             {param.type === 'color' && (
               <ColorInput
                 param={param}
-                value={(currentValues[param.id] as [number, number, number]) ?? param.default}
+                value={(currentValues[param.id] as number[]) ?? param.default}
                 onChange={(value) => handleChange(param.id, value)}
               />
             )}
@@ -129,8 +130,8 @@ export function FloatSlider({ param, value, onChange, disabled }: FloatSliderPro
 
 interface ColorInputProps {
   param: NodeParameter
-  value: [number, number, number]
-  onChange: (value: [number, number, number]) => void
+  value: number[]
+  onChange: (value: Rgba) => void
 }
 
 interface AnchorGridProps {
@@ -197,30 +198,12 @@ function EnumSelect({ param, value, onChange }: EnumSelectProps) {
 }
 
 function ColorInput({ param, value, onChange }: ColorInputProps) {
-  const [r, g, b] = value
-
-  // Convert 0-1 float to 0-255 hex
-  const toHex = (v: number) => Math.round(v * 255).toString(16).padStart(2, '0')
-  const hexColor = `#${toHex(r)}${toHex(g)}${toHex(b)}`
-
-  const handleColorChange = (hex: string) => {
-    const r = parseInt(hex.slice(1, 3), 16) / 255
-    const g = parseInt(hex.slice(3, 5), 16) / 255
-    const b = parseInt(hex.slice(5, 7), 16) / 255
-    onChange([r, g, b])
-  }
+  // Old saves may store a 3-tuple (RGB, pre-alpha-migration); pad with a=1.
+  const rgba: Rgba = [value[0] ?? 0, value[1] ?? 0, value[2] ?? 0, value[3] ?? 1]
 
   return (
     <div className={ds.colorInput.root}>
-      <Label className={ds.colorInput.label}>
-        {param.label}
-      </Label>
-      <input
-        type="color"
-        value={hexColor}
-        onChange={(e) => handleColorChange(e.target.value)}
-        className={ds.colorInput.input}
-      />
+      <RgbaColorPicker label={param.label} value={rgba} onChange={onChange} />
     </div>
   )
 }
