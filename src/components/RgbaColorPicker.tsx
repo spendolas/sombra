@@ -289,22 +289,26 @@ export function RgbaColorPicker({ value, onChange, label, className, mode = 'pop
         style={{ backgroundImage: 'linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)' }}
       />
 
-      {/* Alpha slider */}
-      <div className={cn(ds.colorPicker.alphaSlider, 'relative w-full overflow-hidden')} style={CHECKER_STYLE}>
-        <div
-          className="absolute inset-0"
-          style={{ backgroundImage: `linear-gradient(to right, ${rgbaCss(r, g, b, 0)}, ${rgbaCss(r, g, b, 1)})` }}
-        />
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.01}
-          value={a}
-          onChange={(e) => handleAlphaChange(Number(e.target.value))}
-          className={RANGE_CLASS}
-        />
-      </div>
+      {/* Alpha slider — checker + color gradient stacked directly on the input
+          (same structure as the hue slider) so the thumb floats above the track
+          and is never clipped by a wrapper's overflow. */}
+      <input
+        type="range"
+        min={0}
+        max={1}
+        step={0.01}
+        value={a}
+        onChange={(e) => handleAlphaChange(Number(e.target.value))}
+        className={cn(RANGE_CLASS, ds.colorPicker.alphaSlider, 'w-full')}
+        style={{
+          backgroundImage:
+            `linear-gradient(to right, ${rgbaCss(r, g, b, 0)}, ${rgbaCss(r, g, b, 1)}), ` +
+            CHECKER_STYLE.backgroundImage,
+          backgroundSize: '100% 100%, 8px 8px, 8px 8px, 8px 8px, 8px 8px',
+          backgroundPosition: '0 0, 0 0, 0 4px, 4px -4px, -4px 0px',
+          backgroundRepeat: 'no-repeat, repeat, repeat, repeat, repeat',
+        }}
+      />
 
       <div className="flex flex-row items-center justify-between text-param text-fg-subtle">
         <span>RGBA</span>
@@ -333,7 +337,10 @@ export function RgbaColorPicker({ value, onChange, label, className, mode = 'pop
       )}
 
       {inline && (
-        <div className={cn(PANEL_BASE, 'w-full')}>
+        // Inline (node body / properties panel): the picker already sits inside
+        // a surface, so drop the panel's own fill/border/padding to avoid a
+        // redundant card-on-card — keep only the vertical layout + gap.
+        <div className={cn(ds.colorPicker.panel, 'flex flex-col gap-sm w-full bg-transparent border-0 p-0 overflow-visible')}>
           {panelContent}
         </div>
       )}
