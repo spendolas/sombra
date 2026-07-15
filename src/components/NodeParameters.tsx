@@ -212,17 +212,18 @@ interface BoolCheckboxProps {
 
 function BoolCheckbox({ param, value, onChange }: BoolCheckboxProps) {
   return (
-    <div className={`${ds.enumSelect.root} nodrag nowheel`}>
-      <label className={`flex flex-row items-center gap-sm cursor-pointer ${ds.enumSelect.label}`}>
-        <input
-          type="checkbox"
-          checked={value}
-          onChange={(e) => onChange(e.target.checked)}
-          className="cursor-pointer accent-indigo"
-        />
-        {param.label}
-      </label>
-    </div>
+    <label className={ds.boolCheckbox.root}>
+      <input
+        type="checkbox"
+        checked={value}
+        onChange={(e) => onChange(e.target.checked)}
+        className="sr-only"
+      />
+      <span className={value ? ds.boolCheckbox.boxChecked : ds.boolCheckbox.box}>
+        {value && <span className={ds.boolCheckbox.indicator}>✓</span>}
+      </span>
+      <span className={ds.boolCheckbox.label}>{param.label}</span>
+    </label>
   )
 }
 
