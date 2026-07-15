@@ -1118,6 +1118,57 @@ function verify(
   verify('Warp (non-texture, clamp)', warpNode, g, i, 'loose')
 }
 
+// 38b. Warp (texture mode, clamp edge) — RGBA sample assertion
+{
+  const [g, i] = ctx({
+    nodeId: 'warp-lll223',
+    inputs: {
+      source: 'node_noise_xyz_color',
+      coords: 'node_uv_aaa_uv',
+      phase: 'u_warp_lll223_phase',
+      srt_scale: 'u_warp_lll223_srt_scale',
+      srt_translateX: 'u_warp_lll223_srt_translateX',
+      srt_translateY: 'u_warp_lll223_srt_translateY',
+      strength: 'u_warp_lll223_strength',
+      seed: 'u_warp_lll223_seed',
+    },
+    outputs: { color: 'node_warp_lll223_color', warped: 'node_warp_lll223_warped', warpedPhase: 'node_warp_lll223_warpedPhase' },
+    params: {
+      noiseType: 'value', warpDepth: '2', edge: 'clamp',
+      strength: 0.3, seed: 12345, srt_scale: 4, srt_translateX: 0, srt_translateY: 0,
+    },
+    textureSamplers: { source: 'u_pass0_tex' },
+  })
+  verify('Warp (texture mode, clamp)', warpNode, g, i, 'loose')
+
+  // RGBA assertion — Spatial: full vec4 sample carries alpha through (see rgba-node-audit.md).
+  testNum++
+  console.log(`\n  ${testNum}. Warp (texture mode, clamp) — RGBA sample assertion`)
+  let warpTexOk = true
+  const refGLSL = warpNode.glsl(g)
+  if (!/vec4 node_warp_lll223_color = texture\(u_pass0_tex, dw_edge_warp_lll223\);/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected full vec4 texture() sample (no .rgb). Got:\n    ${refGLSL}`)
+    warpTexOk = false
+  }
+  const irOut = warpNode.ir!(i)
+  const irGLSL = lowerNodeOutputToGLSL(irOut).join('\n')
+  if (!/vec4 node_warp_lll223_color = texture\(u_pass0_tex, dw_edge_warp_lll223\);/.test(irGLSL)) {
+    console.log(`  [FAIL] IR->GLSL: expected full vec4 sample. Got:\n    ${irGLSL}`)
+    warpTexOk = false
+  }
+  const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
+  if (!/var node_warp_lll223_color: vec4f = textureSample\(u_pass0_tex_tex, u_pass0_tex_samp, dw_edge_warp_lll223\);/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected full vec4f sample. Got:\n    ${irWGSL}`)
+    warpTexOk = false
+  }
+  if (warpTexOk) {
+    console.log('  [PASS] warp (texture mode): color output is full RGBA sample (vec4/vec4f), alpha carried')
+    passed++
+  } else {
+    failed++
+  }
+}
+
 // 39. Pixelate (non-texture)
 {
   const [g, i] = ctx({
