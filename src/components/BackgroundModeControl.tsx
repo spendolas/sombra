@@ -85,6 +85,7 @@ export function BackgroundModeControl({ className }: BackgroundModeControlProps)
       {previewBackground.mode === 'solid' && (
         <RgbaColorPicker
           mode="popover"
+          showAlpha={false}
           value={cssColorToRgba(previewBackground.color)}
           onChange={(rgba) => setPreviewBackground({ color: rgbaToCssColor(rgba) })}
         />

@@ -28,6 +28,12 @@ interface RgbaColorPickerProps {
   className?: string
   /** 'popover' (default) or 'inline' — see file header. */
   mode?: 'inline' | 'popover'
+  /**
+   * Whether to show the alpha slider (default true). Set false where the
+   * context has no use for opacity (e.g. an opaque solid background) — the
+   * alpha row is hidden and the emitted color is forced fully opaque.
+   */
+  showAlpha?: boolean
 }
 
 interface Hsv {
@@ -113,7 +119,7 @@ const TRIGGER_GAP = 4
  */
 const PANEL_BASE = cn(ds.colorPicker.panel, 'overflow-visible')
 
-export function RgbaColorPicker({ value, onChange, label, className, mode = 'popover' }: RgbaColorPickerProps) {
+export function RgbaColorPicker({ value, onChange, label, className, mode = 'popover', showAlpha = true }: RgbaColorPickerProps) {
   const inline = mode === 'inline'
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
@@ -210,7 +216,8 @@ export function RgbaColorPicker({ value, onChange, label, className, mode = 'pop
     [onChange]
   )
 
-  const a = value[3]
+  // When alpha is disabled, always treat/emit the color as fully opaque.
+  const a = showAlpha ? value[3] : 1
 
   const handleSvPointer = useCallback(
     (e: React.PointerEvent) => {
@@ -291,29 +298,32 @@ export function RgbaColorPicker({ value, onChange, label, className, mode = 'pop
 
       {/* Alpha slider — checker + color gradient stacked directly on the input
           (same structure as the hue slider) so the thumb floats above the track
-          and is never clipped by a wrapper's overflow. */}
-      <input
-        type="range"
-        min={0}
-        max={1}
-        step={0.01}
-        value={a}
-        onChange={(e) => handleAlphaChange(Number(e.target.value))}
-        className={cn(RANGE_CLASS, ds.colorPicker.alphaSlider, 'w-full')}
-        style={{
-          backgroundImage:
-            `linear-gradient(to right, ${rgbaCss(r, g, b, 0)}, ${rgbaCss(r, g, b, 1)}), ` +
-            CHECKER_STYLE.backgroundImage,
-          backgroundSize: '100% 100%, 8px 8px, 8px 8px, 8px 8px, 8px 8px',
-          backgroundPosition: '0 0, 0 0, 0 4px, 4px -4px, -4px 0px',
-          backgroundRepeat: 'no-repeat, repeat, repeat, repeat, repeat',
-        }}
-      />
+          and is never clipped by a wrapper's overflow. Omitted when the context
+          has no use for opacity. */}
+      {showAlpha && (
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.01}
+          value={a}
+          onChange={(e) => handleAlphaChange(Number(e.target.value))}
+          className={cn(RANGE_CLASS, ds.colorPicker.alphaSlider, 'w-full')}
+          style={{
+            backgroundImage:
+              `linear-gradient(to right, ${rgbaCss(r, g, b, 0)}, ${rgbaCss(r, g, b, 1)}), ` +
+              CHECKER_STYLE.backgroundImage,
+            backgroundSize: '100% 100%, 8px 8px, 8px 8px, 8px 8px, 8px 8px',
+            backgroundPosition: '0 0, 0 0, 0 4px, 4px -4px, -4px 0px',
+            backgroundRepeat: 'no-repeat, repeat, repeat, repeat, repeat',
+          }}
+        />
+      )}
 
       <div className="flex flex-row items-center justify-between text-param text-fg-subtle">
-        <span>RGBA</span>
+        <span>{showAlpha ? 'RGBA' : 'RGB'}</span>
         <span className={ds.colorPicker.readout}>
-          {Math.round(r * 255)}, {Math.round(g * 255)}, {Math.round(b * 255)}, {a.toFixed(2)}
+          {Math.round(r * 255)}, {Math.round(g * 255)}, {Math.round(b * 255)}{showAlpha ? `, ${a.toFixed(2)}` : ''}
         </span>
       </div>
     </>
