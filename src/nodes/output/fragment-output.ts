@@ -49,8 +49,11 @@ export const fragmentOutputNode: NodeDefinition = {
     {
       id: 'color',
       label: 'Color',
-      type: 'vec4',
-      default: [0.0, 0.0, 0.0, 1.0], // opaque black; alpha auto-derives from a wired vec4
+      type: 'color',
+      default: [0.0, 0.0, 0.0, 1.0], // opaque black. `color` (not raw vec4): non-alpha
+      // sources (float/vec2/vec3) coerce with alpha forced to 1 instead of the
+      // float->vec4 splat that leaked the value into alpha (transparent-by-brightness).
+      // Genuine color/vec4 sources still pass their real alpha through unchanged.
     },
   ],
 
