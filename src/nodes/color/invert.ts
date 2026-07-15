@@ -12,25 +12,26 @@ export const invertNode: NodeDefinition = {
   description: 'Invert color channels',
 
   inputs: [
-    { id: 'color', label: 'Color', type: 'vec3', default: [0.5, 0.5, 0.5] },
+    { id: 'color', label: 'Color', type: 'color', default: [0.5, 0.5, 0.5] },
   ],
 
   outputs: [
-    { id: 'result', label: 'Result', type: 'vec3' },
+    { id: 'result', label: 'Result', type: 'color' },
   ],
 
+  // Alpha is inverted too, by design — this is a channel transform (see rgba-node-audit.md).
   glsl: (ctx) => {
     const { inputs, outputs } = ctx
-    return `vec3 ${outputs.result} = vec3(1.0) - ${inputs.color};`
+    return `vec4 ${outputs.result} = vec4(1.0) - ${inputs.color};`
   },
 
   ir: (ctx) => ({
     statements: [
-      declare(ctx.outputs.result, 'vec3',
+      declare(ctx.outputs.result, 'vec4',
         binary('-',
-          construct('vec3', [literal('float', 1.0)]),
+          construct('vec4', [literal('float', 1.0)]),
           variable(ctx.inputs.color),
-          'vec3',
+          'vec4',
         ),
       ),
     ],

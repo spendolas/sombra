@@ -482,6 +482,33 @@ function verify(
     params: {},
   })
   verify('Invert', invertNode, g, i)
+
+  // RGBA assertion — Channel transform: `vec4(1.0) - color` inverts alpha too, by design.
+  testNum++
+  console.log(`\n  ${testNum}. Invert — RGBA channel-transform assertion`)
+  const refGLSL = invertNode.glsl(g)
+  let invOk = true
+  if (!/vec4 node_inv_jjj000_result = vec4\(1\.0\) - node_noise_xyz_color;/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected vec4(1.0) - color (inverts alpha too). Got:\n    ${refGLSL}`)
+    invOk = false
+  }
+  const irOut = invertNode.ir!(i)
+  const irGLSL = lowerNodeOutputToGLSL(irOut).join('\n')
+  if (!/vec4 node_inv_jjj000_result = vec4\(1\.0\) - node_noise_xyz_color;/.test(irGLSL)) {
+    console.log(`  [FAIL] IR->GLSL: expected vec4(1.0) - color. Got:\n    ${irGLSL}`)
+    invOk = false
+  }
+  const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
+  if (!/var node_inv_jjj000_result: vec4f = \(vec4f\(1\.0\) - node_noise_xyz_color\);/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected vec4f(1.0) - color. Got:\n    ${irWGSL}`)
+    invOk = false
+  }
+  if (invOk) {
+    console.log('  [PASS] invert: color/result are RGBA (vec4/vec4f), alpha inverted too')
+    passed++
+  } else {
+    failed++
+  }
 }
 
 // 13. Grayscale (Luminance)
