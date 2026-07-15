@@ -99,6 +99,13 @@ export function NodeParameters({ nodeId, parameters, currentValues, connectedInp
                 />
               )
             )}
+            {param.type === 'bool' && (
+              <BoolCheckbox
+                param={param}
+                value={(currentValues[param.id] as boolean) ?? (param.default as boolean)}
+                onChange={(value) => handleChange(param.id, value)}
+              />
+            )}
           </div>
         )
       })}
@@ -193,6 +200,28 @@ function EnumSelect({ param, value, onChange }: EnumSelectProps) {
           ))}
         </SelectContent>
       </Select>
+    </div>
+  )
+}
+
+interface BoolCheckboxProps {
+  param: NodeParameter
+  value: boolean
+  onChange: (value: boolean) => void
+}
+
+function BoolCheckbox({ param, value, onChange }: BoolCheckboxProps) {
+  return (
+    <div className={`${ds.enumSelect.root} nodrag nowheel`}>
+      <label className={`flex flex-row items-center gap-sm cursor-pointer ${ds.enumSelect.label}`}>
+        <input
+          type="checkbox"
+          checked={value}
+          onChange={(e) => onChange(e.target.checked)}
+          className="cursor-pointer accent-indigo"
+        />
+        {param.label}
+      </label>
     </div>
   )
 }

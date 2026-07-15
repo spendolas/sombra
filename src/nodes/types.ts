@@ -30,11 +30,13 @@ export interface PortDefinition {
 export interface NodeParameter {
   id: string                    // Unique identifier (e.g., "scale", "strength")
   label: string                 // Display name
-  type: 'float' | 'vec2' | 'vec3' | 'color' | 'enum'
+  type: 'float' | 'vec2' | 'vec3' | 'color' | 'enum' | 'bool'
   // `color` params are RGBA (vec4-backed) — default may be a legacy 3-tuple
   // (padded to opaque a=1.0 at uniform-upload time, see padColorUniformValue)
   // or a full 4-tuple RGBA value.
-  default: number | string | [number, number] | [number, number, number] | [number, number, number, number]
+  // `bool` params store a JS boolean, always `updateMode: 'recompile'` — read via
+  // ctx.params.<id> in glsl()/ir() to branch codegen, like `enum`. Never a uniform.
+  default: number | string | boolean | [number, number] | [number, number, number] | [number, number, number, number]
   min?: number                  // For numeric types
   max?: number                  // For numeric types
   step?: number                 // Step increment for sliders
