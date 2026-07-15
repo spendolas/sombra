@@ -531,6 +531,33 @@ function verify(
     params: { levels: 4 },
   })
   verify('Posterize', posterizeNode, g, i)
+
+  // RGBA assertion — Channel transform: quantization formula applies to all 4 channels (incl. alpha).
+  testNum++
+  console.log(`\n  ${testNum}. Posterize — RGBA channel-transform assertion`)
+  const refGLSL = posterizeNode.glsl(g)
+  let postOk = true
+  if (!/^vec4 node_post_lll222_result = floor\(/.test(refGLSL) || /vec3/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected vec4 floor(...) declaration, no vec3 remnants. Got:\n    ${refGLSL}`)
+    postOk = false
+  }
+  const irOut = posterizeNode.ir!(i)
+  const irGLSL = lowerNodeOutputToGLSL(irOut).join('\n')
+  if (!/^vec4 node_post_lll222_result = floor\(/.test(irGLSL) || /vec3/.test(irGLSL)) {
+    console.log(`  [FAIL] IR->GLSL: expected vec4 floor(...) declaration, no vec3 remnants. Got:\n    ${irGLSL}`)
+    postOk = false
+  }
+  const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
+  if (!/^var node_post_lll222_result: vec4f = /.test(irWGSL) || /vec3f/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected vec4f declaration, no vec3f remnants. Got:\n    ${irWGSL}`)
+    postOk = false
+  }
+  if (postOk) {
+    console.log('  [PASS] posterize: color/result are RGBA (vec4/vec4f), quantization covers alpha')
+    passed++
+  } else {
+    failed++
+  }
 }
 
 // 15. Checkerboard

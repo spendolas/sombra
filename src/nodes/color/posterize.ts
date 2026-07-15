@@ -12,11 +12,11 @@ export const posterizeNode: NodeDefinition = {
   description: 'Quantize color to N discrete levels',
 
   inputs: [
-    { id: 'color', label: 'Color', type: 'vec3', default: [0.5, 0.5, 0.5] },
+    { id: 'color', label: 'Color', type: 'color', default: [0.5, 0.5, 0.5] },
   ],
 
   outputs: [
-    { id: 'result', label: 'Result', type: 'vec3' },
+    { id: 'result', label: 'Result', type: 'color' },
   ],
 
   params: [
@@ -27,21 +27,22 @@ export const posterizeNode: NodeDefinition = {
     },
   ],
 
+  // Quantization applies to all four channels, including alpha (channel transform — see rgba-node-audit.md).
   glsl: (ctx) => {
     const { inputs, outputs } = ctx
-    return `vec3 ${outputs.result} = floor(${inputs.color} * ${inputs.levels}) / (${inputs.levels} - 1.0);`
+    return `vec4 ${outputs.result} = floor(${inputs.color} * ${inputs.levels}) / (${inputs.levels} - 1.0);`
   },
 
   ir: (ctx) => ({
     statements: [
       // floor(color * levels) / (levels - 1.0)
-      declare(ctx.outputs.result, 'vec3',
+      declare(ctx.outputs.result, 'vec4',
         binary('/',
           call('floor', [
-            binary('*', variable(ctx.inputs.color), variable(ctx.inputs.levels), 'vec3'),
-          ], 'vec3'),
+            binary('*', variable(ctx.inputs.color), variable(ctx.inputs.levels), 'vec4'),
+          ], 'vec4'),
           binary('-', variable(ctx.inputs.levels), literal('float', 1.0), 'float'),
-          'vec3',
+          'vec4',
         ),
       ),
     ],
