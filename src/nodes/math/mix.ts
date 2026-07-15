@@ -15,13 +15,13 @@ export const mixNode: NodeDefinition = {
     {
       id: 'a',
       label: 'A',
-      type: 'vec3',
+      type: 'color',
       default: [0.0, 0.0, 0.0],
     },
     {
       id: 'b',
       label: 'B',
-      type: 'vec3',
+      type: 'color',
       default: [1.0, 1.0, 1.0],
     },
   ],
@@ -30,7 +30,7 @@ export const mixNode: NodeDefinition = {
     {
       id: 'result',
       label: 'Result',
-      type: 'vec3',
+      type: 'color',
     },
   ],
 
@@ -51,17 +51,18 @@ export const mixNode: NodeDefinition = {
   glsl: (ctx) => {
     const { inputs, outputs } = ctx
     // inputs.factor is always a GLSL expression (connectable param)
-    return `vec3 ${outputs.result} = mix(${inputs.a}, ${inputs.b}, ${inputs.factor});`
+    // Blend: interpolates the full vec4, blending alpha too (see rgba-node-audit.md).
+    return `vec4 ${outputs.result} = mix(${inputs.a}, ${inputs.b}, ${inputs.factor});`
   },
 
   ir: (ctx) => ({
     statements: [
-      declare(ctx.outputs.result, 'vec3',
+      declare(ctx.outputs.result, 'vec4',
         call('mix', [
           variable(ctx.inputs.a),
           variable(ctx.inputs.b),
           variable(ctx.inputs.factor),
-        ], 'vec3'),
+        ], 'vec4'),
       ),
     ],
     uniforms: [],

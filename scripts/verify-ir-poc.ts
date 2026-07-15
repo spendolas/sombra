@@ -361,6 +361,33 @@ function verify(
     params: { factor: 0.5 },
   })
   verify('Mix', mixNode, g, i)
+
+  // RGBA assertion — Blend: both color inputs are RGBA, mix() blends alpha too via `factor`.
+  testNum++
+  console.log(`\n  ${testNum}. Mix — RGBA blend assertion`)
+  const refGLSL = mixNode.glsl(g)
+  let mixOk = true
+  if (!/vec4 node_mix_abc123_result = mix\(node_noise_xyz_value, node_color_def_color, u_mix_abc123_factor\);/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected vec4 mix() assignment (blends alpha). Got:\n    ${refGLSL}`)
+    mixOk = false
+  }
+  const irOut = mixNode.ir!(i)
+  const irGLSL = lowerNodeOutputToGLSL(irOut).join('\n')
+  if (!/vec4 node_mix_abc123_result = mix\(node_noise_xyz_value, node_color_def_color, u_mix_abc123_factor\);/.test(irGLSL)) {
+    console.log(`  [FAIL] IR->GLSL: expected vec4 mix() assignment. Got:\n    ${irGLSL}`)
+    mixOk = false
+  }
+  const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
+  if (!/var node_mix_abc123_result: vec4f = mix\(node_noise_xyz_value, node_color_def_color, u_mix_abc123_factor\);/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected vec4f mix() assignment. Got:\n    ${irWGSL}`)
+    mixOk = false
+  }
+  if (mixOk) {
+    console.log('  [PASS] mix: a/b/result are RGBA (vec4/vec4f), factor blends alpha')
+    passed++
+  } else {
+    failed++
+  }
 }
 
 // 2. Clamp
