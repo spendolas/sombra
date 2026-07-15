@@ -90,11 +90,11 @@ export const reededGlassNode: NodeDefinition = {
   description: 'Cylindrical lens distortion through ribbed glass',
 
   inputs: [
-    { id: 'source', label: 'Source', type: 'vec3', textureInput: true, default: [0, 0, 0] },
+    { id: 'source', label: 'Source', type: 'color', textureInput: true, default: [0, 0, 0] },
   ],
 
   outputs: [
-    { id: 'color', label: 'Color', type: 'vec3' },
+    { id: 'color', label: 'Color', type: 'color' },
     { id: 'coords', label: 'Coords', type: 'vec2' },
   ],
 
@@ -346,23 +346,24 @@ export const reededGlassNode: NodeDefinition = {
         lines.push(`vec2 ${sampleUV} = gl_FragCoord.xy / u_viewport + vec2(0.0, ${disp});`)
       }
 
-      // Frosted glass: hash-based jitter blur (grainy texture)
+      // Frosted glass: hash-based jitter blur (grainy texture).
+      // Full RGBA accumulation/sample — alpha rides with the pixel (see rgba-node-audit.md).
       const frostVar = `rg_frost_${id}`
       lines.push(`float ${frostVar} = ${inputs.frost};`)
-      lines.push(`vec3 ${outputs.color};`)
+      lines.push(`vec4 ${outputs.color};`)
       lines.push(`if (${frostVar} > 0.001) {`)
-      lines.push(`  vec3 rg_acc_${id} = vec3(0.0);`)
+      lines.push(`  vec4 rg_acc_${id} = vec4(0.0);`)
       lines.push(`  float rg_frad_${id} = ${frostVar} * 0.02;`)
       lines.push(`  for (int rg_i_${id} = 0; rg_i_${id} < 8; rg_i_${id}++) {`)
       lines.push(`    vec2 rg_jit_${id} = reedHash(${sampleUV} * 0.1 + float(rg_i_${id}) * 7.31) * rg_frad_${id};`)
-      lines.push(`    rg_acc_${id} += texture(${samplerName}, ${sampleUV} + rg_jit_${id}).rgb;`)
+      lines.push(`    rg_acc_${id} += texture(${samplerName}, ${sampleUV} + rg_jit_${id});`)
       lines.push(`  }`)
       lines.push(`  ${outputs.color} = rg_acc_${id} / 8.0;`)
       lines.push(`} else {`)
-      lines.push(`  ${outputs.color} = texture(${samplerName}, ${sampleUV}).rgb;`)
+      lines.push(`  ${outputs.color} = texture(${samplerName}, ${sampleUV});`)
       lines.push(`}`)
     } else {
-      lines.push(`vec3 ${outputs.color} = ${inputs.source};`)
+      lines.push(`vec4 ${outputs.color} = ${inputs.source};`)
     }
 
     return lines.join('\n  ')
@@ -665,30 +666,31 @@ export const reededGlassNode: NodeDefinition = {
         )
       }
 
-      // Frosted glass: hash-based jitter blur (8 directional samples)
+      // Frosted glass: hash-based jitter blur (8 directional samples).
+      // Full RGBA accumulation/sample — alpha rides with the pixel (see rgba-node-audit.md).
       const frostVar = `rg_frost_${id}`
       stmts.push(declare(frostVar, 'float', variable(ctx.inputs.frost)))
 
       // Use raw() for the conditional frost blur — complex control flow with loop
       const frostStmts: IRStmt[] = [
-        raw(`vec3 ${ctx.outputs.color};
+        raw(`vec4 ${ctx.outputs.color};
   if (${frostVar} > 0.001) {
-    vec3 rg_acc_${id} = vec3(0.0);
+    vec4 rg_acc_${id} = vec4(0.0);
     float rg_frad_${id} = ${frostVar} * 0.02;
     for (int rg_i_${id} = 0; rg_i_${id} < 8; rg_i_${id}++) {
       vec2 rg_jit_${id} = reedHash(${sampleUV} * 0.1 + float(rg_i_${id}) * 7.31) * rg_frad_${id};
-      rg_acc_${id} += texture(${samplerName}, ${sampleUV} + rg_jit_${id}).rgb;
+      rg_acc_${id} += texture(${samplerName}, ${sampleUV} + rg_jit_${id});
     }
     ${ctx.outputs.color} = rg_acc_${id} / 8.0;
   } else {
-    ${ctx.outputs.color} = texture(${samplerName}, ${sampleUV}).rgb;
+    ${ctx.outputs.color} = texture(${samplerName}, ${sampleUV});
   }`),
       ]
       stmts.push(...frostStmts)
     } else {
       // Non-texture fallback: passthrough source input
       stmts.push(
-        declare(ctx.outputs.color, 'vec3', variable(ctx.inputs.source)),
+        declare(ctx.outputs.color, 'vec4', variable(ctx.inputs.source)),
       )
     }
 

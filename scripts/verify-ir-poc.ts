@@ -1360,6 +1360,82 @@ function verify(
   verify('Reeded Glass (straight, non-texture)', reededGlassNode, g, i, 'loose')
 }
 
+// 44b. Reeded Glass (straight, vertical, texture mode) — RGBA sample/accumulate assertion
+{
+  const [g, i] = ctx({
+    nodeId: 'reed-rrr889',
+    inputs: {
+      source: 'node_noise_xyz_color',
+      coords: 'node_uv_aaa_uv',
+      ribWidth: 'u_reed_rrr889_ribWidth',
+      ior: 'u_reed_rrr889_ior',
+      curvature: 'u_reed_rrr889_curvature',
+      frost: 'u_reed_rrr889_frost',
+      srt_scaleX: 'u_reed_rrr889_srt_scaleX',
+      srt_scaleY: 'u_reed_rrr889_srt_scaleY',
+      srt_rotate: 'u_reed_rrr889_srt_rotate',
+      srt_translateX: 'u_reed_rrr889_srt_translateX',
+      srt_translateY: 'u_reed_rrr889_srt_translateY',
+    },
+    outputs: { color: 'node_reed_rrr889_color', coords: 'node_reed_rrr889_coords' },
+    params: {
+      direction: 'vertical', ribType: 'straight',
+      ribWidth: 80, ior: 1.5, curvature: 0.8, frost: 0,
+      srt_scaleX: 1, srt_scaleY: 1, srt_rotate: 0, srt_translateX: 0, srt_translateY: 0,
+    },
+    textureSamplers: { source: 'u_pass0_tex' },
+  })
+  verify('Reeded Glass (straight, texture mode)', reededGlassNode, g, i, 'loose')
+
+  // RGBA assertion — Spatial: both the frost-blur accumulation loop and the plain sample
+  // widen to full vec4 (both branches are emitted unconditionally; frost is a runtime
+  // uniform, not a compile-time branch) — alpha rides with the pixel (see rgba-node-audit.md).
+  testNum++
+  console.log(`\n  ${testNum}. Reeded Glass (texture mode) — RGBA sample/accumulate assertion`)
+  let reedTexOk = true
+  const refGLSL = reededGlassNode.glsl(g)
+  if (!/vec4 node_reed_rrr889_color;/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected vec4 color declaration. Got:\n    ${refGLSL}`)
+    reedTexOk = false
+  }
+  if (!/vec4 rg_acc_reed_rrr889 = vec4\(0\.0\);/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected vec4 frost accumulator. Got:\n    ${refGLSL}`)
+    reedTexOk = false
+  }
+  if (!/rg_acc_reed_rrr889 \+= texture\(u_pass0_tex, rg_sampleUV_reed_rrr889 \+ rg_jit_reed_rrr889\);/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected full vec4 accumulation sample (no .rgb). Got:\n    ${refGLSL}`)
+    reedTexOk = false
+  }
+  if (!/node_reed_rrr889_color = texture\(u_pass0_tex, rg_sampleUV_reed_rrr889\);/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected full vec4 plain sample (no .rgb). Got:\n    ${refGLSL}`)
+    reedTexOk = false
+  }
+  const irOut = reededGlassNode.ir!(i)
+  const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
+  if (!/var node_reed_rrr889_color: vec4f;/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected vec4f color declaration. Got:\n    ${irWGSL}`)
+    reedTexOk = false
+  }
+  if (!/var rg_acc_reed_rrr889: vec4f = vec4f\(0\.0\);/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected vec4f frost accumulator. Got:\n    ${irWGSL}`)
+    reedTexOk = false
+  }
+  if (!/rg_acc_reed_rrr889 \+= textureSample\(u_pass0_tex_tex, u_pass0_tex_samp, rg_sampleUV_reed_rrr889 \+ rg_jit_reed_rrr889\);/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected full vec4f accumulation sample. Got:\n    ${irWGSL}`)
+    reedTexOk = false
+  }
+  if (!/node_reed_rrr889_color = textureSample\(u_pass0_tex_tex, u_pass0_tex_samp, rg_sampleUV_reed_rrr889\);/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected full vec4f plain sample. Got:\n    ${irWGSL}`)
+    reedTexOk = false
+  }
+  if (reedTexOk) {
+    console.log('  [PASS] reeded_glass (texture mode): color output is full RGBA sample/accumulate (vec4/vec4f), alpha carried')
+    passed++
+  } else {
+    failed++
+  }
+}
+
 // 45. Reeded Glass (wave, sine, non-texture)
 {
   const [g, i] = ctx({
