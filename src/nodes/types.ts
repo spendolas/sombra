@@ -10,7 +10,7 @@ export type PortType =
   | 'vec2'       // 2D vector
   | 'vec3'       // 3D vector (RGB color)
   | 'vec4'       // 4D vector (RGBA color)
-  | 'color'      // Alias for vec3, UI shows color picker
+  | 'color'      // RGBA (vec4-backed), UI shows color picker
   | 'sampler2D'  // Texture sampler (future)
 
 /**

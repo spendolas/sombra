@@ -3,7 +3,7 @@
  */
 
 import type { NodeDefinition } from '../types'
-import { variable, declare } from '../../compiler/ir/types'
+import { raw } from '../../compiler/ir/types'
 
 export const colorConstantNode: NodeDefinition = {
   type: 'color_constant',
@@ -33,12 +33,17 @@ export const colorConstantNode: NodeDefinition = {
 
   glsl: (ctx) => {
     const { inputs, outputs } = ctx
-    return `vec3 ${outputs.color} = ${inputs.color};`
+    // `color` param is RGBA (vec4) uniform as of the RGBA type migration;
+    // this node's output port is still vec3, so drop alpha here.
+    return `vec3 ${outputs.color} = ${inputs.color}.rgb;`
   },
 
   ir: (ctx) => ({
     statements: [
-      declare(ctx.outputs.color, 'vec3', variable(ctx.inputs.color)),
+      raw(
+        `vec3 ${ctx.outputs.color} = ${ctx.inputs.color}.rgb;`,
+        `let ${ctx.outputs.color}: vec3f = ${ctx.inputs.color}.rgb;`,
+      ),
     ],
     uniforms: [],
     standardUniforms: new Set(),

@@ -17,7 +17,7 @@ import { topologicalSort, hasCycles } from './topological-sort'
 import {
   partitionPasses, findTextureBoundaries, outputTypeToFragColor,
   resolveSourceEdge, groupBoundariesBySourceOutput,
-  uniformName, paramGlslType, formatDefaultValue,
+  uniformName, paramGlslType, formatDefaultValue, padColorUniformValue,
 } from './glsl-generator'
 import type { TextureBoundaryEdge } from './glsl-generator'
 import { assembleWGSL } from './ir/wgsl-assembler'
@@ -35,37 +35,39 @@ import { assembleWGSL } from './ir/wgsl-assembler'
  */
 export function coerceTypeForIR(varName: string, from: PortType, to: PortType): string {
   if (from === to) return varName
-  // color is alias for vec3
-  if ((from === 'color' && to === 'vec3') || (from === 'vec3' && to === 'color')) return varName
 
   const rules: Record<string, Record<string, (v: string) => string>> = {
     float: {
       vec2: (v) => `vec2f(${v})`,
       vec3: (v) => `vec3f(${v})`,
-      color: (v) => `vec3f(${v})`,
+      // color is RGBA — alpha defaults to 1.0 (matches GLSL `vec4(vec3(v), 1.0)`),
+      // unlike the generic float->vec4 splat below.
+      color: (v) => `vec4f(vec3f(${v}), 1.0)`,
       vec4: (v) => `vec4f(${v})`,
     },
     vec2: {
       float: (v) => `${v}.x`,
       vec3: (v) => `vec3f(${v}, 0.0)`,
-      color: (v) => `vec3f(${v}, 0.0)`,
+      color: (v) => `vec4f(${v}, 0.0, 1.0)`,
       vec4: (v) => `vec4f(${v}, 0.0, 1.0)`,
     },
     vec3: {
       float: (v) => `${v}.x`,
       vec2: (v) => `${v}.xy`,
       vec4: (v) => `vec4f(${v}, 1.0)`,
+      color: (v) => `vec4f(${v}, 1.0)`,
     },
     color: {
       float: (v) => `${v}.x`,
       vec2: (v) => `${v}.xy`,
-      vec4: (v) => `vec4f(${v}, 1.0)`,
+      vec3: (v) => `${v}.rgb`,
+      vec4: (v) => v,
     },
     vec4: {
       float: (v) => `${v}.x`,
       vec2: (v) => `${v}.xy`,
       vec3: (v) => `${v}.rgb`,
-      color: (v) => `${v}.rgb`,
+      color: (v) => v,
     },
   }
 
@@ -240,7 +242,7 @@ export function generateNodeIR(
       userUniforms.push({
         name: uName,
         glslType: paramGlslType(param.type),
-        value: paramValue as number | number[],
+        value: padColorUniformValue(param.type, paramValue),
         nodeId: node.id,
         paramId: param.id,
       })
@@ -401,7 +403,7 @@ export function resolveParamFallbackIR(
     userUniforms.push({
       name: uName,
       glslType: paramGlslType(param.type),
-      value: paramValue as number | number[],
+      value: padColorUniformValue(param.type, paramValue),
       nodeId: node.id,
       paramId: param.id,
     })
