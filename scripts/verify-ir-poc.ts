@@ -106,6 +106,17 @@ import type { GLSLContext } from '../src/nodes/types'
 import type { IRContext, IRNodeOutput } from '../src/compiler/ir/types'
 
 // ---------------------------------------------------------------------------
+// Real-codegen-path regression harness (color_constant RGBA — see bottom of file)
+// ---------------------------------------------------------------------------
+import { initializeNodeLibrary } from '../src/nodes'
+import { generateNodeGlsl } from '../src/compiler/glsl-generator'
+import { generateNodeIR } from '../src/compiler/ir-compiler'
+import type { Node, Edge } from '@xyflow/react'
+import type { NodeData, EdgeData, UniformSpec } from '../src/nodes/types'
+
+initializeNodeLibrary()
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -648,7 +659,7 @@ function verify(
     nodeId: 'color-bbb222',
     inputs: { color: 'u_color_bbb222_color' },
     outputs: { color: 'node_color_bbb222_color' },
-    params: { color: [1.0, 0.0, 1.0] },
+    params: { color: [1.0, 0.0, 1.0, 1.0] },
   })
   verify('Color Constant', colorConstantNode, g, i)
 }
@@ -979,6 +990,112 @@ function verify(
     },
   })
   verify('Image (no data)', imageNode, g, i, 'loose')
+}
+
+// ===========================================================================
+// Regression: color_constant real-codegen-path RGBA check
+// ===========================================================================
+//
+// The `verify()` fixtures above hand-supply `inputs`/`outputs` directly,
+// bypassing the real `paramGlslType()`-driven uniform declaration — so they
+// did NOT catch a vec4->vec3 mismatch found mid-Task-2 (the `color` param
+// uniform is vec4, but color_constant's own codegen assigned it into a
+// vec3). This block drives color_constant through the REAL node-graph
+// compile path — `generateNodeGlsl` / `generateNodeIR`, the exact functions
+// `compileGraph()` / `compileGraphIR()` call per node — so the `color`
+// uniform is declared via the real `paramGlslType('color')` (vec4), and
+// asserts the node's output declaration stays vec4 end to end on both
+// backends. Reverting color_constant to `vec3 x = <vec4 uniform>.rgb` (GLSL)
+// or `vec3f` (WGSL) makes this FAIL.
+{
+  testNum++
+  console.log(`\n${'='.repeat(60)}`)
+  console.log(`  ${testNum}. REGRESSION: color_constant real-codegen-path (RGBA)`)
+  console.log('='.repeat(60))
+
+  const nodeId = 'regress-color-1'
+  const sanitizedId = nodeId.replace(/-/g, '_')
+  const node: Node<NodeData> = {
+    id: nodeId,
+    type: 'shaderNode',
+    position: { x: 0, y: 0 },
+    data: { type: 'color_constant', params: { color: [1.0, 0.0, 1.0, 0.4] } },
+  }
+  const nodeMap = new Map<string, Node<NodeData>>([[nodeId, node]])
+  const edgesByTarget = new Map<string, Edge<EdgeData>[]>()
+
+  let regressionOk = true
+
+  // --- Real GLSL path (generateNodeGlsl — same fn compileGraph() calls) ---
+  const glslUserUniforms: UniformSpec[] = []
+  const glslResult = generateNodeGlsl(
+    nodeId, nodeMap, edgesByTarget,
+    new Set<string>(), [], new Map<string, string>(), glslUserUniforms,
+  )
+  const glslLines = glslResult.glslLines.join('\n')
+
+  if (glslResult.errors.length > 0) {
+    console.log(`  [FAIL] generateNodeGlsl errors: ${glslResult.errors.map((e) => e.message).join('; ')}`)
+    regressionOk = false
+  }
+
+  const glslColorUniform = glslUserUniforms.find((u) => u.paramId === 'color')
+  if (glslColorUniform?.glslType !== 'vec4') {
+    console.log(`  [FAIL] GLSL: color uniform not declared vec4 via paramGlslType — got: ${glslColorUniform?.glslType}`)
+    regressionOk = false
+  } else {
+    console.log('  [PASS] GLSL: color uniform declared vec4 (real paramGlslType path)')
+  }
+
+  const glslAssignRe = new RegExp(`vec4 node_${sanitizedId}_color = u_${sanitizedId}_color;`)
+  if (!glslAssignRe.test(glslLines)) {
+    console.log(`  [FAIL] GLSL: output assignment is not a plain vec4 passthrough. Got:\n    ${glslLines.trim()}`)
+    regressionOk = false
+  } else if (/\.rgb\b/.test(glslLines)) {
+    console.log(`  [FAIL] GLSL: output still truncates alpha with .rgb: ${glslLines.trim()}`)
+    regressionOk = false
+  } else {
+    console.log('  [PASS] GLSL: output assignment is vec4 (no vec4->vec3 mismatch)')
+  }
+
+  // --- Real IR/WGSL path (generateNodeIR — same fn compileGraphIR() calls) ---
+  const irUserUniforms: UniformSpec[] = []
+  const irResult = generateNodeIR(
+    nodeId, nodeMap, edgesByTarget,
+    new Set<string>(), irUserUniforms, new Set<string>(),
+  )
+
+  if (irResult.errors.length > 0 || !irResult.output) {
+    console.log(`  [FAIL] generateNodeIR errors: ${irResult.errors.map((e) => e.message).join('; ')}`)
+    regressionOk = false
+  } else {
+    const irColorUniform = irUserUniforms.find((u) => u.paramId === 'color')
+    if (irColorUniform?.glslType !== 'vec4') {
+      console.log(`  [FAIL] IR: color uniform not declared vec4 via paramGlslType — got: ${irColorUniform?.glslType}`)
+      regressionOk = false
+    } else {
+      console.log('  [PASS] IR: color uniform declared vec4 (real paramGlslType path)')
+    }
+
+    const wgslLines = lowerNodeOutputToWGSL(irResult.output).join('\n')
+    const wgslDeclareRe = new RegExp(`var node_${sanitizedId}_color:\\s*vec4f\\s*=\\s*u_${sanitizedId}_color;`)
+    if (!wgslDeclareRe.test(wgslLines)) {
+      console.log(`  [FAIL] WGSL: declare is not a vec4f passthrough. Got:\n    ${wgslLines.trim()}`)
+      regressionOk = false
+    } else if (/vec3f/.test(wgslLines)) {
+      console.log(`  [FAIL] WGSL: output still declares vec3f: ${wgslLines.trim()}`)
+      regressionOk = false
+    } else {
+      console.log('  [PASS] WGSL: declare is vec4f (no vec4->vec3 mismatch)')
+    }
+  }
+
+  if (regressionOk) {
+    console.log('  [PASS] color_constant real-codegen-path RGBA regression')
+    passed++
+  } else {
+    failed++
+  }
 }
 
 // ---------------------------------------------------------------------------
