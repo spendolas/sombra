@@ -15,12 +15,12 @@ export const polarCoordsNode: NodeDefinition = {
   description: 'Convert between cartesian and polar coordinates',
 
   inputs: [
-    { id: 'source', label: 'Source', type: 'vec3', textureInput: true, default: [0, 0, 0] },
+    { id: 'source', label: 'Source', type: 'color', textureInput: true, default: [0, 0, 0] },
     { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },
   ],
 
   outputs: [
-    { id: 'color', label: 'Color', type: 'vec3' },
+    { id: 'color', label: 'Color', type: 'color' },
     { id: 'polar', label: 'Polar', type: 'vec2' },
   ],
 
@@ -57,9 +57,10 @@ export const polarCoordsNode: NodeDefinition = {
       ]
       const samplerName = ctx.textureSamplers?.source
       if (samplerName) {
-        lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${outputs.polar}).rgb;`)
+        // Full RGBA sample — alpha rides with the pixel (see rgba-node-audit.md).
+        lines.push(`vec4 ${outputs.color} = texture(${samplerName}, ${outputs.polar});`)
       } else {
-        lines.push(`vec3 ${outputs.color} = ${inputs.source};`)
+        lines.push(`vec4 ${outputs.color} = ${inputs.source};`)
       }
       return lines.join('\n  ')
     }
@@ -73,9 +74,10 @@ export const polarCoordsNode: NodeDefinition = {
     ]
     const samplerName = ctx.textureSamplers?.source
     if (samplerName) {
-      lines.push(`vec3 ${outputs.color} = texture(${samplerName}, ${outputs.polar}).rgb;`)
+      // Full RGBA sample — alpha rides with the pixel (see rgba-node-audit.md).
+      lines.push(`vec4 ${outputs.color} = texture(${samplerName}, ${outputs.polar});`)
     } else {
-      lines.push(`vec3 ${outputs.color} = ${inputs.source};`)
+      lines.push(`vec4 ${outputs.color} = ${inputs.source};`)
     }
     return lines.join('\n  ')
   },
@@ -151,16 +153,16 @@ export const polarCoordsNode: NodeDefinition = {
       )
     }
 
-    // Color output
+    // Color output — full RGBA sample, alpha rides with the pixel (see rgba-node-audit.md).
     if (samplerName) {
       stmts.push(
-        declare(ctx.outputs.color, 'vec3',
-          swizzle(textureSample(samplerName, variable(ctx.outputs.polar)), 'rgb', 'vec3'),
+        declare(ctx.outputs.color, 'vec4',
+          textureSample(samplerName, variable(ctx.outputs.polar)),
         ),
       )
     } else {
       stmts.push(
-        declare(ctx.outputs.color, 'vec3', variable(ctx.inputs.source)),
+        declare(ctx.outputs.color, 'vec4', variable(ctx.inputs.source)),
       )
     }
 

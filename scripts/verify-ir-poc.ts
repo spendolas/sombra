@@ -1148,6 +1148,50 @@ function verify(
   verify('Polar Coords (forward)', polarCoordsNode, g, i)
 }
 
+// 40b. Polar Coords (forward, texture mode) — RGBA sample assertion
+{
+  const [g, i] = ctx({
+    nodeId: 'polar-nnn445',
+    inputs: {
+      source: 'node_noise_xyz_color',
+      coords: 'node_uv_aaa_uv',
+      centerX: 'u_polar_nnn445_centerX',
+      centerY: 'u_polar_nnn445_centerY',
+    },
+    outputs: { color: 'node_polar_nnn445_color', polar: 'node_polar_nnn445_polar' },
+    params: { mode: 'forward', centerX: 0.5, centerY: 0.5 },
+    textureSamplers: { source: 'u_pass0_tex' },
+  })
+  verify('Polar Coords (forward, texture mode)', polarCoordsNode, g, i, 'loose')
+
+  // RGBA assertion — Spatial: full vec4 sample carries alpha through (see rgba-node-audit.md).
+  testNum++
+  console.log(`\n  ${testNum}. Polar Coords (forward, texture mode) — RGBA sample assertion`)
+  let polarTexOk = true
+  const refGLSL = polarCoordsNode.glsl(g)
+  if (!/vec4 node_polar_nnn445_color = texture\(u_pass0_tex, node_polar_nnn445_polar\);/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected full vec4 texture() sample (no .rgb). Got:\n    ${refGLSL}`)
+    polarTexOk = false
+  }
+  const irOut = polarCoordsNode.ir!(i)
+  const irGLSL = lowerNodeOutputToGLSL(irOut).join('\n')
+  if (!/vec4 node_polar_nnn445_color = texture\(u_pass0_tex, node_polar_nnn445_polar\);/.test(irGLSL)) {
+    console.log(`  [FAIL] IR->GLSL: expected full vec4 sample. Got:\n    ${irGLSL}`)
+    polarTexOk = false
+  }
+  const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
+  if (!/var node_polar_nnn445_color: vec4f = textureSample\(u_pass0_tex_tex, u_pass0_tex_samp, node_polar_nnn445_polar\);/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected full vec4f sample. Got:\n    ${irWGSL}`)
+    polarTexOk = false
+  }
+  if (polarTexOk) {
+    console.log('  [PASS] polar_coords (texture mode): color output is full RGBA sample (vec4/vec4f), alpha carried')
+    passed++
+  } else {
+    failed++
+  }
+}
+
 // 41. Polar Coords (inverse)
 {
   const [g, i] = ctx({
