@@ -99,20 +99,6 @@ html, body, #root {
   box-sizing: border-box;
 }
 
-/* Strip browser chrome from native color inputs — render as flat swatch */
-input[type="color"] {
-  appearance: none;
-  padding: 0;
-  cursor: pointer;
-}
-input[type="color"]::-webkit-color-swatch-wrapper {
-  padding: 0;
-}
-input[type="color"]::-webkit-color-swatch {
-  border: none;
-  border-radius: inherit;
-}
-
 /* React Flow theming — map RF CSS custom properties to Sombra tokens */
 .react-flow {
   /* Edges */

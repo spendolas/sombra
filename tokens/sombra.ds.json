@@ -1333,22 +1333,6 @@
           "figmaNodeId": "106:290",
           "textStyle": "text-param",
           "textColor": "fg-subtle"
-        },
-        "input": {
-          "figmaNodeId": "354:13",
-          "radius": "sm",
-          "fill": "surface/alt",
-          "stroke": {
-            "color": "edge/default",
-            "weight": 1
-          },
-          "width": "6",
-          "height": "6",
-          "cursor": "pointer",
-          "transition": "colors",
-          "hover": {
-            "stroke": "active"
-          }
         }
       }
     },

@@ -95,7 +95,6 @@ export const ds = {
   colorInput: {
     root: "flex flex-col gap-sm overflow-hidden",
     label: "text-param text-fg-subtle",
-    input: "bg-surface-alt rounded-sm border border-edge cursor-pointer transition-colors w-6 h-6 hover:border-active",
   },
   connectableParamRow: {
     root: "flex flex-row items-center relative",
