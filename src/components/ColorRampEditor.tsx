@@ -14,14 +14,27 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { IconButton } from '@/components/IconButton'
+import { RgbaColorPicker, type Rgba } from '@/components/RgbaColorPicker'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
+
+/** Checkerboard pattern behind gradient/swatch surfaces so alpha reads visually (mirrors RgbaColorPicker). */
+const CHECKER_STYLE: React.CSSProperties = {
+  backgroundImage:
+    'linear-gradient(45deg, rgba(128,128,128,0.4) 25%, transparent 25%), ' +
+    'linear-gradient(-45deg, rgba(128,128,128,0.4) 25%, transparent 25%), ' +
+    'linear-gradient(45deg, transparent 75%, rgba(128,128,128,0.4) 75%), ' +
+    'linear-gradient(-45deg, transparent 75%, rgba(128,128,128,0.4) 75%)',
+  backgroundSize: '8px 8px',
+  backgroundPosition: '0 0, 0 4px, 4px -4px, -4px 0px',
+}
 
 // --- Types ---
 
 interface ColorStop {
   position: number
-  color: [number, number, number]
+  /** RGB (legacy, alpha defaults to 1) or RGBA. */
+  color: [number, number, number] | Rgba
 }
 
 interface Preset {
@@ -101,46 +114,31 @@ const DEFAULT_STOPS: ColorStop[] = [
 
 // --- Helpers ---
 
-function toHex(v: number): string {
-  return Math.round(v * 255).toString(16).padStart(2, '0')
+/** Normalize a stop color to RGBA, defaulting alpha to 1 for legacy 3-length colors. */
+function normalizeStopColor(color: ColorStop['color']): Rgba {
+  return color.length === 4 ? color : [color[0], color[1], color[2], 1]
 }
 
-function stopToHex(stop: ColorStop): string {
-  const [r, g, b] = stop.color
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`
+function stopToRgba(stop: ColorStop): string {
+  const [r, g, b, a] = normalizeStopColor(stop.color)
+  return `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${a})`
 }
 
-function stopToRgb(stop: ColorStop): string {
-  const [r, g, b] = stop.color
-  return `rgb(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)})`
-}
-
-function hexToColor(hex: string): [number, number, number] {
-  return [
-    parseInt(hex.slice(1, 3), 16) / 255,
-    parseInt(hex.slice(3, 5), 16) / 255,
-    parseInt(hex.slice(5, 7), 16) / 255,
-  ]
-}
-
-/** Interpolate between two colors at ratio t (0-1) */
-function lerpColor(
-  a: [number, number, number],
-  b: [number, number, number],
-  t: number
-): [number, number, number] {
+/** Interpolate between two RGBA colors at ratio t (0-1) */
+function lerpColor(a: Rgba, b: Rgba, t: number): Rgba {
   return [
     a[0] + (b[0] - a[0]) * t,
     a[1] + (b[1] - a[1]) * t,
     a[2] + (b[2] - a[2]) * t,
+    a[3] + (b[3] - a[3]) * t,
   ]
 }
 
-/** Get interpolated color at position from sorted stops */
-function colorAtPosition(stops: ColorStop[], pos: number): [number, number, number] {
-  if (stops.length === 0) return [0, 0, 0]
-  if (pos <= stops[0].position) return stops[0].color
-  if (pos >= stops[stops.length - 1].position) return stops[stops.length - 1].color
+/** Get interpolated RGBA color at position from sorted stops */
+function colorAtPosition(stops: ColorStop[], pos: number): Rgba {
+  if (stops.length === 0) return [0, 0, 0, 1]
+  if (pos <= stops[0].position) return normalizeStopColor(stops[0].color)
+  if (pos >= stops[stops.length - 1].position) return normalizeStopColor(stops[stops.length - 1].color)
 
   for (let i = 1; i < stops.length; i++) {
     if (pos <= stops[i].position) {
@@ -148,10 +146,10 @@ function colorAtPosition(stops: ColorStop[], pos: number): [number, number, numb
       const curr = stops[i]
       const range = curr.position - prev.position
       const t = range < 0.0001 ? 0 : (pos - prev.position) / range
-      return lerpColor(prev.color, curr.color, t)
+      return lerpColor(normalizeStopColor(prev.color), normalizeStopColor(curr.color), t)
     }
   }
-  return stops[stops.length - 1].color
+  return normalizeStopColor(stops[stops.length - 1].color)
 }
 
 // --- Component ---
@@ -211,7 +209,7 @@ export function ColorRampEditor({
   // --- Gradient CSS ---
 
   const gradientCSS = sortedStops
-    .map((s) => `${stopToRgb(s)} ${s.position * 100}%`)
+    .map((s) => `${stopToRgba(s)} ${s.position * 100}%`)
     .join(', ')
 
   // --- Drag handling ---
@@ -293,8 +291,8 @@ export function ColorRampEditor({
   // --- Color change ---
 
   const handleColorChange = useCallback(
-    (hex: string) => {
-      updateStop(safeIndex, { ...selectedStop, color: hexToColor(hex) })
+    (rgba: Rgba) => {
+      updateStop(safeIndex, { ...selectedStop, color: rgba })
     },
     [safeIndex, selectedStop, updateStop]
   )
@@ -314,13 +312,18 @@ export function ColorRampEditor({
 
   return (
     <div className={cn(ds.gradientEditor.root, "nodrag nowheel")}>
-      {/* Gradient bar */}
+      {/* Gradient bar (checker behind so transparent stops read as transparent) */}
       <div
         ref={barRef}
-        className={ds.gradientEditor.bar}
-        style={{ background: `linear-gradient(to right, ${gradientCSS})` }}
+        className={cn(ds.gradientEditor.bar, "relative overflow-hidden")}
+        style={CHECKER_STYLE}
         onClick={handleBarClick}
-      />
+      >
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{ background: `linear-gradient(to right, ${gradientCSS})` }}
+        />
+      </div>
 
       {/* Stop markers */}
       <div className={ds.gradientEditor.stopMarkers}>
@@ -329,25 +332,23 @@ export function ColorRampEditor({
             key={i}
             className={cn(
               ds.gradientEditor.stopHandle,
-              'top-0 -translate-x-1/2',
+              'top-0 -translate-x-1/2 overflow-hidden',
               i === safeIndex && ds.gradientEditor.stopHandleSelected
             )}
-            style={{
-              left: `${stop.position * 100}%`,
-              backgroundColor: stopToRgb(stop),
-            }}
+            style={{ left: `${stop.position * 100}%` }}
             onPointerDown={(e) => handleStopPointerDown(e, i)}
-          />
+          >
+            <span className="absolute inset-0" style={CHECKER_STYLE} />
+            <span className="absolute inset-0" style={{ backgroundColor: stopToRgba(stop) }} />
+          </button>
         ))}
       </div>
 
       {/* Controls row */}
       <div className={ds.gradientEditor.controlsRow}>
-        <input
-          type="color"
-          value={stopToHex(selectedStop)}
-          onChange={(e) => handleColorChange(e.target.value)}
-          className={cn(ds.colorSwatch.root, "cursor-pointer")}
+        <RgbaColorPicker
+          value={normalizeStopColor(selectedStop.color)}
+          onChange={handleColorChange}
         />
         <span className={ds.gradientEditor.positionText}>
           {Math.round(selectedStop.position * 100)}%

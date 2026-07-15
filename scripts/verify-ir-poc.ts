@@ -735,11 +735,11 @@ function verify(
   }
 }
 
-// 32. Color Ramp (smooth, 2 stops)
+// 32. Color Ramp (smooth, 2 RGBA stops)
 {
   const stops = [
-    { position: 0.0, color: [0, 0, 0] },
-    { position: 1.0, color: [1, 1, 1] },
+    { position: 0.0, color: [0, 0, 0, 1] },
+    { position: 1.0, color: [1, 1, 1, 0.5] },
   ]
   const [g, i] = ctx({
     nodeId: 'ramp-fff666',
@@ -747,7 +747,79 @@ function verify(
     outputs: { color: 'node_ramp_fff666_color' },
     params: { interpolation: 'smooth', stops },
   })
-  verify('Color Ramp (smooth)', colorRampNode, g, i, 'loose')
+  verify('Color Ramp (smooth, RGBA stops)', colorRampNode, g, i, 'loose')
+
+  // RGBA assertion — output port migrated to `color` (vec4); alpha interpolates
+  // alongside rgb through the same mix() chain (see Task 5b RGBA migration).
+  testNum++
+  console.log(`\n  ${testNum}. Color Ramp — RGBA output assertion`)
+  const refGLSL = colorRampNode.glsl(g)
+  let rampOk = true
+  if (!/vec4 node_ramp_fff666_color = vec4\(0\.0, 0\.0, 0\.0, 1\.0\);/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected vec4 init assignment. Got:\n    ${refGLSL}`)
+    rampOk = false
+  }
+  if (!/node_ramp_fff666_color = mix\(node_ramp_fff666_color, vec4\(1\.0, 1\.0, 1\.0, 0\.5\), smoothstep\(0\.0, 1\.0, node_grad_aaa_value\)\);/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected vec4 mix() carrying alpha. Got:\n    ${refGLSL}`)
+    rampOk = false
+  }
+  const irOut = colorRampNode.ir!(i)
+  const irGLSL = lowerNodeOutputToGLSL(irOut).join('\n')
+  if (!/vec4 node_ramp_fff666_color = vec4\(0\.0, 0\.0, 0\.0, 1\.0\);/.test(irGLSL)) {
+    console.log(`  [FAIL] IR->GLSL: expected vec4 init. Got:\n    ${irGLSL}`)
+    rampOk = false
+  }
+  const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
+  if (!/var node_ramp_fff666_color: vec4f = vec4f\(0\.0, 0\.0, 0\.0, 1\.0\);/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected vec4f init. Got:\n    ${irWGSL}`)
+    rampOk = false
+  }
+  if (!/node_ramp_fff666_color = mix\(node_ramp_fff666_color, vec4f\(1\.0, 1\.0, 1\.0, 0\.5\), smoothstep\(0\.0, 1\.0, node_grad_aaa_value\)\);/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected vec4f mix() carrying alpha. Got:\n    ${irWGSL}`)
+    rampOk = false
+  }
+  if (rampOk) {
+    console.log('  [PASS] color_ramp: output is RGBA (vec4/vec4f), alpha interpolated via mix()')
+    passed++
+  } else {
+    failed++
+  }
+}
+
+// 32b. Color Ramp — legacy 3-length stop backward-compat (opaque, a=1)
+{
+  const stops = [
+    { position: 0.0, color: [0.2, 0.4, 0.6] },
+    { position: 1.0, color: [0.8, 0.6, 0.4] },
+  ]
+  const [g, i] = ctx({
+    nodeId: 'ramp-legacy1',
+    inputs: { t: 'node_grad_bbb_value' },
+    outputs: { color: 'node_ramp_legacy1_color' },
+    params: { interpolation: 'linear', stops },
+  })
+  testNum++
+  console.log(`\n${'='.repeat(60)}`)
+  console.log(`  ${testNum}. Color Ramp — legacy 3-length stop backward-compat`)
+  console.log('='.repeat(60))
+  let legacyOk = true
+  const refGLSL = colorRampNode.glsl(g)
+  if (!/vec4 node_ramp_legacy1_color = vec4\(0\.2, 0\.4, 0\.6, 1\.0\);/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: legacy 3-length stop should pad alpha to 1.0. Got:\n    ${refGLSL}`)
+    legacyOk = false
+  }
+  const irOut = colorRampNode.ir!(i)
+  const irGLSL = lowerNodeOutputToGLSL(irOut).join('\n')
+  if (!/vec4 node_ramp_legacy1_color = vec4\(0\.2, 0\.4, 0\.6, 1\.0\);/.test(irGLSL)) {
+    console.log(`  [FAIL] IR->GLSL: legacy 3-length stop should pad alpha to 1.0. Got:\n    ${irGLSL}`)
+    legacyOk = false
+  }
+  if (legacyOk) {
+    console.log('  [PASS] color_ramp: legacy 3-length stops render opaque (a=1.0)')
+    passed++
+  } else {
+    failed++
+  }
 }
 
 // 33. Noise (simplex, non-texture mode)
