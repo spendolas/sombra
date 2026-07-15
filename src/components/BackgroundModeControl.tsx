@@ -91,8 +91,8 @@ export function BackgroundModeControl({ className }: BackgroundModeControlProps)
         />
       )}
       <IconButton
-        icon="ban"
-        title="Background: none"
+        icon="eye"
+        title="Background: see-through (transparent — shows the UI behind)"
         className={previewBackground.mode === 'none' ? active : inactive}
         onClick={() => setPreviewBackground({ mode: 'none' })}
       />

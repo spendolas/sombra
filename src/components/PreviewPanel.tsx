@@ -4,6 +4,7 @@ import { BackgroundModeControl } from './BackgroundModeControl'
 import { ShaderPlaceholder } from './ShaderPlaceholder'
 import { PreviewBackdrop } from './PreviewBackdrop'
 import { useCompilerStore } from '../stores/compilerStore'
+import { useSettingsStore } from '../stores/settingsStore'
 import { ds } from '@/generated/ds'
 
 interface PreviewPanelProps {
@@ -35,8 +36,11 @@ function CompileErrorBanner() {
 }
 
 export function PreviewPanel({ targetRef }: PreviewPanelProps) {
+  // See-through mode: strip the panel's opaque scrim so a transparent shader
+  // composites all the way through to the Sombra UI behind the preview.
+  const seeThrough = useSettingsStore((s) => s.previewBackground.mode === 'none')
   return (
-    <div className={ds.previewPanel.root + ' isolate'}>
+    <div className={ds.previewPanel.root + ' isolate' + (seeThrough ? ' !bg-transparent' : '')}>
       <PreviewBackdrop />
       <BackgroundModeControl className="absolute top-xl left-xl z-10" />
       <PreviewToolbar className="absolute top-xl right-xl z-10" />
