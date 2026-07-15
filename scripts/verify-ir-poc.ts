@@ -109,8 +109,10 @@ import type { IRContext, IRNodeOutput } from '../src/compiler/ir/types'
 // Real-codegen-path regression harness (color_constant RGBA — see bottom of file)
 // ---------------------------------------------------------------------------
 import { initializeNodeLibrary } from '../src/nodes'
-import { generateNodeGlsl } from '../src/compiler/glsl-generator'
-import { generateNodeIR } from '../src/compiler/ir-compiler'
+import { generateNodeGlsl, compileGraph } from '../src/compiler/glsl-generator'
+import { generateNodeIR, compileGraphIR } from '../src/compiler/ir-compiler'
+import { compileNodePreview } from '../src/compiler/subgraph-compiler'
+import { compileNodePreviewIR } from '../src/compiler/ir-subgraph-compiler'
 import type { Node, Edge } from '@xyflow/react'
 import type { NodeData, EdgeData, UniformSpec } from '../src/nodes/types'
 
@@ -1905,6 +1907,175 @@ function verify(
 
   if (legacyOk) {
     console.log('  [PASS] legacy 3-tuple color param pads to opaque RGBA')
+    passed++
+  } else {
+    failed++
+  }
+}
+
+// ===========================================================================
+// Regression: `color`-output preview/pass fragColor assembly is NOT re-wrapped
+// ===========================================================================
+//
+// `color` is an RGBA (vec4) port type. `outputTypeToFragColor()`
+// (glsl-generator.ts) assembles a node's output variable into the fragColor
+// assignment used by BOTH per-node preview thumbnails (subgraph-compiler.ts /
+// ir-subgraph-compiler.ts) and multi-pass texture-boundary/relay passes
+// (glsl-generator.ts / ir-compiler.ts). Since a `color` var is already vec4,
+// wrapping it again (`vec4(colorVar, 1.0)` / `vec4f(colorVar, 1.0)`) produces
+// an invalid 5-component constructor call that fails to compile on both
+// GLSL and WGSL. This drives the REAL preview-compile entry points
+// (`compileNodePreview` / `compileNodePreviewIR` — the exact functions the
+// app calls for per-node thumbnails) with a single `color_constant` node
+// (color-typed output) and asserts the emitted fragColor line is a plain
+// passthrough (`fragColor = <var>;` / `return <var>;`), never re-wrapped.
+{
+  testNum++
+  console.log(`\n${'='.repeat(60)}`)
+  console.log(`  ${testNum}. REGRESSION: color-output fragColor assembly is not re-wrapped (5-component vec4)`)
+  console.log('='.repeat(60))
+
+  const nodeId = 'regress-color-passthrough-1'
+  const previewNode: Node<NodeData> = {
+    id: nodeId,
+    type: 'shaderNode',
+    position: { x: 0, y: 0 },
+    data: { type: 'color_constant', params: { color: [1.0, 0.0, 1.0, 1.0] } },
+  }
+  const previewNodes = [previewNode]
+  const previewEdges: Edge<EdgeData>[] = []
+
+  let wrapOk = true
+
+  // --- GLSL preview path (compileNodePreview → outputTypeToFragColor) ---
+  const glslPreview = compileNodePreview(previewNodes, previewEdges, nodeId)
+  if (!glslPreview.success) {
+    console.log(`  [FAIL] compileNodePreview errors: ${glslPreview.errors.map((e) => e.message).join('; ')}`)
+    wrapOk = false
+  } else {
+    const fragLine = glslPreview.fragmentShader.split('\n').find((l) => l.includes('fragColor ='))
+    if (!fragLine) {
+      console.log('  [FAIL] GLSL preview: no fragColor assignment found in fragment shader')
+      wrapOk = false
+    } else if (/fragColor\s*=\s*vec4\(/.test(fragLine)) {
+      console.log(`  [FAIL] GLSL preview: color output re-wrapped in vec4(...) — got: "${fragLine.trim()}"`)
+      wrapOk = false
+    } else {
+      console.log(`  [PASS] GLSL preview: fragColor is a plain passthrough — "${fragLine.trim()}"`)
+    }
+    // Belt-and-suspenders: no N-ary vec4 construct with more than 4 args anywhere.
+    if (/vec4\(\s*[^()]*(?:,\s*[^,()]+){4,}\)/.test(glslPreview.fragmentShader)) {
+      console.log('  [FAIL] GLSL preview: found a vec4(...) construct with 5+ arguments')
+      wrapOk = false
+    }
+  }
+
+  // --- IR/WGSL preview path (compileNodePreviewIR → outputTypeToFragColor → WGSL) ---
+  const irPreview = compileNodePreviewIR(previewNodes, previewEdges, nodeId)
+  if (!irPreview.success) {
+    console.log(`  [FAIL] compileNodePreviewIR errors: ${irPreview.errors.map((e) => e.message).join('; ')}`)
+    wrapOk = false
+  } else {
+    const shaderCode = irPreview.wgslPasses.map((p) => p.shaderCode).join('\n')
+    // Scope to the fragment entry point only — the vertex stage (vs_main) also
+    // has a `return out;` and would give a false pass if matched first.
+    const fsMarker = shaderCode.indexOf('fn fs_main')
+    const fsBody = fsMarker === -1 ? shaderCode : shaderCode.slice(fsMarker)
+    const returnLine = fsBody.split('\n').find((l) => l.includes('return ') && l.includes(';'))
+    if (fsMarker === -1) {
+      console.log('  [FAIL] WGSL preview: no fs_main fragment entry point found')
+      wrapOk = false
+    } else if (!returnLine) {
+      console.log('  [FAIL] WGSL preview: no fragment return statement found')
+      wrapOk = false
+    } else if (/return\s+vec4f\(/.test(returnLine)) {
+      console.log(`  [FAIL] WGSL preview: color output re-wrapped in vec4f(...) — got: "${returnLine.trim()}"`)
+      wrapOk = false
+    } else {
+      console.log(`  [PASS] WGSL preview: fragment return is a plain passthrough — "${returnLine.trim()}"`)
+    }
+    if (/vec4f\(\s*[^()]*(?:,\s*[^,()]+){4,}\)/.test(fsBody)) {
+      console.log('  [FAIL] WGSL preview: found a vec4f(...) construct with 5+ arguments')
+      wrapOk = false
+    }
+  }
+
+  // --- Multi-pass texture-boundary path: color_constant -> pixelate.source (textureInput) -> fragment_output ---
+  // Exercises the OTHER call site of outputTypeToFragColor(): the boundary/relay
+  // resolveGroup() helpers in glsl-generator.ts (compileMultiPass) and
+  // ir-compiler.ts (compileMultiPassIR), which wrap the source node's output
+  // (here color_constant's `color` output) into the intermediate pass's
+  // fragColor/return, separately from the single-node preview path above.
+  const mpColorId = 'regress-mp-color'
+  const mpPixelateId = 'regress-mp-pixelate'
+  const mpOutputId = 'regress-mp-output'
+  const mpNodes: Node<NodeData>[] = [
+    {
+      id: mpColorId, type: 'shaderNode', position: { x: 0, y: 0 },
+      data: { type: 'color_constant', params: { color: [0.3, 0.6, 0.9, 1.0] } },
+    },
+    {
+      id: mpPixelateId, type: 'shaderNode', position: { x: 200, y: 0 },
+      data: { type: 'pixelate', params: { pixelSize: 8 } },
+    },
+    {
+      id: mpOutputId, type: 'shaderNode', position: { x: 400, y: 0 },
+      data: { type: 'fragment_output', params: {} },
+    },
+  ]
+  const mpEdges: Edge<EdgeData>[] = [
+    {
+      id: 'mp-edge-1', source: mpColorId, target: mpPixelateId,
+      sourceHandle: 'color', targetHandle: 'source',
+      data: { sourcePort: 'color', targetPort: 'source' },
+    },
+    {
+      id: 'mp-edge-2', source: mpPixelateId, target: mpOutputId,
+      sourceHandle: 'color', targetHandle: 'color',
+      data: { sourcePort: 'color', targetPort: 'color' },
+    },
+  ]
+
+  const mpGlsl = compileGraph(mpNodes, mpEdges)
+  if (!mpGlsl.success || mpGlsl.passes.length < 2) {
+    console.log(`  [FAIL] compileGraph (multipass) did not produce a 2+ pass plan: success=${mpGlsl.success}, passes=${mpGlsl.passes.length}, errors=${mpGlsl.errors.map((e) => e.message).join('; ')}`)
+    wrapOk = false
+  } else {
+    const boundaryPass = mpGlsl.passes[0]
+    const fragLine = boundaryPass.fragmentShader.split('\n').find((l) => l.includes('fragColor ='))
+    if (!fragLine) {
+      console.log('  [FAIL] GLSL multipass boundary: no fragColor assignment found')
+      wrapOk = false
+    } else if (/fragColor\s*=\s*vec4\(/.test(fragLine)) {
+      console.log(`  [FAIL] GLSL multipass boundary: color output re-wrapped in vec4(...) — got: "${fragLine.trim()}"`)
+      wrapOk = false
+    } else {
+      console.log(`  [PASS] GLSL multipass boundary: fragColor is a plain passthrough — "${fragLine.trim()}"`)
+    }
+  }
+
+  const mpIr = compileGraphIR(mpNodes, mpEdges)
+  if (!mpIr || mpIr.passes.length < 2) {
+    console.log(`  [FAIL] compileGraphIR (multipass) did not produce a 2+ pass plan: passes=${mpIr?.passes.length ?? 0}`)
+    wrapOk = false
+  } else {
+    const boundaryShader = mpIr.passes[0].shaderCode
+    const fsMarker = boundaryShader.indexOf('fn fs_main')
+    const fsBody = fsMarker === -1 ? boundaryShader : boundaryShader.slice(fsMarker)
+    const returnLine = fsBody.split('\n').find((l) => l.includes('return ') && l.includes(';'))
+    if (!returnLine) {
+      console.log('  [FAIL] WGSL multipass boundary: no fragment return statement found')
+      wrapOk = false
+    } else if (/return\s+vec4f\(/.test(returnLine)) {
+      console.log(`  [FAIL] WGSL multipass boundary: color output re-wrapped in vec4f(...) — got: "${returnLine.trim()}"`)
+      wrapOk = false
+    } else {
+      console.log(`  [PASS] WGSL multipass boundary: fragment return is a plain passthrough — "${returnLine.trim()}"`)
+    }
+  }
+
+  if (wrapOk) {
+    console.log('  [PASS] color-output fragColor/return assembly is a plain passthrough on both backends (preview + multipass boundary)')
     passed++
   } else {
     failed++

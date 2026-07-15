@@ -938,8 +938,8 @@ export function outputTypeToFragColor(varName: string, type: string): string {
     case 'vec2':
       return `  fragColor = vec4(${varName}, 0.0, 1.0);`
     case 'vec3':
-    case 'color':
       return `  fragColor = vec4(${varName}, 1.0);`
+    case 'color':
     case 'vec4':
       return `  fragColor = ${varName};`
     default:
