@@ -45,14 +45,22 @@ export function CommandPalette({ onClose, mousePosition }: CommandPaletteProps) 
   const allNodes = useMemo(() => nodeRegistry.getAll(), [])
   const recentsSet = useMemo(() => new Set(recents), [recents])
 
-  // Search results with recent boost
+  // Search results, ranked by match tier first, then recency within a tier.
+  // Tier (label > category > description) dominates so a recently-used node
+  // that only matches on its description can't leap above a near-exact label
+  // match. The recents boost only reorders items that match the SAME way.
   const results = useMemo(() => {
     const raw = searchNodes(query, allNodes)
     if (!query.trim() || recentsSet.size === 0) return raw
-    // Boost recent types by subtracting from score
-    return raw
-      .map(r => recentsSet.has(r.definition.type) ? { ...r, score: r.score - 3 } : r)
-      .sort((a, b) => a.score - b.score)
+    const tier = (f: string) => (f === 'label' ? 0 : f === 'category' ? 1 : 2)
+    const RECENT_BOOST = 3
+    return [...raw].sort((a, b) => {
+      const t = tier(a.matchField) - tier(b.matchField)
+      if (t !== 0) return t
+      const sa = a.score - (recentsSet.has(a.definition.type) ? RECENT_BOOST : 0)
+      const sb = b.score - (recentsSet.has(b.definition.type) ? RECENT_BOOST : 0)
+      return sa - sb
+    })
   }, [query, allNodes, recentsSet])
 
   // Build recent items for empty-query display
