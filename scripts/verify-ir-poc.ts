@@ -813,15 +813,59 @@ function verify(
   verify('Dots', dotsNode, g, i)
 }
 
-// 18. Gradient (Linear)
+// 18. Gradient (Linear, RGBA stops)
 {
+  const stops = [
+    { position: 0.0, color: [0, 0, 0, 1] },
+    { position: 1.0, color: [1, 1, 1, 0.5] },
+  ]
   const [g, i] = ctx({
     nodeId: 'grad-ppp666',
     inputs: { coords: 'node_uv_xyz_coords' },
-    outputs: { value: 'node_grad_ppp666_value' },
-    params: { gradientType: 'linear' },
+    outputs: { color: 'node_grad_ppp666_color', value: 'node_grad_ppp666_value' },
+    params: { gradientType: 'linear', interpolation: 'smooth', stops },
   })
-  verify('Gradient (Linear)', gradientNode, g, i)
+  verify('Gradient (Linear, RGBA stops)', gradientNode, g, i, 'loose')
+
+  // RGBA assertion — mirrors color_ramp's Task 5b migration: `value` keeps the
+  // existing Type field math; `color` is the stops mix-chain over `value` as `t`.
+  testNum++
+  console.log(`\n  ${testNum}. Gradient — RGBA color output assertion`)
+  const refGLSL = gradientNode.glsl(g)
+  let gradOk = true
+  if (!/float node_grad_ppp666_value = grad_field_grad_ppp666;/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected value assigned from field. Got:\n    ${refGLSL}`)
+    gradOk = false
+  }
+  if (!/vec4 node_grad_ppp666_color = vec4\(0\.0, 0\.0, 0\.0, 1\.0\);/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected vec4 init assignment. Got:\n    ${refGLSL}`)
+    gradOk = false
+  }
+  if (!/node_grad_ppp666_color = mix\(node_grad_ppp666_color, vec4\(1\.0, 1\.0, 1\.0, 0\.5\), smoothstep\(0\.0, 1\.0, grad_field_grad_ppp666\)\);/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected vec4 mix() carrying alpha over field. Got:\n    ${refGLSL}`)
+    gradOk = false
+  }
+  const irOut = gradientNode.ir!(i)
+  const irGLSL = lowerNodeOutputToGLSL(irOut).join('\n')
+  if (!/vec4 node_grad_ppp666_color = vec4\(0\.0, 0\.0, 0\.0, 1\.0\);/.test(irGLSL)) {
+    console.log(`  [FAIL] IR->GLSL: expected vec4 init. Got:\n    ${irGLSL}`)
+    gradOk = false
+  }
+  const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
+  if (!/var node_grad_ppp666_color: vec4f = vec4f\(0\.0, 0\.0, 0\.0, 1\.0\);/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected vec4f init. Got:\n    ${irWGSL}`)
+    gradOk = false
+  }
+  if (!/node_grad_ppp666_color = mix\(node_grad_ppp666_color, vec4f\(1\.0, 1\.0, 1\.0, 0\.5\), smoothstep\(0\.0, 1\.0, grad_field_grad_ppp666\)\);/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected vec4f mix() carrying alpha over field. Got:\n    ${irWGSL}`)
+    gradOk = false
+  }
+  if (gradOk) {
+    console.log('  [PASS] gradient: color output is RGBA (vec4/vec4f), alpha interpolated via mix() over field')
+    passed++
+  } else {
+    failed++
+  }
 }
 
 // 19. Split Vec2

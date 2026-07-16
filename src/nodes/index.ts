@@ -152,6 +152,9 @@ export async function bindNodeComponents(): Promise<void> {
   const colorRamp = nodeRegistry.get('color_ramp')
   if (colorRamp) colorRamp.component = ColorRampEditor
 
+  const gradient = nodeRegistry.get('gradient')
+  if (gradient) gradient.component = ColorRampEditor
+
   const random = nodeRegistry.get('random')
   if (random) random.component = RandomDisplay
 
