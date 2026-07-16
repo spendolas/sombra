@@ -1,5 +1,5 @@
 /**
- * Stripes — repeating band pattern with configurable angle and edge softness.
+ * Stripes — repeating band pattern with pixel-accurate width/gap, duty cycle, and A/B colors.
  */
 
 import type { NodeDefinition, SpatialConfig } from '../types'
@@ -10,7 +10,7 @@ export const stripesNode: NodeDefinition = {
   type: 'stripes',
   label: 'Stripes',
   category: 'Pattern',
-  description: 'Repeating bands — adjustable angle and softness',
+  description: 'Repeating bands — pixel width/gap, duty cycle, and A/B colors',
   spatial: { transforms: ['scale', 'rotate', 'translate'] } satisfies SpatialConfig,
 
   inputs: [
@@ -18,69 +18,126 @@ export const stripesNode: NodeDefinition = {
   ],
 
   outputs: [
+    { id: 'color', label: 'Color', type: 'color' },
     { id: 'value', label: 'Value', type: 'float' },
   ],
 
   params: [
     ...getSpatialParams({ transforms: ['scale', 'rotate', 'translate'] }),
+    { id: 'width', label: 'Width', type: 'float', default: 40, min: 1, max: 512, step: 1, connectable: true, updateMode: 'uniform' },
+    { id: 'gap', label: 'Gap', type: 'float', default: 40, min: 0, max: 512, step: 1, connectable: true, updateMode: 'uniform' },
     { id: 'softness', label: 'Softness', type: 'float', default: 0.0, min: 0.0, max: 1.0, step: 0.01, connectable: true, updateMode: 'uniform' },
+    { id: 'colorA', label: 'Color A', type: 'color', default: [1, 1, 1, 1], connectable: true, updateMode: 'uniform' },
+    { id: 'colorB', label: 'Color B', type: 'color', default: [0, 0, 0, 1], connectable: true, updateMode: 'uniform' },
   ],
 
   glsl: (ctx) => {
-    const { inputs, outputs } = ctx
+    const { inputs, outputs, uniforms } = ctx
+    uniforms.add('u_dpr')
+    uniforms.add('u_ref_size')
     const id = ctx.nodeId.replace(/-/g, '_')
-    const f = `st_f_${id}`
-    const lo = `st_lo_${id}`
-    const hi = `st_hi_${id}`
+    const periodPx = `st_periodPx_${id}`
+    const period = `st_period_${id}`
+    const duty = `st_duty_${id}`
+    const t = `st_t_${id}`
+    const hw = `st_hw_${id}`
+    const aa = `st_aa_${id}`
+    const band = `st_band_${id}`
     return [
-      `float ${f} = fract(${inputs.coords}.x);`,
-      `float ${lo} = max(0.25 - ${inputs.softness} * 0.25, 0.001);`,
-      `float ${hi} = min(0.25 + ${inputs.softness} * 0.25, 0.499);`,
-      `float ${outputs.value} = smoothstep(${lo}, ${hi}, ${f}) - smoothstep(1.0 - ${hi}, 1.0 - ${lo}, ${f});`,
+      `float ${periodPx} = max(${inputs.width} + ${inputs.gap}, 0.0001);`,
+      `float ${period} = ${periodPx} / (u_dpr * u_ref_size);`,
+      `float ${duty} = clamp(${inputs.width} / ${periodPx}, 0.0, 1.0);`,
+      `float ${t} = fract(${inputs.coords}.x / ${period} + 0.5) - 0.5;`,
+      `float ${hw} = ${duty} * 0.5;`,
+      `float ${aa} = max(${inputs.softness} * 0.5, 0.0001);`,
+      `float ${band} = smoothstep(${hw} + ${aa}, ${hw} - ${aa}, abs(${t}));`,
+      `float ${outputs.value} = ${band};`,
+      `vec4 ${outputs.color} = mix(${inputs.colorB}, ${inputs.colorA}, ${band});`,
     ].join('\n  ')
   },
 
   ir: (ctx) => {
     const id = ctx.nodeId.replace(/-/g, '_')
-    const f = `st_f_${id}`
-    const lo = `st_lo_${id}`
-    const hi = `st_hi_${id}`
+    const periodPx = `st_periodPx_${id}`
+    const period = `st_period_${id}`
+    const duty = `st_duty_${id}`
+    const t = `st_t_${id}`
+    const hw = `st_hw_${id}`
+    const aa = `st_aa_${id}`
+    const band = `st_band_${id}`
+
+    const width = variable(ctx.inputs.width)
+    const gap = variable(ctx.inputs.gap)
     const softness = variable(ctx.inputs.softness)
+    const coords = variable(ctx.inputs.coords)
+    const colorA = variable(ctx.inputs.colorA)
+    const colorB = variable(ctx.inputs.colorB)
+
     return {
       statements: [
-        // float f = fract(coords.x)
-        declare(f, 'float',
-          call('fract', [swizzle(variable(ctx.inputs.coords), 'x', 'float')], 'float'),
-        ),
-        // float lo = max(0.25 - softness * 0.25, 0.001)
-        declare(lo, 'float',
+        // float periodPx = max(width + gap, 0.0001)
+        declare(periodPx, 'float',
           call('max', [
-            binary('-', literal('float', 0.25), binary('*', softness, literal('float', 0.25), 'float'), 'float'),
-            literal('float', 0.001),
+            binary('+', width, gap, 'float'),
+            literal('float', 0.0001),
           ], 'float'),
         ),
-        // float hi = min(0.25 + softness * 0.25, 0.499)
-        declare(hi, 'float',
-          call('min', [
-            binary('+', literal('float', 0.25), binary('*', softness, literal('float', 0.25), 'float'), 'float'),
-            literal('float', 0.499),
-          ], 'float'),
-        ),
-        // float value = smoothstep(lo, hi, f) - smoothstep(1.0 - hi, 1.0 - lo, f)
-        declare(ctx.outputs.value, 'float',
-          binary('-',
-            call('smoothstep', [variable(lo), variable(hi), variable(f)], 'float'),
-            call('smoothstep', [
-              binary('-', literal('float', 1.0), variable(hi), 'float'),
-              binary('-', literal('float', 1.0), variable(lo), 'float'),
-              variable(f),
-            ], 'float'),
+        // float period = periodPx / (u_dpr * u_ref_size)
+        declare(period, 'float',
+          binary('/',
+            variable(periodPx),
+            binary('*', variable('u_dpr'), variable('u_ref_size'), 'float'),
             'float',
           ),
         ),
+        // float duty = clamp(width / periodPx, 0.0, 1.0)
+        declare(duty, 'float',
+          call('clamp', [
+            binary('/', width, variable(periodPx), 'float'),
+            literal('float', 0.0),
+            literal('float', 1.0),
+          ], 'float'),
+        ),
+        // float t = fract(coords.x / period + 0.5) - 0.5
+        declare(t, 'float',
+          binary('-',
+            call('fract', [
+              binary('+',
+                binary('/', swizzle(coords, 'x', 'float'), variable(period), 'float'),
+                literal('float', 0.5),
+                'float',
+              ),
+            ], 'float'),
+            literal('float', 0.5),
+            'float',
+          ),
+        ),
+        // float hw = duty * 0.5
+        declare(hw, 'float', binary('*', variable(duty), literal('float', 0.5), 'float')),
+        // float aa = max(softness * 0.5, 0.0001)
+        declare(aa, 'float',
+          call('max', [
+            binary('*', softness, literal('float', 0.5), 'float'),
+            literal('float', 0.0001),
+          ], 'float'),
+        ),
+        // float band = smoothstep(hw + aa, hw - aa, abs(t))
+        declare(band, 'float',
+          call('smoothstep', [
+            binary('+', variable(hw), variable(aa), 'float'),
+            binary('-', variable(hw), variable(aa), 'float'),
+            call('abs', [variable(t)], 'float'),
+          ], 'float'),
+        ),
+        // float value = band
+        declare(ctx.outputs.value, 'float', variable(band)),
+        // vec4 color = mix(colorB, colorA, band)
+        declare(ctx.outputs.color, 'vec4',
+          call('mix', [colorB, colorA, variable(band)], 'vec4'),
+        ),
       ],
       uniforms: [],
-      standardUniforms: new Set(),
+      standardUniforms: new Set(['u_dpr', 'u_ref_size']),
     }
   },
 }

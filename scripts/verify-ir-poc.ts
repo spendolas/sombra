@@ -773,9 +773,16 @@ function verify(
 {
   const [g, i] = ctx({
     nodeId: 'strip-nnn444',
-    inputs: { coords: 'node_uv_xyz_coords', softness: 'u_strip_nnn444_softness' },
-    outputs: { value: 'node_strip_nnn444_value' },
-    params: { softness: 0.0 },
+    inputs: {
+      coords: 'node_uv_xyz_coords',
+      width: 'u_strip_nnn444_width',
+      gap: 'u_strip_nnn444_gap',
+      softness: 'u_strip_nnn444_softness',
+      colorA: 'u_strip_nnn444_colorA',
+      colorB: 'u_strip_nnn444_colorB',
+    },
+    outputs: { color: 'node_strip_nnn444_color', value: 'node_strip_nnn444_value' },
+    params: { width: 40, gap: 40, softness: 0.0 },
   })
   verify('Stripes', stripesNode, g, i)
 }
