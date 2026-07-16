@@ -422,9 +422,11 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
           )
         })}
 
-        {/* Non-connectable params (enums, sliders without handles) */}
+        {/* Non-connectable params (enums, sliders without handles). nodrag/nowheel:
+            React Flow otherwise swallows the first pointerdown on a Radix Select
+            trigger as a node-drag gesture, so dropdowns took a second click to open. */}
         {regularParams.length > 0 && (
-          <div className={cn(ds.shaderNode.paramDivider, "mt-xs pt-md")}>
+          <div className={cn(ds.shaderNode.paramDivider, "mt-xs pt-md nodrag nowheel")}>
             <NodeParameters
               nodeId={id}
               parameters={regularParams}
