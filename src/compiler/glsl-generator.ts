@@ -550,19 +550,17 @@ export function generateNodeGlsl(
       preambleLines.push(`${srtVar} /= vec2(${inputs.srt_scaleX}, ${inputs.srt_scaleY});`)
     }
 
-    // Rotate (aspect-corrected so angle looks correct at any canvas shape)
+    // Rotate. coords are isotropic (auto_uv divides both axes by the frozen
+    // u_ref_size), so a plain rotation gives a true, resolution-independent
+    // angle. No aspect term — conjugating by the LIVE u_resolution aspect made
+    // the rendered angle drift as the canvas was resized. srt_rotate is degrees.
     if (hasRotate) {
-      uniforms.add('u_resolution')
-      const aspVar = `srt_asp_${sanitizedNodeId}`
       const cVar = `srt_c_${sanitizedNodeId}`
       const sVar = `srt_s_${sanitizedNodeId}`
       const radVar = `srt_rad_${sanitizedNodeId}`
-      preambleLines.push(`float ${aspVar} = u_resolution.x / u_resolution.y;`)
       preambleLines.push(`float ${radVar} = ${inputs.srt_rotate} * 0.01745329;`)
       preambleLines.push(`float ${cVar} = cos(${radVar}); float ${sVar} = sin(${radVar});`)
-      preambleLines.push(`${srtVar}.x *= ${aspVar};`)
       preambleLines.push(`${srtVar} = vec2(${srtVar}.x * ${cVar} - ${srtVar}.y * ${sVar}, ${srtVar}.x * ${sVar} + ${srtVar}.y * ${cVar});`)
-      preambleLines.push(`${srtVar}.x /= ${aspVar};`)
     }
 
     // Translate (pixel units → UV conversion, stable on resize)

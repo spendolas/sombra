@@ -287,9 +287,7 @@ export function generateNodeIR(
 
     // Add standard uniforms needed by SRT
     collectedStandardUniforms.add('u_anchor')
-    if (spatial.transforms.includes('rotate')) {
-      collectedStandardUniforms.add('u_resolution')
-    }
+    // (rotate no longer needs u_resolution — rotation is now aspect-free)
     if (spatial.transforms.includes('translate')) {
       collectedStandardUniforms.add('u_dpr')
       collectedStandardUniforms.add('u_ref_size')

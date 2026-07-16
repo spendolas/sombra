@@ -514,18 +514,17 @@ export function lowerSpatialTransformToWGSL(srt: IRSpatialTransform): string[] {
     lines.push(`${v} /= vec2f(${srt.scaleXUniform}, ${srt.scaleYUniform});`)
   }
 
-  // Rotate (aspect-corrected)
+  // Rotate. coords are isotropic (auto_uv divides both axes by the frozen
+  // u_ref_size), so a plain rotation gives a true, resolution-independent
+  // angle. No aspect term — conjugating by the LIVE u_resolution aspect made
+  // the rendered angle drift as the canvas was resized. srt_rotate is degrees.
   if (srt.rotateUniform) {
-    const asp = `${v}_asp`
     const rad = `${v}_rad`
     const c = `${v}_c`
     const s = `${v}_s`
-    lines.push(`let ${asp}: f32 = u_resolution.x / u_resolution.y;`)
     lines.push(`let ${rad}: f32 = ${srt.rotateUniform} * 0.01745329;`)
     lines.push(`let ${c}: f32 = cos(${rad}); let ${s}: f32 = sin(${rad});`)
-    lines.push(`${v}.x *= ${asp};`)
     lines.push(`${v} = vec2f(${v}.x * ${c} - ${v}.y * ${s}, ${v}.x * ${s} + ${v}.y * ${c});`)
-    lines.push(`${v}.x /= ${asp};`)
   }
 
   // Translate
