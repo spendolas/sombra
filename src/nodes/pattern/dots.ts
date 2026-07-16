@@ -26,11 +26,12 @@ export const dotsNode: NodeDefinition = {
     ...getSpatialParams({ transforms: ['scale', 'rotate', 'translate'] }),
     { id: 'gapX', label: 'Gap X', type: 'float', default: 60, min: 1, max: 512, step: 1, connectable: true, updateMode: 'uniform' },
     { id: 'gapY', label: 'Gap Y', type: 'float', default: 60, min: 1, max: 512, step: 1, connectable: true, updateMode: 'uniform' },
-    { id: 'radius', label: 'Radius', type: 'float', default: 0.3, min: 0.01, max: 0.5, step: 0.01, connectable: true, updateMode: 'uniform' },
+    { id: 'radius', label: 'Radius', type: 'float', default: 20, min: 1, max: 256, step: 1, connectable: true, updateMode: 'uniform' },
     { id: 'aspect', label: 'Aspect', type: 'float', default: 1.0, min: 0.25, max: 4.0, step: 0.01, connectable: true, updateMode: 'uniform' },
     { id: 'softness', label: 'Softness', type: 'float', default: 0.05, min: 0.0, max: 0.5, step: 0.01, connectable: true, updateMode: 'uniform' },
-    { id: 'colorA', label: 'Color A', type: 'color', default: [1, 1, 1, 1], connectable: true, updateMode: 'uniform' },
-    { id: 'colorB', label: 'Color B', type: 'color', default: [0, 0, 0, 1], connectable: true, updateMode: 'uniform' },
+    // Colors are pickers (not connectable) — connectable params render as float sliders.
+    { id: 'colorA', label: 'Color A', type: 'color', default: [1, 1, 1, 1], updateMode: 'uniform' },
+    { id: 'colorB', label: 'Color B', type: 'color', default: [0, 0, 0, 1], updateMode: 'uniform' },
   ],
 
   glsl: (ctx) => {
@@ -45,7 +46,7 @@ export const dotsNode: NodeDefinition = {
     return [
       `vec2 ${gapU} = vec2(${inputs.gapX}, ${inputs.gapY}) / (u_dpr * u_ref_size);`,
       `vec2 ${rel} = ${inputs.coords} - (floor(${inputs.coords} / ${gapU}) + vec2(0.5, 0.5)) * ${gapU};`,
-      `float ${rpx} = ${inputs.radius} * min(${gapU}.x, ${gapU}.y);`,
+      `float ${rpx} = ${inputs.radius} / (u_dpr * u_ref_size);`,
       `float ${d} = length(vec2(${rel}.x * ${inputs.aspect}, ${rel}.y));`,
       `float ${outputs.value} = 1.0 - smoothstep(${rpx} - ${inputs.softness} * ${rpx}, ${rpx} + ${inputs.softness} * ${rpx}, ${d});`,
       `vec4 ${outputs.color} = mix(${inputs.colorB}, ${inputs.colorA}, ${outputs.value});`,
@@ -94,14 +95,11 @@ export const dotsNode: NodeDefinition = {
             'vec2',
           ),
         ),
-        // float rpx = radius * min(gap_u.x, gap_u.y)
+        // float rpx = radius(px) / (u_dpr * u_ref_size)  → dot radius in coord units
         declare(rpx, 'float',
-          binary('*',
+          binary('/',
             radius,
-            call('min', [
-              swizzle(variable(gapU), 'x', 'float'),
-              swizzle(variable(gapU), 'y', 'float'),
-            ], 'float'),
+            binary('*', variable('u_dpr'), variable('u_ref_size'), 'float'),
             'float',
           ),
         ),

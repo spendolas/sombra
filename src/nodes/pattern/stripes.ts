@@ -27,8 +27,9 @@ export const stripesNode: NodeDefinition = {
     { id: 'width', label: 'Width', type: 'float', default: 40, min: 1, max: 512, step: 1, connectable: true, updateMode: 'uniform' },
     { id: 'gap', label: 'Gap', type: 'float', default: 40, min: 0, max: 512, step: 1, connectable: true, updateMode: 'uniform' },
     { id: 'softness', label: 'Softness', type: 'float', default: 0.0, min: 0.0, max: 1.0, step: 0.01, connectable: true, updateMode: 'uniform' },
-    { id: 'colorA', label: 'Color A', type: 'color', default: [1, 1, 1, 1], connectable: true, updateMode: 'uniform' },
-    { id: 'colorB', label: 'Color B', type: 'color', default: [0, 0, 0, 1], connectable: true, updateMode: 'uniform' },
+    // Colors are pickers (not connectable) — connectable params render as float sliders.
+    { id: 'colorA', label: 'Color A', type: 'color', default: [1, 1, 1, 1], updateMode: 'uniform' },
+    { id: 'colorB', label: 'Color B', type: 'color', default: [0, 0, 0, 1], updateMode: 'uniform' },
   ],
 
   glsl: (ctx) => {

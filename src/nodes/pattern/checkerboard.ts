@@ -39,11 +39,13 @@ export const checkerboardNode: NodeDefinition = {
       ],
       updateMode: 'recompile',
     },
-    { id: 'cellSize', label: 'Cell Size', type: 'float', default: 40, min: 1, max: 512, step: 1, connectable: true, updateMode: 'uniform', showWhen: { tileMode: 'cellSize' } },
-    { id: 'density', label: 'Density', type: 'float', default: 8, min: 1, max: 128, step: 1, connectable: true, updateMode: 'uniform', showWhen: { tileMode: 'density' } },
-    { id: 'softness', label: 'Softness', type: 'float', default: 0.0, min: 0.0, max: 0.5, step: 0.01, connectable: true, updateMode: 'uniform' },
-    { id: 'colorA', label: 'Color A', type: 'color', default: [1, 1, 1, 1], connectable: true, updateMode: 'uniform' },
-    { id: 'colorB', label: 'Color B', type: 'color', default: [0, 0, 0, 1], connectable: true, updateMode: 'uniform' },
+    // Non-connectable so they render in declared order under Tile Mode (connectable
+    // params render in a separate section above the regular ones). Still uniforms → live drag.
+    { id: 'cellSize', label: 'Cell Size', type: 'float', default: 40, min: 1, max: 512, step: 1, updateMode: 'uniform', showWhen: { tileMode: 'cellSize' } },
+    { id: 'density', label: 'Density', type: 'float', default: 8, min: 1, max: 128, step: 1, updateMode: 'uniform', showWhen: { tileMode: 'density' } },
+    { id: 'softness', label: 'Softness', type: 'float', default: 0.0, min: 0.0, max: 0.5, step: 0.01, updateMode: 'uniform' },
+    { id: 'colorA', label: 'Color A', type: 'color', default: [1, 1, 1, 1], updateMode: 'uniform' },
+    { id: 'colorB', label: 'Color B', type: 'color', default: [0, 0, 0, 1], updateMode: 'uniform' },
   ],
 
   glsl: (ctx) => {
