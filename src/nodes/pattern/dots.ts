@@ -24,9 +24,9 @@ export const dotsNode: NodeDefinition = {
 
   params: [
     ...getSpatialParams({ transforms: ['scale', 'rotate', 'translate'] }),
-    { id: 'gapX', label: 'Gap X', type: 'float', default: 60, min: 1, max: 512, step: 1, connectable: true, updateMode: 'uniform' },
-    { id: 'gapY', label: 'Gap Y', type: 'float', default: 60, min: 1, max: 512, step: 1, connectable: true, updateMode: 'uniform' },
     { id: 'radius', label: 'Radius', type: 'float', default: 20, min: 1, max: 256, step: 1, connectable: true, updateMode: 'uniform' },
+    { id: 'gapX', label: 'Gap X', type: 'float', default: 20, min: 0, max: 512, step: 1, connectable: true, updateMode: 'uniform' },
+    { id: 'gapY', label: 'Gap Y', type: 'float', default: 20, min: 0, max: 512, step: 1, connectable: true, updateMode: 'uniform' },
     { id: 'aspect', label: 'Aspect', type: 'float', default: 1.0, min: 0.25, max: 4.0, step: 0.01, connectable: true, updateMode: 'uniform' },
     { id: 'softness', label: 'Softness', type: 'float', default: 0.05, min: 0.0, max: 0.5, step: 0.01, connectable: true, updateMode: 'uniform' },
     { id: 'colorA', label: 'Color A', type: 'color', default: [1, 1, 1, 1], connectable: true, updateMode: 'uniform' },
@@ -43,7 +43,8 @@ export const dotsNode: NodeDefinition = {
     const rpx = `dt_rpx_${id}`
     const d = `dt_d_${id}`
     return [
-      `vec2 ${gapU} = vec2(${inputs.gapX}, ${inputs.gapY}) / (u_dpr * u_ref_size);`,
+      // Gap is edge-to-edge → cell period = gap + 2*radius (center spacing).
+      `vec2 ${gapU} = vec2(${inputs.gapX} + 2.0 * ${inputs.radius}, ${inputs.gapY} + 2.0 * ${inputs.radius}) / (u_dpr * u_ref_size);`,
       `vec2 ${rel} = ${inputs.coords} - (floor(${inputs.coords} / ${gapU}) + vec2(0.5, 0.5)) * ${gapU};`,
       `float ${rpx} = ${inputs.radius} / (u_dpr * u_ref_size);`,
       `float ${d} = length(vec2(${rel}.x * ${inputs.aspect}, ${rel}.y));`,
@@ -70,10 +71,15 @@ export const dotsNode: NodeDefinition = {
 
     return {
       statements: [
-        // vec2 gap_u = vec2(gapX, gapY) / (u_dpr * u_ref_size)
+        // vec2 gap_u = vec2(gapX + 2r, gapY + 2r) / (u_dpr * u_ref_size)
+        // Gap is edge-to-edge → cell period = gap + 2*radius (center spacing).
+        // (per-component: WGSL has no vec2 + scalar overload)
         declare(gapU, 'vec2',
           binary('/',
-            construct('vec2', [gapX, gapY]),
+            construct('vec2', [
+              binary('+', gapX, binary('*', literal('float', 2.0), radius, 'float'), 'float'),
+              binary('+', gapY, binary('*', literal('float', 2.0), radius, 'float'), 'float'),
+            ]),
             binary('*', variable('u_dpr'), variable('u_ref_size'), 'float'),
             'vec2',
           ),
