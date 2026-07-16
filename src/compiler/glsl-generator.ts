@@ -30,8 +30,12 @@ export function paramGlslType(paramType: string): 'float' | 'vec2' | 'vec3' | 'v
  * never upload a truncated/garbage 4th component.
  */
 export function padColorUniformValue(paramType: string, value: unknown): number | number[] {
-  if (paramType === 'color' && Array.isArray(value) && value.length === 3) {
-    return [...value, 1.0]
+  if (paramType === 'color' && Array.isArray(value)) {
+    // Always emit exactly 4 components. Legacy saves are 3-tuples; a value
+    // shorter than 4 (e.g. a 2-tuple from an earlier corruption) would upload
+    // a truncated/garbage vec4 uniform and break the render — pad defensively.
+    const v = value as number[]
+    return [v[0] ?? 0, v[1] ?? 0, v[2] ?? 0, v[3] ?? 1]
   }
   return value as number | number[]
 }
