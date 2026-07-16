@@ -47,8 +47,9 @@ export const stripesNode: NodeDefinition = {
       `float ${periodPx} = max(${inputs.width} + ${inputs.gap}, 0.0001);`,
       `float ${period} = ${periodPx} / (u_dpr * u_ref_size);`,
       `float ${duty} = clamp(${inputs.width} / ${periodPx}, 0.0, 1.0);`,
-      `float ${t} = fract(${inputs.coords}.x / ${period} + 0.5) - 0.5;`,
       `float ${hw} = ${duty} * 0.5;`,
+      // stripe LEFT edge at the origin (not centered): stripe occupies [0, duty] per period
+      `float ${t} = fract(${inputs.coords}.x / ${period}) - ${hw};`,
       `float ${aa} = max(${inputs.softness} * 0.5, 0.0001);`,
       `float ${band} = smoothstep(${hw} + ${aa}, ${hw} - ${aa}, abs(${t}));`,
       `float ${outputs.value} = ${band};`,
@@ -98,22 +99,18 @@ export const stripesNode: NodeDefinition = {
             literal('float', 1.0),
           ], 'float'),
         ),
-        // float t = fract(coords.x / period + 0.5) - 0.5
+        // float hw = duty * 0.5
+        declare(hw, 'float', binary('*', variable(duty), literal('float', 0.5), 'float')),
+        // float t = fract(coords.x / period) - hw  (stripe LEFT edge at the origin)
         declare(t, 'float',
           binary('-',
             call('fract', [
-              binary('+',
-                binary('/', swizzle(coords, 'x', 'float'), variable(period), 'float'),
-                literal('float', 0.5),
-                'float',
-              ),
+              binary('/', swizzle(coords, 'x', 'float'), variable(period), 'float'),
             ], 'float'),
-            literal('float', 0.5),
+            variable(hw),
             'float',
           ),
         ),
-        // float hw = duty * 0.5
-        declare(hw, 'float', binary('*', variable(duty), literal('float', 0.5), 'float')),
         // float aa = max(softness * 0.5, 0.0001)
         declare(aa, 'float',
           call('max', [
