@@ -791,9 +791,18 @@ function verify(
 {
   const [g, i] = ctx({
     nodeId: 'dots-ooo555',
-    inputs: { coords: 'node_uv_xyz_coords', radius: 'u_dots_ooo555_radius', softness: 'u_dots_ooo555_softness' },
-    outputs: { value: 'node_dots_ooo555_value' },
-    params: { radius: 0.3, softness: 0.05 },
+    inputs: {
+      coords: 'node_uv_xyz_coords',
+      gapX: 'u_dots_ooo555_gapX',
+      gapY: 'u_dots_ooo555_gapY',
+      radius: 'u_dots_ooo555_radius',
+      aspect: 'u_dots_ooo555_aspect',
+      softness: 'u_dots_ooo555_softness',
+      colorA: 'u_dots_ooo555_colorA',
+      colorB: 'u_dots_ooo555_colorB',
+    },
+    outputs: { color: 'node_dots_ooo555_color', value: 'node_dots_ooo555_value' },
+    params: { gapX: 60, gapY: 60, radius: 0.3, aspect: 1.0, softness: 0.05 },
   })
   verify('Dots', dotsNode, g, i)
 }
