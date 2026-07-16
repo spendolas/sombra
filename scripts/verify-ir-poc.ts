@@ -762,9 +762,15 @@ function verify(
 {
   const [g, i] = ctx({
     nodeId: 'check-mmm333',
-    inputs: { coords: 'node_uv_xyz_coords' },
-    outputs: { value: 'node_check_mmm333_value' },
-    params: {},
+    inputs: {
+      coords: 'node_uv_xyz_coords',
+      cellSize: 'u_check_mmm333_cellSize',
+      softness: 'u_check_mmm333_softness',
+      colorA: 'u_check_mmm333_colorA',
+      colorB: 'u_check_mmm333_colorB',
+    },
+    outputs: { color: 'node_check_mmm333_color', value: 'node_check_mmm333_value' },
+    params: { tileMode: 'cellSize', cellSize: 40, softness: 0.0 },
   })
   verify('Checkerboard', checkerboardNode, g, i)
 }
