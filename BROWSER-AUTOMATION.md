@@ -278,10 +278,10 @@ The **GraphToolbar** in the top-left of the canvas provides Save (download) and 
 
 | Type | Label | Inputs | Outputs | Params |
 |---|---|---|---|---|
-| `checkerboard` | Checkerboard | `coords` (vec2, auto_uv) | `value` (float) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable) |
-| `stripes` | Stripes | `coords` (vec2, auto_uv) | `value` (float) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `softness` (connectable) |
-| `dots` | Dots | `coords` (vec2, auto_uv) | `value` (float) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `radius` (connectable), `softness` (connectable) |
-| `gradient` | Gradient | `coords` (vec2, auto_uv) | `value` (float) | `gradientType` (enum: linear/radial/angular/diamond) |
+| `checkerboard` | Checkerboard | `coords` (vec2, auto_uv) | `color` (color), `value` (float) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `tileMode` (enum: cellSize/density), `cellSize` (connectable; when tileMode=cellSize), `density` (connectable; when tileMode=density), `softness` (connectable), `colorA` (connectable), `colorB` (connectable) |
+| `stripes` | Stripes | `coords` (vec2, auto_uv) | `color` (color), `value` (float) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `width` (connectable), `gap` (connectable), `softness` (connectable), `colorA` (connectable), `colorB` (connectable) |
+| `dots` | Dots | `coords` (vec2, auto_uv) | `color` (color), `value` (float) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `gapX` (connectable), `gapY` (connectable), `radius` (connectable), `aspect` (connectable), `softness` (connectable), `colorA` (connectable), `colorB` (connectable) |
+| `gradient` | Gradient | `coords` (vec2, auto_uv) | `color` (color, RGBA — stops carry alpha), `value` (float) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `gradientType` (enum: linear/radial/angular/diamond), `interpolation` (enum: smooth/linear/constant) |
 
 ### Vector
 
