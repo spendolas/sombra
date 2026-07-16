@@ -271,6 +271,11 @@ export function ImageUploader({ nodeId, data }: {
   const svgRef = useRef<SVGSVGElement>(null)
   const [thumbSize, setThumbSize] = useState<[number, number]>([156, 96])
   const [hoverCursor, setHoverCursor] = useState('default')
+  // Toggled on pointerdown/up so the drag listeners live on `window` (below),
+  // not on the <svg>. The gizmo restyles the polygon every frame, which slides
+  // it out from under the cursor and silently drops pointer capture — binding
+  // move/up on the element would then miss the release and strand the drag.
+  const [dragging, setDragging] = useState(false)
   const maskId = useId().replace(/:/g, '_')
 
   const imageData = data.imageData as string | undefined
@@ -330,7 +335,6 @@ export function ImageUploader({ nodeId, data }: {
 
     e.stopPropagation()
     e.preventDefault()
-    ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
 
     const state: DragState = {
       mode: hit.mode,
@@ -377,29 +381,33 @@ export function ImageUploader({ nodeId, data }: {
     }
 
     dragRef.current = state
+    setDragging(true)
     document.body.style.cursor = hit.cursor
   }, [clientToSvg, polygon, polyCenter, offsetX, offsetY, scale, rotateDeg])
 
-  const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    const drag = dragRef.current
-    if (!drag) {
-      const [sx, sy] = clientToSvg(e.clientX, e.clientY)
-      const hit = hitTestPolygon(sx, sy, polygon)
-      setHoverCursor(hit?.cursor || 'default')
-      return
-    }
-
-    e.stopPropagation()
-    e.preventDefault()
+  // Element handler: hover-cursor hit-test only. Drag moves are handled by the
+  // window listeners (effect below), so bail once a drag is active.
+  const handleHoverMove = useCallback((e: React.PointerEvent) => {
+    if (dragRef.current) return
     const [sx, sy] = clientToSvg(e.clientX, e.clientY)
+    const hit = hitTestPolygon(sx, sy, polygon)
+    setHoverCursor(hit?.cursor || 'default')
+  }, [clientToSvg, polygon])
+
+  // Drag math, driven by window pointermove (clientX/clientY/altKey from the
+  // native event). Reads the frozen gesture start from dragRef.
+  const applyDrag = useCallback((clientX: number, clientY: number, altKey: boolean) => {
+    const drag = dragRef.current
+    if (!drag) return
+    const [sx, sy] = clientToSvg(clientX, clientY)
 
     if (drag.mode === 'offset') {
       // Client pixel delta → thumbnail pixel delta → image UV delta → invert fit/fill → offset
       const svg = svgRef.current
       if (!svg) return
       const r = svg.getBoundingClientRect()
-      const dThumbX = (e.clientX - drag.startClientX) / r.width * tw
-      const dThumbY = (e.clientY - drag.startClientY) / r.height * th
+      const dThumbX = (clientX - drag.startClientX) / r.width * tw
+      const dThumbY = (clientY - drag.startClientY) / r.height * th
 
       let dImgU = dThumbX / tw
       let dImgV = -dThumbY / th
@@ -436,7 +444,7 @@ export function ImageUploader({ nodeId, data }: {
         const params: Record<string, unknown> = { ...dataRef.current, srt_scale: newScale }
 
         // Anchor compensation: exact SRT derivation keeps anchor corner fixed
-        if (!e.altKey) {
+        if (!altKey) {
           const u = drag.anchorU, v = drag.anchorV
           const aspect = canvasW / canvasH
           const rad = drag.startRotate * 0.01745329
@@ -461,15 +469,33 @@ export function ImageUploader({ nodeId, data }: {
         params: { ...dataRef.current, srt_rotate: Math.round(newRotate) },
       })
     }
-  }, [clientToSvg, polygon, tw, th, canvasW, canvasH, imageAspect, fitMode, imageWidth, imageHeight, nodeId, updateNodeData])
+  }, [clientToSvg, tw, th, canvasW, canvasH, imageAspect, fitMode, imageWidth, imageHeight, nodeId, updateNodeData])
 
-  const handlePointerUp = useCallback((e: React.PointerEvent) => {
-    if (!dragRef.current) return
-    e.stopPropagation()
-    ;(e.currentTarget as Element).releasePointerCapture(e.pointerId)
-    dragRef.current = null
-    document.body.style.cursor = ''
-  }, [])
+  // Drag lifetime: bind move/up/cancel on `window` so the release is caught
+  // wherever the cursor lands — even after the gizmo has slid out from under it.
+  // No pointer capture to silently drop; listeners are scoped to the drag.
+  useEffect(() => {
+    if (!dragging) return
+
+    const onMove = (e: PointerEvent) => {
+      e.preventDefault()
+      applyDrag(e.clientX, e.clientY, e.altKey)
+    }
+    const onEnd = () => {
+      dragRef.current = null
+      document.body.style.cursor = ''
+      setDragging(false)
+    }
+
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onEnd)
+    window.addEventListener('pointercancel', onEnd)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onEnd)
+      window.removeEventListener('pointercancel', onEnd)
+    }
+  }, [dragging, applyDrag])
 
   // --- File handlers ---
   const handleFileChange = useCallback(
@@ -523,8 +549,7 @@ export function ImageUploader({ nodeId, data }: {
               viewBox={`0 0 ${tw} ${th}`}
               style={{ cursor: hoverCursor }}
               onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
+              onPointerMove={handleHoverMove}
             >
               <defs>
                 <mask id={`vp-${maskId}`}>
