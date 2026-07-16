@@ -369,7 +369,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
             bool = checkbox, float/other = slider. nodrag/nowheel so React Flow
             doesn't eat the first pointerdown on Radix triggers / pickers. */}
         {bodyParams.length > 0 && (
-          <div className={cn(ds.shaderNode.paramDivider, "mt-xs pt-md nodrag nowheel")}>
+          <div className={cn(ds.shaderNode.paramDivider, "mt-xs pt-md flex flex-col gap-md nodrag nowheel")}>
             {bodyParams.map((param) => {
               const connectable = !!param.connectable
               const isConnected = connectable && connectedInputs.has(param.id)
@@ -439,7 +439,9 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                       connected={isConnected}
                     />
                   )}
-                  <div className={ds.connectableParamRow.innerFrame}>{control}</div>
+                  {/* auto-height frame (the DS innerFrame is fixed h-36, tuned for
+                      sliders — it clips taller controls like dropdowns / anchor grid) */}
+                  <div className="flex flex-col pl-handle-offset pr-xs gap-xs flex-1 min-w-0">{control}</div>
                   {param.warnAbove != null && !isConnected && displayValue > param.warnAbove && (
                     <span className={cn(ds.shaderNode.warnText, "px-sm pb-2xs")}>
                       High value — may impact performance
