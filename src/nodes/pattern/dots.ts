@@ -29,9 +29,8 @@ export const dotsNode: NodeDefinition = {
     { id: 'radius', label: 'Radius', type: 'float', default: 20, min: 1, max: 256, step: 1, connectable: true, updateMode: 'uniform' },
     { id: 'aspect', label: 'Aspect', type: 'float', default: 1.0, min: 0.25, max: 4.0, step: 0.01, connectable: true, updateMode: 'uniform' },
     { id: 'softness', label: 'Softness', type: 'float', default: 0.05, min: 0.0, max: 0.5, step: 0.01, connectable: true, updateMode: 'uniform' },
-    // Colors are pickers (not connectable) — connectable params render as float sliders.
-    { id: 'colorA', label: 'Color A', type: 'color', default: [1, 1, 1, 1], updateMode: 'uniform' },
-    { id: 'colorB', label: 'Color B', type: 'color', default: [0, 0, 0, 1], updateMode: 'uniform' },
+    { id: 'colorA', label: 'Color A', type: 'color', default: [1, 1, 1, 1], connectable: true, updateMode: 'uniform' },
+    { id: 'colorB', label: 'Color B', type: 'color', default: [0, 0, 0, 1], connectable: true, updateMode: 'uniform' },
   ],
 
   glsl: (ctx) => {

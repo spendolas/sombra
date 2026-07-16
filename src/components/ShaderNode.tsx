@@ -6,7 +6,7 @@ import { memo, useCallback, useMemo, useRef, useEffect } from 'react'
 import { Position, useEdges, type NodeProps } from '@xyflow/react'
 import type { NodeData, NodeParameter } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
-import { NodeParameters, FloatSlider } from './NodeParameters'
+import { FloatSlider, AnchorGrid, EnumSelect, BoolCheckbox } from './NodeParameters'
 import { useGraphStore } from '../stores/graphStore'
 import { usePreviewStore } from '../stores/previewStore'
 import { useCompilerStore } from '../stores/compilerStore'
@@ -248,29 +248,32 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
     ? definition.dynamicInputs(currentValues)
     : definition.inputs
 
-  // Partition: connectable params that are visible
-  const connectableParams = allParams.filter(
-    (p) => p.connectable && isParamVisible(p, currentValues, allParams)
+  // SRT (framework transform) params render in the Transform section below.
+  const srtParams = allParams.filter(
+    (p) => p.id.startsWith('srt_') && p.connectable && isParamVisible(p, currentValues, allParams)
   )
-  const connectableIds = new Set(connectableParams.map((p) => p.id))
 
-  // Split connectable params: framework SRT (_srt_*) vs node-specific
-  const srtParams = connectableParams.filter((p) => p.id.startsWith('srt_'))
-  const nodeConnectableParams = connectableParams.filter((p) => !p.id.startsWith('srt_'))
-
-  // Pure inputs: those NOT shadowed by a connectable param
-  const pureInputs = resolvedInputs.filter((inp) => !connectableIds.has(inp.id))
-
-  // Non-connectable, visible params (enums, non-connectable floats, colors).
-  // color_constant's `color` param is excluded here — its node body IS the
-  // inline color picker (rendered below), so it must not also appear via the
-  // generic NodeParameters row (that would double-render the same control).
-  const regularParams = allParams.filter(
+  // Everything else renders inline in DECLARED ORDER, with a left handle on
+  // connectable params (so all inputs are wireable). One ordered pass keeps
+  // authoring order (e.g. Tile Mode before Cell Size) and lets each param pick
+  // its own control — colors render as swatch pickers, not sliders.
+  // color_constant's `color` param is excluded — its node body IS the inline
+  // picker (rendered below), so it must not also appear as a generic row.
+  const bodyParams = allParams.filter(
     (p) =>
-      !p.connectable &&
+      !p.id.startsWith('srt_') &&
       isParamVisible(p, currentValues, allParams) &&
       !(definition.type === 'color_constant' && p.type === 'color')
   )
+
+  const connectableIds = new Set(
+    allParams
+      .filter((p) => p.connectable && isParamVisible(p, currentValues, allParams))
+      .map((p) => p.id)
+  )
+
+  // Pure inputs: those NOT shadowed by a connectable param
+  const pureInputs = resolvedInputs.filter((inp) => !connectableIds.has(inp.id))
 
   // Dynamic input flag
   const hasDynamicInputs = !!definition.dynamicInputs
@@ -361,77 +364,90 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
           </div>
         )}
 
-        {/* Node connectable param rows: handle + inline slider */}
-        {nodeConnectableParams.map((param) => {
-          const isConnected = connectedInputs.has(param.id)
+        {/* Body params in DECLARED ORDER. Connectable → left handle (all inputs
+            wireable); control by type: color = swatch picker, enum = dropdown,
+            bool = checkbox, float/other = slider. nodrag/nowheel so React Flow
+            doesn't eat the first pointerdown on Radix triggers / pickers. */}
+        {bodyParams.length > 0 && (
+          <div className={cn(ds.shaderNode.paramDivider, "mt-xs pt-md nodrag nowheel")}>
+            {bodyParams.map((param) => {
+              const connectable = !!param.connectable
+              const isConnected = connectable && connectedInputs.has(param.id)
 
-          // Resolve source info when connected
-          let displayValue = (currentValues[param.id] as number) ?? (param.default as number)
-          let sourceLabel = ''
-          let hasResolvedValue = false
-          if (isConnected) {
-            const edge = edges.find((e) => e.target === id && e.targetHandle === param.id)
-            if (edge) {
-              const sourceNode = allNodes.find((n) => n.id === edge.source)
-              if (sourceNode) {
-                const sourceDef = nodeRegistry.get(sourceNode.data.type)
-                sourceLabel = sourceDef?.label || sourceNode.data.type
-                const resolved = resolveSourceFloat(sourceNode.data.type, sourceNode.data.params || {})
-                if (resolved !== null) {
-                  displayValue = resolved
-                  hasResolvedValue = true
+              let displayValue = (currentValues[param.id] as number) ?? (param.default as number)
+              let sourceLabel = ''
+              let hasResolvedValue = false
+              if (isConnected) {
+                const edge = edges.find((e) => e.target === id && e.targetHandle === param.id)
+                if (edge) {
+                  const sourceNode = allNodes.find((n) => n.id === edge.source)
+                  if (sourceNode) {
+                    const sourceDef = nodeRegistry.get(sourceNode.data.type)
+                    sourceLabel = sourceDef?.label || sourceNode.data.type
+                    const resolved = resolveSourceFloat(sourceNode.data.type, sourceNode.data.params || {})
+                    if (resolved !== null) {
+                      displayValue = resolved
+                      hasResolvedValue = true
+                    }
+                  }
                 }
               }
-            }
-          }
 
-          return (
-            <div key={param.id} className={cn(ds.connectableParamRow.root, "nodrag nowheel")}>
-              <BaseHandle
-                type="target"
-                position={Position.Left}
-                id={param.id}
-                handleColor={getPortColor(param.type)}
-                connected={isConnected}
-              />
-              <div className={ds.connectableParamRow.innerFrame}>
-                {isConnected && !hasResolvedValue ? (
+              let control
+              if (isConnected && !hasResolvedValue) {
+                control = (
                   <div className={cn(ds.nodeParameters.connectedHeader, "py-2xs")}>
-                    <span className={ds.shaderNode.connectedLabel}>
-                      {param.label}
-                    </span>
-                    <span className={ds.shaderNode.connectedSource}>
-                      {'← ' + sourceLabel}
-                    </span>
+                    <span className={ds.shaderNode.connectedLabel}>{param.label}</span>
+                    <span className={ds.shaderNode.connectedSource}>{'← ' + sourceLabel}</span>
                   </div>
-                ) : (
-                  <FloatSlider
-                    param={param}
-                    value={displayValue}
-                    onChange={(value) => handleParamChange(param.id, value)}
-                    disabled={isConnected}
+                )
+              } else if (param.type === 'color') {
+                const raw = (currentValues[param.id] as number[] | undefined) ?? (param.default as number[] | undefined) ?? [0, 0, 0, 1]
+                const rgba: Rgba = [raw[0] ?? 0, raw[1] ?? 0, raw[2] ?? 0, raw[3] ?? 1]
+                control = (
+                  <RgbaColorPicker
+                    label={param.label}
+                    mode="popover"
+                    value={rgba}
+                    onChange={(v) => handleParamChange(param.id, v)}
                   />
-                )}
-              </div>
-              {param.warnAbove != null && !isConnected && displayValue > param.warnAbove && (
-                <span className={cn(ds.shaderNode.warnText, "px-sm pb-2xs")}>
-                  High value — may impact performance
-                </span>
-              )}
-            </div>
-          )
-        })}
+                )
+              } else if (param.type === 'enum' && param.options) {
+                control = param.control === 'anchor-grid' ? (
+                  <AnchorGrid param={param} value={(currentValues[param.id] as string) ?? (param.default as string)} onChange={(v) => handleParamChange(param.id, v)} />
+                ) : (
+                  <EnumSelect param={param} value={(currentValues[param.id] as string) ?? (param.default as string)} onChange={(v) => handleParamChange(param.id, v)} />
+                )
+              } else if (param.type === 'bool') {
+                control = (
+                  <BoolCheckbox param={param} value={(currentValues[param.id] as boolean) ?? (param.default as boolean)} onChange={(v) => handleParamChange(param.id, v)} />
+                )
+              } else {
+                control = (
+                  <FloatSlider param={param} value={displayValue} onChange={(value) => handleParamChange(param.id, value)} disabled={isConnected} />
+                )
+              }
 
-        {/* Non-connectable params (enums, sliders without handles). nodrag/nowheel:
-            React Flow otherwise swallows the first pointerdown on a Radix Select
-            trigger as a node-drag gesture, so dropdowns took a second click to open. */}
-        {regularParams.length > 0 && (
-          <div className={cn(ds.shaderNode.paramDivider, "mt-xs pt-md nodrag nowheel")}>
-            <NodeParameters
-              nodeId={id}
-              parameters={regularParams}
-              currentValues={currentValues}
-            />
+              return (
+                <div key={param.id} className={ds.connectableParamRow.root}>
+                  {connectable && (
+                    <BaseHandle
+                      type="target"
+                      position={Position.Left}
+                      id={param.id}
+                      handleColor={getPortColor(param.type)}
+                      connected={isConnected}
+                    />
+                  )}
+                  <div className={ds.connectableParamRow.innerFrame}>{control}</div>
+                  {param.warnAbove != null && !isConnected && displayValue > param.warnAbove && (
+                    <span className={cn(ds.shaderNode.warnText, "px-sm pb-2xs")}>
+                      High value — may impact performance
+                    </span>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
 
@@ -470,7 +486,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
           <div className={cn(
             "w-full",
             !definition.hidePreview && "mt-xs pt-md",
-            !definition.hidePreview && regularParams.length === 0 && ds.shaderNode.paramDivider,
+            !definition.hidePreview && bodyParams.length === 0 && ds.shaderNode.paramDivider,
           )}>
             <definition.component nodeId={id} data={currentValues} />
           </div>

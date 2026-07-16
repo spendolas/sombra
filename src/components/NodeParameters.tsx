@@ -151,7 +151,7 @@ interface AnchorGridProps {
  * 3×3 pin-position toggle grid for anchor-style enum params
  * (param.control === 'anchor-grid'; options in row-major order tl..br).
  */
-function AnchorGrid({ param, value, onChange }: AnchorGridProps) {
+export function AnchorGrid({ param, value, onChange }: AnchorGridProps) {
   return (
     <div className={ds.anchorGrid.root}>
       <Label className={ds.anchorGrid.label}>{param.label}</Label>
@@ -182,7 +182,7 @@ interface EnumSelectProps {
   onChange: (value: string) => void
 }
 
-function EnumSelect({ param, value, onChange }: EnumSelectProps) {
+export function EnumSelect({ param, value, onChange }: EnumSelectProps) {
   return (
     <div className={ds.enumSelect.root}>
       <Label className={ds.enumSelect.label}>
@@ -210,7 +210,7 @@ interface BoolCheckboxProps {
   onChange: (value: boolean) => void
 }
 
-function BoolCheckbox({ param, value, onChange }: BoolCheckboxProps) {
+export function BoolCheckbox({ param, value, onChange }: BoolCheckboxProps) {
   return (
     <label className={ds.boolCheckbox.root}>
       <input
