@@ -164,8 +164,12 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
 
   const pointScreenPos = new Map<string, { x: number; y: number }>()
   for (const p of visiblePoints) {
-    const px = (currentParams[p.xParam] as number) ?? 0
-    const py = (currentParams[p.yParam] as number) ?? 0
+    // Fall back to the param's DEFINITION default (not 0) for points the user
+    // hasn't dragged yet — else every unset point collapses onto the anchor.
+    const xDef = allParams.find((pp) => pp.id === p.xParam)?.default
+    const yDef = allParams.find((pp) => pp.id === p.yParam)?.default
+    const px = (currentParams[p.xParam] as number) ?? (xDef as number) ?? 0
+    const py = (currentParams[p.yParam] as number) ?? (yDef as number) ?? 0
     pointScreenPos.set(p.id, pointPxToScreen(px, py, canvasRect, anchor))
   }
 
