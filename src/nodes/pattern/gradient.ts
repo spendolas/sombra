@@ -123,8 +123,8 @@ export const gradientNode: NodeDefinition = {
   gizmo: {
     showWhen: { drawMode: 'pinned' },
     points: [
-      { id: 'p0', xParam: 'p0x', yParam: 'p0y', shape: 'diamond', showWhen: { drawMode: 'pinned' } },
-      { id: 'p1', xParam: 'p1x', yParam: 'p1y', shape: 'diamond', showWhen: { drawMode: 'pinned' } },
+      { id: 'p0', xParam: 'p0x', yParam: 'p0y', shape: 'circle', showWhen: { drawMode: 'pinned' } },
+      { id: 'p1', xParam: 'p1x', yParam: 'p1y', shape: 'circle', showWhen: { drawMode: 'pinned' } },
     ],
     connectors: [
       { from: 'p0', to: 'p1' },
