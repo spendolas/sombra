@@ -104,8 +104,8 @@ export const ds = {
     root: "flex flex-col gap-md",
     bar: "bg-gradient:linear rounded-md border border-edge cursor-crosshair relative h-input-h",
     stopMarkers: "relative h-icon-sm",
-    stopHandle: "bg-overlay-scrim rounded-full border-2 border-surface-elevated cursor-pointer transition-colors absolute w-handle h-handle hover:border-active",
-    stopHandleSelected: "bg-fg border-2 border-surface-elevated shadow-[0_0_4px_1px_rgba(99,102,241,0.8)]",
+    stopHandle: "bg-overlay-scrim rounded-full border-[2px] border-surface-elevated cursor-pointer transition-colors absolute w-handle h-handle hover:border-active",
+    stopHandleSelected: "bg-fg border-[2px] border-surface-elevated shadow-[0_0_4px_1px_rgba(99,102,241,0.8)]",
     controlsRow: "flex flex-row items-center gap-md overflow-hidden",
     positionText: "text-mono-value text-fg text-center",
   },
@@ -181,9 +181,9 @@ export const ds = {
     root: "overflow-hidden relative rounded-sm",
   },
   gizmo: {
-    handle: "bg-white rounded-full border-1.5 border-indigo cursor-grab w-[12px] h-[12px]",
-    center: "bg-surface rounded-full border-1.5 border-indigo w-[14px] h-[14px]",
-    connector: "border-1.5 border-indigo",
+    handle: "bg-white rounded-full border-[1.5px] border-indigo cursor-grab w-[12px] h-[12px]",
+    center: "bg-surface rounded-full border-[1.5px] border-indigo w-[14px] h-[14px]",
+    connector: "border-[1.5px] border-indigo",
   },
 } as const;
 

@@ -112,24 +112,29 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
     }
   }, [gizmoActive, previewMode, dockTargetRef, floatTargetRef, fullTargetRef])
 
-  // While dragging, the floating/full-window preview panel or its canvas may
-  // move/resize without a discrete resize/scroll event (e.g. layout settling
-  // mid-gesture) — a light rAF loop keeps canvasRect exact for the duration
-  // of the drag only, avoiding needless per-frame work while idle.
+  // Follow the preview live: the docked/floating/full-window panel (or its
+  // canvas) can move/resize without a discrete resize/scroll event — panel
+  // drags, split-handle drags, layout settling. A rAF loop while the gizmo is
+  // active keeps canvasRect exact every frame, and only calls setState when the
+  // rect actually changed so a static preview costs no re-renders.
   useEffect(() => {
-    if (!dragging) return
+    if (!gizmoActive) return
     let raf = 0
     const tick = () => {
       const canvas = canvasElRef.current
       if (canvas) {
         const r = canvas.getBoundingClientRect()
-        setCanvasRect({ left: r.left, top: r.top, width: r.width, height: r.height })
+        setCanvasRect((prev) =>
+          prev && prev.left === r.left && prev.top === r.top && prev.width === r.width && prev.height === r.height
+            ? prev
+            : { left: r.left, top: r.top, width: r.width, height: r.height },
+        )
       }
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
-  }, [dragging])
+  }, [gizmoActive])
 
   // Drag lifetime: bind move/up/cancel on `window` so release is caught even
   // off-canvas — no setPointerCapture, mirroring the ImageUploader gizmo.
@@ -207,7 +212,7 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
           <div
             key={point.id}
             className={cn(
-              'absolute nodrag nowheel pointer-events-auto border-[1.5px]',
+              'absolute nodrag nowheel pointer-events-auto',
               isCenter ? ds.gizmo.center : ds.gizmo.handle,
             )}
             style={{

@@ -391,7 +391,10 @@ function fillToClass(fill: string, colorMap: Record<string, string>): string {
 function strokeToClasses(stroke: StrokeDef, colorMap: Record<string, string>): string[] {
   const classes: string[] = []
 
-  const widthSuffix = stroke.weight && stroke.weight !== 1 ? `-${stroke.weight}` : ''
+  // Non-1 weights use an arbitrary px value — Tailwind's border-width scale only
+  // has 0/2/4/8, so `border-1.5` / `border-3` etc. compile to no CSS. `-[1.5px]`
+  // is always valid and visually identical to the scale values for integers.
+  const widthSuffix = stroke.weight && stroke.weight !== 1 ? `-[${stroke.weight}px]` : ''
   if (stroke.side === 'bottom') classes.push(`border-b${widthSuffix}`)
   else if (stroke.side === 'top') classes.push(`border-t${widthSuffix}`)
   else if (stroke.side === 'left') classes.push(`border-l${widthSuffix}`)
