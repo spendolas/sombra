@@ -148,6 +148,29 @@ export function getSpatialParams(spatial: SpatialConfig): NodeParameter[] {
 }
 
 /**
+ * A single draggable control point exposed by a node's preview gizmo overlay.
+ * `xParam`/`yParam` reference NodeParameter ids whose values (CSS px relative
+ * to the gizmo's anchor) are read/written as the handle is dragged.
+ */
+export interface GizmoPoint {
+  id: string                                   // Unique identifier within the gizmo
+  xParam: string                                // NodeParameter id holding the point's x (px)
+  yParam: string                                // NodeParameter id holding the point's y (px)
+  role?: 'point' | 'center'                     // Visual/behavioral role of the handle
+  showWhen?: Record<string, string | string[]>  // Only show when other params match (array = any of)
+}
+
+/**
+ * Declares a node's preview gizmo: draggable overlay handles bound to its
+ * point params. Rendered by the (future) gizmo overlay above the preview canvas.
+ */
+export interface GizmoConfig {
+  points: GizmoPoint[]
+  connectors?: Array<{ from: string; to: string }>  // Lines drawn between point ids, by GizmoPoint.id
+  showWhen?: Record<string, string | string[]>       // Only show the whole gizmo when other params match
+}
+
+/**
  * Register a shared GLSL function. Skips if key already registered.
  * Use this instead of pushing to functions[] directly.
  */
@@ -227,6 +250,14 @@ export interface NodeDefinition {
    * Defaults to 'linear' if not set.
    */
   textureFilter?: 'linear' | 'nearest'
+
+  /**
+   * Declares draggable control points for this node, rendered by the preview
+   * gizmo overlay (handles + inline sliders' on-canvas counterpart). Point
+   * params are read/written in the same CSS-px-relative-to-anchor space as
+   * the SRT translate params — see `src/utils/gizmo-coords.ts`.
+   */
+  gizmo?: GizmoConfig
 }
 
 /**
