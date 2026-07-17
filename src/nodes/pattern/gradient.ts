@@ -98,24 +98,6 @@ export const gradientNode: NodeDefinition = {
       connectable: true, updateMode: 'uniform',
       showWhen: { drawMode: 'pinned', gradientType: ['radial', 'angular', 'diamond'] },
     },
-    // Pinned PIN — the canvas point (0..1, u_anchor convention: 0,0 = top-left,
-    // 0.5,0.5 = centre) the gradient pins to on resize. P0/P1 are px offsets
-    // from it. Independent of the Fragment Output anchor, so changing the output
-    // anchor never moves the gradient; the pin is the gradient's OWN anchor
-    // (defaults to centre; set via the gizmo pin control). Hidden from the
-    // slider list — it's a gizmo control, not a scalar to drag.
-    {
-      id: 'pinX', label: 'Pin X', type: 'float', default: 0.5,
-      min: 0, max: 1, step: 0.5, hidden: true,
-      connectable: true, updateMode: 'uniform',
-      showWhen: { drawMode: 'pinned' },
-    },
-    {
-      id: 'pinY', label: 'Pin Y', type: 'float', default: 0.5,
-      min: 0, max: 1, step: 0.5, hidden: true,
-      connectable: true, updateMode: 'uniform',
-      showWhen: { drawMode: 'pinned' },
-    },
     // Stretch control points — UV (normalized 0..1 across canvas, bottom-left
     // origin, Y-up = v_uv). Renormalize on resize, so anchor-snapped handles
     // track their canvas landmark. Centre-origin defaults match Pinned
@@ -229,17 +211,16 @@ export const gradientNode: NodeDefinition = {
     const lines: string[] = []
 
     if (drawMode === 'pinned') {
-      // Pinned: P0/P1 are CSS px offsets from `grad_center` — the coords value
-      // that maps to the node's own PIN point on screen. grad_center = coords
-      // (auto_uv) evaluated at the pin pixel (u_resolution*pin): the u_anchor
-      // terms make it independent of the Fragment Output anchor (changing the
-      // output anchor never moves the gradient), while it PINS to `pin` on resize
-      // (pin*u_resolution tracks the canvas). Y flipped (px Y-down, coords Y-up).
+      // Pinned: P0/P1 are CSS px offsets from `grad_center`, a fixed coords value
+      // (0.5) that maps to the canvas centre at the REFERENCE size. Because
+      // `auto_uv` (coords) is anchor-relative, holding grad_center constant makes
+      // the gradient PIN to the Fragment Output anchor on resize (like the rest
+      // of the output). Y flipped (px Y-down, coords Y-up).
       ctx.uniforms.add('u_ref_size')
       ctx.uniforms.add('u_anchor')
       ctx.uniforms.add('u_resolution')
       ctx.uniforms.add('u_dpr')
-      lines.push(`vec2 grad_center_${id} = u_resolution * (vec2(${inputs.pinX}, ${inputs.pinY}) - u_anchor) / (u_dpr * u_ref_size) + u_anchor;`)
+      lines.push(`vec2 grad_center_${id} = vec2(0.5);`)
 
       const pt = (varName: string, pxExpr: string, pyExpr: string) => {
         lines.push(`vec2 ${varName} = grad_center_${id} + vec2(${pxExpr}, -(${pyExpr})) / u_ref_size;`)
@@ -402,27 +383,11 @@ export const gradientNode: NodeDefinition = {
       standardUniforms.add('u_resolution')
       standardUniforms.add('u_dpr')
 
-      // grad_center = u_resolution * (pin - u_anchor) / (u_dpr * u_ref_size) + u_anchor
-      // (see GLSL comment): pins to the node's own pin, independent of the output anchor.
+      // grad_center = 0.5 (see GLSL comment): fixed coords → pins to the Fragment
+      // Output anchor on resize via the anchor-relative auto_uv.
       const center = `grad_center_${id}`
       statements.push(declare(center, 'vec2',
-        binary('+',
-          binary('/',
-            binary('*',
-              variable('u_resolution'),
-              binary('-',
-                construct('vec2', [variable(ctx.inputs.pinX), variable(ctx.inputs.pinY)]),
-                variable('u_anchor'),
-                'vec2',
-              ),
-              'vec2',
-            ),
-            binary('*', variable('u_dpr'), variable('u_ref_size'), 'float'),
-            'vec2',
-          ),
-          variable('u_anchor'),
-          'vec2',
-        ),
+        construct('vec2', [literal('float', 0.5), literal('float', 0.5)]),
       ))
 
       // pt = grad_center + vec2(px, -py) / u_ref_size

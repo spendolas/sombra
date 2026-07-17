@@ -19,6 +19,8 @@ import { nodeRegistry } from '../nodes/registry'
 import { matchesShowWhen, type GizmoPoint, type GizmoAspectHandle, type GizmoOutline } from '../nodes/types'
 import { pointPxToScreen, screenToPointPx, uvToScreen, screenToUv, type Rect } from '../utils/gizmo-coords'
 import { moveCursor } from '../utils/cursors'
+import { REFERENCE_SIZE } from '../renderer/constants'
+import { anchorToVec2 } from '../nodes/output/fragment-output'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
 
@@ -74,8 +76,22 @@ function computeAspectGeometry(
   return { Cs, dirX, dirY, perpX, perpY, L, aspect }
 }
 
-/** Default px-space pin (canvas centre) when a node declares no pin params. */
-const DEFAULT_PIN: [number, number] = [0.5, 0.5]
+/**
+ * Fractional screen position (0..1 of the canvas rect) of the shader's px-space
+ * origin — where `grad_center` (coords `(0.5,0.5)`) lands on screen: the inverse
+ * of `auto_uv`, `anchor + (0.5 - anchor) * (REFERENCE_SIZE / cssSize)` (dpr
+ * cancels). At the reference size this is 0.5 for any anchor; as the canvas
+ * diverges it slides toward `outputAnchor` — matching the gradient's on-resize
+ * pinning to the Fragment Output anchor. px offsets add straight in CSS px.
+ */
+function pxOriginFrac(rect: Rect, outputAnchor: [number, number]): [number, number] {
+  const mx = rect.width > 0 ? REFERENCE_SIZE / rect.width : 1
+  const my = rect.height > 0 ? REFERENCE_SIZE / rect.height : 1
+  return [
+    outputAnchor[0] + (0.5 - outputAnchor[0]) * mx,
+    outputAnchor[1] + (0.5 - outputAnchor[1]) * my,
+  ]
+}
 
 /** Colour of the 9-point snap targets shown while dragging (yellow). Inline
  *  affordance colour (like `handleColor`), not a brand token — DS-ify later if
@@ -159,17 +175,13 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
     return gizmo.outline.filter((o) => matchesShowWhen(o.showWhen, currentParams, allParams))
   }, [gizmo, currentParams, allParams])
 
-  // The node's own PIN (0..1 canvas fraction) — the px-space origin. The shader's
-  // grad_center maps to `pin * canvas`, so px handles hang off the pin fraction
-  // directly (and it tracks the pin across resizes). Independent of the Fragment
-  // Output anchor. Defaults to centre.
-  const nodePin = useMemo<[number, number]>(() => {
-    const px = (currentParams.pinX as number | undefined) ??
-      (allParams.find((p) => p.id === 'pinX')?.default as number | undefined) ?? DEFAULT_PIN[0]
-    const py = (currentParams.pinY as number | undefined) ??
-      (allParams.find((p) => p.id === 'pinY')?.default as number | undefined) ?? DEFAULT_PIN[1]
-    return [px, py]
-  }, [currentParams, allParams])
+  // The Fragment Output anchor (as an [x,y] fraction) — the shader's px-space
+  // origin (grad_center) slides toward it as the canvas diverges from
+  // REFERENCE_SIZE, so the px gizmo must follow. Read from the fragment_output node.
+  const outputAnchor = useMemo<[number, number]>(() => {
+    const fo = nodes.find((n) => n.data.type === 'fragment_output')
+    return anchorToVec2((fo?.data.params?.anchor as string) ?? 'center')
+  }, [nodes])
 
   // --- Canvas rect tracking -------------------------------------------------
 
@@ -250,7 +262,7 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
       const canvas = canvasElRef.current
       if (!canvas) return
       const r = canvas.getBoundingClientRect()
-      const anchor = nodePin
+      const anchor = pxOriginFrac(r, outputAnchor)
       const latest = useGraphStore.getState().nodes.find((n) => n.id === nodeId)
       const latestParams = (latest?.data.params ?? {}) as Record<string, unknown>
 
@@ -357,14 +369,14 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
       window.removeEventListener('pointerup', onEnd)
       window.removeEventListener('pointercancel', onEnd)
     }
-  }, [dragging, nodePin, selectedNode, updateNodeData, gizmo, allParams])
+  }, [dragging, outputAnchor, selectedNode, updateNodeData, gizmo, allParams])
 
   if (!gizmoActive || !gizmo || !canvasRect) return null
 
   // Built from ALL gizmo points (not just currently-visible ones) so aspect
   // handles/outline can resolve their centerPoint/endPoint even if that point
   // itself isn't rendered as a handle.
-  const pxAnchor = nodePin
+  const pxAnchor = pxOriginFrac(canvasRect, outputAnchor)
   const pointScreenPos = new Map<string, { x: number; y: number }>()
   for (const p of gizmo.points) {
     // Fall back to the param's DEFINITION default (not 0) for points the user

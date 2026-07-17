@@ -6,6 +6,7 @@ import { createShaderRenderer, createPreviewRenderer, isWebGL2Forced } from './r
 import type { RenderPlan, RenderPass } from './compiler/glsl-generator'
 import { PreviewScheduler } from './renderer/preview-scheduler'
 import { useLiveCompiler } from './compiler'
+import { useAnchorCompensation } from './hooks/use-anchor-compensation'
 import { useGraphStore } from './stores/graphStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useCompilerStore } from './stores/compilerStore'
@@ -97,6 +98,10 @@ function applyCompileResult(
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rendererRef = useRef<ShaderRenderer | null>(null)
+
+  // Hold pinned gradients in place when the output anchor changes (they pin to
+  // the anchor on resize; this stops them jumping on anchor switch).
+  useAnchorCompensation(canvasRef)
 
   // Buffer for compile results that arrive before the renderer is ready.
   // The Worker compile may complete while the async factory is still resolving.
