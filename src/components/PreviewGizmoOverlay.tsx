@@ -212,7 +212,57 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
       const latestParams = (latest?.data.params ?? {}) as Record<string, unknown>
 
       if (dragging.kind === 'point') {
-        const { x, y } = screenToPointPx(e.clientX, e.clientY, r, anchor)
+        let sx = e.clientX
+        let sy = e.clientY
+        if (e.shiftKey) {
+          // Shift = angle snap. Constrain the cursor to 15deg increments around
+          // this point's PIVOT — the `from` end of the connector that points at
+          // this point (dragging p1 pivots around p0). Distance preserved; only
+          // the angle snaps. Magnet is suppressed while Shift is held so precise
+          // angle work isn't yanked to a landmark.
+          const pivotId = gizmo?.connectors?.find((c) => c.to === dragging.pointId)?.from
+          const pivot = pivotId ? gizmo?.points.find((p) => p.id === pivotId) : undefined
+          if (pivot) {
+            const pvx = (latestParams[pivot.xParam] as number | undefined) ??
+              (allParams.find((pp) => pp.id === pivot.xParam)?.default as number | undefined) ?? 0
+            const pvy = (latestParams[pivot.yParam] as number | undefined) ??
+              (allParams.find((pp) => pp.id === pivot.yParam)?.default as number | undefined) ?? 0
+            const Ps = pointPxToScreen(pvx, pvy, r, anchor)
+            const ddx = sx - Ps.x
+            const ddy = sy - Ps.y
+            const dist = Math.hypot(ddx, ddy)
+            if (dist > 1e-6) {
+              const step = Math.PI / 12 // 15deg
+              const snapped = Math.round(Math.atan2(ddy, ddx) / step) * step
+              sx = Ps.x + Math.cos(snapped) * dist
+              sy = Ps.y + Math.sin(snapped) * dist
+            }
+          }
+        } else {
+          // 9-point canvas magnet: snap onto the nearest canvas anchor (corners /
+          // edge-midpoints / centre) when within THRESHOLD screen px. Always on
+          // (no modifier) — the small radius keeps it unobtrusive and you can
+          // pull away freely.
+          const THRESHOLD = 10
+          const xs = [r.left, r.left + r.width / 2, r.left + r.width]
+          const ys = [r.top, r.top + r.height / 2, r.top + r.height]
+          let bestD = THRESHOLD
+          let bestX = sx
+          let bestY = sy
+          for (const ax of xs) {
+            for (const ay of ys) {
+              const d = Math.hypot(sx - ax, sy - ay)
+              if (d <= bestD) {
+                bestD = d
+                bestX = ax
+                bestY = ay
+              }
+            }
+          }
+          sx = bestX
+          sy = bestY
+        }
+        const { x, y } = screenToPointPx(sx, sy, r, anchor)
         updateNodeData(nodeId, {
           params: { ...latestParams, [dragging.xParam]: x, [dragging.yParam]: y },
         })
