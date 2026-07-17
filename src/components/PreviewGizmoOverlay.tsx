@@ -16,10 +16,62 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { useGraphStore } from '../stores/graphStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { nodeRegistry } from '../nodes/registry'
-import { matchesShowWhen, type GizmoPoint } from '../nodes/types'
+import { matchesShowWhen, type GizmoPoint, type GizmoAspectHandle } from '../nodes/types'
 import { pointPxToScreen, screenToPointPx, type Rect } from '../utils/gizmo-coords'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
+
+/** Tailwind override for the marker's border-radius: 'circle' (default) keeps
+ *  the base `rounded-full`; 'square'/'diamond' switch to `rounded-none` (a
+ *  diamond is a square rotated 45deg — see `markerTransform`). */
+function markerShapeClass(shape: 'circle' | 'diamond' | 'square' | undefined): string {
+  return shape === 'square' || shape === 'diamond' ? 'rounded-none' : ''
+}
+
+/** Marker's inline `transform`: always re-centers on its (left, top) via
+ *  translate(-50%, -50%); 'diamond' additionally rotates 45deg. Computed
+ *  inline (not via a Tailwind `rotate-45` class) because the centering
+ *  translate is already an inline style and would otherwise clobber it. */
+function markerTransform(shape: 'circle' | 'diamond' | 'square' | undefined): string {
+  return shape === 'diamond' ? 'translate(-50%, -50%) rotate(45deg)' : 'translate(-50%, -50%)'
+}
+
+/** Screen-space geometry derived from an aspect handle's center/end points:
+ *  direction along the center->end line, its perpendicular, the line length,
+ *  and the resolved aspect scalar (current param value, falling back to the
+ *  param's declared default, then 1). */
+interface AspectGeometry {
+  Cs: { x: number; y: number }
+  dirX: number
+  dirY: number
+  perpX: number
+  perpY: number
+  L: number
+  aspect: number
+}
+
+function computeAspectGeometry(
+  handle: Pick<GizmoAspectHandle, 'centerPoint' | 'endPoint' | 'aspectParam'>,
+  pointScreenPos: Map<string, { x: number; y: number }>,
+  currentParams: Record<string, unknown>,
+  allParams: { id: string; default: unknown }[],
+): AspectGeometry | null {
+  const Cs = pointScreenPos.get(handle.centerPoint)
+  const Es = pointScreenPos.get(handle.endPoint)
+  if (!Cs || !Es) return null
+  const dx = Es.x - Cs.x
+  const dy = Es.y - Cs.y
+  const L = Math.hypot(dx, dy)
+  const dirX = L > 1e-6 ? dx / L : 1
+  const dirY = L > 1e-6 ? dy / L : 0
+  const perpX = -dirY
+  const perpY = dirX
+  const aspect =
+    (currentParams[handle.aspectParam] as number | undefined) ??
+    (allParams.find((pp) => pp.id === handle.aspectParam)?.default as number | undefined) ??
+    1
+  return { Cs, dirX, dirY, perpX, perpY, L, aspect }
+}
 
 /** Gizmo points are relative to the preview canvas centre (stable reference,
  *  independent of the Fragment Output anchor). Module-level so its identity is
@@ -32,11 +84,9 @@ interface PreviewGizmoOverlayProps {
   fullTargetRef: RefObject<HTMLDivElement | null>
 }
 
-interface DragState {
-  pointId: string
-  xParam: string
-  yParam: string
-}
+type DragState =
+  | { kind: 'point'; pointId: string; xParam: string; yParam: string }
+  | { kind: 'aspect'; handleId: string; aspectParam: string; centerPoint: string; endPoint: string }
 
 export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetRef }: PreviewGizmoOverlayProps) {
   const previewMode = useSettingsStore((s) => s.previewMode)
@@ -64,6 +114,14 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
     if (!gizmo) return []
     return gizmo.points.filter((p) => matchesShowWhen(p.showWhen, currentParams, allParams))
   }, [gizmo, currentParams, allParams])
+
+  const visibleAspectHandles = useMemo<GizmoAspectHandle[]>(() => {
+    if (!gizmo?.aspectHandles) return []
+    return gizmo.aspectHandles.filter((h) => matchesShowWhen(h.showWhen, currentParams, allParams))
+  }, [gizmo, currentParams, allParams])
+
+  const outlineVisible =
+    !!gizmo?.outline && matchesShowWhen(gizmo.outline.showWhen, currentParams, allParams)
 
   // Gizmo points are relative to the PREVIEW CANVAS CENTRE (not the Fragment
   // Output anchor) so their preview-window position survives anchor changes.
@@ -148,11 +206,43 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
       const canvas = canvasElRef.current
       if (!canvas) return
       const r = canvas.getBoundingClientRect()
-      const { x, y } = screenToPointPx(e.clientX, e.clientY, r, anchor)
       const latest = useGraphStore.getState().nodes.find((n) => n.id === nodeId)
       const latestParams = (latest?.data.params ?? {}) as Record<string, unknown>
+
+      if (dragging.kind === 'point') {
+        const { x, y } = screenToPointPx(e.clientX, e.clientY, r, anchor)
+        updateNodeData(nodeId, {
+          params: { ...latestParams, [dragging.xParam]: x, [dragging.yParam]: y },
+        })
+        return
+      }
+
+      // Aspect handle: project the cursor onto the perpendicular of the
+      // center->end line, using each point's LATEST params (not the
+      // possibly-stale render-time pointScreenPos).
+      const centerPoint = gizmo?.points.find((p) => p.id === dragging.centerPoint)
+      const endPoint = gizmo?.points.find((p) => p.id === dragging.endPoint)
+      if (!centerPoint || !endPoint) return
+      const cx = (latestParams[centerPoint.xParam] as number | undefined) ??
+        (allParams.find((pp) => pp.id === centerPoint.xParam)?.default as number | undefined) ?? 0
+      const cy = (latestParams[centerPoint.yParam] as number | undefined) ??
+        (allParams.find((pp) => pp.id === centerPoint.yParam)?.default as number | undefined) ?? 0
+      const ex = (latestParams[endPoint.xParam] as number | undefined) ??
+        (allParams.find((pp) => pp.id === endPoint.xParam)?.default as number | undefined) ?? 0
+      const ey = (latestParams[endPoint.yParam] as number | undefined) ??
+        (allParams.find((pp) => pp.id === endPoint.yParam)?.default as number | undefined) ?? 0
+      const Cs = pointPxToScreen(cx, cy, r, anchor)
+      const Es = pointPxToScreen(ex, ey, r, anchor)
+      const dx = Es.x - Cs.x
+      const dy = Es.y - Cs.y
+      const L = Math.hypot(dx, dy)
+      if (L < 1e-6) return
+      const perpX = -(dy / L)
+      const perpY = dx / L
+      const proj = ((e.clientX - Cs.x) * perpX + (e.clientY - Cs.y) * perpY) / Math.max(L, 1e-6)
+      const aspectNew = Math.max(0.05, proj)
       updateNodeData(nodeId, {
-        params: { ...latestParams, [dragging.xParam]: x, [dragging.yParam]: y },
+        params: { ...latestParams, [dragging.aspectParam]: aspectNew },
       })
     }
     const onEnd = () => setDragging(null)
@@ -165,12 +255,15 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
       window.removeEventListener('pointerup', onEnd)
       window.removeEventListener('pointercancel', onEnd)
     }
-  }, [dragging, anchor, selectedNode, updateNodeData])
+  }, [dragging, anchor, selectedNode, updateNodeData, gizmo, allParams])
 
   if (!gizmoActive || !gizmo || !canvasRect) return null
 
+  // Built from ALL gizmo points (not just currently-visible ones) so aspect
+  // handles/outline can resolve their centerPoint/endPoint even if that point
+  // itself isn't rendered as a handle.
   const pointScreenPos = new Map<string, { x: number; y: number }>()
-  for (const p of visiblePoints) {
+  for (const p of gizmo.points) {
     // Fall back to the param's DEFINITION default (not 0) for points the user
     // hasn't dragged yet — else every unset point collapses onto the anchor.
     const xDef = allParams.find((pp) => pp.id === p.xParam)?.default
@@ -180,11 +273,56 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
     pointScreenPos.set(p.id, pointPxToScreen(px, py, canvasRect, anchor))
   }
 
+  const outline = outlineVisible ? gizmo.outline : undefined
+  const outlineGeom = outline
+    ? computeAspectGeometry(outline, pointScreenPos, currentParams, allParams)
+    : null
+
   return (
     <div
       className="fixed pointer-events-none z-[55]"
       style={{ left: canvasRect.left, top: canvasRect.top, width: canvasRect.width, height: canvasRect.height }}
     >
+      {outline && outlineGeom && (
+        <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">
+          {outline.shape === 'ellipse' ? (
+            (() => {
+              const cx = outlineGeom.Cs.x - canvasRect.left
+              const cy = outlineGeom.Cs.y - canvasRect.top
+              const angleDeg = (Math.atan2(outlineGeom.dirY, outlineGeom.dirX) * 180) / Math.PI
+              return (
+                <ellipse
+                  cx={cx}
+                  cy={cy}
+                  rx={outlineGeom.L}
+                  ry={outlineGeom.aspect * outlineGeom.L}
+                  transform={`rotate(${angleDeg} ${cx} ${cy})`}
+                  fill="none"
+                  stroke="var(--indigo)"
+                  strokeWidth={1}
+                />
+              )
+            })()
+          ) : (
+            (() => {
+              const { Cs, dirX, dirY, perpX, perpY, L, aspect } = outlineGeom
+              const tips = [
+                { x: Cs.x + dirX * L, y: Cs.y + dirY * L },
+                { x: Cs.x + perpX * aspect * L, y: Cs.y + perpY * aspect * L },
+                { x: Cs.x - dirX * L, y: Cs.y - dirY * L },
+                { x: Cs.x - perpX * aspect * L, y: Cs.y - perpY * aspect * L },
+              ]
+              const pointsAttr = tips
+                .map((t) => `${t.x - canvasRect.left},${t.y - canvasRect.top}`)
+                .join(' ')
+              return (
+                <polygon points={pointsAttr} fill="none" stroke="var(--indigo)" strokeWidth={1} />
+              )
+            })()
+          )}
+        </svg>
+      )}
+
       {gizmo.connectors && gizmo.connectors.length > 0 && (
         <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">
           {gizmo.connectors.map((c) => {
@@ -216,16 +354,52 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
             className={cn(
               'absolute nodrag nowheel pointer-events-auto',
               isCenter ? ds.gizmo.center : ds.gizmo.handle,
+              markerShapeClass(point.shape),
             )}
             style={{
               left: pos.x - canvasRect.left,
               top: pos.y - canvasRect.top,
-              transform: 'translate(-50%, -50%)',
+              transform: markerTransform(point.shape),
             }}
             onPointerDown={(e) => {
               e.stopPropagation()
               e.preventDefault()
-              setDragging({ pointId: point.id, xParam: point.xParam, yParam: point.yParam })
+              setDragging({ kind: 'point', pointId: point.id, xParam: point.xParam, yParam: point.yParam })
+            }}
+          />
+        )
+      })}
+
+      {visibleAspectHandles.map((handle) => {
+        const geom = computeAspectGeometry(handle, pointScreenPos, currentParams, allParams)
+        if (!geom) return null
+        const pos = {
+          x: geom.Cs.x + geom.perpX * geom.aspect * geom.L,
+          y: geom.Cs.y + geom.perpY * geom.aspect * geom.L,
+        }
+        return (
+          <div
+            key={handle.id}
+            className={cn(
+              'absolute nodrag nowheel pointer-events-auto',
+              ds.gizmo.handle,
+              markerShapeClass(handle.shape),
+            )}
+            style={{
+              left: pos.x - canvasRect.left,
+              top: pos.y - canvasRect.top,
+              transform: markerTransform(handle.shape),
+            }}
+            onPointerDown={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              setDragging({
+                kind: 'aspect',
+                handleId: handle.id,
+                aspectParam: handle.aspectParam,
+                centerPoint: handle.centerPoint,
+                endPoint: handle.endPoint,
+              })
             }}
           />
         )

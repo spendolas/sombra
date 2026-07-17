@@ -157,7 +157,36 @@ export interface GizmoPoint {
   xParam: string                                // NodeParameter id holding the point's x (px)
   yParam: string                                // NodeParameter id holding the point's y (px)
   role?: 'point' | 'center'                     // Visual/behavioral role of the handle
+  shape?: 'circle' | 'diamond' | 'square'       // Marker shape (default: circle)
   showWhen?: Record<string, string | string[]>  // Only show when other params match (array = any of)
+}
+
+/**
+ * A derived handle that lets the user drag a scalar aspect ratio param
+ * perpendicular to the line from `centerPoint` to `endPoint`. Its screen
+ * position is computed from the two referenced GizmoPoints, not from its own
+ * x/y params — see PreviewGizmoOverlay for the derivation.
+ */
+export interface GizmoAspectHandle {
+  id: string
+  shape?: 'circle' | 'diamond' | 'square'
+  aspectParam: string                           // NodeParameter id holding the scalar aspect value
+  centerPoint: string                           // GizmoPoint id
+  endPoint: string                              // GizmoPoint id
+  showWhen?: Record<string, string | string[]>
+}
+
+/**
+ * A non-interactive shape outline drawn from `centerPoint`/`endPoint` and a
+ * perpendicular `aspectParam`, e.g. to preview an ellipse/diamond gradient's
+ * footprint on the canvas.
+ */
+export interface GizmoOutline {
+  shape: 'ellipse' | 'diamond'
+  centerPoint: string                           // GizmoPoint id
+  endPoint: string                               // GizmoPoint id
+  aspectParam: string                            // NodeParameter id holding the scalar aspect value
+  showWhen?: Record<string, string | string[]>
 }
 
 /**
@@ -167,6 +196,8 @@ export interface GizmoPoint {
 export interface GizmoConfig {
   points: GizmoPoint[]
   connectors?: Array<{ from: string; to: string }>  // Lines drawn between point ids, by GizmoPoint.id
+  aspectHandles?: GizmoAspectHandle[]                 // Perpendicular aspect-ratio drag handles
+  outline?: GizmoOutline                              // Drawn shape outline (e.g. ellipse/diamond footprint)
   showWhen?: Record<string, string | string[]>       // Only show the whole gizmo when other params match
 }
 
