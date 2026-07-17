@@ -382,6 +382,17 @@ export function useLiveCompiler(
     const outputNode = nodesRef.current.find((n) => n.data.type === 'fragment_output')
     const qualityTier = (outputNode?.data.params?.quality as string) ?? 'adaptive'
     const anchor = (outputNode?.data.params?.anchor as string) ?? 'center'
+    // Flush uniforms in this SAME synchronous pass, cancelling the pending
+    // debounce. An anchor change coupled with a uniform change (e.g. the pinned
+    // gradient's p0/p1 compensation, committed atomically with the anchor) must
+    // land in one frame — otherwise setAnchor applies now and the debounced
+    // uniform push snaps in ~50ms later, a visible jump.
+    if (uniformTimerRef.current) {
+      clearTimeout(uniformTimerRef.current)
+      uniformTimerRef.current = undefined
+    }
+    const values = collectCurrentUniformValues()
+    if (values.length > 0) onUniformUpdateRef.current?.(values)
     onRendererUpdateRef.current?.({ qualityTier, anchor })
-  }, [rendererKey, autoCompile])
+  }, [rendererKey, autoCompile, collectCurrentUniformValues])
 }
