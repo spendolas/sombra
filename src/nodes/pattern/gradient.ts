@@ -184,24 +184,88 @@ export const gradientNode: NodeDefinition = {
   glsl: (ctx) => {
     const { inputs, outputs, params } = ctx
     const gradType = (params.gradientType as string) || 'linear'
+    const drawMode = (params.drawMode as string) || 'stretch'
     const interp = (params.interpolation as string) || 'smooth'
     const id = ctx.nodeId.replace(/-/g, '_')
     const field = `grad_field_${id}`
 
     const lines: string[] = []
 
-    switch (gradType) {
-      case 'radial':
-        lines.push(`float ${field} = clamp(length(${inputs.coords} - 0.5) * 2.0, 0.0, 1.0);`)
-        break
-      case 'angular':
-        lines.push(`float ${field} = atan(${inputs.coords}.y - 0.5, ${inputs.coords}.x - 0.5) * (1.0 / 6.28318530718) + 0.5;`)
-        break
-      case 'diamond':
-        lines.push(`float ${field} = clamp((abs(${inputs.coords}.x - 0.5) + abs(${inputs.coords}.y - 0.5)) * 2.0, 0.0, 1.0);`)
-        break
-      default: // linear
-        lines.push(`float ${field} = ${inputs.coords}.x;`)
+    if (drawMode === 'pinned') {
+      // Pinned: control points are anchor-relative CSS px, converted to the
+      // same coord-unit space as `coords` (isotropic auto_uv): Y is flipped
+      // (px is Y-down like the SRT translate convention, coords is Y-up).
+      ctx.uniforms.add('u_dpr')
+      ctx.uniforms.add('u_ref_size')
+      ctx.uniforms.add('u_anchor')
+
+      const pt = (varName: string, pxExpr: string, pyExpr: string) => {
+        lines.push(`vec2 ${varName} = u_anchor + vec2(${pxExpr}, -(${pyExpr})) / (u_dpr * u_ref_size);`)
+      }
+
+      switch (gradType) {
+        case 'radial': {
+          const C = `grad_C_${id}`
+          const E = `grad_E_${id}`
+          pt(C, inputs.cx, inputs.cy)
+          pt(E, inputs.ex, inputs.ey)
+          lines.push(`float ${field} = length(${inputs.coords} - ${C}) / max(length(${E} - ${C}), 1e-6);`)
+          break
+        }
+        case 'angular': {
+          const C = `grad_C_${id}`
+          const R = `grad_R_${id}`
+          const f = `grad_f_${id}`
+          const d = `grad_d_${id}`
+          pt(C, inputs.cx, inputs.cy)
+          pt(R, inputs.rx, inputs.ry)
+          lines.push(`vec2 ${f} = ${R} - ${C};`)
+          lines.push(`vec2 ${d} = ${inputs.coords} - ${C};`)
+          lines.push(`float ${field} = atan(${d}.x * ${f}.y - ${d}.y * ${f}.x, dot(${d}, ${f})) * (1.0 / 6.28318530718) + 0.5;`)
+          break
+        }
+        case 'diamond': {
+          const C = `grad_C_${id}`
+          const K = `grad_K_${id}`
+          const u = `grad_u_${id}`
+          const ulen = `grad_ulen_${id}`
+          const uhat = `grad_uhat_${id}`
+          const uperp = `grad_uperp_${id}`
+          const d = `grad_d_${id}`
+          pt(C, inputs.cx, inputs.cy)
+          pt(K, inputs.kx, inputs.ky)
+          lines.push(`vec2 ${u} = ${K} - ${C};`)
+          lines.push(`float ${ulen} = max(length(${u}), 1e-6);`)
+          lines.push(`vec2 ${uhat} = ${u} / ${ulen};`)
+          lines.push(`vec2 ${uperp} = vec2(-${uhat}.y, ${uhat}.x);`)
+          lines.push(`vec2 ${d} = ${inputs.coords} - ${C};`)
+          lines.push(`float ${field} = (abs(dot(${d}, ${uhat})) + abs(dot(${d}, ${uperp}))) / ${ulen};`)
+          break
+        }
+        default: { // linear
+          const A = `grad_A_${id}`
+          const B = `grad_B_${id}`
+          pt(A, inputs.ax, inputs.ay)
+          pt(B, inputs.bx, inputs.by)
+          lines.push(`float ${field} = dot(${inputs.coords} - ${A}, ${B} - ${A}) / max(dot(${B} - ${A}, ${B} - ${A}), 1e-6);`)
+        }
+      }
+    } else {
+      // Stretch: field computed in raw normalized v_uv (0..1 across the full
+      // canvas, aspect-distorting) — independent of `coords` wiring/SRT.
+      switch (gradType) {
+        case 'radial':
+          lines.push(`float ${field} = clamp(length(v_uv - 0.5) * 2.0, 0.0, 1.0);`)
+          break
+        case 'angular':
+          lines.push(`float ${field} = atan(v_uv.y - 0.5, v_uv.x - 0.5) * (1.0 / 6.28318530718) + 0.5;`)
+          break
+        case 'diamond':
+          lines.push(`float ${field} = clamp((abs(v_uv.x - 0.5) + abs(v_uv.y - 0.5)) * 2.0, 0.0, 1.0);`)
+          break
+        default: // linear
+          lines.push(`float ${field} = v_uv.x;`)
+      }
     }
 
     lines.push(`float ${outputs.value} = ${field};`)
@@ -251,80 +315,232 @@ export const gradientNode: NodeDefinition = {
 
   ir: (ctx) => {
     const gradType = (ctx.params.gradientType as string) || 'linear'
+    const drawMode = (ctx.params.drawMode as string) || 'stretch'
     const interp = (ctx.params.interpolation as string) || 'smooth'
     const coords = variable(ctx.inputs.coords)
     const id = ctx.nodeId.replace(/-/g, '_')
     const field = `grad_field_${id}`
 
     const statements: IRStmt[] = []
+    const standardUniforms = new Set<string>()
 
-    switch (gradType) {
-      case 'radial':
-        // clamp(length(coords - 0.5) * 2.0, 0.0, 1.0)
-        statements.push(
-          declare(field, 'float',
-            call('clamp', [
-              binary('*',
-                call('length', [
-                  binary('-', coords, literal('vec2', [0.5, 0.5]), 'vec2'),
-                ], 'float'),
-                literal('float', 2.0),
-                'float',
-              ),
-              literal('float', 0.0),
-              literal('float', 1.0),
-            ], 'float'),
+    if (drawMode === 'pinned') {
+      // Pinned: control points are anchor-relative CSS px, converted to the
+      // same coord-unit space as `coords` (isotropic auto_uv): Y is flipped
+      // (px is Y-down like the SRT translate convention, coords is Y-up).
+      standardUniforms.add('u_dpr')
+      standardUniforms.add('u_ref_size')
+      standardUniforms.add('u_anchor')
+
+      const dprRefSize = binary('*', variable('u_dpr'), variable('u_ref_size'), 'float')
+
+      // pt = u_anchor + vec2(px, -py) / (u_dpr * u_ref_size)
+      // WGSL has no scalar±vector +/-, so the vec2 is built per-component and
+      // only vec2±vec2 / vec2÷scalar ops are used.
+      const ptExpr = (pxId: string, pyId: string): IRExpr =>
+        binary('+',
+          variable('u_anchor'),
+          binary('/',
+            construct('vec2', [
+              variable(ctx.inputs[pxId]),
+              binary('*', literal('float', -1.0), variable(ctx.inputs[pyId]), 'float'),
+            ]),
+            dprRefSize,
+            'vec2',
           ),
+          'vec2',
         )
-        break
-      case 'angular':
-        // atan(coords.y - 0.5, coords.x - 0.5) * (1.0 / 6.28318530718) + 0.5
-        statements.push(
-          declare(field, 'float',
-            binary('+',
-              binary('*',
-                call('atan', [
-                  binary('-', swizzle(coords, 'y', 'float'), literal('float', 0.5), 'float'),
-                  binary('-', swizzle(coords, 'x', 'float'), literal('float', 0.5), 'float'),
+
+      switch (gradType) {
+        case 'radial': {
+          const C = `grad_C_${id}`
+          const E = `grad_E_${id}`
+          statements.push(declare(C, 'vec2', ptExpr('cx', 'cy')))
+          statements.push(declare(E, 'vec2', ptExpr('ex', 'ey')))
+          // length(coords - C) / max(length(E - C), 1e-6)
+          statements.push(
+            declare(field, 'float',
+              binary('/',
+                call('length', [binary('-', coords, variable(C), 'vec2')], 'float'),
+                call('max', [
+                  call('length', [binary('-', variable(E), variable(C), 'vec2')], 'float'),
+                  literal('float', 1e-6),
                 ], 'float'),
-                literal('float', 1.0 / 6.28318530718),
                 'float',
               ),
-              literal('float', 0.5),
-              'float',
             ),
-          ),
-        )
-        break
-      case 'diamond':
-        // clamp((abs(coords.x - 0.5) + abs(coords.y - 0.5)) * 2.0, 0.0, 1.0)
-        statements.push(
-          declare(field, 'float',
-            call('clamp', [
-              binary('*',
-                binary('+',
-                  call('abs', [
-                    binary('-', swizzle(coords, 'x', 'float'), literal('float', 0.5), 'float'),
-                  ], 'float'),
-                  call('abs', [
-                    binary('-', swizzle(coords, 'y', 'float'), literal('float', 0.5), 'float'),
-                  ], 'float'),
+          )
+          break
+        }
+        case 'angular': {
+          const C = `grad_C_${id}`
+          const R = `grad_R_${id}`
+          const f = `grad_f_${id}`
+          const d = `grad_d_${id}`
+          statements.push(declare(C, 'vec2', ptExpr('cx', 'cy')))
+          statements.push(declare(R, 'vec2', ptExpr('rx', 'ry')))
+          statements.push(declare(f, 'vec2', binary('-', variable(R), variable(C), 'vec2')))
+          statements.push(declare(d, 'vec2', binary('-', coords, variable(C), 'vec2')))
+          // det = d.x*f.y - d.y*f.x ; dotv = dot(d, f)
+          // atan(det, dotv) * (1.0 / 6.28318530718) + 0.5
+          const det = binary('-',
+            binary('*', swizzle(variable(d), 'x', 'float'), swizzle(variable(f), 'y', 'float'), 'float'),
+            binary('*', swizzle(variable(d), 'y', 'float'), swizzle(variable(f), 'x', 'float'), 'float'),
+            'float',
+          )
+          const dotv = call('dot', [variable(d), variable(f)], 'float')
+          statements.push(
+            declare(field, 'float',
+              binary('+',
+                binary('*',
+                  call('atan', [det, dotv], 'float'),
+                  literal('float', 1.0 / 6.28318530718),
                   'float',
                 ),
-                literal('float', 2.0),
+                literal('float', 0.5),
                 'float',
               ),
-              literal('float', 0.0),
-              literal('float', 1.0),
-            ], 'float'),
-          ),
-        )
-        break
-      default: // linear
-        // coords.x
-        statements.push(
-          declare(field, 'float', swizzle(coords, 'x', 'float')),
-        )
+            ),
+          )
+          break
+        }
+        case 'diamond': {
+          const C = `grad_C_${id}`
+          const K = `grad_K_${id}`
+          const u = `grad_u_${id}`
+          const ulen = `grad_ulen_${id}`
+          const uhat = `grad_uhat_${id}`
+          const uperp = `grad_uperp_${id}`
+          const d = `grad_d_${id}`
+          statements.push(declare(C, 'vec2', ptExpr('cx', 'cy')))
+          statements.push(declare(K, 'vec2', ptExpr('kx', 'ky')))
+          statements.push(declare(u, 'vec2', binary('-', variable(K), variable(C), 'vec2')))
+          statements.push(declare(ulen, 'float',
+            call('max', [call('length', [variable(u)], 'float'), literal('float', 1e-6)], 'float'),
+          ))
+          statements.push(declare(uhat, 'vec2', binary('/', variable(u), variable(ulen), 'vec2')))
+          // perpendicular: (-uhat.y, uhat.x)
+          statements.push(declare(uperp, 'vec2', construct('vec2', [
+            binary('*', literal('float', -1.0), swizzle(variable(uhat), 'y', 'float'), 'float'),
+            swizzle(variable(uhat), 'x', 'float'),
+          ])))
+          statements.push(declare(d, 'vec2', binary('-', coords, variable(C), 'vec2')))
+          // (|dot(d, uhat)| + |dot(d, uperp)|) / ulen
+          statements.push(
+            declare(field, 'float',
+              binary('/',
+                binary('+',
+                  call('abs', [call('dot', [variable(d), variable(uhat)], 'float')], 'float'),
+                  call('abs', [call('dot', [variable(d), variable(uperp)], 'float')], 'float'),
+                  'float',
+                ),
+                variable(ulen),
+                'float',
+              ),
+            ),
+          )
+          break
+        }
+        default: { // linear
+          const A = `grad_A_${id}`
+          const B = `grad_B_${id}`
+          statements.push(declare(A, 'vec2', ptExpr('ax', 'ay')))
+          statements.push(declare(B, 'vec2', ptExpr('bx', 'by')))
+          // dot(coords - A, B - A) / max(dot(B - A, B - A), 1e-6)
+          statements.push(
+            declare(field, 'float',
+              binary('/',
+                call('dot', [
+                  binary('-', coords, variable(A), 'vec2'),
+                  binary('-', variable(B), variable(A), 'vec2'),
+                ], 'float'),
+                call('max', [
+                  call('dot', [
+                    binary('-', variable(B), variable(A), 'vec2'),
+                    binary('-', variable(B), variable(A), 'vec2'),
+                  ], 'float'),
+                  literal('float', 1e-6),
+                ], 'float'),
+                'float',
+              ),
+            ),
+          )
+        }
+      }
+    } else {
+      // Stretch: field computed in raw normalized v_uv (0..1 across the full
+      // canvas, aspect-distorting) — independent of `coords` wiring/SRT.
+      // Bare `v_uv` mirrors image.ts's screen_uv mechanism; the WGSL assembler
+      // mechanically rewrites it to `in.v_uv` (see wgsl-assembler.ts).
+      const uv = variable('v_uv')
+      switch (gradType) {
+        case 'radial':
+          // clamp(length(v_uv - 0.5) * 2.0, 0.0, 1.0)
+          statements.push(
+            declare(field, 'float',
+              call('clamp', [
+                binary('*',
+                  call('length', [
+                    binary('-', uv, literal('vec2', [0.5, 0.5]), 'vec2'),
+                  ], 'float'),
+                  literal('float', 2.0),
+                  'float',
+                ),
+                literal('float', 0.0),
+                literal('float', 1.0),
+              ], 'float'),
+            ),
+          )
+          break
+        case 'angular':
+          // atan(v_uv.y - 0.5, v_uv.x - 0.5) * (1.0 / 6.28318530718) + 0.5
+          statements.push(
+            declare(field, 'float',
+              binary('+',
+                binary('*',
+                  call('atan', [
+                    binary('-', swizzle(uv, 'y', 'float'), literal('float', 0.5), 'float'),
+                    binary('-', swizzle(uv, 'x', 'float'), literal('float', 0.5), 'float'),
+                  ], 'float'),
+                  literal('float', 1.0 / 6.28318530718),
+                  'float',
+                ),
+                literal('float', 0.5),
+                'float',
+              ),
+            ),
+          )
+          break
+        case 'diamond':
+          // clamp((abs(v_uv.x - 0.5) + abs(v_uv.y - 0.5)) * 2.0, 0.0, 1.0)
+          statements.push(
+            declare(field, 'float',
+              call('clamp', [
+                binary('*',
+                  binary('+',
+                    call('abs', [
+                      binary('-', swizzle(uv, 'x', 'float'), literal('float', 0.5), 'float'),
+                    ], 'float'),
+                    call('abs', [
+                      binary('-', swizzle(uv, 'y', 'float'), literal('float', 0.5), 'float'),
+                    ], 'float'),
+                    'float',
+                  ),
+                  literal('float', 2.0),
+                  'float',
+                ),
+                literal('float', 0.0),
+                literal('float', 1.0),
+              ], 'float'),
+            ),
+          )
+          break
+        default: // linear
+          // v_uv.x
+          statements.push(
+            declare(field, 'float', swizzle(uv, 'x', 'float')),
+          )
+      }
     }
 
     statements.push(declare(ctx.outputs.value, 'float', variable(field)))
@@ -399,7 +615,7 @@ export const gradientNode: NodeDefinition = {
     return {
       statements,
       uniforms: [],
-      standardUniforms: new Set<string>(),
+      standardUniforms,
     }
   },
 }

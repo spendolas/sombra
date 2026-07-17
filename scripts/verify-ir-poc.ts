@@ -868,6 +868,62 @@ function verify(
   }
 }
 
+// 18b. Gradient — Pinned draw mode (control-point field math), all 4 types
+{
+  const stops = [
+    { position: 0.0, color: [0, 0, 0] },
+    { position: 1.0, color: [1, 1, 1] },
+  ]
+  const pinnedCases: Array<{ gradientType: string; inputs: Record<string, string>; params: Record<string, unknown> }> = [
+    {
+      gradientType: 'linear',
+      inputs: {
+        coords: 'node_uv_xyz_coords',
+        ax: 'u_grad_pin1_ax', ay: 'u_grad_pin1_ay',
+        bx: 'u_grad_pin1_bx', by: 'u_grad_pin1_by',
+      },
+      params: { ax: -150, ay: 0, bx: 150, by: 0 },
+    },
+    {
+      gradientType: 'radial',
+      inputs: {
+        coords: 'node_uv_xyz_coords',
+        cx: 'u_grad_pin2_cx', cy: 'u_grad_pin2_cy',
+        ex: 'u_grad_pin2_ex', ey: 'u_grad_pin2_ey',
+      },
+      params: { cx: 0, cy: 0, ex: 150, ey: 0 },
+    },
+    {
+      gradientType: 'angular',
+      inputs: {
+        coords: 'node_uv_xyz_coords',
+        cx: 'u_grad_pin3_cx', cy: 'u_grad_pin3_cy',
+        rx: 'u_grad_pin3_rx', ry: 'u_grad_pin3_ry',
+      },
+      params: { cx: 0, cy: 0, rx: 150, ry: 0 },
+    },
+    {
+      gradientType: 'diamond',
+      inputs: {
+        coords: 'node_uv_xyz_coords',
+        cx: 'u_grad_pin4_cx', cy: 'u_grad_pin4_cy',
+        kx: 'u_grad_pin4_kx', ky: 'u_grad_pin4_ky',
+      },
+      params: { cx: 0, cy: 0, kx: 150, ky: 0 },
+    },
+  ]
+
+  for (const [idx, tc] of pinnedCases.entries()) {
+    const [g, i] = ctx({
+      nodeId: `grad-pin${idx}`,
+      inputs: tc.inputs,
+      outputs: { color: `node_grad_pin${idx}_color`, value: `node_grad_pin${idx}_value` },
+      params: { gradientType: tc.gradientType, drawMode: 'pinned', interpolation: 'smooth', stops, ...tc.params },
+    })
+    verify(`Gradient (Pinned, ${tc.gradientType})`, gradientNode, g, i, 'loose')
+  }
+}
+
 // 19. Split Vec2
 {
   const [g, i] = ctx({
