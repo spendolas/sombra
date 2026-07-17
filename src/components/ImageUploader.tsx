@@ -179,19 +179,20 @@ function scaleCursor(angleDeg: number): string {
   return svgCursor(svg, 'pointer')
 }
 
-/** Curved arrow for rotate drag, follows pointer angle around centroid. */
+/** Curved arrow for rotate drag, follows pointer angle around centroid.
+ *  Geometry from the Figma "Rotate" icon (569:17): quarter arc (12→9 o'clock)
+ *  with an arrowhead at each end. Two-layer (white outline + indigo) for
+ *  visibility on any background. */
 function rotateCursor(angleDeg: number): string {
   const a = Math.round(angleDeg)
+  const paths = `<path d="M11 6L13 4L11 2"/>`
+    + `<path d="M6 11L4 13L2 11"/>`
+    + `<path d="M12 4C10.9494 4 9.90914 4.20693 8.93853 4.60896C7.96793 5.011 7.08601 5.60028 6.34315 6.34315C5.60028 7.08601 5.011 7.96793 4.60896 8.93853C4.20693 9.90914 4 10.9494 4 12"/>`
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">`
     + `<g transform="rotate(${a} 12 12)">`
-    + `<g stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">`
-    + `<path d="M12 4a8 8 0 0 0-7.5 5.2"/>`
-    + `<path d="M14 2l-2 2 2 2"/>`
-    + `</g>`
-    + `<g stroke="#6366f1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">`
-    + `<path d="M12 4a8 8 0 0 0-7.5 5.2"/>`
-    + `<path d="M14 2l-2 2 2 2"/>`
-    + `</g></g></svg>`
+    + `<g stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">${paths}</g>`
+    + `<g stroke="#6366f1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${paths}</g>`
+    + `</g></svg>`
   return svgCursor(svg, 'alias')
 }
 
