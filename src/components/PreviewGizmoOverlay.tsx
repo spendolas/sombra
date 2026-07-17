@@ -17,7 +17,7 @@ import { useGraphStore } from '../stores/graphStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { nodeRegistry } from '../nodes/registry'
 import { matchesShowWhen, type GizmoPoint, type GizmoAspectHandle, type GizmoOutline } from '../nodes/types'
-import { pointPxToScreen, screenToPointPx, type Rect } from '../utils/gizmo-coords'
+import { pointPxToScreen, screenToPointPx, uvToScreen, screenToUv, type Rect } from '../utils/gizmo-coords'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
 
@@ -77,6 +77,34 @@ function computeAspectGeometry(
  *  independent of the Fragment Output anchor). Module-level so its identity is
  *  stable across renders. */
 const GIZMO_ANCHOR: [number, number] = [0.5, 0.5]
+
+/** Coordinate-space dispatch: a point declares `space` ('px' default, or 'uv').
+ *  These map its stored param values to/from screen so px and UV handles share
+ *  the same render/drag code — only the mapping differs. UV renormalizes with
+ *  `rect`, so a UV handle tracks its canvas landmark across resizes. */
+function pointToScreen(
+  point: Pick<GizmoPoint, 'space'>,
+  xVal: number,
+  yVal: number,
+  rect: Rect,
+  anchor: [number, number],
+): { x: number; y: number } {
+  return point.space === 'uv' ? uvToScreen(xVal, yVal, rect) : pointPxToScreen(xVal, yVal, rect, anchor)
+}
+
+function screenToPoint(
+  point: Pick<GizmoPoint, 'space'>,
+  sx: number,
+  sy: number,
+  rect: Rect,
+  anchor: [number, number],
+): { x: number; y: number } {
+  if (point.space === 'uv') {
+    const { u, v } = screenToUv(sx, sy, rect)
+    return { x: u, y: v }
+  }
+  return screenToPointPx(sx, sy, rect, anchor)
+}
 
 interface PreviewGizmoOverlayProps {
   dockTargetRef: RefObject<HTMLDivElement | null>
@@ -212,6 +240,7 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
       const latestParams = (latest?.data.params ?? {}) as Record<string, unknown>
 
       if (dragging.kind === 'point') {
+        const draggedPoint = gizmo?.points.find((p) => p.id === dragging.pointId)
         let sx = e.clientX
         let sy = e.clientY
         if (e.shiftKey) {
@@ -227,7 +256,7 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
               (allParams.find((pp) => pp.id === pivot.xParam)?.default as number | undefined) ?? 0
             const pvy = (latestParams[pivot.yParam] as number | undefined) ??
               (allParams.find((pp) => pp.id === pivot.yParam)?.default as number | undefined) ?? 0
-            const Ps = pointPxToScreen(pvx, pvy, r, anchor)
+            const Ps = pointToScreen(pivot, pvx, pvy, r, anchor)
             const ddx = sx - Ps.x
             const ddy = sy - Ps.y
             const dist = Math.hypot(ddx, ddy)
@@ -262,7 +291,7 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
           sx = bestX
           sy = bestY
         }
-        const { x, y } = screenToPointPx(sx, sy, r, anchor)
+        const { x, y } = screenToPoint(draggedPoint ?? {}, sx, sy, r, anchor)
         updateNodeData(nodeId, {
           params: { ...latestParams, [dragging.xParam]: x, [dragging.yParam]: y },
         })
@@ -283,8 +312,8 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
         (allParams.find((pp) => pp.id === endPoint.xParam)?.default as number | undefined) ?? 0
       const ey = (latestParams[endPoint.yParam] as number | undefined) ??
         (allParams.find((pp) => pp.id === endPoint.yParam)?.default as number | undefined) ?? 0
-      const Cs = pointPxToScreen(cx, cy, r, anchor)
-      const Es = pointPxToScreen(ex, ey, r, anchor)
+      const Cs = pointToScreen(centerPoint, cx, cy, r, anchor)
+      const Es = pointToScreen(endPoint, ex, ey, r, anchor)
       const dx = Es.x - Cs.x
       const dy = Es.y - Cs.y
       const L = Math.hypot(dx, dy)
@@ -322,7 +351,7 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
     const yDef = allParams.find((pp) => pp.id === p.yParam)?.default
     const px = (currentParams[p.xParam] as number) ?? (xDef as number) ?? 0
     const py = (currentParams[p.yParam] as number) ?? (yDef as number) ?? 0
-    pointScreenPos.set(p.id, pointPxToScreen(px, py, canvasRect, anchor))
+    pointScreenPos.set(p.id, pointToScreen(p, px, py, canvasRect, anchor))
   }
 
   return (

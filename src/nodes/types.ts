@@ -154,10 +154,18 @@ export function getSpatialParams(spatial: SpatialConfig): NodeParameter[] {
  */
 export interface GizmoPoint {
   id: string                                   // Unique identifier within the gizmo
-  xParam: string                                // NodeParameter id holding the point's x (px)
-  yParam: string                                // NodeParameter id holding the point's y (px)
+  xParam: string                                // NodeParameter id holding the point's x
+  yParam: string                                // NodeParameter id holding the point's y
   role?: 'point' | 'center'                     // Visual/behavioral role of the handle
   shape?: 'circle' | 'diamond' | 'square'       // Marker shape (default: circle)
+  /**
+   * Coordinate space of xParam/yParam:
+   *  - 'px' (default): CSS px relative to the canvas centre, Y-up (frozen, fixed size).
+   *  - 'uv': normalized 0..1 across the canvas, origin top-left, Y-down (matches
+   *    `v_uv`; renormalizes on resize so the handle tracks its canvas landmark).
+   * Aspect handles/outlines inherit the space of their referenced points.
+   */
+  space?: 'px' | 'uv'
   showWhen?: Record<string, string | string[]>  // Only show when other params match (array = any of)
 }
 
