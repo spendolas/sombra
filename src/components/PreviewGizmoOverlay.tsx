@@ -17,10 +17,14 @@ import { useGraphStore } from '../stores/graphStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { nodeRegistry } from '../nodes/registry'
 import { matchesShowWhen, type GizmoPoint } from '../nodes/types'
-import { anchorToVec2 } from '../nodes/output/fragment-output'
 import { pointPxToScreen, screenToPointPx, type Rect } from '../utils/gizmo-coords'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
+
+/** Gizmo points are relative to the preview canvas centre (stable reference,
+ *  independent of the Fragment Output anchor). Module-level so its identity is
+ *  stable across renders. */
+const GIZMO_ANCHOR: [number, number] = [0.5, 0.5]
 
 interface PreviewGizmoOverlayProps {
   dockTargetRef: RefObject<HTMLDivElement | null>
@@ -61,11 +65,9 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
     return gizmo.points.filter((p) => matchesShowWhen(p.showWhen, currentParams, allParams))
   }, [gizmo, currentParams, allParams])
 
-  // Anchor from the fragment_output node's `anchor` param; [0.5, 0.5] if absent.
-  const anchor = useMemo<[number, number]>(() => {
-    const outputNode = nodes.find((n) => n.data.type === 'fragment_output')
-    return anchorToVec2((outputNode?.data.params?.anchor as string) ?? 'center')
-  }, [nodes])
+  // Gizmo points are relative to the PREVIEW CANVAS CENTRE (not the Fragment
+  // Output anchor) so their preview-window position survives anchor changes.
+  const anchor = GIZMO_ANCHOR
 
   // --- Canvas rect tracking -------------------------------------------------
 

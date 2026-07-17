@@ -192,17 +192,19 @@ export const gradientNode: NodeDefinition = {
     const lines: string[] = []
 
     if (drawMode === 'pinned') {
-      // Pinned: control points are anchor-relative CSS px, converted to the
-      // same coord-unit space as `coords` (isotropic auto_uv): Y is flipped
-      // (px is Y-down like the SRT translate convention, coords is Y-up).
-      // Divide by u_ref_size ONLY — auto_uv already carries the dpr*ref scale,
-      // so a point at `px` CSS px lands exactly under the overlay handle
-      // (dividing by u_dpr*u_ref_size would halve the offset at dpr=2).
+      // Pinned: control points are CSS px relative to the PREVIEW CANVAS CENTRE
+      // (not the anchor) so their preview position survives anchor changes.
+      // grad_center = auto_uv at the canvas centre; the u_anchor terms cancel in
+      // (coords - pt) → anchor-invariant. Y flipped (px Y-down, coords Y-up);
+      // px→units divides by u_ref_size only (auto_uv carries the dpr*ref scale).
       ctx.uniforms.add('u_ref_size')
       ctx.uniforms.add('u_anchor')
+      ctx.uniforms.add('u_resolution')
+      ctx.uniforms.add('u_dpr')
+      lines.push(`vec2 grad_center_${id} = u_anchor + (vec2(0.5) - u_anchor) * u_resolution / (u_dpr * u_ref_size);`)
 
       const pt = (varName: string, pxExpr: string, pyExpr: string) => {
-        lines.push(`vec2 ${varName} = u_anchor + vec2(${pxExpr}, -(${pyExpr})) / u_ref_size;`)
+        lines.push(`vec2 ${varName} = grad_center_${id} + vec2(${pxExpr}, -(${pyExpr})) / u_ref_size;`)
       }
 
       switch (gradType) {
@@ -327,21 +329,41 @@ export const gradientNode: NodeDefinition = {
     const standardUniforms = new Set<string>()
 
     if (drawMode === 'pinned') {
-      // Pinned: control points are anchor-relative CSS px, converted to the
-      // same coord-unit space as `coords` (isotropic auto_uv): Y is flipped
-      // (px is Y-down like the SRT translate convention, coords is Y-up).
-      // Divide by u_ref_size ONLY — auto_uv already carries the dpr*ref scale,
-      // so a point at `px` CSS px lands exactly under the overlay handle
-      // (dividing by u_dpr*u_ref_size would halve the offset at dpr=2).
+      // Pinned: control points are CSS px relative to the PREVIEW CANVAS CENTRE
+      // (not the anchor) so their preview position survives anchor changes.
+      // grad_center = auto_uv at the canvas centre = u_anchor + (0.5 - u_anchor)
+      // * u_resolution / (u_dpr * u_ref_size) — the u_anchor terms cancel in
+      // (coords - pt), making the field anchor-invariant. Y is flipped (px is
+      // Y-down like SRT translate; coords is Y-up); px→units divides by
+      // u_ref_size only (auto_uv already carries the dpr*ref scale).
       standardUniforms.add('u_ref_size')
       standardUniforms.add('u_anchor')
+      standardUniforms.add('u_resolution')
+      standardUniforms.add('u_dpr')
 
-      // pt = u_anchor + vec2(px, -py) / u_ref_size
+      const center = `grad_center_${id}`
+      statements.push(declare(center, 'vec2',
+        binary('+',
+          variable('u_anchor'),
+          binary('/',
+            binary('*',
+              binary('-', construct('vec2', [literal('float', 0.5), literal('float', 0.5)]), variable('u_anchor'), 'vec2'),
+              variable('u_resolution'),
+              'vec2',
+            ),
+            binary('*', variable('u_dpr'), variable('u_ref_size'), 'float'),
+            'vec2',
+          ),
+          'vec2',
+        ),
+      ))
+
+      // pt = grad_center + vec2(px, -py) / u_ref_size
       // WGSL has no scalar±vector +/-, so the vec2 is built per-component and
       // only vec2±vec2 / vec2÷scalar ops are used.
       const ptExpr = (pxId: string, pyId: string): IRExpr =>
         binary('+',
-          variable('u_anchor'),
+          variable(center),
           binary('/',
             construct('vec2', [
               variable(ctx.inputs[pxId]),
