@@ -197,7 +197,7 @@ export interface GizmoConfig {
   points: GizmoPoint[]
   connectors?: Array<{ from: string; to: string }>  // Lines drawn between point ids, by GizmoPoint.id
   aspectHandles?: GizmoAspectHandle[]                 // Perpendicular aspect-ratio drag handles
-  outline?: GizmoOutline                              // Drawn shape outline (e.g. ellipse/diamond footprint)
+  outline?: GizmoOutline[]                            // Drawn shape outline(s) (e.g. ellipse/diamond footprint)
   showWhen?: Record<string, string | string[]>       // Only show the whole gizmo when other params match
 }
 

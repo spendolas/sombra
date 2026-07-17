@@ -194,31 +194,56 @@ whichever single node is selected on the canvas:
 gizmo: {
   showWhen: { drawMode: 'pinned' },      // optional — gates the whole gizmo
   points: [
-    { id: 'a', xParam: 'ax', yParam: 'ay', showWhen: { gradientType: 'linear' } },
-    { id: 'b', xParam: 'bx', yParam: 'by', showWhen: { gradientType: 'linear' } },
-    { id: 'c', xParam: 'cx', yParam: 'cy', role: 'center', showWhen: { gradientType: ['radial', 'angular', 'diamond'] } },
+    { id: 'p0', xParam: 'p0x', yParam: 'p0y', shape: 'diamond', showWhen: { drawMode: 'pinned' } },
+    { id: 'p1', xParam: 'p1x', yParam: 'p1y', shape: 'diamond', showWhen: { drawMode: 'pinned' } },
   ],
-  connectors: [{ from: 'a', to: 'b' }],  // optional lines drawn between point ids
+  connectors: [{ from: 'p0', to: 'p1' }],  // optional lines drawn between point ids
+  aspectHandles: [
+    // Perpendicular drag handle: writes a scalar `aspectParam`, position
+    // derived from centerPoint→endPoint (not its own xParam/yParam).
+    { id: 'asp', shape: 'square', aspectParam: 'aspect', centerPoint: 'p0', endPoint: 'p1',
+      showWhen: { drawMode: 'pinned', gradientType: ['radial', 'angular', 'diamond'] } },
+  ],
+  outline: [
+    // Non-interactive shape outline(s) — array so multiple shapes can be
+    // gated by different param values (e.g. ellipse for radial/angular,
+    // diamond for diamond) and render simultaneously if both match.
+    { shape: 'ellipse', centerPoint: 'p0', endPoint: 'p1', aspectParam: 'aspect',
+      showWhen: { drawMode: 'pinned', gradientType: ['radial', 'angular'] } },
+    { shape: 'diamond', centerPoint: 'p0', endPoint: 'p1', aspectParam: 'aspect',
+      showWhen: { drawMode: 'pinned', gradientType: 'diamond' } },
+  ],
 } satisfies GizmoConfig,
 ```
 
 - Each `GizmoPoint` (`id`, `xParam`, `yParam`, `role?: 'point' | 'center'`,
-  `showWhen?`) binds to a pair of ordinary `float` params — `xParam`/`yParam`
-  must be regular `connectable: true, updateMode: 'uniform'` params like any
-  other, read via `ctx.inputs.<id>` in `glsl()`/`ir()` exactly as with any
+  `shape?: 'circle' | 'diamond' | 'square'` (default circle), `showWhen?`)
+  binds to a pair of ordinary `float` params — `xParam`/`yParam` must be
+  regular `connectable: true, updateMode: 'uniform'` params like any other,
+  read via `ctx.inputs.<id>` in `glsl()`/`ir()` exactly as with any
   connectable param. `id` is the point's own identifier (used by
-  `connectors`), not a param id.
+  `connectors`/`aspectHandles`/`outline`), not a param id.
 - Point values are **CSS px relative to the Fragment Output's anchor**,
   **Y-up** — the same convention as the framework SRT `srt_translateX`/
   `srt_translateY` params. `src/utils/gizmo-coords.ts` (`pointPxToScreen`/
   `screenToPointPx`, exact inverses of each other) converts between that px
   space and on-screen coordinates over the preview canvas.
-- `showWhen` on both the top-level `GizmoConfig` and individual `GizmoPoint`s
-  uses the same matcher as param `showWhen` (`matchesShowWhen`) — gate the
-  whole gizmo on a draw-mode param, then gate individual points on a
-  sub-mode (e.g. only show Point A/B for `gradientType: 'linear'`).
+- `showWhen` on the top-level `GizmoConfig`, individual `GizmoPoint`s,
+  `GizmoAspectHandle`s and `GizmoOutline`s uses the same matcher as param
+  `showWhen` (`matchesShowWhen`) — gate the whole gizmo on a draw-mode param,
+  then gate individual points/handles/outlines on a sub-mode (e.g. only show
+  the aspect handle and ellipse outline for `gradientType: 'radial'|'angular'`).
 - `connectors` draw thin lines between two point ids (by `GizmoPoint.id`,
   not param id) — purely visual, no behavior.
+- `aspectHandles` (`GizmoAspectHandle[]`: `id`, `shape?`, `aspectParam`,
+  `centerPoint`, `endPoint`, `showWhen?`) render a drag handle perpendicular
+  to the `centerPoint`→`endPoint` line; dragging writes the scalar
+  `aspectParam` (a plain `connectable` float param), not an x/y pair.
+- `outline` (`GizmoOutline[]`: `shape: 'ellipse' | 'diamond'`, `centerPoint`,
+  `endPoint`, `aspectParam`, `showWhen?`) draws a non-interactive shape
+  footprint from the same center/end/aspect geometry — an array so a node
+  can register multiple shapes gated by different `showWhen`s; each visible
+  entry renders independently (see `PreviewGizmoOverlay.tsx`).
 - Drag handling in `PreviewGizmoOverlay` deliberately avoids
   `setPointerCapture`: it binds `pointermove`/`pointerup`/`pointercancel` on
   `window` for the drag's lifetime so a release off-canvas is still caught
@@ -226,8 +251,9 @@ gizmo: {
   window-listener approach for any new gizmo-driving UI rather than pointer
   capture.
 
-**See:** `src/nodes/pattern/gradient.ts` for a full example — 6 points across
-4 draw modes, a `role: 'center'` point, and `connectors`.
+**See:** `src/nodes/pattern/gradient.ts` for a full example — shared `p0`/`p1`
+diamond points across all 4 gradient types, an `aspectHandles` entry, and a
+2-entry `outline` array (ellipse for radial/angular, diamond for diamond).
 
 ### Conditional visibility (showWhen)
 

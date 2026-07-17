@@ -879,37 +879,41 @@ function verify(
       gradientType: 'linear',
       inputs: {
         coords: 'node_uv_xyz_coords',
-        ax: 'u_grad_pin1_ax', ay: 'u_grad_pin1_ay',
-        bx: 'u_grad_pin1_bx', by: 'u_grad_pin1_by',
+        p0x: 'u_grad_pin1_p0x', p0y: 'u_grad_pin1_p0y',
+        p1x: 'u_grad_pin1_p1x', p1y: 'u_grad_pin1_p1y',
+        aspect: 'u_grad_pin1_aspect',
       },
-      params: { ax: -150, ay: 0, bx: 150, by: 0 },
+      params: { p0x: 0, p0y: 0, p1x: 150, p1y: 0, aspect: 1.0 },
     },
     {
       gradientType: 'radial',
       inputs: {
         coords: 'node_uv_xyz_coords',
-        cx: 'u_grad_pin2_cx', cy: 'u_grad_pin2_cy',
-        ex: 'u_grad_pin2_ex', ey: 'u_grad_pin2_ey',
+        p0x: 'u_grad_pin2_p0x', p0y: 'u_grad_pin2_p0y',
+        p1x: 'u_grad_pin2_p1x', p1y: 'u_grad_pin2_p1y',
+        aspect: 'u_grad_pin2_aspect',
       },
-      params: { cx: 0, cy: 0, ex: 150, ey: 0 },
+      params: { p0x: 0, p0y: 0, p1x: 150, p1y: 0, aspect: 1.0 },
     },
     {
       gradientType: 'angular',
       inputs: {
         coords: 'node_uv_xyz_coords',
-        cx: 'u_grad_pin3_cx', cy: 'u_grad_pin3_cy',
-        rx: 'u_grad_pin3_rx', ry: 'u_grad_pin3_ry',
+        p0x: 'u_grad_pin3_p0x', p0y: 'u_grad_pin3_p0y',
+        p1x: 'u_grad_pin3_p1x', p1y: 'u_grad_pin3_p1y',
+        aspect: 'u_grad_pin3_aspect',
       },
-      params: { cx: 0, cy: 0, rx: 150, ry: 0 },
+      params: { p0x: 0, p0y: 0, p1x: 150, p1y: 0, aspect: 1.0 },
     },
     {
       gradientType: 'diamond',
       inputs: {
         coords: 'node_uv_xyz_coords',
-        cx: 'u_grad_pin4_cx', cy: 'u_grad_pin4_cy',
-        kx: 'u_grad_pin4_kx', ky: 'u_grad_pin4_ky',
+        p0x: 'u_grad_pin4_p0x', p0y: 'u_grad_pin4_p0y',
+        p1x: 'u_grad_pin4_p1x', p1y: 'u_grad_pin4_p1y',
+        aspect: 'u_grad_pin4_aspect',
       },
-      params: { cx: 0, cy: 0, kx: 150, ky: 0 },
+      params: { p0x: 0, p0y: 0, p1x: 150, p1y: 0, aspect: 1.0 },
     },
   ]
 

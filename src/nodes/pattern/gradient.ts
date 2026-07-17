@@ -9,7 +9,7 @@
 
 import type { NodeDefinition, SpatialConfig, GizmoConfig } from '../types'
 import { getSpatialParams } from '../types'
-import { variable, call, binary, literal, declare, assign, swizzle, construct } from '../../compiler/ir/types'
+import { variable, call, binary, literal, declare, assign, swizzle, construct, ternary } from '../../compiler/ir/types'
 import type { IRStmt, IRExpr } from '../../compiler/ir/types'
 
 /** Format number as GLSL float literal */
@@ -64,82 +64,39 @@ export const gradientNode: NodeDefinition = {
       ],
       updateMode: 'recompile',
     },
-    // Pinned control points — linear (Point A / Point B)
+    // Pinned control points — SHARED across all gradient types, so switching
+    // `gradientType` never moves the gradient. P0 = Start/Center, P1 =
+    // End/Edge/Ref/Corner depending on type; `aspect` scales the perpendicular
+    // axis for radial (ellipse)/angular (elliptical angle)/diamond (rhombus).
     {
-      id: 'ax', label: 'Point A X', type: 'float', default: -150,
+      id: 'p0x', label: 'Start / Center X', type: 'float', default: 0,
       min: -1000, max: 1000, step: 1,
       connectable: true, updateMode: 'uniform',
-      showWhen: { drawMode: 'pinned', gradientType: 'linear' },
+      showWhen: { drawMode: 'pinned' },
     },
     {
-      id: 'ay', label: 'Point A Y', type: 'float', default: 0,
+      id: 'p0y', label: 'Start / Center Y', type: 'float', default: 0,
       min: -1000, max: 1000, step: 1,
       connectable: true, updateMode: 'uniform',
-      showWhen: { drawMode: 'pinned', gradientType: 'linear' },
+      showWhen: { drawMode: 'pinned' },
     },
     {
-      id: 'bx', label: 'Point B X', type: 'float', default: 150,
+      id: 'p1x', label: 'End / Edge / Ref / Corner X', type: 'float', default: 150,
       min: -1000, max: 1000, step: 1,
       connectable: true, updateMode: 'uniform',
-      showWhen: { drawMode: 'pinned', gradientType: 'linear' },
+      showWhen: { drawMode: 'pinned' },
     },
     {
-      id: 'by', label: 'Point B Y', type: 'float', default: 0,
+      id: 'p1y', label: 'End / Edge / Ref / Corner Y', type: 'float', default: 0,
       min: -1000, max: 1000, step: 1,
       connectable: true, updateMode: 'uniform',
-      showWhen: { drawMode: 'pinned', gradientType: 'linear' },
+      showWhen: { drawMode: 'pinned' },
     },
-    // Pinned control points — shared center for radial/angular/diamond
     {
-      id: 'cx', label: 'Center X', type: 'float', default: 0,
-      min: -1000, max: 1000, step: 1,
+      id: 'aspect', label: 'Aspect', type: 'float', default: 1,
+      min: 0.1, max: 10, step: 0.01,
       connectable: true, updateMode: 'uniform',
       showWhen: { drawMode: 'pinned', gradientType: ['radial', 'angular', 'diamond'] },
-    },
-    {
-      id: 'cy', label: 'Center Y', type: 'float', default: 0,
-      min: -1000, max: 1000, step: 1,
-      connectable: true, updateMode: 'uniform',
-      showWhen: { drawMode: 'pinned', gradientType: ['radial', 'angular', 'diamond'] },
-    },
-    // Pinned control points — radial (Edge)
-    {
-      id: 'ex', label: 'Edge X', type: 'float', default: 150,
-      min: -1000, max: 1000, step: 1,
-      connectable: true, updateMode: 'uniform',
-      showWhen: { drawMode: 'pinned', gradientType: 'radial' },
-    },
-    {
-      id: 'ey', label: 'Edge Y', type: 'float', default: 0,
-      min: -1000, max: 1000, step: 1,
-      connectable: true, updateMode: 'uniform',
-      showWhen: { drawMode: 'pinned', gradientType: 'radial' },
-    },
-    // Pinned control points — angular (Angle ref)
-    {
-      id: 'rx', label: 'Angle Ref X', type: 'float', default: 150,
-      min: -1000, max: 1000, step: 1,
-      connectable: true, updateMode: 'uniform',
-      showWhen: { drawMode: 'pinned', gradientType: 'angular' },
-    },
-    {
-      id: 'ry', label: 'Angle Ref Y', type: 'float', default: 0,
-      min: -1000, max: 1000, step: 1,
-      connectable: true, updateMode: 'uniform',
-      showWhen: { drawMode: 'pinned', gradientType: 'angular' },
-    },
-    // Pinned control points — diamond (Corner)
-    {
-      id: 'kx', label: 'Corner X', type: 'float', default: 150,
-      min: -1000, max: 1000, step: 1,
-      connectable: true, updateMode: 'uniform',
-      showWhen: { drawMode: 'pinned', gradientType: 'diamond' },
-    },
-    {
-      id: 'ky', label: 'Corner Y', type: 'float', default: 0,
-      min: -1000, max: 1000, step: 1,
-      connectable: true, updateMode: 'uniform',
-      showWhen: { drawMode: 'pinned', gradientType: 'diamond' },
     },
     {
       id: 'interpolation',
@@ -166,18 +123,27 @@ export const gradientNode: NodeDefinition = {
   gizmo: {
     showWhen: { drawMode: 'pinned' },
     points: [
-      { id: 'a', xParam: 'ax', yParam: 'ay', showWhen: { gradientType: 'linear' } },
-      { id: 'b', xParam: 'bx', yParam: 'by', showWhen: { gradientType: 'linear' } },
-      { id: 'c', xParam: 'cx', yParam: 'cy', role: 'center', showWhen: { gradientType: ['radial', 'angular', 'diamond'] } },
-      { id: 'e', xParam: 'ex', yParam: 'ey', showWhen: { gradientType: 'radial' } },
-      { id: 'r', xParam: 'rx', yParam: 'ry', showWhen: { gradientType: 'angular' } },
-      { id: 'k', xParam: 'kx', yParam: 'ky', showWhen: { gradientType: 'diamond' } },
+      { id: 'p0', xParam: 'p0x', yParam: 'p0y', shape: 'diamond', showWhen: { drawMode: 'pinned' } },
+      { id: 'p1', xParam: 'p1x', yParam: 'p1y', shape: 'diamond', showWhen: { drawMode: 'pinned' } },
     ],
     connectors: [
-      { from: 'a', to: 'b' },
-      { from: 'c', to: 'e' },
-      { from: 'c', to: 'r' },
-      { from: 'c', to: 'k' },
+      { from: 'p0', to: 'p1' },
+    ],
+    aspectHandles: [
+      {
+        id: 'asp', shape: 'square', aspectParam: 'aspect', centerPoint: 'p0', endPoint: 'p1',
+        showWhen: { drawMode: 'pinned', gradientType: ['radial', 'angular', 'diamond'] },
+      },
+    ],
+    outline: [
+      {
+        shape: 'ellipse', centerPoint: 'p0', endPoint: 'p1', aspectParam: 'aspect',
+        showWhen: { drawMode: 'pinned', gradientType: ['radial', 'angular'] },
+      },
+      {
+        shape: 'diamond', centerPoint: 'p0', endPoint: 'p1', aspectParam: 'aspect',
+        showWhen: { drawMode: 'pinned', gradientType: 'diamond' },
+      },
     ],
   } satisfies GizmoConfig,
 
@@ -207,51 +173,46 @@ export const gradientNode: NodeDefinition = {
         lines.push(`vec2 ${varName} = grad_center_${id} + vec2(${pxExpr}, -(${pyExpr})) / u_ref_size;`)
       }
 
+      // Shared field basis for ALL types: C = P0, P = P1, so switching
+      // gradientType never moves the gradient. u = P - C is the primary axis;
+      // vh is its perpendicular, scaled by `aspect` for radial/angular/diamond.
+      const C = `grad_C_${id}`
+      const P = `grad_P_${id}`
+      const u = `grad_u_${id}`
+      const L = `grad_L_${id}`
+      const uh = `grad_uh_${id}`
+      const vh = `grad_vh_${id}`
+      const d = `grad_d_${id}`
+      const a = `grad_a_${id}`
+      const b = `grad_b_${id}`
+      pt(C, inputs.p0x, inputs.p0y)
+      pt(P, inputs.p1x, inputs.p1y)
+      lines.push(`vec2 ${u} = ${P} - ${C};`)
+      lines.push(`float ${L} = max(length(${u}), 1e-6);`)
+      lines.push(`vec2 ${uh} = ${u} / ${L};`)
+      lines.push(`vec2 ${vh} = vec2(-${uh}.y, ${uh}.x);`)
+      lines.push(`vec2 ${d} = ${inputs.coords} - ${C};`)
+      lines.push(`float ${a} = dot(${d}, ${uh}) / ${L};`)
+      lines.push(`float ${b} = dot(${d}, ${vh}) / (${inputs.aspect} * ${L});`)
+
       switch (gradType) {
         case 'radial': {
-          const C = `grad_C_${id}`
-          const E = `grad_E_${id}`
-          pt(C, inputs.cx, inputs.cy)
-          pt(E, inputs.ex, inputs.ey)
-          lines.push(`float ${field} = length(${inputs.coords} - ${C}) / max(length(${E} - ${C}), 1e-6);`)
+          lines.push(`float ${field} = length(vec2(${a}, ${b}));`)
           break
         }
         case 'angular': {
-          const C = `grad_C_${id}`
-          const R = `grad_R_${id}`
-          const f = `grad_f_${id}`
-          const d = `grad_d_${id}`
-          pt(C, inputs.cx, inputs.cy)
-          pt(R, inputs.rx, inputs.ry)
-          lines.push(`vec2 ${f} = ${R} - ${C};`)
-          lines.push(`vec2 ${d} = ${inputs.coords} - ${C};`)
-          lines.push(`float ${field} = atan(${d}.x * ${f}.y - ${d}.y * ${f}.x, dot(${d}, ${f})) * (1.0 / 6.28318530718) + 0.5;`)
+          const ang = `grad_ang_${id}`
+          lines.push(`float ${ang} = atan(${b}, ${a});`)
+          lines.push(`float ${field} = ${ang} * (1.0 / 6.28318530718);`)
+          lines.push(`${field} = ${field} < 0.0 ? ${field} + 1.0 : ${field};`)
           break
         }
         case 'diamond': {
-          const C = `grad_C_${id}`
-          const K = `grad_K_${id}`
-          const u = `grad_u_${id}`
-          const ulen = `grad_ulen_${id}`
-          const uhat = `grad_uhat_${id}`
-          const uperp = `grad_uperp_${id}`
-          const d = `grad_d_${id}`
-          pt(C, inputs.cx, inputs.cy)
-          pt(K, inputs.kx, inputs.ky)
-          lines.push(`vec2 ${u} = ${K} - ${C};`)
-          lines.push(`float ${ulen} = max(length(${u}), 1e-6);`)
-          lines.push(`vec2 ${uhat} = ${u} / ${ulen};`)
-          lines.push(`vec2 ${uperp} = vec2(-${uhat}.y, ${uhat}.x);`)
-          lines.push(`vec2 ${d} = ${inputs.coords} - ${C};`)
-          lines.push(`float ${field} = (abs(dot(${d}, ${uhat})) + abs(dot(${d}, ${uperp}))) / ${ulen};`)
+          lines.push(`float ${field} = abs(${a}) + abs(${b});`)
           break
         }
         default: { // linear
-          const A = `grad_A_${id}`
-          const B = `grad_B_${id}`
-          pt(A, inputs.ax, inputs.ay)
-          pt(B, inputs.bx, inputs.by)
-          lines.push(`float ${field} = dot(${inputs.coords} - ${A}, ${B} - ${A}) / max(dot(${B} - ${A}, ${B} - ${A}), 1e-6);`)
+          lines.push(`float ${field} = ${a};`)
         }
       }
     } else {
@@ -375,53 +336,69 @@ export const gradientNode: NodeDefinition = {
           'vec2',
         )
 
+      // Shared field basis for ALL types: C = P0, P = P1, so switching
+      // gradientType never moves the gradient. u = P - C is the primary axis;
+      // vh is its perpendicular, scaled by `aspect` for radial/angular/diamond.
+      const C = `grad_C_${id}`
+      const P = `grad_P_${id}`
+      const u = `grad_u_${id}`
+      const L = `grad_L_${id}`
+      const uh = `grad_uh_${id}`
+      const vh = `grad_vh_${id}`
+      const d = `grad_d_${id}`
+      const a = `grad_a_${id}`
+      const b = `grad_b_${id}`
+      statements.push(declare(C, 'vec2', ptExpr('p0x', 'p0y')))
+      statements.push(declare(P, 'vec2', ptExpr('p1x', 'p1y')))
+      statements.push(declare(u, 'vec2', binary('-', variable(P), variable(C), 'vec2')))
+      statements.push(declare(L, 'float',
+        call('max', [call('length', [variable(u)], 'float'), literal('float', 1e-6)], 'float'),
+      ))
+      statements.push(declare(uh, 'vec2', binary('/', variable(u), variable(L), 'vec2')))
+      // perpendicular: (-uh.y, uh.x)
+      statements.push(declare(vh, 'vec2', construct('vec2', [
+        binary('*', literal('float', -1.0), swizzle(variable(uh), 'y', 'float'), 'float'),
+        swizzle(variable(uh), 'x', 'float'),
+      ])))
+      statements.push(declare(d, 'vec2', binary('-', coords, variable(C), 'vec2')))
+      // a = dot(d, uh) / L
+      statements.push(declare(a, 'float',
+        binary('/', call('dot', [variable(d), variable(uh)], 'float'), variable(L), 'float'),
+      ))
+      // b = dot(d, vh) / (aspect * L)
+      statements.push(declare(b, 'float',
+        binary('/',
+          call('dot', [variable(d), variable(vh)], 'float'),
+          binary('*', variable(ctx.inputs.aspect), variable(L), 'float'),
+          'float',
+        ),
+      ))
+
       switch (gradType) {
         case 'radial': {
-          const C = `grad_C_${id}`
-          const E = `grad_E_${id}`
-          statements.push(declare(C, 'vec2', ptExpr('cx', 'cy')))
-          statements.push(declare(E, 'vec2', ptExpr('ex', 'ey')))
-          // length(coords - C) / max(length(E - C), 1e-6)
+          // length(vec2(a, b))
           statements.push(
             declare(field, 'float',
-              binary('/',
-                call('length', [binary('-', coords, variable(C), 'vec2')], 'float'),
-                call('max', [
-                  call('length', [binary('-', variable(E), variable(C), 'vec2')], 'float'),
-                  literal('float', 1e-6),
-                ], 'float'),
-                'float',
-              ),
+              call('length', [construct('vec2', [variable(a), variable(b)])], 'float'),
             ),
           )
           break
         }
         case 'angular': {
-          const C = `grad_C_${id}`
-          const R = `grad_R_${id}`
-          const f = `grad_f_${id}`
-          const d = `grad_d_${id}`
-          statements.push(declare(C, 'vec2', ptExpr('cx', 'cy')))
-          statements.push(declare(R, 'vec2', ptExpr('rx', 'ry')))
-          statements.push(declare(f, 'vec2', binary('-', variable(R), variable(C), 'vec2')))
-          statements.push(declare(d, 'vec2', binary('-', coords, variable(C), 'vec2')))
-          // det = d.x*f.y - d.y*f.x ; dotv = dot(d, f)
-          // atan(det, dotv) * (1.0 / 6.28318530718) + 0.5
-          const det = binary('-',
-            binary('*', swizzle(variable(d), 'x', 'float'), swizzle(variable(f), 'y', 'float'), 'float'),
-            binary('*', swizzle(variable(d), 'y', 'float'), swizzle(variable(f), 'x', 'float'), 'float'),
-            'float',
-          )
-          const dotv = call('dot', [variable(d), variable(f)], 'float')
+          const ang = `grad_ang_${id}`
+          // ang = atan(b, a); field = ang / (2*pi); field = field < 0 ? field + 1 : field
+          statements.push(declare(ang, 'float', call('atan', [variable(b), variable(a)], 'float')))
           statements.push(
             declare(field, 'float',
-              binary('+',
-                binary('*',
-                  call('atan', [det, dotv], 'float'),
-                  literal('float', 1.0 / 6.28318530718),
-                  'float',
-                ),
-                literal('float', 0.5),
+              binary('*', variable(ang), literal('float', 1.0 / 6.28318530718), 'float'),
+            ),
+          )
+          statements.push(
+            assign(field,
+              ternary(
+                binary('<', variable(field), literal('float', 0.0), 'bool'),
+                binary('+', variable(field), literal('float', 1.0), 'float'),
+                variable(field),
                 'float',
               ),
             ),
@@ -429,36 +406,12 @@ export const gradientNode: NodeDefinition = {
           break
         }
         case 'diamond': {
-          const C = `grad_C_${id}`
-          const K = `grad_K_${id}`
-          const u = `grad_u_${id}`
-          const ulen = `grad_ulen_${id}`
-          const uhat = `grad_uhat_${id}`
-          const uperp = `grad_uperp_${id}`
-          const d = `grad_d_${id}`
-          statements.push(declare(C, 'vec2', ptExpr('cx', 'cy')))
-          statements.push(declare(K, 'vec2', ptExpr('kx', 'ky')))
-          statements.push(declare(u, 'vec2', binary('-', variable(K), variable(C), 'vec2')))
-          statements.push(declare(ulen, 'float',
-            call('max', [call('length', [variable(u)], 'float'), literal('float', 1e-6)], 'float'),
-          ))
-          statements.push(declare(uhat, 'vec2', binary('/', variable(u), variable(ulen), 'vec2')))
-          // perpendicular: (-uhat.y, uhat.x)
-          statements.push(declare(uperp, 'vec2', construct('vec2', [
-            binary('*', literal('float', -1.0), swizzle(variable(uhat), 'y', 'float'), 'float'),
-            swizzle(variable(uhat), 'x', 'float'),
-          ])))
-          statements.push(declare(d, 'vec2', binary('-', coords, variable(C), 'vec2')))
-          // (|dot(d, uhat)| + |dot(d, uperp)|) / ulen
+          // abs(a) + abs(b)
           statements.push(
             declare(field, 'float',
-              binary('/',
-                binary('+',
-                  call('abs', [call('dot', [variable(d), variable(uhat)], 'float')], 'float'),
-                  call('abs', [call('dot', [variable(d), variable(uperp)], 'float')], 'float'),
-                  'float',
-                ),
-                variable(ulen),
+              binary('+',
+                call('abs', [variable(a)], 'float'),
+                call('abs', [variable(b)], 'float'),
                 'float',
               ),
             ),
@@ -466,29 +419,7 @@ export const gradientNode: NodeDefinition = {
           break
         }
         default: { // linear
-          const A = `grad_A_${id}`
-          const B = `grad_B_${id}`
-          statements.push(declare(A, 'vec2', ptExpr('ax', 'ay')))
-          statements.push(declare(B, 'vec2', ptExpr('bx', 'by')))
-          // dot(coords - A, B - A) / max(dot(B - A, B - A), 1e-6)
-          statements.push(
-            declare(field, 'float',
-              binary('/',
-                call('dot', [
-                  binary('-', coords, variable(A), 'vec2'),
-                  binary('-', variable(B), variable(A), 'vec2'),
-                ], 'float'),
-                call('max', [
-                  call('dot', [
-                    binary('-', variable(B), variable(A), 'vec2'),
-                    binary('-', variable(B), variable(A), 'vec2'),
-                  ], 'float'),
-                  literal('float', 1e-6),
-                ], 'float'),
-                'float',
-              ),
-            ),
-          )
+          statements.push(declare(field, 'float', variable(a)))
         }
       }
     } else {

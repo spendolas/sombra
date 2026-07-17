@@ -16,7 +16,7 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { useGraphStore } from '../stores/graphStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { nodeRegistry } from '../nodes/registry'
-import { matchesShowWhen, type GizmoPoint, type GizmoAspectHandle } from '../nodes/types'
+import { matchesShowWhen, type GizmoPoint, type GizmoAspectHandle, type GizmoOutline } from '../nodes/types'
 import { pointPxToScreen, screenToPointPx, type Rect } from '../utils/gizmo-coords'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
@@ -120,8 +120,10 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
     return gizmo.aspectHandles.filter((h) => matchesShowWhen(h.showWhen, currentParams, allParams))
   }, [gizmo, currentParams, allParams])
 
-  const outlineVisible =
-    !!gizmo?.outline && matchesShowWhen(gizmo.outline.showWhen, currentParams, allParams)
+  const visibleOutlines = useMemo<GizmoOutline[]>(() => {
+    if (!gizmo?.outline) return []
+    return gizmo.outline.filter((o) => matchesShowWhen(o.showWhen, currentParams, allParams))
+  }, [gizmo, currentParams, allParams])
 
   // Gizmo points are relative to the PREVIEW CANVAS CENTRE (not the Fragment
   // Output anchor) so their preview-window position survives anchor changes.
@@ -273,55 +275,54 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
     pointScreenPos.set(p.id, pointPxToScreen(px, py, canvasRect, anchor))
   }
 
-  const outline = outlineVisible ? gizmo.outline : undefined
-  const outlineGeom = outline
-    ? computeAspectGeometry(outline, pointScreenPos, currentParams, allParams)
-    : null
-
   return (
     <div
       className="fixed pointer-events-none z-[55]"
       style={{ left: canvasRect.left, top: canvasRect.top, width: canvasRect.width, height: canvasRect.height }}
     >
-      {outline && outlineGeom && (
-        <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">
-          {outline.shape === 'ellipse' ? (
-            (() => {
-              const cx = outlineGeom.Cs.x - canvasRect.left
-              const cy = outlineGeom.Cs.y - canvasRect.top
-              const angleDeg = (Math.atan2(outlineGeom.dirY, outlineGeom.dirX) * 180) / Math.PI
-              return (
-                <ellipse
-                  cx={cx}
-                  cy={cy}
-                  rx={outlineGeom.L}
-                  ry={outlineGeom.aspect * outlineGeom.L}
-                  transform={`rotate(${angleDeg} ${cx} ${cy})`}
-                  fill="none"
-                  stroke="var(--indigo)"
-                  strokeWidth={1}
-                />
-              )
-            })()
-          ) : (
-            (() => {
-              const { Cs, dirX, dirY, perpX, perpY, L, aspect } = outlineGeom
-              const tips = [
-                { x: Cs.x + dirX * L, y: Cs.y + dirY * L },
-                { x: Cs.x + perpX * aspect * L, y: Cs.y + perpY * aspect * L },
-                { x: Cs.x - dirX * L, y: Cs.y - dirY * L },
-                { x: Cs.x - perpX * aspect * L, y: Cs.y - perpY * aspect * L },
-              ]
-              const pointsAttr = tips
-                .map((t) => `${t.x - canvasRect.left},${t.y - canvasRect.top}`)
-                .join(' ')
-              return (
-                <polygon points={pointsAttr} fill="none" stroke="var(--indigo)" strokeWidth={1} />
-              )
-            })()
-          )}
-        </svg>
-      )}
+      {visibleOutlines.map((outline, i) => {
+        const outlineGeom = computeAspectGeometry(outline, pointScreenPos, currentParams, allParams)
+        if (!outlineGeom) return null
+        return (
+          <svg key={`outline-${i}`} className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">
+            {outline.shape === 'ellipse' ? (
+              (() => {
+                const cx = outlineGeom.Cs.x - canvasRect.left
+                const cy = outlineGeom.Cs.y - canvasRect.top
+                const angleDeg = (Math.atan2(outlineGeom.dirY, outlineGeom.dirX) * 180) / Math.PI
+                return (
+                  <ellipse
+                    cx={cx}
+                    cy={cy}
+                    rx={outlineGeom.L}
+                    ry={outlineGeom.aspect * outlineGeom.L}
+                    transform={`rotate(${angleDeg} ${cx} ${cy})`}
+                    fill="none"
+                    stroke="var(--indigo)"
+                    strokeWidth={1}
+                  />
+                )
+              })()
+            ) : (
+              (() => {
+                const { Cs, dirX, dirY, perpX, perpY, L, aspect } = outlineGeom
+                const tips = [
+                  { x: Cs.x + dirX * L, y: Cs.y + dirY * L },
+                  { x: Cs.x + perpX * aspect * L, y: Cs.y + perpY * aspect * L },
+                  { x: Cs.x - dirX * L, y: Cs.y - dirY * L },
+                  { x: Cs.x - perpX * aspect * L, y: Cs.y - perpY * aspect * L },
+                ]
+                const pointsAttr = tips
+                  .map((t) => `${t.x - canvasRect.left},${t.y - canvasRect.top}`)
+                  .join(' ')
+                return (
+                  <polygon points={pointsAttr} fill="none" stroke="var(--indigo)" strokeWidth={1} />
+                )
+              })()
+            )}
+          </svg>
+        )
+      })}
 
       {gizmo.connectors && gizmo.connectors.length > 0 && (
         <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">

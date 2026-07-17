@@ -281,7 +281,7 @@ The **GraphToolbar** in the top-left of the canvas provides Save (download) and 
 | `checkerboard` | Checkerboard | `coords` (vec2, auto_uv) | `color` (color), `value` (float) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `tileMode` (enum: cellSize/density), `cellSize` (connectable; when tileMode=cellSize), `density` (connectable; when tileMode=density), `softness` (connectable), `colorA` (connectable), `colorB` (connectable) |
 | `stripes` | Stripes | `coords` (vec2, auto_uv) | `color` (color), `value` (float) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `width` (connectable), `gap` (connectable), `softness` (connectable), `colorA` (connectable), `colorB` (connectable) |
 | `dots` | Dots | `coords` (vec2, auto_uv) | `color` (color), `value` (float) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `gapX` (connectable), `gapY` (connectable), `radius` (connectable), `aspect` (connectable), `softness` (connectable), `colorA` (connectable), `colorB` (connectable) |
-| `gradient` | Gradient | `coords` (vec2, auto_uv) | `color` (color, RGBA — stops carry alpha), `value` (float) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `gradientType` (enum: linear/radial/angular/diamond), `drawMode` (enum: stretch/pinned; stretch = full-canvas field, pinned = anchor-relative px control points), `ax`/`ay`/`bx`/`by` (connectable px, defaults -150/0/150/0; when drawMode=pinned & gradientType=linear — Point A/B), `cx`/`cy` (connectable px, defaults 0/0; when drawMode=pinned & gradientType=radial\|angular\|diamond — shared Center), `ex`/`ey` (connectable px, defaults 150/0; when drawMode=pinned & gradientType=radial — Edge), `rx`/`ry` (connectable px, defaults 150/0; when drawMode=pinned & gradientType=angular — Angle Ref), `kx`/`ky` (connectable px, defaults 150/0; when drawMode=pinned & gradientType=diamond — Corner), `interpolation` (enum: smooth/linear/constant) |
+| `gradient` | Gradient | `coords` (vec2, auto_uv) | `color` (color, RGBA — stops carry alpha), `value` (float) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `gradientType` (enum: linear/radial/angular/diamond), `drawMode` (enum: stretch/pinned; stretch = full-canvas field, pinned = anchor-relative px control points), `p0x`/`p0y` (connectable px, default 0/0; when drawMode=pinned — SHARED Start/Center point across all types), `p1x`/`p1y` (connectable px, default 150/0; when drawMode=pinned — SHARED End/Edge/Ref/Corner point across all types), `aspect` (connectable, default 1, min 0.1, max 10; when drawMode=pinned & gradientType=radial\|angular\|diamond — perpendicular-axis scale: elliptical radial/angular, rhombus diamond), `interpolation` (enum: smooth/linear/constant) |
 
 ### Vector
 
@@ -338,10 +338,17 @@ selected on the canvas, `PreviewGizmoOverlay` renders its visible points
 (subject to `showWhen`) as draggable handles — positioned in CSS px relative
 to the Fragment Output's `anchor`, Y-up — and dragging a handle writes
 straight to its bound `xParam`/`yParam` params (a uniform update, no
-recompile). Currently only `gradient` declares a gizmo: its Point A/B,
-Center, Edge, Angle Ref, and Corner handles render only when
-`drawMode: 'pinned'`, filtered further to the handles relevant to the
-current `gradientType`.
+recompile). A `GizmoConfig` can also declare `aspectHandles` (a perpendicular
+drag handle that writes a scalar `aspectParam`) and `outline` (an array of
+non-interactive `GizmoOutline`s — `ellipse`/`diamond` shapes drawn from a
+`centerPoint`/`endPoint` pair and an `aspectParam`; each entry is filtered by
+its own `showWhen` and rendered independently, so a node can show more than
+one outline shape at once gated by different param values). Currently only
+`gradient` declares a gizmo: its `p0`/`p1` diamond handles (shared Start/
+Center → End/Edge/Ref/Corner across all types) and its `asp` aspect handle
+render only when `drawMode: 'pinned'` (the aspect handle further gated to
+`gradientType: radial|angular|diamond`); the outline renders an ellipse for
+radial/angular and a diamond for diamond.
 
 ### Dynamic Inputs
 
