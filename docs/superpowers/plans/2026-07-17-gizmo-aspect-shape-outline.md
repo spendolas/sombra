@@ -50,30 +50,37 @@
 
 ---
 
-### Task 2: Gradient — aspect field math + gizmo (radial / angular / diamond)
+### Task 2: Gradient — SHARED points across types + aspect field math + gizmo
 
-**Files:** `src/nodes/pattern/gradient.ts`
+**Files:** `src/nodes/pattern/gradient.ts`; small framework tweak in `src/nodes/types.ts` + `src/components/PreviewGizmoOverlay.tsx` (outline → array).
 
-**Params:** add shared `aspect` (float, default 1, min 0.1, max 10, step 0.01, connectable, uniform, `showWhen:{ drawMode:'pinned', gradientType:['radial','angular','diamond'] }`).
+**SHARED control points (key change):** ALL gradient types use ONE shared point pair so switching `gradientType` never moves the gradient:
+- `p0x,p0y` — **Start / Center** (default `0, 0`).
+- `p1x,p1y` — **End / Edge / Ref / Corner** (default `150, 0`).
+- Replace the old per-type params (ax/ay/bx/by, cx/cy/ex/ey, rx/ry, kx/ky) with `p0*`/`p1*`. All `connectable, updateMode:'uniform'`, `showWhen:{ drawMode:'pinned' }` (NOT per-type — shared).
+- `aspect` (float, default 1, min 0.1, max 10, step 0.01, connectable, uniform, `showWhen:{ drawMode:'pinned', gradientType:['radial','angular','diamond'] }`).
 
-**gizmo config:**
-- Markers: `shape:'diamond'` on center `c` and each endpoint (radial `e`, angular `r`, diamond `k`); Linear `a`/`b` stay `shape:'circle'`.
-- `aspectHandles`: one per aspect type, `shape:'square'`, `aspectParam:'aspect'`, `centerPoint:'c'`, `endPoint:'e'|'r'|'k'`, gated by its `gradientType` (+ `drawMode:'pinned'`).
-- `outline`: radial → `ellipse` (c,e); angular → `ellipse` (c,r) [the "circle"]; diamond → `diamond` (c,k). Each `aspectParam:'aspect'`, gated by type.
+**Framework tweak:** change `GizmoConfig.outline?: GizmoOutline` → `outline?: GizmoOutline[]` (array); the overlay renders each visible outline. (Gradient needs ellipse for radial|angular AND diamond for diamond — two shapes gated by type.)
 
-**Field math (both backends), pinned.** With `C`=center, `P`=endpoint (radial E / angular R / diamond K), `A`=aspect:
+**gizmo config (single shared set):**
+- points: `p0` and `p1`, both `shape:'diamond'`, `showWhen:{ drawMode:'pinned' }`. connector `p0→p1`.
+- `aspectHandles: [{ id:'asp', shape:'square', aspectParam:'aspect', centerPoint:'p0', endPoint:'p1', showWhen:{ drawMode:'pinned', gradientType:['radial','angular','diamond'] } }]`.
+- `outline: [ { shape:'ellipse', centerPoint:'p0', endPoint:'p1', aspectParam:'aspect', showWhen:{ drawMode:'pinned', gradientType:['radial','angular'] } }, { shape:'diamond', centerPoint:'p0', endPoint:'p1', aspectParam:'aspect', showWhen:{ drawMode:'pinned', gradientType:'diamond' } } ]`.
+
+**Field math (both backends), pinned.** With `C = P0`, `P = P1`, `A = aspect`:
 ```
 u = P - C; L = max(length(u), 1e-6); uh = u / L; vh = vec2(-uh.y, uh.x);
 d = coords - C; a = dot(d, uh) / L; b = dot(d, vh) / (A * L);
+linear:  t = a;                       // projection onto P0→P1 (no aspect; a already /L)
 radial:  t = length(vec2(a, b));
 diamond: t = abs(a) + abs(b);
-angular: ang = atan(b, a);           // atan2; 0 along +u (the center→R line)
+angular: ang = atan(b, a);            // atan2; 0 along +u (the P0→P1 line)
          t = ang * (1.0/6.28318530718);
-         t = t < 0.0 ? t + 1.0 : t;  // 0..1, seam (t 0↔1) exactly on center→R line
+         t = t < 0.0 ? t + 1.0 : t;   // 0..1, seam (t 0↔1) exactly on P0→P1 line
 ```
-Angular's seam sitting on `+u` makes the **center→R line align to the gradient's start/stop** (the requirement). Aspect makes angular's iso-angle frame elliptical (matches the ellipse outline). Feed `t` through the existing stops chain (unchanged). WGSL: per-component vec2 ops only; use the WGSL `atan2` builtin (GLSL `atan(y,x)`).
+Note linear uses the same P0/P1 as the others (t = normalized projection). Angular's seam on `+u` makes the **P0→P1 line align to the gradient's start/stop**. Feed `t` through the existing stops chain (unchanged). WGSL: per-component vec2 ops; `atan2` builtin (GLSL `atan(y,x)`).
 
-- [ ] Steps: add `aspect` param + gizmo (markers/aspectHandles/outline); implement radial+diamond aspect field GLSL+IR; `tsc`/`verify-ir-poc`/`validate-wgsl-multipass`/`lint` green (update gradient fixtures if needed, loose-mode). Commit `feat: gradient — elliptical radial + aspect diamond, aspect gizmo + outline`.
+- [ ] Steps: outline→array (types+overlay); replace gradient params with shared `p0*/p1*/aspect`; gizmo config; field math all 4 types GLSL+IR on shared P0/P1; `tsc`/`verify-ir-poc`/`validate-wgsl-multipass`/`lint` green (update gradient fixtures, loose-mode). Commit `feat: gradient — shared control points across types + aspect (elliptical radial/angular, aspect diamond) + gizmo/outline`.
 
 ---
 
