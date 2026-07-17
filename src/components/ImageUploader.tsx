@@ -11,6 +11,7 @@ import { useRef, useCallback, useMemo, useState, useEffect, useId } from 'react'
 import { useGraphStore } from '@/stores/graphStore'
 import { usePreviewStore } from '@/stores/previewStore'
 import { ds } from '@/generated/ds'
+import { svgCursor, moveCursor } from '@/utils/cursors'
 
 const ACCEPTED_TYPES = 'image/png,image/jpeg,image/webp,image/gif'
 const CORNER_ZONE = 8
@@ -137,29 +138,8 @@ function distToSegment(px: number, py: number, a: Pt, b: Pt): number {
 // Each uses white outline + indigo stroke for visibility on any background.
 // ---------------------------------------------------------------------------
 
-function svgCursor(svg: string, fallback: string): string {
-  return `url('data:image/svg+xml,${encodeURIComponent(svg)}') 12 12, ${fallback}`
-}
-
-/** 4-way arrow for offset drag (static, no rotation). */
-function moveCursor(): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">`
-    + `<g stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">`
-    + `<path d="M12 5v14M5 12h14"/>`
-    + `<path d="M12 5l-2.5 3m2.5-3l2.5 3"/>`
-    + `<path d="M12 19l-2.5-3m2.5 3l2.5-3"/>`
-    + `<path d="M5 12l3-2.5m-3 2.5l3 2.5"/>`
-    + `<path d="M19 12l-3-2.5m3 2.5l-3 2.5"/>`
-    + `</g>`
-    + `<g stroke="#6366f1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">`
-    + `<path d="M12 5v14M5 12h14"/>`
-    + `<path d="M12 5l-2.5 3m2.5-3l2.5 3"/>`
-    + `<path d="M12 19l-2.5-3m2.5 3l2.5-3"/>`
-    + `<path d="M5 12l3-2.5m-3 2.5l3 2.5"/>`
-    + `<path d="M19 12l-3-2.5m3 2.5l-3 2.5"/>`
-    + `</g></svg>`
-  return svgCursor(svg, 'move')
-}
+// svgCursor + moveCursor now live in ../utils/cursors (shared with the preview
+// gizmo overlay). scale/rotate cursors below stay local (angle-parameterised).
 
 /** Double-ended arrow for scale drag, rotated to match handle direction. */
 function scaleCursor(angleDeg: number): string {

@@ -18,6 +18,7 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { nodeRegistry } from '../nodes/registry'
 import { matchesShowWhen, type GizmoPoint, type GizmoAspectHandle, type GizmoOutline } from '../nodes/types'
 import { pointPxToScreen, screenToPointPx, uvToScreen, screenToUv, type Rect } from '../utils/gizmo-coords'
+import { moveCursor } from '../utils/cursors'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
 
@@ -342,10 +343,16 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
     }
     const onEnd = () => setDragging(null)
 
+    // Hold the Move cursor for the whole drag, even when the pointer leaves the
+    // small handle (restored on release).
+    const prevCursor = document.body.style.cursor
+    document.body.style.cursor = moveCursor()
+
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onEnd)
     window.addEventListener('pointercancel', onEnd)
     return () => {
+      document.body.style.cursor = prevCursor
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onEnd)
       window.removeEventListener('pointercancel', onEnd)
@@ -482,6 +489,7 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
               left: pos.x - canvasRect.left,
               top: pos.y - canvasRect.top,
               transform: markerTransform(point.shape),
+              cursor: moveCursor(),
             }}
             onPointerDown={(e) => {
               e.stopPropagation()
@@ -511,6 +519,7 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
               left: pos.x - canvasRect.left,
               top: pos.y - canvasRect.top,
               transform: markerTransform(handle.shape),
+              cursor: moveCursor(),
             }}
             onPointerDown={(e) => {
               e.stopPropagation()
