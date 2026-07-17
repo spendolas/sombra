@@ -104,7 +104,7 @@ Each node is one file in `src/nodes/<category>/`, registered in `src/nodes/index
 
 - Fullscreen quad (2 triangles), all work in the fragment shader.
 - Built-in uniforms: `u_time`, `u_resolution`, `u_mouse`, `u_ref_size`, `u_dpr`, `u_viewport`.
-- **Frozen reference sizing:** `u_ref_size` captures `min(width, height)` on first render and never changes; UV math `(v_uv - 0.5) * u_resolution / u_ref_size + 0.5` means resizing reveals/hides edges without zoom or distortion.
+- **Fixed reference sizing:** `u_ref_size` is a constant (`REFERENCE_SIZE = 512`, shared in `src/renderer/constants.ts`), NOT captured per-canvas. `auto_uv` = `(fragXY - u_resolution*u_anchor) / (u_dpr * u_ref_size) + u_anchor` is anchor-relative, so resizing reveals/hides edges (no zoom/distortion) and pins content to the Fragment Output anchor. Nodes placing px-space content relative to this (e.g. gradient Pinned `grad_center = vec2(0.5)`) pin to the anchor on resize.
 
 ### State + UI
 

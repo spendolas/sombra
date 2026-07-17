@@ -97,7 +97,7 @@ npm run tokens:audit # Compare DB component parts against Figma REST API (requir
 - **Fullscreen quad**: 2 triangles covering clip space (-1 to 1), vertex shader passes through, fragment shader does all the work
 - **Shader compilation**: Graph nodes → topological sort → GLSL code generation → WebGL program compilation
 - **Uniforms**: Built-in `u_time`, `u_resolution`, `u_mouse`, `u_ref_size`; user-defined uniforms from node parameters
-- **Frozen reference sizing**: `u_ref_size` captures `min(width, height)` on first render and never changes. The UV node uses `(v_uv - 0.5) * u_resolution / u_ref_size + 0.5` so each axis scales independently — resizing reveals/hides edges without zoom or distortion
+- **Fixed reference sizing**: `u_ref_size` is a constant (`REFERENCE_SIZE = 512`, shared in `src/renderer/constants.ts`), NOT captured per-canvas. `auto_uv` = `(fragXY - u_resolution*u_anchor) / (u_dpr * u_ref_size) + u_anchor` is anchor-relative — resizing reveals/hides edges without zoom/distortion and pins content to the Fragment Output anchor
 - **Preview rendering**: Single offscreen WebGL context captures frames to `<img>` for per-node previews
 
 ### Node System
