@@ -171,6 +171,25 @@ export interface GizmoConfig {
 }
 
 /**
+ * Generic `showWhen` matcher shared by param visibility (ShaderNode.tsx's
+ * `isParamVisible`) and gizmo/gizmo-point visibility (PreviewGizmoOverlay).
+ * All key/value pairs must match `currentValues`, falling back to each
+ * param's declared default (via `allParams`) when a key is unset. An array
+ * value matches if the current value is any of its entries.
+ */
+export function matchesShowWhen(
+  showWhen: Record<string, string | string[]> | undefined,
+  currentValues: Record<string, unknown>,
+  allParams: NodeParameter[],
+): boolean {
+  if (!showWhen) return true
+  return Object.entries(showWhen).every(([key, val]) => {
+    const current = currentValues[key] ?? allParams.find((p) => p.id === key)?.default
+    return Array.isArray(val) ? val.includes(current as string) : current === val
+  })
+}
+
+/**
  * Register a shared GLSL function. Skips if key already registered.
  * Use this instead of pushing to functions[] directly.
  */

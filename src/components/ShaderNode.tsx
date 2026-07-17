@@ -4,7 +4,7 @@
 
 import { memo, useCallback, useMemo, useRef, useEffect } from 'react'
 import { Position, useEdges, type NodeProps } from '@xyflow/react'
-import type { NodeData, NodeParameter } from '../nodes/types'
+import { matchesShowWhen, type NodeData, type NodeParameter } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { FloatSlider, AnchorGrid, EnumSelect, BoolCheckbox } from './NodeParameters'
 import { useGraphStore } from '../stores/graphStore'
@@ -58,13 +58,7 @@ NodePreview.displayName = 'NodePreview'
  */
 function isParamVisible(param: NodeParameter, currentValues: Record<string, unknown>, allParams: NodeParameter[]): boolean {
   if (param.hidden) return false
-  if (!param.showWhen) return true
-  return Object.entries(param.showWhen).every(
-    ([key, val]) => {
-      const current = currentValues[key] ?? allParams.find((p) => p.id === key)?.default
-      return Array.isArray(val) ? val.includes(current as string) : current === val
-    }
-  )
+  return matchesShowWhen(param.showWhen, currentValues, allParams)
 }
 
 /**

@@ -23,6 +23,7 @@ import { PropertiesPanel } from './components/PropertiesPanel'
 import { PreviewPanel } from './components/PreviewPanel'
 import { FloatingPreview } from './components/FloatingPreview'
 import { FullWindowOverlay } from './components/FullWindowOverlay'
+import { PreviewGizmoOverlay } from './components/PreviewGizmoOverlay'
 import { CommandPalette } from './components/CommandPalette'
 import {
   ResizablePanelGroup,
@@ -607,6 +608,15 @@ function App() {
         {previewMode === 'fullwindow' && (
           <FullWindowOverlay targetRef={fullTargetRef} />
         )}
+
+        {/* Preview gizmo overlay — draggable control points for the selected
+            node's gizmo (if any), tracking the live canvas rect across all
+            three preview targets regardless of previewMode. */}
+        <PreviewGizmoOverlay
+          dockTargetRef={dockTargetRef}
+          floatTargetRef={floatTargetRef}
+          fullTargetRef={fullTargetRef}
+        />
 
         {/* Command palette overlay */}
         {commandPaletteOpen && (
