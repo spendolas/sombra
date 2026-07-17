@@ -7,7 +7,7 @@
  * also fed as `t` into the stops mix-chain to produce `color`.
  */
 
-import type { NodeDefinition, SpatialConfig } from '../types'
+import type { NodeDefinition, SpatialConfig, GizmoConfig } from '../types'
 import { getSpatialParams } from '../types'
 import { variable, call, binary, literal, declare, assign, swizzle, construct } from '../../compiler/ir/types'
 import type { IRStmt, IRExpr } from '../../compiler/ir/types'
@@ -57,6 +57,91 @@ export const gradientNode: NodeDefinition = {
       updateMode: 'recompile',
     },
     {
+      id: 'drawMode', label: 'Draw Mode', type: 'enum', default: 'stretch',
+      options: [
+        { value: 'stretch', label: 'Stretch' },
+        { value: 'pinned', label: 'Pinned' },
+      ],
+      updateMode: 'recompile',
+    },
+    // Pinned control points — linear (Point A / Point B)
+    {
+      id: 'ax', label: 'Point A X', type: 'float', default: -150,
+      min: -1000, max: 1000, step: 1,
+      connectable: true, updateMode: 'uniform',
+      showWhen: { drawMode: 'pinned', gradientType: 'linear' },
+    },
+    {
+      id: 'ay', label: 'Point A Y', type: 'float', default: 0,
+      min: -1000, max: 1000, step: 1,
+      connectable: true, updateMode: 'uniform',
+      showWhen: { drawMode: 'pinned', gradientType: 'linear' },
+    },
+    {
+      id: 'bx', label: 'Point B X', type: 'float', default: 150,
+      min: -1000, max: 1000, step: 1,
+      connectable: true, updateMode: 'uniform',
+      showWhen: { drawMode: 'pinned', gradientType: 'linear' },
+    },
+    {
+      id: 'by', label: 'Point B Y', type: 'float', default: 0,
+      min: -1000, max: 1000, step: 1,
+      connectable: true, updateMode: 'uniform',
+      showWhen: { drawMode: 'pinned', gradientType: 'linear' },
+    },
+    // Pinned control points — shared center for radial/angular/diamond
+    {
+      id: 'cx', label: 'Center X', type: 'float', default: 0,
+      min: -1000, max: 1000, step: 1,
+      connectable: true, updateMode: 'uniform',
+      showWhen: { drawMode: 'pinned', gradientType: ['radial', 'angular', 'diamond'] },
+    },
+    {
+      id: 'cy', label: 'Center Y', type: 'float', default: 0,
+      min: -1000, max: 1000, step: 1,
+      connectable: true, updateMode: 'uniform',
+      showWhen: { drawMode: 'pinned', gradientType: ['radial', 'angular', 'diamond'] },
+    },
+    // Pinned control points — radial (Edge)
+    {
+      id: 'ex', label: 'Edge X', type: 'float', default: 150,
+      min: -1000, max: 1000, step: 1,
+      connectable: true, updateMode: 'uniform',
+      showWhen: { drawMode: 'pinned', gradientType: 'radial' },
+    },
+    {
+      id: 'ey', label: 'Edge Y', type: 'float', default: 0,
+      min: -1000, max: 1000, step: 1,
+      connectable: true, updateMode: 'uniform',
+      showWhen: { drawMode: 'pinned', gradientType: 'radial' },
+    },
+    // Pinned control points — angular (Angle ref)
+    {
+      id: 'rx', label: 'Angle Ref X', type: 'float', default: 150,
+      min: -1000, max: 1000, step: 1,
+      connectable: true, updateMode: 'uniform',
+      showWhen: { drawMode: 'pinned', gradientType: 'angular' },
+    },
+    {
+      id: 'ry', label: 'Angle Ref Y', type: 'float', default: 0,
+      min: -1000, max: 1000, step: 1,
+      connectable: true, updateMode: 'uniform',
+      showWhen: { drawMode: 'pinned', gradientType: 'angular' },
+    },
+    // Pinned control points — diamond (Corner)
+    {
+      id: 'kx', label: 'Corner X', type: 'float', default: 150,
+      min: -1000, max: 1000, step: 1,
+      connectable: true, updateMode: 'uniform',
+      showWhen: { drawMode: 'pinned', gradientType: 'diamond' },
+    },
+    {
+      id: 'ky', label: 'Corner Y', type: 'float', default: 0,
+      min: -1000, max: 1000, step: 1,
+      connectable: true, updateMode: 'uniform',
+      showWhen: { drawMode: 'pinned', gradientType: 'diamond' },
+    },
+    {
       id: 'interpolation',
       label: 'Interpolation',
       type: 'enum',
@@ -77,6 +162,24 @@ export const gradientNode: NodeDefinition = {
       updateMode: 'recompile',
     },
   ],
+
+  gizmo: {
+    showWhen: { drawMode: 'pinned' },
+    points: [
+      { id: 'a', xParam: 'ax', yParam: 'ay', showWhen: { gradientType: 'linear' } },
+      { id: 'b', xParam: 'bx', yParam: 'by', showWhen: { gradientType: 'linear' } },
+      { id: 'c', xParam: 'cx', yParam: 'cy', role: 'center', showWhen: { gradientType: ['radial', 'angular', 'diamond'] } },
+      { id: 'e', xParam: 'ex', yParam: 'ey', showWhen: { gradientType: 'radial' } },
+      { id: 'r', xParam: 'rx', yParam: 'ry', showWhen: { gradientType: 'angular' } },
+      { id: 'k', xParam: 'kx', yParam: 'ky', showWhen: { gradientType: 'diamond' } },
+    ],
+    connectors: [
+      { from: 'a', to: 'b' },
+      { from: 'c', to: 'e' },
+      { from: 'c', to: 'r' },
+      { from: 'c', to: 'k' },
+    ],
+  } satisfies GizmoConfig,
 
   glsl: (ctx) => {
     const { inputs, outputs, params } = ctx
