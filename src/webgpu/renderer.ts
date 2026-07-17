@@ -11,6 +11,7 @@
  * and snap-to-static behavior.
  */
 
+import { REFERENCE_SIZE as SHARED_REFERENCE_SIZE } from '../renderer/constants'
 import type { RenderPlan } from '../compiler/glsl-generator'
 import type { ShaderRenderer, QualityTier } from '../renderer/types'
 import type { UniformBufferLayout, TextureBinding } from '../compiler/ir/wgsl-assembler'
@@ -121,8 +122,8 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
   private snapTimer: ReturnType<typeof setTimeout> | null = null
   private lastAnimationSpeed = 1.0
 
-  /** Fixed reference size for DPR-independent UV scaling. */
-  private static readonly REFERENCE_SIZE = 512
+  /** Fixed reference size for DPR-independent UV scaling (shared constant). */
+  private static readonly REFERENCE_SIZE = SHARED_REFERENCE_SIZE
 
   // Resize
   private resizeObserver: ResizeObserver | null = null

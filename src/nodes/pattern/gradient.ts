@@ -211,16 +211,17 @@ export const gradientNode: NodeDefinition = {
     const lines: string[] = []
 
     if (drawMode === 'pinned') {
-      // Pinned: control points are CSS px relative to the PREVIEW CANVAS CENTRE
-      // (not the anchor) so their preview position survives anchor changes.
-      // grad_center = auto_uv at the canvas centre; the u_anchor terms cancel in
-      // (coords - pt) → anchor-invariant. Y flipped (px Y-down, coords Y-up);
-      // px→units divides by u_ref_size only (auto_uv carries the dpr*ref scale).
+      // Pinned: P0/P1 are CSS px offsets from `grad_center`. grad_center is the
+      // fixed coords value (0.5) that maps to `auto_uv` at the canvas centre at
+      // the REFERENCE size. Because `auto_uv` is anchor-relative, holding
+      // grad_center constant makes the gradient PIN to the output anchor on
+      // resize (like the rest of the output) rather than staying centred.
+      // Y flipped (px Y-down, coords Y-up); px→units divides by u_ref_size only.
       ctx.uniforms.add('u_ref_size')
       ctx.uniforms.add('u_anchor')
       ctx.uniforms.add('u_resolution')
       ctx.uniforms.add('u_dpr')
-      lines.push(`vec2 grad_center_${id} = u_anchor + (vec2(0.5) - u_anchor) * u_resolution / (u_dpr * u_ref_size);`)
+      lines.push(`vec2 grad_center_${id} = vec2(0.5);`)
 
       const pt = (varName: string, pxExpr: string, pyExpr: string) => {
         lines.push(`vec2 ${varName} = grad_center_${id} + vec2(${pxExpr}, -(${pyExpr})) / u_ref_size;`)
@@ -372,13 +373,12 @@ export const gradientNode: NodeDefinition = {
     const standardUniforms = new Set<string>()
 
     if (drawMode === 'pinned') {
-      // Pinned: control points are CSS px relative to the PREVIEW CANVAS CENTRE
-      // (not the anchor) so their preview position survives anchor changes.
-      // grad_center = auto_uv at the canvas centre = u_anchor + (0.5 - u_anchor)
-      // * u_resolution / (u_dpr * u_ref_size) — the u_anchor terms cancel in
-      // (coords - pt), making the field anchor-invariant. Y is flipped (px is
-      // Y-down like SRT translate; coords is Y-up); px→units divides by
-      // u_ref_size only (auto_uv already carries the dpr*ref scale).
+      // Pinned: P0/P1 are CSS px offsets from `grad_center`, a fixed coords value
+      // (0.5) that maps to the canvas centre at the REFERENCE size. Because
+      // `auto_uv` (coords) is anchor-relative, holding grad_center constant makes
+      // the gradient PIN to the output anchor on resize (like the rest of the
+      // output) instead of staying centred. Y flipped (px Y-down, coords Y-up);
+      // px→units divides by u_ref_size only.
       standardUniforms.add('u_ref_size')
       standardUniforms.add('u_anchor')
       standardUniforms.add('u_resolution')
@@ -386,19 +386,7 @@ export const gradientNode: NodeDefinition = {
 
       const center = `grad_center_${id}`
       statements.push(declare(center, 'vec2',
-        binary('+',
-          variable('u_anchor'),
-          binary('/',
-            binary('*',
-              binary('-', construct('vec2', [literal('float', 0.5), literal('float', 0.5)]), variable('u_anchor'), 'vec2'),
-              variable('u_resolution'),
-              'vec2',
-            ),
-            binary('*', variable('u_dpr'), variable('u_ref_size'), 'float'),
-            'vec2',
-          ),
-          'vec2',
-        ),
+        construct('vec2', [literal('float', 0.5), literal('float', 0.5)]),
       ))
 
       // pt = grad_center + vec2(px, -py) / u_ref_size

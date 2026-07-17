@@ -5,6 +5,7 @@
  * Multi-pass graphs render intermediate passes to FBO textures.
  */
 
+import { REFERENCE_SIZE as SHARED_REFERENCE_SIZE } from '../renderer/constants'
 import type { RenderPlan } from '../compiler/glsl-generator'
 import type { UniformSpec } from '../nodes/types'
 import type { ShaderRenderer, QualityTier } from '../renderer/types'
@@ -111,8 +112,8 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
   private snapTimer: ReturnType<typeof setTimeout> | null = null
   private lastAnimationSpeed = 1.0
 
-  /** Fixed reference size for DPR-independent UV scaling in auto_uv and SRT translate. */
-  private static readonly REFERENCE_SIZE = 512
+  /** Fixed reference size for DPR-independent UV scaling in auto_uv and SRT translate (shared constant). */
+  private static readonly REFERENCE_SIZE = SHARED_REFERENCE_SIZE
 
   // Resize
   private resizeObserver: ResizeObserver | null = null

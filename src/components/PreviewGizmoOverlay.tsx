@@ -18,6 +18,8 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { nodeRegistry } from '../nodes/registry'
 import { matchesShowWhen, type GizmoPoint, type GizmoAspectHandle, type GizmoOutline } from '../nodes/types'
 import { pointPxToScreen, screenToPointPx, uvToScreen, screenToUv, type Rect } from '../utils/gizmo-coords'
+import { REFERENCE_SIZE } from '../renderer/constants'
+import { anchorToVec2 } from '../nodes/output/fragment-output'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
 
@@ -73,10 +75,32 @@ function computeAspectGeometry(
   return { Cs, dirX, dirY, perpX, perpY, L, aspect }
 }
 
-/** Gizmo points are relative to the preview canvas centre (stable reference,
- *  independent of the Fragment Output anchor). Module-level so its identity is
- *  stable across renders. */
-const GIZMO_ANCHOR: [number, number] = [0.5, 0.5]
+/**
+ * Fractional screen position (0..1 of the canvas rect) of the shader's px-space
+ * origin — where `grad_center` (coords `(0.5,0.5)`) lands on screen. This is the
+ * exact inverse of the shader's `auto_uv`
+ * (`(fragXY - u_resolution*u_anchor)/(u_dpr*u_ref_size) + u_anchor`): for a
+ * coords value C the screen fraction is `anchor + (C - anchor) * (REF/cssSize)`
+ * (dpr cancels). With C = 0.5 this is `anchor + (0.5 - anchor) * m`, m = REF/css.
+ * At the reference size m=1 → 0.5 for any anchor; as the canvas diverges it pins
+ * toward `outputAnchor`, matching the gradient's on-resize anchoring. px offsets
+ * (p0/p1) then add straight in CSS px from here. (UV points ignore this.)
+ */
+function pxOriginFrac(rect: Rect, outputAnchor: [number, number]): [number, number] {
+  const mx = rect.width > 0 ? REFERENCE_SIZE / rect.width : 1
+  const my = rect.height > 0 ? REFERENCE_SIZE / rect.height : 1
+  return [
+    outputAnchor[0] + (0.5 - outputAnchor[0]) * mx,
+    outputAnchor[1] + (0.5 - outputAnchor[1]) * my,
+  ]
+}
+
+/** Colour of the 9-point snap targets shown while dragging (yellow). Inline
+ *  affordance colour (like `handleColor`), not a brand token — DS-ify later if
+ *  it needs to be themeable. Must match the magnet in the point-drag handler. */
+const SNAP_TARGET_COLOR = '#eab308'
+/** Snap-magnet radius in screen px (must match THRESHOLD in the point-drag handler). */
+const SNAP_THRESHOLD = 10
 
 /** Coordinate-space dispatch: a point declares `space` ('px' default, or 'uv').
  *  These map its stored param values to/from screen so px and UV handles share
@@ -153,9 +177,14 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
     return gizmo.outline.filter((o) => matchesShowWhen(o.showWhen, currentParams, allParams))
   }, [gizmo, currentParams, allParams])
 
-  // Gizmo points are relative to the PREVIEW CANVAS CENTRE (not the Fragment
-  // Output anchor) so their preview-window position survives anchor changes.
-  const anchor = GIZMO_ANCHOR
+  // The Fragment Output anchor (mapped to a [x,y] fraction) — the shader's
+  // px-space origin (grad_center) slides toward it as the canvas diverges from
+  // REFERENCE_SIZE, so the px gizmo must follow. Read from the single
+  // fragment_output node; defaults to centre when absent.
+  const outputAnchor = useMemo<[number, number]>(() => {
+    const fo = nodes.find((n) => n.data.type === 'fragment_output')
+    return anchorToVec2((fo?.data.params?.anchor as string) ?? 'center')
+  }, [nodes])
 
   // --- Canvas rect tracking -------------------------------------------------
 
@@ -236,6 +265,7 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
       const canvas = canvasElRef.current
       if (!canvas) return
       const r = canvas.getBoundingClientRect()
+      const anchor = pxOriginFrac(r, outputAnchor)
       const latest = useGraphStore.getState().nodes.find((n) => n.id === nodeId)
       const latestParams = (latest?.data.params ?? {}) as Record<string, unknown>
 
@@ -272,7 +302,7 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
           // edge-midpoints / centre) when within THRESHOLD screen px. Always on
           // (no modifier) — the small radius keeps it unobtrusive and you can
           // pull away freely.
-          const THRESHOLD = 10
+          const THRESHOLD = SNAP_THRESHOLD
           const xs = [r.left, r.left + r.width / 2, r.left + r.width]
           const ys = [r.top, r.top + r.height / 2, r.top + r.height]
           let bestD = THRESHOLD
@@ -336,13 +366,14 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
       window.removeEventListener('pointerup', onEnd)
       window.removeEventListener('pointercancel', onEnd)
     }
-  }, [dragging, anchor, selectedNode, updateNodeData, gizmo, allParams])
+  }, [dragging, outputAnchor, selectedNode, updateNodeData, gizmo, allParams])
 
   if (!gizmoActive || !gizmo || !canvasRect) return null
 
   // Built from ALL gizmo points (not just currently-visible ones) so aspect
   // handles/outline can resolve their centerPoint/endPoint even if that point
   // itself isn't rendered as a handle.
+  const pxAnchor = pxOriginFrac(canvasRect, outputAnchor)
   const pointScreenPos = new Map<string, { x: number; y: number }>()
   for (const p of gizmo.points) {
     // Fall back to the param's DEFINITION default (not 0) for points the user
@@ -351,7 +382,7 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
     const yDef = allParams.find((pp) => pp.id === p.yParam)?.default
     const px = (currentParams[p.xParam] as number) ?? (xDef as number) ?? 0
     const py = (currentParams[p.yParam] as number) ?? (yDef as number) ?? 0
-    pointScreenPos.set(p.id, pointToScreen(p, px, py, canvasRect, anchor))
+    pointScreenPos.set(p.id, pointToScreen(p, px, py, canvasRect, pxAnchor))
   }
 
   // Ids of points currently rendered — used to gate connectors (which have no
@@ -406,6 +437,25 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
           </svg>
         )
       })}
+
+      {/* 9-point snap targets — visible only while dragging a point, marking the
+          canvas anchors (corners / edge-midpoints / centre) the magnet snaps to. */}
+      {dragging?.kind === 'point' && (
+        <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">
+          {[0, 0.5, 1].flatMap((fx) =>
+            [0, 0.5, 1].map((fy) => (
+              <circle
+                key={`snap-${fx}-${fy}`}
+                cx={fx * canvasRect.width}
+                cy={fy * canvasRect.height}
+                r={SNAP_THRESHOLD / 2}
+                fill={SNAP_TARGET_COLOR}
+                fillOpacity={0.85}
+              />
+            )),
+          )}
+        </svg>
+      )}
 
       {gizmo.connectors && gizmo.connectors.length > 0 && (
         <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">
