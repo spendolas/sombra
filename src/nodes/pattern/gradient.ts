@@ -131,7 +131,7 @@ export const gradientNode: NodeDefinition = {
     ],
     aspectHandles: [
       {
-        id: 'asp', shape: 'square', aspectParam: 'aspect', centerPoint: 'p0', endPoint: 'p1',
+        id: 'asp', shape: 'circle', aspectParam: 'aspect', centerPoint: 'p0', endPoint: 'p1',
         showWhen: { drawMode: 'pinned', gradientType: ['radial', 'angular', 'diamond'] },
       },
     ],
