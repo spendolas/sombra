@@ -2020,6 +2020,56 @@
           ]
         }
       }
+    },
+    "791:3971": {
+      "name": "Gizmo",
+      "type": "molecule",
+      "dsKey": "gizmo",
+      "codeFile": "src/components/PreviewGizmoOverlay.tsx",
+      "parts": {
+        "handle": {
+          "figmaNodeId": "791:3973",
+          "fill": "white",
+          "stroke": {
+            "color": "indigo/default",
+            "weight": 1.5
+          },
+          "radius": "full",
+          "width": "[12px]",
+          "height": "[12px]",
+          "cursor": "grab",
+          "auditIgnore": [
+            "stroke",
+            "radius"
+          ]
+        },
+        "center": {
+          "figmaNodeId": "791:3974",
+          "fill": "surface/default",
+          "stroke": {
+            "color": "indigo/default",
+            "weight": 1.5
+          },
+          "radius": "full",
+          "width": "[14px]",
+          "height": "[14px]",
+          "auditIgnore": [
+            "fill",
+            "stroke",
+            "radius"
+          ]
+        },
+        "connector": {
+          "figmaNodeId": "791:3975",
+          "stroke": {
+            "color": "indigo/default",
+            "weight": 1.5
+          },
+          "auditIgnore": [
+            "stroke"
+          ]
+        }
+      }
     }
   },
   "nodeTemplates": {

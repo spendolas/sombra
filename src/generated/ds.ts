@@ -180,6 +180,11 @@ export const ds = {
   imageViewportOverlay: {
     root: "overflow-hidden relative rounded-sm",
   },
+  gizmo: {
+    handle: "bg-white rounded-full border-1.5 border-indigo cursor-grab w-[12px] h-[12px]",
+    center: "bg-surface rounded-full border-1.5 border-indigo w-[14px] h-[14px]",
+    connector: "border-1.5 border-indigo",
+  },
 } as const;
 
 export type DSComponent = keyof typeof ds;
