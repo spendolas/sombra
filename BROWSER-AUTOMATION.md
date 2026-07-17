@@ -281,7 +281,7 @@ The **GraphToolbar** in the top-left of the canvas provides Save (download) and 
 | `checkerboard` | Checkerboard | `coords` (vec2, auto_uv) | `color` (color), `value` (float) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `tileMode` (enum: cellSize/density), `cellSize` (connectable; when tileMode=cellSize), `density` (connectable; when tileMode=density), `softness` (connectable), `colorA` (connectable), `colorB` (connectable) |
 | `stripes` | Stripes | `coords` (vec2, auto_uv) | `color` (color), `value` (float) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `width` (connectable), `gap` (connectable), `softness` (connectable), `colorA` (connectable), `colorB` (connectable) |
 | `dots` | Dots | `coords` (vec2, auto_uv) | `color` (color), `value` (float) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `gapX` (connectable), `gapY` (connectable), `radius` (connectable), `aspect` (connectable), `softness` (connectable), `colorA` (connectable), `colorB` (connectable) |
-| `gradient` | Gradient | `coords` (vec2, auto_uv) | `color` (color, RGBA — stops carry alpha), `value` (float) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `gradientType` (enum: linear/radial/angular/diamond), `interpolation` (enum: smooth/linear/constant) |
+| `gradient` | Gradient | `coords` (vec2, auto_uv) | `color` (color, RGBA — stops carry alpha), `value` (float) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `gradientType` (enum: linear/radial/angular/diamond), `drawMode` (enum: stretch/pinned; stretch = full-canvas field, pinned = anchor-relative px control points), `ax`/`ay`/`bx`/`by` (connectable px, defaults -150/0/150/0; when drawMode=pinned & gradientType=linear — Point A/B), `cx`/`cy` (connectable px, defaults 0/0; when drawMode=pinned & gradientType=radial\|angular\|diamond — shared Center), `ex`/`ey` (connectable px, defaults 150/0; when drawMode=pinned & gradientType=radial — Edge), `rx`/`ry` (connectable px, defaults 150/0; when drawMode=pinned & gradientType=angular — Angle Ref), `kx`/`ky` (connectable px, defaults 150/0; when drawMode=pinned & gradientType=diamond — Corner), `interpolation` (enum: smooth/linear/constant) |
 
 ### Vector
 
@@ -328,6 +328,20 @@ Params marked `connectable: true` appear as both a slider AND an input handle on
 ```js
 sombra.connect(timeId, noiseId, 'time', 'scale')  // animate noise scale
 ```
+
+### Preview Gizmo
+
+Nodes can declare a `gizmo` (`GizmoConfig` in `src/nodes/types.ts`, authoring
+details in `NODE_AUTHORING_GUIDE.md`) exposing draggable control-point
+handles over the live preview. When exactly one node with a `gizmo` is
+selected on the canvas, `PreviewGizmoOverlay` renders its visible points
+(subject to `showWhen`) as draggable handles — positioned in CSS px relative
+to the Fragment Output's `anchor`, Y-up — and dragging a handle writes
+straight to its bound `xParam`/`yParam` params (a uniform update, no
+recompile). Currently only `gradient` declares a gizmo: its Point A/B,
+Center, Edge, Angle Ref, and Corner handles render only when
+`drawMode: 'pinned'`, filtered further to the handles relevant to the
+current `gradientType`.
 
 ### Dynamic Inputs
 

@@ -184,6 +184,51 @@ Adds a wirable handle on the left side of the node. When unwired, uses slider va
 
 **See:** `src/nodes/math/mix.ts` for simplest example.
 
+### Gizmo (preview control points)
+
+Declare `gizmo?: GizmoConfig` on `NodeDefinition` to expose draggable on-canvas
+control points over the live preview, rendered by `PreviewGizmoOverlay` for
+whichever single node is selected on the canvas:
+
+```ts
+gizmo: {
+  showWhen: { drawMode: 'pinned' },      // optional — gates the whole gizmo
+  points: [
+    { id: 'a', xParam: 'ax', yParam: 'ay', showWhen: { gradientType: 'linear' } },
+    { id: 'b', xParam: 'bx', yParam: 'by', showWhen: { gradientType: 'linear' } },
+    { id: 'c', xParam: 'cx', yParam: 'cy', role: 'center', showWhen: { gradientType: ['radial', 'angular', 'diamond'] } },
+  ],
+  connectors: [{ from: 'a', to: 'b' }],  // optional lines drawn between point ids
+} satisfies GizmoConfig,
+```
+
+- Each `GizmoPoint` (`id`, `xParam`, `yParam`, `role?: 'point' | 'center'`,
+  `showWhen?`) binds to a pair of ordinary `float` params — `xParam`/`yParam`
+  must be regular `connectable: true, updateMode: 'uniform'` params like any
+  other, read via `ctx.inputs.<id>` in `glsl()`/`ir()` exactly as with any
+  connectable param. `id` is the point's own identifier (used by
+  `connectors`), not a param id.
+- Point values are **CSS px relative to the Fragment Output's anchor**,
+  **Y-up** — the same convention as the framework SRT `srt_translateX`/
+  `srt_translateY` params. `src/utils/gizmo-coords.ts` (`pointPxToScreen`/
+  `screenToPointPx`, exact inverses of each other) converts between that px
+  space and on-screen coordinates over the preview canvas.
+- `showWhen` on both the top-level `GizmoConfig` and individual `GizmoPoint`s
+  uses the same matcher as param `showWhen` (`matchesShowWhen`) — gate the
+  whole gizmo on a draw-mode param, then gate individual points on a
+  sub-mode (e.g. only show Point A/B for `gradientType: 'linear'`).
+- `connectors` draw thin lines between two point ids (by `GizmoPoint.id`,
+  not param id) — purely visual, no behavior.
+- Drag handling in `PreviewGizmoOverlay` deliberately avoids
+  `setPointerCapture`: it binds `pointermove`/`pointerup`/`pointercancel` on
+  `window` for the drag's lifetime so a release off-canvas is still caught
+  (mirrors the existing ImageUploader gizmo). Follow the same
+  window-listener approach for any new gizmo-driving UI rather than pointer
+  capture.
+
+**See:** `src/nodes/pattern/gradient.ts` for a full example — 6 points across
+4 draw modes, a `role: 'center'` point, and `connectors`.
+
 ### Conditional visibility (showWhen)
 
 ```ts
