@@ -2028,7 +2028,7 @@
       "codeFile": "src/components/PreviewGizmoOverlay.tsx",
       "parts": {
         "handle": {
-          "figmaNodeId": "791:3973",
+          "figmaNodeId": "794:3976",
           "fill": "white",
           "stroke": {
             "color": "indigo/default",
@@ -2039,12 +2039,11 @@
           "height": "[12px]",
           "cursor": "grab",
           "auditIgnore": [
-            "stroke",
-            "radius"
+            "overflow"
           ]
         },
         "center": {
-          "figmaNodeId": "791:3974",
+          "figmaNodeId": "794:3977",
           "fill": "surface/default",
           "stroke": {
             "color": "indigo/default",
@@ -2054,9 +2053,7 @@
           "width": "[14px]",
           "height": "[14px]",
           "auditIgnore": [
-            "fill",
-            "stroke",
-            "radius"
+            "overflow"
           ]
         },
         "connector": {
@@ -2066,7 +2063,8 @@
             "weight": 1.5
           },
           "auditIgnore": [
-            "stroke"
+            "width",
+            "height"
           ]
         }
       }
