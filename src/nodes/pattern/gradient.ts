@@ -98,6 +98,42 @@ export const gradientNode: NodeDefinition = {
       connectable: true, updateMode: 'uniform',
       showWhen: { drawMode: 'pinned', gradientType: ['radial', 'angular', 'diamond'] },
     },
+    // Stretch control points — UV (normalized 0..1 across canvas, top-left
+    // origin, Y-down = v_uv). Renormalize on resize, so anchor-snapped handles
+    // track their canvas landmark. Centre-origin defaults match Pinned
+    // semantics (P0 = Start/Center). NOTE: this makes Stretch `linear` a
+    // centre-origin gradient (t=0 at centre) rather than the old full-span
+    // `v_uv.x`; drag P0 to the left edge to restore the old look.
+    {
+      id: 'p0u', label: 'Start / Center U', type: 'float', default: 0.5,
+      min: 0, max: 1, step: 0.01,
+      connectable: true, updateMode: 'uniform',
+      showWhen: { drawMode: 'stretch' },
+    },
+    {
+      id: 'p0v', label: 'Start / Center V', type: 'float', default: 0.5,
+      min: 0, max: 1, step: 0.01,
+      connectable: true, updateMode: 'uniform',
+      showWhen: { drawMode: 'stretch' },
+    },
+    {
+      id: 'p1u', label: 'End / Edge U', type: 'float', default: 1,
+      min: 0, max: 1, step: 0.01,
+      connectable: true, updateMode: 'uniform',
+      showWhen: { drawMode: 'stretch' },
+    },
+    {
+      id: 'p1v', label: 'End / Edge V', type: 'float', default: 0.5,
+      min: 0, max: 1, step: 0.01,
+      connectable: true, updateMode: 'uniform',
+      showWhen: { drawMode: 'stretch' },
+    },
+    {
+      id: 'aspectUV', label: 'Aspect', type: 'float', default: 1,
+      min: 0.1, max: 10, step: 0.01,
+      connectable: true, updateMode: 'uniform',
+      showWhen: { drawMode: 'stretch', gradientType: ['radial', 'angular', 'diamond'] },
+    },
     {
       id: 'interpolation',
       label: 'Interpolation',
@@ -120,19 +156,28 @@ export const gradientNode: NodeDefinition = {
     },
   ],
 
+  // Two gizmo sets, gated by drawMode: 'p*' in px (Pinned, frozen) and 'p*uv'
+  // in UV (Stretch, resize-tracking). No top-level showWhen — one set is always
+  // visible; per-element showWhen selects which.
   gizmo: {
-    showWhen: { drawMode: 'pinned' },
     points: [
       { id: 'p0', xParam: 'p0x', yParam: 'p0y', shape: 'circle', showWhen: { drawMode: 'pinned' } },
       { id: 'p1', xParam: 'p1x', yParam: 'p1y', shape: 'circle', showWhen: { drawMode: 'pinned' } },
+      { id: 'p0uv', xParam: 'p0u', yParam: 'p0v', shape: 'circle', space: 'uv', showWhen: { drawMode: 'stretch' } },
+      { id: 'p1uv', xParam: 'p1u', yParam: 'p1v', shape: 'circle', space: 'uv', showWhen: { drawMode: 'stretch' } },
     ],
     connectors: [
       { from: 'p0', to: 'p1' },
+      { from: 'p0uv', to: 'p1uv' },
     ],
     aspectHandles: [
       {
         id: 'asp', shape: 'circle', aspectParam: 'aspect', centerPoint: 'p0', endPoint: 'p1',
         showWhen: { drawMode: 'pinned', gradientType: ['radial', 'angular', 'diamond'] },
+      },
+      {
+        id: 'aspUV', shape: 'circle', aspectParam: 'aspectUV', centerPoint: 'p0uv', endPoint: 'p1uv',
+        showWhen: { drawMode: 'stretch', gradientType: ['radial', 'angular', 'diamond'] },
       },
     ],
     outline: [
@@ -143,6 +188,14 @@ export const gradientNode: NodeDefinition = {
       {
         shape: 'diamond', centerPoint: 'p0', endPoint: 'p1', aspectParam: 'aspect',
         showWhen: { drawMode: 'pinned', gradientType: 'diamond' },
+      },
+      {
+        shape: 'ellipse', centerPoint: 'p0uv', endPoint: 'p1uv', aspectParam: 'aspectUV',
+        showWhen: { drawMode: 'stretch', gradientType: ['radial', 'angular'] },
+      },
+      {
+        shape: 'diamond', centerPoint: 'p0uv', endPoint: 'p1uv', aspectParam: 'aspectUV',
+        showWhen: { drawMode: 'stretch', gradientType: 'diamond' },
       },
     ],
   } satisfies GizmoConfig,
@@ -216,20 +269,49 @@ export const gradientNode: NodeDefinition = {
         }
       }
     } else {
-      // Stretch: field computed in raw normalized v_uv (0..1 across the full
-      // canvas, aspect-distorting) — independent of `coords` wiring/SRT.
+      // Stretch: same field basis as Pinned but in raw normalized v_uv (0..1
+      // across the full canvas, aspect-distorting) — control points are UV, so
+      // they renormalize on resize (a corner-snapped handle stays on the corner)
+      // and no u_ref_size/anchor/SRT is involved. C = P0, P = P1; `aspectUV`
+      // scales the perpendicular axis for radial/angular/diamond.
+      const C = `grad_C_${id}`
+      const P = `grad_P_${id}`
+      const u = `grad_u_${id}`
+      const L = `grad_L_${id}`
+      const uh = `grad_uh_${id}`
+      const vh = `grad_vh_${id}`
+      const d = `grad_d_${id}`
+      const a = `grad_a_${id}`
+      const b = `grad_b_${id}`
+      lines.push(`vec2 ${C} = vec2(${inputs.p0u}, ${inputs.p0v});`)
+      lines.push(`vec2 ${P} = vec2(${inputs.p1u}, ${inputs.p1v});`)
+      lines.push(`vec2 ${u} = ${P} - ${C};`)
+      lines.push(`float ${L} = max(length(${u}), 1e-6);`)
+      lines.push(`vec2 ${uh} = ${u} / ${L};`)
+      lines.push(`vec2 ${vh} = vec2(-${uh}.y, ${uh}.x);`)
+      lines.push(`vec2 ${d} = v_uv - ${C};`)
+      lines.push(`float ${a} = dot(${d}, ${uh}) / ${L};`)
+      lines.push(`float ${b} = dot(${d}, ${vh}) / (${inputs.aspectUV} * ${L});`)
+
       switch (gradType) {
-        case 'radial':
-          lines.push(`float ${field} = clamp(length(v_uv - 0.5) * 2.0, 0.0, 1.0);`)
+        case 'radial': {
+          lines.push(`float ${field} = length(vec2(${a}, ${b}));`)
           break
-        case 'angular':
-          lines.push(`float ${field} = atan(v_uv.y - 0.5, v_uv.x - 0.5) * (1.0 / 6.28318530718) + 0.5;`)
+        }
+        case 'angular': {
+          const ang = `grad_ang_${id}`
+          lines.push(`float ${ang} = atan(${b}, ${a});`)
+          lines.push(`float ${field} = ${ang} * (1.0 / 6.28318530718);`)
+          lines.push(`${field} = ${field} < 0.0 ? ${field} + 1.0 : ${field};`)
           break
-        case 'diamond':
-          lines.push(`float ${field} = clamp((abs(v_uv.x - 0.5) + abs(v_uv.y - 0.5)) * 2.0, 0.0, 1.0);`)
+        }
+        case 'diamond': {
+          lines.push(`float ${field} = abs(${a}) + abs(${b});`)
           break
-        default: // linear
-          lines.push(`float ${field} = v_uv.x;`)
+        }
+        default: { // linear
+          lines.push(`float ${field} = ${a};`)
+        }
       }
     }
 
@@ -423,78 +505,88 @@ export const gradientNode: NodeDefinition = {
         }
       }
     } else {
-      // Stretch: field computed in raw normalized v_uv (0..1 across the full
-      // canvas, aspect-distorting) — independent of `coords` wiring/SRT.
-      // Bare `v_uv` mirrors image.ts's screen_uv mechanism; the WGSL assembler
-      // mechanically rewrites it to `in.v_uv` (see wgsl-assembler.ts).
-      const uv = variable('v_uv')
+      // Stretch: same field basis as Pinned but in raw normalized v_uv (0..1
+      // across the full canvas, aspect-distorting). Control points are UV, so
+      // they renormalize on resize (a corner-snapped handle stays on the corner)
+      // and no u_ref_size/anchor/SRT is involved. C = P0, P = P1; `aspectUV`
+      // scales the perpendicular axis. Bare `v_uv` mirrors image.ts's screen_uv
+      // mechanism; the WGSL assembler rewrites it to `in.v_uv`.
+      const C = `grad_C_${id}`
+      const P = `grad_P_${id}`
+      const u = `grad_u_${id}`
+      const L = `grad_L_${id}`
+      const uh = `grad_uh_${id}`
+      const vh = `grad_vh_${id}`
+      const d = `grad_d_${id}`
+      const a = `grad_a_${id}`
+      const b = `grad_b_${id}`
+      statements.push(declare(C, 'vec2', construct('vec2', [variable(ctx.inputs.p0u), variable(ctx.inputs.p0v)])))
+      statements.push(declare(P, 'vec2', construct('vec2', [variable(ctx.inputs.p1u), variable(ctx.inputs.p1v)])))
+      statements.push(declare(u, 'vec2', binary('-', variable(P), variable(C), 'vec2')))
+      statements.push(declare(L, 'float',
+        call('max', [call('length', [variable(u)], 'float'), literal('float', 1e-6)], 'float'),
+      ))
+      statements.push(declare(uh, 'vec2', binary('/', variable(u), variable(L), 'vec2')))
+      statements.push(declare(vh, 'vec2', construct('vec2', [
+        binary('*', literal('float', -1.0), swizzle(variable(uh), 'y', 'float'), 'float'),
+        swizzle(variable(uh), 'x', 'float'),
+      ])))
+      statements.push(declare(d, 'vec2', binary('-', variable('v_uv'), variable(C), 'vec2')))
+      statements.push(declare(a, 'float',
+        binary('/', call('dot', [variable(d), variable(uh)], 'float'), variable(L), 'float'),
+      ))
+      statements.push(declare(b, 'float',
+        binary('/',
+          call('dot', [variable(d), variable(vh)], 'float'),
+          binary('*', variable(ctx.inputs.aspectUV), variable(L), 'float'),
+          'float',
+        ),
+      ))
+
       switch (gradType) {
-        case 'radial':
-          // clamp(length(v_uv - 0.5) * 2.0, 0.0, 1.0)
+        case 'radial': {
           statements.push(
             declare(field, 'float',
-              call('clamp', [
-                binary('*',
-                  call('length', [
-                    binary('-', uv, literal('vec2', [0.5, 0.5]), 'vec2'),
-                  ], 'float'),
-                  literal('float', 2.0),
-                  'float',
-                ),
-                literal('float', 0.0),
-                literal('float', 1.0),
-              ], 'float'),
+              call('length', [construct('vec2', [variable(a), variable(b)])], 'float'),
             ),
           )
           break
-        case 'angular':
-          // atan(v_uv.y - 0.5, v_uv.x - 0.5) * (1.0 / 6.28318530718) + 0.5
+        }
+        case 'angular': {
+          const ang = `grad_ang_${id}`
+          statements.push(declare(ang, 'float', call('atan', [variable(b), variable(a)], 'float')))
           statements.push(
             declare(field, 'float',
-              binary('+',
-                binary('*',
-                  call('atan', [
-                    binary('-', swizzle(uv, 'y', 'float'), literal('float', 0.5), 'float'),
-                    binary('-', swizzle(uv, 'x', 'float'), literal('float', 0.5), 'float'),
-                  ], 'float'),
-                  literal('float', 1.0 / 6.28318530718),
-                  'float',
-                ),
-                literal('float', 0.5),
+              binary('*', variable(ang), literal('float', 1.0 / 6.28318530718), 'float'),
+            ),
+          )
+          statements.push(
+            assign(field,
+              ternary(
+                binary('<', variable(field), literal('float', 0.0), 'bool'),
+                binary('+', variable(field), literal('float', 1.0), 'float'),
+                variable(field),
                 'float',
               ),
             ),
           )
           break
-        case 'diamond':
-          // clamp((abs(v_uv.x - 0.5) + abs(v_uv.y - 0.5)) * 2.0, 0.0, 1.0)
+        }
+        case 'diamond': {
           statements.push(
             declare(field, 'float',
-              call('clamp', [
-                binary('*',
-                  binary('+',
-                    call('abs', [
-                      binary('-', swizzle(uv, 'x', 'float'), literal('float', 0.5), 'float'),
-                    ], 'float'),
-                    call('abs', [
-                      binary('-', swizzle(uv, 'y', 'float'), literal('float', 0.5), 'float'),
-                    ], 'float'),
-                    'float',
-                  ),
-                  literal('float', 2.0),
-                  'float',
-                ),
-                literal('float', 0.0),
-                literal('float', 1.0),
-              ], 'float'),
+              binary('+',
+                call('abs', [variable(a)], 'float'),
+                call('abs', [variable(b)], 'float'),
+                'float',
+              ),
             ),
           )
           break
-        default: // linear
-          // v_uv.x
-          statements.push(
-            declare(field, 'float', swizzle(uv, 'x', 'float')),
-          )
+        }
+        default: { // linear
+          statements.push(declare(field, 'float', variable(a)))
+        }
       }
     }
 
