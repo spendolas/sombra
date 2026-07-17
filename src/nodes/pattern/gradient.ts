@@ -195,12 +195,14 @@ export const gradientNode: NodeDefinition = {
       // Pinned: control points are anchor-relative CSS px, converted to the
       // same coord-unit space as `coords` (isotropic auto_uv): Y is flipped
       // (px is Y-down like the SRT translate convention, coords is Y-up).
-      ctx.uniforms.add('u_dpr')
+      // Divide by u_ref_size ONLY — auto_uv already carries the dpr*ref scale,
+      // so a point at `px` CSS px lands exactly under the overlay handle
+      // (dividing by u_dpr*u_ref_size would halve the offset at dpr=2).
       ctx.uniforms.add('u_ref_size')
       ctx.uniforms.add('u_anchor')
 
       const pt = (varName: string, pxExpr: string, pyExpr: string) => {
-        lines.push(`vec2 ${varName} = u_anchor + vec2(${pxExpr}, -(${pyExpr})) / (u_dpr * u_ref_size);`)
+        lines.push(`vec2 ${varName} = u_anchor + vec2(${pxExpr}, -(${pyExpr})) / u_ref_size;`)
       }
 
       switch (gradType) {
@@ -328,13 +330,13 @@ export const gradientNode: NodeDefinition = {
       // Pinned: control points are anchor-relative CSS px, converted to the
       // same coord-unit space as `coords` (isotropic auto_uv): Y is flipped
       // (px is Y-down like the SRT translate convention, coords is Y-up).
-      standardUniforms.add('u_dpr')
+      // Divide by u_ref_size ONLY — auto_uv already carries the dpr*ref scale,
+      // so a point at `px` CSS px lands exactly under the overlay handle
+      // (dividing by u_dpr*u_ref_size would halve the offset at dpr=2).
       standardUniforms.add('u_ref_size')
       standardUniforms.add('u_anchor')
 
-      const dprRefSize = binary('*', variable('u_dpr'), variable('u_ref_size'), 'float')
-
-      // pt = u_anchor + vec2(px, -py) / (u_dpr * u_ref_size)
+      // pt = u_anchor + vec2(px, -py) / u_ref_size
       // WGSL has no scalar±vector +/-, so the vec2 is built per-component and
       // only vec2±vec2 / vec2÷scalar ops are used.
       const ptExpr = (pxId: string, pyId: string): IRExpr =>
@@ -345,7 +347,7 @@ export const gradientNode: NodeDefinition = {
               variable(ctx.inputs[pxId]),
               binary('*', literal('float', -1.0), variable(ctx.inputs[pyId]), 'float'),
             ]),
-            dprRefSize,
+            variable('u_ref_size'),
             'vec2',
           ),
           'vec2',
