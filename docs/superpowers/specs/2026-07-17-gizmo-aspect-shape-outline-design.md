@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-17
 **Status:** design (Figma-referenced; building per standing "make the call, flag it" directive)
-**Scope:** Extend the preview-gizmo framework with marker shapes, a perpendicular aspect handle, and drawn shape outlines; apply to the Gradient node's Radial + Diamond modes (elliptical/aspect-scaled fields). Angular + Linear unchanged.
+**Scope:** Extend the preview-gizmo framework with marker shapes, a perpendicular aspect handle, and drawn shape outlines; apply to the Gradient node's Radial, Angular + Diamond modes (elliptical/aspect-scaled fields). Linear unchanged.
 
 ## Goal
 
@@ -64,7 +64,7 @@ Given center `C`, endpoint `P` (radial E / diamond K), `aspect` (scalar):
 Because the field is defined so `t=1` at the endpoint along the primary axis, the center→endpoint line ends exactly where the gradient reaches its last stop (fixes the current diamond mismatch). The drawn outline traces the full `t=1` locus.
 
 ## Out of scope
-- Angular/Linear aspect. Free-form (non-perpendicular) second handles. Rotating the aspect independently of the endpoint angle (aspect is always perpendicular to center→endpoint).
+- Linear aspect. Free-form (non-perpendicular) second handles. Rotating the aspect independently of the endpoint angle (aspect is always perpendicular to center→endpoint).
 
 ## Open calls (made, flag to change)
 1. Aspect = scalar + perpendicular handle (not free 2nd handle). ✓

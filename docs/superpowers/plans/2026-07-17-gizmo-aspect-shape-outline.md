@@ -50,22 +50,28 @@
 
 ---
 
-### Task 2: Gradient — aspect field math + gizmo (radial/diamond)
+### Task 2: Gradient — aspect field math + gizmo (radial / angular / diamond)
 
 **Files:** `src/nodes/pattern/gradient.ts`
 
-**Params:** add shared `aspect` (float, default 1, min 0.1, max 10, step 0.01, connectable, uniform, `showWhen:{ drawMode:'pinned', gradientType:['radial','diamond'] }`).
+**Params:** add shared `aspect` (float, default 1, min 0.1, max 10, step 0.01, connectable, uniform, `showWhen:{ drawMode:'pinned', gradientType:['radial','angular','diamond'] }`).
 
-**gizmo config:** set `shape:'diamond'` on center + radial-edge + diamond-corner points; add `aspectHandles:[{ id:'asp', shape:'square', aspectParam:'aspect', centerPoint:'c', endPoint:'e' (radial) / 'k' (diamond), showWhen per type }]` (two entries, one per type, or one gated by both) and `outline` entries (ellipse for radial, diamond for diamond) referencing c + e/k + aspect. Linear points keep `shape:'circle'`.
+**gizmo config:**
+- Markers: `shape:'diamond'` on center `c` and each endpoint (radial `e`, angular `r`, diamond `k`); Linear `a`/`b` stay `shape:'circle'`.
+- `aspectHandles`: one per aspect type, `shape:'square'`, `aspectParam:'aspect'`, `centerPoint:'c'`, `endPoint:'e'|'r'|'k'`, gated by its `gradientType` (+ `drawMode:'pinned'`).
+- `outline`: radial → `ellipse` (c,e); angular → `ellipse` (c,r) [the "circle"]; diamond → `diamond` (c,k). Each `aspectParam:'aspect'`, gated by type.
 
-**Field math (both backends), pinned radial & diamond** — replace the current length-ratio with the aspect frame. With `C` (center), `P` (radial E / diamond K), `A = aspect`:
+**Field math (both backends), pinned.** With `C`=center, `P`=endpoint (radial E / angular R / diamond K), `A`=aspect:
 ```
 u = P - C; L = max(length(u), 1e-6); uh = u / L; vh = vec2(-uh.y, uh.x);
 d = coords - C; a = dot(d, uh) / L; b = dot(d, vh) / (A * L);
 radial:  t = length(vec2(a, b));
 diamond: t = abs(a) + abs(b);
+angular: ang = atan(b, a);           // atan2; 0 along +u (the center→R line)
+         t = ang * (1.0/6.28318530718);
+         t = t < 0.0 ? t + 1.0 : t;  // 0..1, seam (t 0↔1) exactly on center→R line
 ```
-Feed `t` through the existing stops chain (unchanged). WGSL: per-component vec2 ops only.
+Angular's seam sitting on `+u` makes the **center→R line align to the gradient's start/stop** (the requirement). Aspect makes angular's iso-angle frame elliptical (matches the ellipse outline). Feed `t` through the existing stops chain (unchanged). WGSL: per-component vec2 ops only; use the WGSL `atan2` builtin (GLSL `atan(y,x)`).
 
 - [ ] Steps: add `aspect` param + gizmo (markers/aspectHandles/outline); implement radial+diamond aspect field GLSL+IR; `tsc`/`verify-ir-poc`/`validate-wgsl-multipass`/`lint` green (update gradient fixtures if needed, loose-mode). Commit `feat: gradient — elliptical radial + aspect diamond, aspect gizmo + outline`.
 
