@@ -354,6 +354,10 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
     pointScreenPos.set(p.id, pointToScreen(p, px, py, canvasRect, anchor))
   }
 
+  // Ids of points currently rendered — used to gate connectors (which have no
+  // showWhen of their own) so a hidden point set draws no connector.
+  const visiblePointIds = new Set(visiblePoints.map((p) => p.id))
+
   return (
     <div
       className="fixed pointer-events-none z-[55]"
@@ -406,6 +410,10 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
       {gizmo.connectors && gizmo.connectors.length > 0 && (
         <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">
           {gizmo.connectors.map((c) => {
+            // Only draw a connector when BOTH its endpoints are visible — else a
+            // hidden point set (e.g. the Pinned points while in Stretch mode)
+            // would still draw its connector, using stale/off-screen positions.
+            if (!visiblePointIds.has(c.from) || !visiblePointIds.has(c.to)) return null
             const from = pointScreenPos.get(c.from)
             const to = pointScreenPos.get(c.to)
             if (!from || !to) return null
