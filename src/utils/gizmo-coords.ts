@@ -64,22 +64,24 @@ export function screenToPointPx(
 }
 
 /**
- * Convert a UV point param (u, v) — normalized 0..1 across the canvas, origin
- * top-left, Y-down (matching the shader's `v_uv`) — to screen coordinates over
- * `rect`. Unlike px space, UV renormalizes with `rect`, so a fixed (u, v)
- * tracks its canvas landmark (e.g. u=1 stays on the right edge) across resizes.
+ * Convert a UV point param (u, v) — normalized 0..1 across the canvas, matching
+ * the shader's `v_uv`: origin BOTTOM-left, Y-UP (v=0 at the canvas bottom, v=1
+ * at the top). Screen Y is down, so v is flipped here. Unlike px space, UV
+ * renormalizes with `rect`, so a fixed (u, v) tracks its canvas landmark (e.g.
+ * u=1 stays on the right edge) across resizes.
  */
 export function uvToScreen(u: number, v: number, rect: Rect): { x: number; y: number } {
   return {
     x: rect.left + u * rect.width,
-    y: rect.top + v * rect.height,
+    y: rect.top + (1 - v) * rect.height,
   }
 }
 
-/** Inverse of `uvToScreen`: screen (sx, sy) over `rect` back to UV (u, v). */
+/** Inverse of `uvToScreen`: screen (sx, sy) over `rect` back to UV (u, v),
+ *  Y-up (v=0 at bottom) to match the shader's `v_uv`. */
 export function screenToUv(sx: number, sy: number, rect: Rect): { u: number; v: number } {
   return {
     u: rect.width > 0 ? (sx - rect.left) / rect.width : 0,
-    v: rect.height > 0 ? (sy - rect.top) / rect.height : 0,
+    v: rect.height > 0 ? 1 - (sy - rect.top) / rect.height : 0,
   }
 }

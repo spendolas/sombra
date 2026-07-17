@@ -161,7 +161,7 @@ export interface GizmoPoint {
   /**
    * Coordinate space of xParam/yParam:
    *  - 'px' (default): CSS px relative to the canvas centre, Y-up (frozen, fixed size).
-   *  - 'uv': normalized 0..1 across the canvas, origin top-left, Y-down (matches
+   *  - 'uv': normalized 0..1 across the canvas, origin bottom-left, Y-up (matches
    *    `v_uv`; renormalizes on resize so the handle tracks its canvas landmark).
    * Aspect handles/outlines inherit the space of their referenced points.
    */

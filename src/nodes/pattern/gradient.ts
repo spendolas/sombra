@@ -98,8 +98,8 @@ export const gradientNode: NodeDefinition = {
       connectable: true, updateMode: 'uniform',
       showWhen: { drawMode: 'pinned', gradientType: ['radial', 'angular', 'diamond'] },
     },
-    // Stretch control points — UV (normalized 0..1 across canvas, top-left
-    // origin, Y-down = v_uv). Renormalize on resize, so anchor-snapped handles
+    // Stretch control points — UV (normalized 0..1 across canvas, bottom-left
+    // origin, Y-up = v_uv). Renormalize on resize, so anchor-snapped handles
     // track their canvas landmark. Centre-origin defaults match Pinned
     // semantics (P0 = Start/Center). NOTE: this makes Stretch `linear` a
     // centre-origin gradient (t=0 at centre) rather than the old full-span
