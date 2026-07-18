@@ -1574,29 +1574,51 @@ function verify(
   })
   verify('Dither (square)', ditherNode, g, i, 'loose')
 
-  // RGBA assertion — Spatial: mask multiplies the full vec4 color, alpha included
-  // (see rgba-node-audit.md).
+  // RGBA assertion — the `premultiply` param controls whether the mask also
+  // scales alpha. Default (false): mask darkens RGB only, alpha passes through
+  // (no invented transparency). True: mask multiplies the full vec4 (cutout).
   testNum++
-  console.log(`\n  ${testNum}. Dither (square) — RGBA mask-multiply assertion`)
+  console.log(`\n  ${testNum}. Dither (square) — alpha handling (premultiply off/on), GLSL↔IR parity`)
   let dithOk = true
+
+  // Default: premultiply OFF → vec4(color.rgb * mask, color.a)
   const refGLSL = ditherNode.glsl(g)
-  if (!/vec4 node_dith_qqq777_result = node_noise_xyz_color \* pg_m_dith_qqq777;/.test(refGLSL)) {
-    console.log(`  [FAIL] GLSL: expected vec4 mask-multiply assignment (masks alpha too). Got:\n    ${refGLSL}`)
+  if (!/vec4 node_dith_qqq777_result = vec4\(node_noise_xyz_color\.rgb \* pg_m_dith_qqq777, node_noise_xyz_color\.a\);/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL(default): expected alpha-passthrough assignment. Got:\n    ${refGLSL}`)
     dithOk = false
   }
   const irOut = ditherNode.ir!(i)
   const irGLSL = lowerNodeOutputToGLSL(irOut).join('\n')
-  if (!/vec4 node_dith_qqq777_result = node_noise_xyz_color \* pg_m_dith_qqq777;/.test(irGLSL)) {
-    console.log(`  [FAIL] IR->GLSL: expected vec4 mask-multiply assignment. Got:\n    ${irGLSL}`)
+  if (!/vec4 node_dith_qqq777_result = vec4\(node_noise_xyz_color\.rgb \* pg_m_dith_qqq777, node_noise_xyz_color\.a\);/.test(irGLSL)) {
+    console.log(`  [FAIL] IR->GLSL(default): expected alpha-passthrough assignment. Got:\n    ${irGLSL}`)
     dithOk = false
   }
   const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
-  if (!/var node_dith_qqq777_result: vec4f = \(node_noise_xyz_color \* pg_m_dith_qqq777\);/.test(irWGSL)) {
-    console.log(`  [FAIL] IR->WGSL: expected vec4f mask-multiply assignment. Got:\n    ${irWGSL}`)
+  if (!/var node_dith_qqq777_result: vec4f = vec4f\(\(node_noise_xyz_color\.rgb \* pg_m_dith_qqq777\), node_noise_xyz_color\.a\);/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL(default): expected alpha-passthrough assignment. Got:\n    ${irWGSL}`)
     dithOk = false
   }
+
+  // premultiply ON → full vec4 mask-multiply (cutout alpha)
+  const [gp, ip] = ctx({
+    nodeId: 'dith-qqq777',
+    inputs: { color: 'node_noise_xyz_color', pixelSize: 'u_dith_qqq777_pixelSize', dither: 'u_dith_qqq777_dither' },
+    outputs: { result: 'node_dith_qqq777_result' },
+    params: { pixelSize: 8, shape: 'square', threshold: 1.0, dither: 0.5, premultiply: true },
+  })
+  const preGLSL = ditherNode.glsl(gp)
+  if (!/vec4 node_dith_qqq777_result = node_noise_xyz_color \* pg_m_dith_qqq777;/.test(preGLSL)) {
+    console.log(`  [FAIL] GLSL(premultiply): expected full vec4 mask-multiply. Got:\n    ${preGLSL}`)
+    dithOk = false
+  }
+  const preWGSL = lowerNodeOutputToWGSL(ditherNode.ir!(ip)).join('\n')
+  if (!/var node_dith_qqq777_result: vec4f = \(node_noise_xyz_color \* pg_m_dith_qqq777\);/.test(preWGSL)) {
+    console.log(`  [FAIL] IR->WGSL(premultiply): expected full vec4f mask-multiply. Got:\n    ${preWGSL}`)
+    dithOk = false
+  }
+
   if (dithOk) {
-    console.log('  [PASS] dither: color/result are RGBA (vec4/vec4f), mask multiplies alpha too')
+    console.log('  [PASS] dither: default passes alpha through; premultiply multiplies full RGBA; GLSL↔IR match')
     passed++
   } else {
     failed++

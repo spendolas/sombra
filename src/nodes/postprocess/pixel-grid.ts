@@ -7,7 +7,7 @@
 import type { NodeDefinition } from '../types'
 import { addFunction } from '../types'
 import type { IRContext, IRFunction, IRNodeOutput } from '../../compiler/ir/types'
-import { variable, call, declare, raw, binary, literal } from '../../compiler/ir/types'
+import { variable, call, declare, raw, binary, literal, construct, swizzle } from '../../compiler/ir/types'
 
 /** Register shared 8x8 Bayer dithering function (recursive quadrant split) */
 function registerBayer(ctx: import('../types').GLSLContext) {
@@ -55,7 +55,7 @@ export const ditherNode: NodeDefinition = {
   type: 'dither',
   label: 'Dither',
   category: 'Effect',
-  description: 'Pixelate with shape masking and ordered dithering',
+  description: 'Screen-space cell grid: shape mask + ordered (Bayer) dithering over the input colour',
 
   inputs: [
     { id: 'color', label: 'Color', type: 'color', default: [0.5, 0.5, 0.5] },
@@ -76,6 +76,16 @@ export const ditherNode: NodeDefinition = {
       step: 1,
       connectable: true,
       updateMode: 'uniform',
+    },
+    {
+      id: 'premultiply',
+      label: 'Premultiply Alpha',
+      type: 'bool',
+      // false (default): mask only darkens RGB; alpha passes through untouched
+      //   → no invented transparency (masked areas are opaque black).
+      // true: mask multiplies alpha too → transparent cutout (premultiplied).
+      default: false,
+      updateMode: 'recompile',
     },
     {
       id: 'shape',
@@ -158,8 +168,15 @@ export const ditherNode: NodeDefinition = {
       lines.push(`float ${mask} = ${sm} * step(${bv}, ${inputs.threshold});`)
     }
 
-    // Output: masked color on black background — mask multiplies alpha too (see rgba-node-audit.md).
-    lines.push(`vec4 ${outputs.result} = ${inputs.color} * ${mask};`)
+    // Output: masked colour on a black background. Premultiply → mask also
+    // scales alpha (transparent cutout); otherwise alpha passes through so the
+    // node never invents transparency (masked areas are opaque black).
+    const premultiply = params.premultiply === true
+    if (premultiply) {
+      lines.push(`vec4 ${outputs.result} = ${inputs.color} * ${mask};`)
+    } else {
+      lines.push(`vec4 ${outputs.result} = vec4(${inputs.color}.rgb * ${mask}, ${inputs.color}.a);`)
+    }
 
     return lines.join('\n  ')
   },
@@ -320,12 +337,26 @@ export const ditherNode: NodeDefinition = {
       )
     }
 
-    // Output: masked color on black background — mask multiplies alpha too (see rgba-node-audit.md).
-    stmts.push(
-      declare(ctx.outputs.result, 'vec4',
-        binary('*', variable(ctx.inputs.color), variable(mask), 'vec4'),
-      ),
-    )
+    // Output: masked colour on a black background. Premultiply → mask also
+    // scales alpha (transparent cutout); otherwise alpha passes through so the
+    // node never invents transparency (masked areas are opaque black). Mirrors GLSL.
+    const premultiply = ctx.params.premultiply === true
+    if (premultiply) {
+      stmts.push(
+        declare(ctx.outputs.result, 'vec4',
+          binary('*', variable(ctx.inputs.color), variable(mask), 'vec4'),
+        ),
+      )
+    } else {
+      stmts.push(
+        declare(ctx.outputs.result, 'vec4',
+          construct('vec4', [
+            binary('*', swizzle(variable(ctx.inputs.color), 'rgb', 'vec3'), variable(mask), 'vec3'),
+            swizzle(variable(ctx.inputs.color), 'a', 'float'),
+          ]),
+        ),
+      )
+    }
 
     return {
       statements: stmts,
