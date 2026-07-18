@@ -6,6 +6,11 @@ import { resolve } from 'path'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   base: '/sombra/',
+  server: {
+    // Allow access over the Tailscale tailnet (leading dot = this tailnet + all
+    // its device hostnames, e.g. grater.tail59ddf4.ts.net).
+    allowedHosts: ['.tail59ddf4.ts.net'],
+  },
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
