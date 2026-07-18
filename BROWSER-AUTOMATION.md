@@ -267,7 +267,7 @@ The **GraphToolbar** in the top-left of the canvas provides Save (download) and 
 |---|---|---|---|---|
 | `pixelate` | Pixelate | `source` (color, textureInput) | `color` (color, RGBA — full vec4 sampled), `uv` (vec2) | `pixelSize` (connectable) |
 | `reeded_glass` | Reeded Glass | `source` (color, textureInput) | `color` (color, RGBA — full vec4 sampled/frosted), `coords` (vec2) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `ribWidth` (connectable), `ior` (connectable), `curvature` (connectable), `frost` (connectable), `direction` (enum: vertical/horizontal), `ribType` (enum: straight/wave/circular/noise), `waveShape` (enum: sine/triangle/square/sawtooth/chevron/u_shape; when ribType=wave), `noiseType` (enum: simplex/value/worley; when ribType=noise), `amplitude` (connectable; when ribType=wave|circular|noise), `wavelength` (connectable; when ribType=wave|circular|noise) |
-| `dither` | Dither | `color` (color) | `result` (color, RGBA — alpha masked through) | `pixelSize` (connectable), `shape` (enum: square/circle/diamond/triangle), `threshold` (connectable), `dither` (connectable; when shape=circle) |
+| `dither` | Dither | `color` (color, `textureInput` — FBO-sampled when wired + colorSource=cell) | `result` (color) | `pixelSize` (connectable), `colorSource` (enum: cell/live — default cell = per-cell block/true pixelation via FBO resample; live = per-pixel screen mask), `premultiply` (bool, default false — false: mask darkens RGB, alpha passthrough (opaque gaps); true: mask multiplies alpha too (transparent cutout)), `shape` (enum: square/circle/diamond/triangle), `threshold` (connectable), `dither` (connectable; when shape=circle) |
 
 ### Output
 
@@ -395,7 +395,7 @@ Both the WebGL2 and WebGPU renderers clear the canvas to transparent (`a = 0`) b
 Nodes whose alpha output changes for pre-RGBA-migration graphs (all previously assumed opaque, `a = 1.0` throughout):
 
 - `invert`, `posterize`, `brightness_contrast` — now edit alpha along with RGB by default. Set `preserveAlpha: true` to restore the old opaque-passthrough behavior (only RGB channels are affected; alpha passes through unchanged).
-- `dither` (`pixel_grid` template) — masks color by multiplying with the computed shape/dither mask (`result = color * mask`), which now also multiplies alpha. A legacy opaque dither graph gets transparent holes wherever the mask is `0` (masked-out cells). This is by-design (RGBA) and has **no `preserveAlpha` opt-out** — if opaque output is required, follow the dither node with an explicit alpha override (e.g. wire a constant `1.0` into the downstream Fragment Output's `alpha` with `alphaOp: 'replace'`).
+- `dither` (`pixel_grid` template) — masks color by the computed shape/dither mask. Alpha handling is explicit via the `premultiply` bool: **default false** → `result = vec4(color.rgb * mask, color.a)` (mask darkens RGB only; alpha passes through, so masked-out cells are opaque, not transparent). Set `premultiply: true` for the legacy premultiplied `result = color * mask` (mask scales alpha too → transparent cutout holes). Color per cell is controlled by `colorSource`: `cell` (default) resamples the upstream FBO at each cell centre (`textureInput` → pass boundary; true pixelation), `live` uses the per-fragment color (screen-space mask, single value).
 
 ---
 

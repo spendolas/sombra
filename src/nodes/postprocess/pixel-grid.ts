@@ -7,7 +7,7 @@
 import type { NodeDefinition } from '../types'
 import { addFunction } from '../types'
 import type { IRContext, IRFunction, IRNodeOutput } from '../../compiler/ir/types'
-import { variable, call, declare, raw, binary, literal, construct, swizzle } from '../../compiler/ir/types'
+import { variable, call, declare, raw, binary, literal, construct, swizzle, textureSample } from '../../compiler/ir/types'
 
 /** Register shared 8x8 Bayer dithering function (recursive quadrant split) */
 function registerBayer(ctx: import('../types').GLSLContext) {
@@ -55,15 +55,20 @@ export const ditherNode: NodeDefinition = {
   type: 'dither',
   label: 'Dither',
   category: 'Effect',
-  description: 'Screen-space cell grid: shape mask + ordered (Bayer) dithering over the input colour',
+  description: 'Cell grid: per-cell or per-pixel colour + shape mask + ordered (Bayer) dithering',
 
   inputs: [
-    { id: 'color', label: 'Color', type: 'color', default: [0.5, 0.5, 0.5] },
+    // textureInput: when wired + colorSource='cell', upstream renders to an FBO
+    // so we can resample it at cell centres. Unwired → default literal.
+    { id: 'color', label: 'Color', type: 'color', default: [0.5, 0.5, 0.5], textureInput: true },
   ],
 
   outputs: [
     { id: 'result', label: 'Result', type: 'color' },
   ],
+
+  // Cell blocks stay crisp when sampled at cell centres.
+  textureFilter: 'nearest',
 
   params: [
     {
@@ -76,6 +81,20 @@ export const ditherNode: NodeDefinition = {
       step: 1,
       connectable: true,
       updateMode: 'uniform',
+    },
+    {
+      id: 'colorSource',
+      label: 'Color Source',
+      type: 'enum',
+      // 'cell': resample upstream at each cell centre → flat per-cell colour
+      //   (true pixelation). 'live': this fragment's own colour → screen-space
+      //   mask over the untouched upstream.
+      default: 'cell',
+      options: [
+        { value: 'cell', label: 'Per-cell block' },
+        { value: 'live', label: 'Per-pixel (mask)' },
+      ],
+      updateMode: 'recompile',
     },
     {
       id: 'premultiply',
@@ -168,14 +187,33 @@ export const ditherNode: NodeDefinition = {
       lines.push(`float ${mask} = ${sm} * step(${bv}, ${inputs.threshold});`)
     }
 
+    // Colour source: 'cell' resamples the upstream FBO at each cell's centre
+    // (flat per-cell block = true pixelation); 'live' uses this fragment's own
+    // colour (screen-space mask). Unwired → default literal.
+    const colorSource = (params.colorSource as string) || 'cell'
+    const colVar = `pg_col_${id}`
+    const samplerName = ctx.textureSamplers?.color
+    if (samplerName) {
+      ctx.uniforms.add('u_viewport')
+      const suv = `pg_suv_${id}`
+      if (colorSource === 'live') {
+        lines.push(`vec2 ${suv} = gl_FragCoord.xy / u_viewport;`)
+      } else {
+        lines.push(`vec2 ${suv} = ((${cell} + 0.5) * ${inputs.pixelSize} + u_resolution * u_anchor) / u_viewport;`)
+      }
+      lines.push(`vec4 ${colVar} = texture(${samplerName}, ${suv});`)
+    } else {
+      lines.push(`vec4 ${colVar} = ${inputs.color};`)
+    }
+
     // Output: masked colour on a black background. Premultiply → mask also
     // scales alpha (transparent cutout); otherwise alpha passes through so the
     // node never invents transparency (masked areas are opaque black).
     const premultiply = params.premultiply === true
     if (premultiply) {
-      lines.push(`vec4 ${outputs.result} = ${inputs.color} * ${mask};`)
+      lines.push(`vec4 ${outputs.result} = ${colVar} * ${mask};`)
     } else {
-      lines.push(`vec4 ${outputs.result} = vec4(${inputs.color}.rgb * ${mask}, ${inputs.color}.a);`)
+      lines.push(`vec4 ${outputs.result} = vec4(${colVar}.rgb * ${mask}, ${colVar}.a);`)
     }
 
     return lines.join('\n  ')
@@ -337,6 +375,40 @@ export const ditherNode: NodeDefinition = {
       )
     }
 
+    // Colour source (mirrors GLSL): 'cell' resamples the upstream FBO at each
+    // cell's centre (flat per-cell block = true pixelation); 'live' uses this
+    // fragment's own colour. Unwired → default literal.
+    const colorSource = (ctx.params.colorSource as string) || 'cell'
+    const colVar = `pg_col_${id}`
+    const samplerName = ctx.textureSamplers?.color
+    const standardUniforms = new Set(['u_resolution', 'u_anchor'])
+    if (samplerName) {
+      standardUniforms.add('u_viewport')
+      const suv = `pg_suv_${id}`
+      if (colorSource === 'live') {
+        stmts.push(declare(suv, 'vec2',
+          binary('/', variable('gl_FragCoord.xy'), variable('u_viewport'), 'vec2')))
+      } else {
+        stmts.push(declare(suv, 'vec2',
+          binary('/',
+            binary('+',
+              binary('*',
+                binary('+', variable(cell), literal('vec2', [0.5, 0.5]), 'vec2'),
+                construct('vec2', [variable(ctx.inputs.pixelSize)]),
+                'vec2',
+              ),
+              binary('*', variable('u_resolution'), variable('u_anchor'), 'vec2'),
+              'vec2',
+            ),
+            variable('u_viewport'),
+            'vec2',
+          )))
+      }
+      stmts.push(declare(colVar, 'vec4', textureSample(samplerName, variable(suv))))
+    } else {
+      stmts.push(declare(colVar, 'vec4', variable(ctx.inputs.color)))
+    }
+
     // Output: masked colour on a black background. Premultiply → mask also
     // scales alpha (transparent cutout); otherwise alpha passes through so the
     // node never invents transparency (masked areas are opaque black). Mirrors GLSL.
@@ -344,15 +416,15 @@ export const ditherNode: NodeDefinition = {
     if (premultiply) {
       stmts.push(
         declare(ctx.outputs.result, 'vec4',
-          binary('*', variable(ctx.inputs.color), variable(mask), 'vec4'),
+          binary('*', variable(colVar), variable(mask), 'vec4'),
         ),
       )
     } else {
       stmts.push(
         declare(ctx.outputs.result, 'vec4',
           construct('vec4', [
-            binary('*', swizzle(variable(ctx.inputs.color), 'rgb', 'vec3'), variable(mask), 'vec3'),
-            swizzle(variable(ctx.inputs.color), 'a', 'float'),
+            binary('*', swizzle(variable(colVar), 'rgb', 'vec3'), variable(mask), 'vec3'),
+            swizzle(variable(colVar), 'a', 'float'),
           ]),
         ),
       )
@@ -361,7 +433,7 @@ export const ditherNode: NodeDefinition = {
     return {
       statements: stmts,
       uniforms: [],
-      standardUniforms: new Set(['u_resolution', 'u_anchor']),
+      standardUniforms,
       functions,
     }
   },
