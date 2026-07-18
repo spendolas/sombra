@@ -53,7 +53,8 @@ export function useLiveCompiler(
   // Separate timers: a slider drag must not reset a pending semantic compile
   // (starvation) and a structural edit must not swallow a pending uniform push.
   const semanticTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const uniformTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  // rAF id for the throttled uniform flush (not a debounce — see the uniform effect).
+  const uniformRafRef = useRef<number | undefined>(undefined)
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const workerRef = useRef<Worker | null>(null)
   const currentCompileId = useRef<string | null>(null)
@@ -353,26 +354,33 @@ export function useLiveCompiler(
     }
   }, [semanticKey, autoCompile, setCompiling])
 
-  // --- Uniform effect: slider drag → fast-path upload, no recompile ---
-  // Fixed short debounce: upload cost is trivial (no codegen), so tying it to
-  // compile duration only made sliders laggy.
+  // --- Uniform effect: slider/gizmo drag → fast-path upload, no recompile ---
+  // rAF THROTTLE, not a debounce. A reset-on-every-change debounce froze the
+  // shader during a continuous drag (the timer kept resetting and only fired on
+  // pause). Throttling to one flush per animation frame makes the shader follow
+  // the drag every frame; multiple changes in a frame coalesce, and the flush
+  // reads the latest values. Upload cost is trivial (no codegen).
   useEffect(() => {
     if (!autoCompile) return
-
-    if (uniformTimerRef.current) clearTimeout(uniformTimerRef.current)
-    uniformTimerRef.current = setTimeout(() => {
-      uniformTimerRef.current = undefined
+    if (uniformRafRef.current != null) return // already scheduled this frame — coalesce
+    uniformRafRef.current = requestAnimationFrame(() => {
+      uniformRafRef.current = undefined
       const values = collectCurrentUniformValues()
       if (values.length > 0) onUniformUpdateRef.current?.(values)
-    }, 50)
-
-    return () => {
-      if (uniformTimerRef.current) {
-        clearTimeout(uniformTimerRef.current)
-        uniformTimerRef.current = undefined
-      }
-    }
+    })
+    // No cleanup on re-run: the frame must fire to push the latest values
+    // (cancelling here would reinstate debounce behavior). Unmount cleanup below.
   }, [uniformKey, autoCompile, collectCurrentUniformValues])
+
+  useEffect(
+    () => () => {
+      if (uniformRafRef.current != null) {
+        cancelAnimationFrame(uniformRafRef.current)
+        uniformRafRef.current = undefined
+      }
+    },
+    [],
+  )
 
   // --- Renderer effect: quality/anchor change → direct renderer call ---
   // Unconditional on key change: the old combined effect skipped this branch
@@ -387,9 +395,9 @@ export function useLiveCompiler(
     // gradient's p0/p1 compensation, committed atomically with the anchor) must
     // land in one frame — otherwise setAnchor applies now and the debounced
     // uniform push snaps in ~50ms later, a visible jump.
-    if (uniformTimerRef.current) {
-      clearTimeout(uniformTimerRef.current)
-      uniformTimerRef.current = undefined
+    if (uniformRafRef.current != null) {
+      cancelAnimationFrame(uniformRafRef.current)
+      uniformRafRef.current = undefined
     }
     const values = collectCurrentUniformValues()
     if (values.length > 0) onUniformUpdateRef.current?.(values)
