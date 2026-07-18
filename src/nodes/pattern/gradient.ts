@@ -211,24 +211,40 @@ export const gradientNode: NodeDefinition = {
     const lines: string[] = []
 
     if (ctx.isPreview) {
-      // Node thumbnail: a canonical centred + fitted view over raw v_uv,
-      // independent of drawMode / pin / output anchor — a predictable preview of
-      // the gradient itself. Applies the active `aspect` (perpendicular axis, x
-      // primary) so an ellipse/rhombus reads as such (aspect>1 → taller). Only the
-      // aspect matters here — no pinning/anchoring.
+      // Node thumbnail: the gradient's own field — same ORIENTATION (P0→P1
+      // direction) + aspect as the shader — centred at the thumb centre and
+      // fit-scaled (larger semi-axis → half the thumb), independent of the
+      // absolute pin position / output anchor. Stable across anchor switches:
+      // the compensation preserves P1−P0, and only the direction is used.
       const asp = drawMode === 'stretch' ? inputs.aspectUV : inputs.aspect
-      switch (gradType) {
-        case 'radial':
-          lines.push(`float ${field} = clamp(length(vec2((v_uv.x - 0.5) * 2.0, (v_uv.y - 0.5) * 2.0 / ${asp})), 0.0, 1.0);`)
-          break
-        case 'angular':
-          lines.push(`float ${field} = atan((v_uv.y - 0.5) / ${asp}, v_uv.x - 0.5) * (1.0 / 6.28318530718) + 0.5;`)
-          break
-        case 'diamond':
-          lines.push(`float ${field} = clamp((abs(v_uv.x - 0.5) + abs(v_uv.y - 0.5) / ${asp}) * 2.0, 0.0, 1.0);`)
-          break
-        default: // linear (aspect N/A)
-          lines.push(`float ${field} = v_uv.x;`)
+      const dirExpr = drawMode === 'stretch'
+        ? `vec2(${inputs.p1u} - ${inputs.p0u}, ${inputs.p1v} - ${inputs.p0v})`
+        : `vec2(${inputs.p1x} - ${inputs.p0x}, -(${inputs.p1y} - ${inputs.p0y}))` // px Y-down → coords Y-up
+      lines.push(`vec2 rg_dir_${id} = ${dirExpr};`)
+      lines.push(`float rg_dl_${id} = length(rg_dir_${id});`)
+      lines.push(`vec2 rg_uh_${id} = rg_dl_${id} > 1e-4 ? rg_dir_${id} / rg_dl_${id} : vec2(1.0, 0.0);`)
+      lines.push(`vec2 rg_vh_${id} = vec2(-rg_uh_${id}.y, rg_uh_${id}.x);`)
+      lines.push(`vec2 rg_pd_${id} = v_uv - 0.5;`)
+      if (gradType === 'linear') {
+        // full ramp edge→edge along the axis (aspect N/A)
+        lines.push(`float ${field} = dot(rg_pd_${id}, rg_uh_${id}) + 0.5;`)
+      } else {
+        // fit: larger semi-axis → half the thumb
+        lines.push(`float rg_R_${id} = 0.5 / max(1.0, ${asp});`)
+        lines.push(`float rg_pa_${id} = dot(rg_pd_${id}, rg_uh_${id}) / rg_R_${id};`)
+        lines.push(`float rg_pb_${id} = dot(rg_pd_${id}, rg_vh_${id}) / (${asp} * rg_R_${id});`)
+        switch (gradType) {
+          case 'radial':
+            lines.push(`float ${field} = clamp(length(vec2(rg_pa_${id}, rg_pb_${id})), 0.0, 1.0);`)
+            break
+          case 'angular':
+            lines.push(`float ${field} = atan(rg_pb_${id}, rg_pa_${id}) * (1.0 / 6.28318530718);`)
+            lines.push(`${field} = ${field} < 0.0 ? ${field} + 1.0 : ${field};`)
+            break
+          case 'diamond':
+            lines.push(`float ${field} = clamp(abs(rg_pa_${id}) + abs(rg_pb_${id}), 0.0, 1.0);`)
+            break
+        }
       }
     } else if (drawMode === 'pinned') {
       // Pinned: P0/P1 are CSS px offsets from `grad_center` = vec2(0.5). Because
@@ -393,58 +409,71 @@ export const gradientNode: NodeDefinition = {
     const standardUniforms = new Set<string>()
 
     if (ctx.isPreview) {
-      // Node thumbnail: canonical centred + fitted view over raw v_uv with the
-      // active aspect applied (perpendicular/y axis, x primary). Mirrors GLSL.
-      // Only aspect matters — no pinning/anchoring.
+      // Node thumbnail: the gradient's own field — same ORIENTATION (P0→P1
+      // direction) + aspect as the shader — centred + fit-scaled, independent of
+      // absolute pin position / output anchor. Mirrors GLSL. Stable across anchor
+      // switches (compensation preserves P1−P0; only direction is used).
       const asp = variable(drawMode === 'stretch' ? ctx.inputs.aspectUV : ctx.inputs.aspect)
-      const ax = () => binary('-', swizzle(variable('v_uv'), 'x', 'float'), literal('float', 0.5), 'float') // v_uv.x - 0.5
-      const ay = () => binary('-', swizzle(variable('v_uv'), 'y', 'float'), literal('float', 0.5), 'float') // v_uv.y - 0.5
-      switch (gradType) {
-        case 'radial':
-          // clamp(length(vec2(ax*2, ay*2/asp)), 0, 1)
-          statements.push(declare(field, 'float',
-            call('clamp', [
-              call('length', [construct('vec2', [
-                binary('*', ax(), literal('float', 2.0), 'float'),
-                binary('/', binary('*', ay(), literal('float', 2.0), 'float'), asp, 'float'),
-              ])], 'float'),
-              literal('float', 0.0), literal('float', 1.0),
-            ], 'float'),
-          ))
-          break
-        case 'angular':
-          // atan(ay/asp, ax) * (1/2π) + 0.5
-          statements.push(declare(field, 'float',
-            binary('+',
-              binary('*',
-                call('atan', [binary('/', ay(), asp, 'float'), ax()], 'float'),
-                literal('float', 1.0 / 6.28318530718),
-                'float',
-              ),
-              literal('float', 0.5),
-              'float',
-            ),
-          ))
-          break
-        case 'diamond':
-          // clamp((abs(ax) + abs(ay)/asp) * 2, 0, 1)
-          statements.push(declare(field, 'float',
-            call('clamp', [
-              binary('*',
-                binary('+',
-                  call('abs', [ax()], 'float'),
-                  binary('/', call('abs', [ay()], 'float'), asp, 'float'),
-                  'float',
-                ),
-                literal('float', 2.0),
-                'float',
-              ),
-              literal('float', 0.0), literal('float', 1.0),
-            ], 'float'),
-          ))
-          break
-        default: // linear (aspect N/A)
-          statements.push(declare(field, 'float', swizzle(variable('v_uv'), 'x', 'float')))
+      const dir = `rg_dir_${id}`, dl = `rg_dl_${id}`, uh = `rg_uh_${id}`, vh = `rg_vh_${id}`, pd = `rg_pd_${id}`
+      const dirExpr = drawMode === 'stretch'
+        ? construct('vec2', [
+            binary('-', variable(ctx.inputs.p1u), variable(ctx.inputs.p0u), 'float'),
+            binary('-', variable(ctx.inputs.p1v), variable(ctx.inputs.p0v), 'float'),
+          ])
+        : construct('vec2', [
+            binary('-', variable(ctx.inputs.p1x), variable(ctx.inputs.p0x), 'float'),
+            binary('*', literal('float', -1.0), binary('-', variable(ctx.inputs.p1y), variable(ctx.inputs.p0y), 'float'), 'float'),
+          ])
+      statements.push(declare(dir, 'vec2', dirExpr))
+      statements.push(declare(dl, 'float', call('length', [variable(dir)], 'float')))
+      statements.push(declare(uh, 'vec2',
+        ternary(
+          binary('>', variable(dl), literal('float', 1e-4), 'bool'),
+          binary('/', variable(dir), variable(dl), 'vec2'),
+          construct('vec2', [literal('float', 1.0), literal('float', 0.0)]),
+          'vec2',
+        ),
+      ))
+      statements.push(declare(vh, 'vec2', construct('vec2', [
+        binary('*', literal('float', -1.0), swizzle(variable(uh), 'y', 'float'), 'float'),
+        swizzle(variable(uh), 'x', 'float'),
+      ])))
+      statements.push(declare(pd, 'vec2', binary('-', variable('v_uv'), literal('vec2', [0.5, 0.5]), 'vec2')))
+      if (gradType === 'linear') {
+        statements.push(declare(field, 'float',
+          binary('+', call('dot', [variable(pd), variable(uh)], 'float'), literal('float', 0.5), 'float'),
+        ))
+      } else {
+        const R = `rg_R_${id}`, pa = `rg_pa_${id}`, pb = `rg_pb_${id}`
+        statements.push(declare(R, 'float',
+          binary('/', literal('float', 0.5), call('max', [literal('float', 1.0), asp], 'float'), 'float'),
+        ))
+        statements.push(declare(pa, 'float',
+          binary('/', call('dot', [variable(pd), variable(uh)], 'float'), variable(R), 'float'),
+        ))
+        statements.push(declare(pb, 'float',
+          binary('/', call('dot', [variable(pd), variable(vh)], 'float'), binary('*', asp, variable(R), 'float'), 'float'),
+        ))
+        switch (gradType) {
+          case 'radial':
+            statements.push(declare(field, 'float',
+              call('clamp', [call('length', [construct('vec2', [variable(pa), variable(pb)])], 'float'), literal('float', 0.0), literal('float', 1.0)], 'float'),
+            ))
+            break
+          case 'angular':
+            statements.push(declare(field, 'float',
+              binary('*', call('atan', [variable(pb), variable(pa)], 'float'), literal('float', 1.0 / 6.28318530718), 'float'),
+            ))
+            statements.push(assign(field,
+              ternary(binary('<', variable(field), literal('float', 0.0), 'bool'), binary('+', variable(field), literal('float', 1.0), 'float'), variable(field), 'float'),
+            ))
+            break
+          case 'diamond':
+            statements.push(declare(field, 'float',
+              call('clamp', [binary('+', call('abs', [variable(pa)], 'float'), call('abs', [variable(pb)], 'float'), 'float'), literal('float', 0.0), literal('float', 1.0)], 'float'),
+            ))
+            break
+        }
       }
     } else if (drawMode === 'pinned') {
       // Pinned: P0/P1 are CSS px offsets from `grad_center`, a fixed coords value
