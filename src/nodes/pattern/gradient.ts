@@ -98,25 +98,6 @@ export const gradientNode: NodeDefinition = {
       connectable: true, updateMode: 'uniform',
       showWhen: { drawMode: 'pinned', gradientType: ['radial', 'angular', 'diamond'] },
     },
-    // Reference resolution (CSS px) — the preview-canvas size captured when the
-    // pinned gradient was authored. grad_center pins against it so the gradient
-    // holds its position when the output anchor changes (survives) yet re-pins to
-    // the anchor on resize — WITHOUT mutating p0/p1 (so the node thumbnail, which
-    // renders at a fixed centre anchor, stays stable). 0 = uncaptured → the
-    // shader/gizmo fall back to the live canvas size (centred, no jump). Set once
-    // by App on first pinned render. Hidden — not user-facing.
-    {
-      id: 'refResX', label: 'Ref Res X', type: 'float', default: 0,
-      min: 0, max: 100000, step: 1, hidden: true,
-      connectable: true, updateMode: 'uniform',
-      showWhen: { drawMode: 'pinned' },
-    },
-    {
-      id: 'refResY', label: 'Ref Res Y', type: 'float', default: 0,
-      min: 0, max: 100000, step: 1, hidden: true,
-      connectable: true, updateMode: 'uniform',
-      showWhen: { drawMode: 'pinned' },
-    },
     // Stretch control points — UV (normalized 0..1 across canvas, bottom-left
     // origin, Y-up = v_uv). Renormalize on resize, so anchor-snapped handles
     // track their canvas landmark. Centre-origin defaults match Pinned
@@ -247,21 +228,17 @@ export const gradientNode: NodeDefinition = {
           lines.push(`float ${field} = v_uv.x;`)
       }
     } else if (drawMode === 'pinned') {
-      // Pinned: P0/P1 are CSS px offsets from `grad_center`, which pins against the
-      // CAPTURED reference resolution (refRes = preview-canvas CSS size at
-      // authoring). grad_center = u_anchor + (0.5 - u_anchor) * refRes / u_ref_size
-      // (the u_dpr cancels since refRes is CSS): at the reference size it maps to
-      // the canvas centre for ANY anchor (survives anchor switches), and away from
-      // it it slides toward the anchor (pins on resize) — all WITHOUT touching
-      // p0/p1, so the fixed-centre-anchor thumbnail stays stable. refRes 0 =
-      // uncaptured → fall back to the live CSS size (u_resolution/u_dpr), i.e.
-      // centred/no-jump until App captures it. Y flipped (px Y-down, coords Y-up).
+      // Pinned: P0/P1 are CSS px offsets from `grad_center` = vec2(0.5). Because
+      // `auto_uv` (coords) is anchor-relative, holding grad_center constant pins
+      // the gradient to the Fragment Output anchor on resize. On anchor SWITCH the
+      // app compensates p0/p1 (graphStore.setOutputAnchor) so it holds position
+      // (survives) — the node thumbnail stays stable regardless because it renders
+      // the isPreview canonical branch above, not p0/p1. Y flipped (px Y-down).
       ctx.uniforms.add('u_ref_size')
       ctx.uniforms.add('u_anchor')
       ctx.uniforms.add('u_resolution')
       ctx.uniforms.add('u_dpr')
-      lines.push(`vec2 rg_refres_${id} = vec2(${inputs.refResX} > 0.0 ? ${inputs.refResX} : u_resolution.x / u_dpr, ${inputs.refResY} > 0.0 ? ${inputs.refResY} : u_resolution.y / u_dpr);`)
-      lines.push(`vec2 grad_center_${id} = u_anchor + (vec2(0.5) - u_anchor) * rg_refres_${id} / u_ref_size;`)
+      lines.push(`vec2 grad_center_${id} = vec2(0.5);`)
 
       const pt = (varName: string, pxExpr: string, pyExpr: string) => {
         lines.push(`vec2 ${varName} = grad_center_${id} + vec2(${pxExpr}, -(${pyExpr})) / u_ref_size;`)
@@ -472,39 +449,12 @@ export const gradientNode: NodeDefinition = {
       standardUniforms.add('u_resolution')
       standardUniforms.add('u_dpr')
 
-      // grad_center pins against the captured reference resolution (see GLSL
-      // comment). rg_refres = vec2(refResX>0 ? refResX : u_resolution.x/u_dpr, …y).
-      const refres = `rg_refres_${id}`
-      statements.push(declare(refres, 'vec2', construct('vec2', [
-        ternary(
-          binary('>', variable(ctx.inputs.refResX), literal('float', 0), 'bool'),
-          variable(ctx.inputs.refResX),
-          binary('/', swizzle(variable('u_resolution'), 'x', 'float'), variable('u_dpr'), 'float'),
-          'float',
-        ),
-        ternary(
-          binary('>', variable(ctx.inputs.refResY), literal('float', 0), 'bool'),
-          variable(ctx.inputs.refResY),
-          binary('/', swizzle(variable('u_resolution'), 'y', 'float'), variable('u_dpr'), 'float'),
-          'float',
-        ),
-      ])))
-      // grad_center = u_anchor + (vec2(0.5) - u_anchor) * rg_refres / u_ref_size
+      // grad_center = vec2(0.5) (see GLSL comment): fixed coords → pins to the
+      // Fragment Output anchor on resize via anchor-relative auto_uv; the app
+      // compensates p0/p1 on anchor switch (setOutputAnchor) so it survives.
       const center = `grad_center_${id}`
       statements.push(declare(center, 'vec2',
-        binary('+',
-          variable('u_anchor'),
-          binary('/',
-            binary('*',
-              binary('-', construct('vec2', [literal('float', 0.5), literal('float', 0.5)]), variable('u_anchor'), 'vec2'),
-              variable(refres),
-              'vec2',
-            ),
-            variable('u_ref_size'),
-            'vec2',
-          ),
-          'vec2',
-        ),
+        construct('vec2', [literal('float', 0.5), literal('float', 0.5)]),
       ))
 
       // pt = grad_center + vec2(px, -py) / u_ref_size

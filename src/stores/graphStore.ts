@@ -9,6 +9,9 @@ import type { Node, Edge, OnNodesChange, OnEdgesChange } from '@xyflow/react'
 import { applyNodeChanges, applyEdgeChanges } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
+import { anchorToVec2 } from '../nodes/output/fragment-output'
+import { REFERENCE_SIZE } from '../renderer/constants'
+import { previewCanvasSize } from '../utils/preview-canvas-size'
 
 /** Schema version — bump when persisted shape changes */
 const GRAPH_SCHEMA_VERSION = 3
@@ -62,6 +65,10 @@ interface GraphState {
   /** Atomic multi-element delete (node + connected edges = ONE history entry). */
   removeElements: (nodeIds: string[], edgeIds: string[]) => void
   updateNodeData: (nodeId: string, data: Partial<NodeData>) => void
+  /** Set the Fragment Output anchor AND compensate pinned gradients' p0/p1 in a
+   *  SINGLE commit, so they hold their on-screen position (no jump) while still
+   *  pinning to the anchor on resize. Atomic = one render = no intermediate jump. */
+  setOutputAnchor: (nodeId: string, anchor: string) => void
 
   addEdge: (edge: Edge<EdgeData>) => void
   removeEdge: (edgeId: string) => void
@@ -257,6 +264,49 @@ export const useGraphStore = create<GraphState>()(
               }),
           _lastActionKey: key,
           _lastActionTime: now,
+        })
+      },
+
+      setOutputAnchor: (nodeId, anchor) => {
+        const state = get()
+        const target = state.nodes.find((n) => n.id === nodeId)
+        const prevA = anchorToVec2((target?.data.params?.anchor as string) ?? 'center')
+        const curA = anchorToVec2(anchor)
+        const { width, height } = previewCanvasSize
+        // Inverse of the gizmo's pxOriginFrac: hold the on-screen centre while the
+        // shader re-pins to the new anchor. Measured vs the live canvas so it
+        // holds at any size. p0y/p1y are Y-up, hence the flipped sign on dpy.
+        const compensate =
+          (prevA[0] !== curA[0] || prevA[1] !== curA[1]) && width > 0 && height > 0
+        const dpx = compensate ? (prevA[0] - curA[0]) * (width - REFERENCE_SIZE) : 0
+        const dpy = compensate ? (curA[1] - prevA[1]) * (height - REFERENCE_SIZE) : 0
+        set({
+          nodes: state.nodes.map((node) => {
+            if (node.id === nodeId) {
+              return { ...node, data: { ...node.data, params: { ...node.data.params, anchor } } }
+            }
+            if (compensate && node.data.type === 'gradient' && node.data.params?.drawMode === 'pinned') {
+              const p = node.data.params as Record<string, number>
+              return {
+                ...node,
+                data: {
+                  ...node.data,
+                  params: {
+                    ...node.data.params,
+                    p0x: (p.p0x ?? 0) + dpx, p1x: (p.p1x ?? 150) + dpx,
+                    p0y: (p.p0y ?? 0) + dpy, p1y: (p.p1y ?? 0) + dpy,
+                  },
+                },
+              }
+            }
+            return node
+          }),
+          _past: pushHistory(state._past, snapshot(state)),
+          _future: [],
+          canUndo: true,
+          canRedo: false,
+          _lastActionKey: `anchor:${nodeId}`,
+          _lastActionTime: Date.now(),
         })
       },
 

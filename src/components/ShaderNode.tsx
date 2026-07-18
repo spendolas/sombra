@@ -78,6 +78,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   const nodeData = data as NodeData
   const definition = nodeRegistry.get(nodeData.type)
   const updateNodeData = useGraphStore((state) => state.updateNodeData)
+  const setOutputAnchor = useGraphStore((state) => state.setOutputAnchor)
   const onEdgesChange = useGraphStore((state) => state.onEdgesChange)
 
   const currentValues = useMemo(
@@ -408,7 +409,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                 )
               } else if (param.type === 'enum' && param.options) {
                 control = param.control === 'anchor-grid' ? (
-                  <AnchorGrid param={param} value={(currentValues[param.id] as string) ?? (param.default as string)} onChange={(v) => handleParamChange(param.id, v)} />
+                  <AnchorGrid param={param} value={(currentValues[param.id] as string) ?? (param.default as string)} onChange={(v) => nodeData.type === 'fragment_output' && param.id === 'anchor' ? setOutputAnchor(id, v) : handleParamChange(param.id, v)} />
                 ) : (
                   <EnumSelect param={param} value={(currentValues[param.id] as string) ?? (param.default as string)} onChange={(v) => handleParamChange(param.id, v)} />
                 )

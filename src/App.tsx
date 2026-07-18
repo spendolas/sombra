@@ -6,6 +6,7 @@ import { createShaderRenderer, createPreviewRenderer, isWebGL2Forced } from './r
 import type { RenderPlan, RenderPass } from './compiler/glsl-generator'
 import { PreviewScheduler } from './renderer/preview-scheduler'
 import { useLiveCompiler } from './compiler'
+import { setPreviewCanvasSize } from './utils/preview-canvas-size'
 import { useGraphStore } from './stores/graphStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useCompilerStore } from './stores/compilerStore'
@@ -98,6 +99,20 @@ function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rendererRef = useRef<ShaderRenderer | null>(null)
 
+  // Keep the live preview-canvas CSS size available to graphStore.setOutputAnchor
+  // (it compensates pinned gradients atomically with the anchor change).
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const update = () => {
+      const r = canvas.getBoundingClientRect()
+      setPreviewCanvasSize(r.width, r.height)
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(canvas)
+    return () => ro.disconnect()
+  }, [])
 
   // Buffer for compile results that arrive before the renderer is ready.
   // The Worker compile may complete while the async factory is still resolving.

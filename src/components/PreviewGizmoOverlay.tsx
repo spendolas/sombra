@@ -20,6 +20,7 @@ import { nodeRegistry } from '../nodes/registry'
 import { matchesShowWhen, type GizmoPoint, type GizmoAspectHandle, type GizmoOutline } from '../nodes/types'
 import { pointPxToScreen, screenToPointPx, uvToScreen, screenToUv, type Rect } from '../utils/gizmo-coords'
 import { moveCursor } from '../utils/cursors'
+import { REFERENCE_SIZE } from '../renderer/constants'
 import { anchorToVec2 } from '../nodes/output/fragment-output'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
@@ -78,19 +79,15 @@ function computeAspectGeometry(
 
 /**
  * Fractional screen position (0..1 of the canvas rect) of the shader's px-space
- * origin — where `grad_center` lands on screen. Mirrors the shader:
- * `anchor + (0.5 - anchor) * (refRes / cssSize)` (the u_ref_size/dpr terms
- * cancel). refRes = the captured reference resolution (CSS px); 0 → fall back to
- * the live canvas size (→ factor 1 → 0.5, i.e. centred/no-jump, matching an
- * uncaptured shader). At the reference size the factor is 1 → 0.5 for any anchor
- * (survives anchor switches); away from it, it slides toward `outputAnchor`
- * (pins on resize). px offsets (p0/p1) add straight in CSS px from here.
+ * origin — where `grad_center` (coords `(0.5,0.5)`) lands on screen: the inverse
+ * of `auto_uv`, `anchor + (0.5 - anchor) * (REFERENCE_SIZE / cssSize)` (dpr
+ * cancels). At the reference size this is 0.5 for any anchor; as the canvas
+ * diverges it slides toward `outputAnchor` — matching the gradient's on-resize
+ * pinning to the Fragment Output anchor. px offsets add straight in CSS px.
  */
-function pxOriginFrac(rect: Rect, outputAnchor: [number, number], refRes: [number, number]): [number, number] {
-  const refX = refRes[0] > 0 ? refRes[0] : rect.width
-  const refY = refRes[1] > 0 ? refRes[1] : rect.height
-  const mx = rect.width > 0 ? refX / rect.width : 1
-  const my = rect.height > 0 ? refY / rect.height : 1
+function pxOriginFrac(rect: Rect, outputAnchor: [number, number]): [number, number] {
+  const mx = rect.width > 0 ? REFERENCE_SIZE / rect.width : 1
+  const my = rect.height > 0 ? REFERENCE_SIZE / rect.height : 1
   return [
     outputAnchor[0] + (0.5 - outputAnchor[0]) * mx,
     outputAnchor[1] + (0.5 - outputAnchor[1]) * my,
@@ -187,13 +184,6 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
     return anchorToVec2((fo?.data.params?.anchor as string) ?? 'center')
   }, [nodes])
 
-  // The selected node's captured reference resolution (CSS px, 0 = uncaptured) —
-  // feeds pxOriginFrac so the gizmo origin matches the shader's grad_center.
-  const nodeRefRes = useMemo<[number, number]>(() => [
-    (currentParams.refResX as number | undefined) ?? 0,
-    (currentParams.refResY as number | undefined) ?? 0,
-  ], [currentParams])
-
   // --- Canvas rect tracking -------------------------------------------------
 
   const canvasElRef = useRef<HTMLCanvasElement | null>(null)
@@ -276,25 +266,6 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
     return () => cancelAnimationFrame(raf)
   }, [gizmoActive])
 
-  // Capture the reference resolution once: when a pinned gradient is being
-  // authored (refRes still 0), snap it to the current preview-canvas CSS size so
-  // grad_center pins against it — the gradient then survives anchor switches at
-  // this size and pins on resize, WITHOUT mutating p0/p1 (keeps the thumbnail
-  // stable). Scoped to the selected node (you author the one you're editing).
-  useEffect(() => {
-    if (!selectedNode || selectedNode.data.type !== 'gradient') return
-    if (selectedNode.data.params?.drawMode !== 'pinned') return
-    if (((selectedNode.data.params?.refResX as number | undefined) ?? 0) > 0) return
-    if (!canvasRect || canvasRect.width <= 0 || canvasRect.height <= 0) return
-    updateNodeData(selectedNode.id, {
-      params: {
-        ...selectedNode.data.params,
-        refResX: Math.round(canvasRect.width),
-        refResY: Math.round(canvasRect.height),
-      },
-    })
-  }, [selectedNode, canvasRect, updateNodeData])
-
   // Drag lifetime: bind move/up/cancel on `window` so release is caught even
   // off-canvas — no setPointerCapture, mirroring the ImageUploader gizmo.
   useEffect(() => {
@@ -305,7 +276,7 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
       const canvas = canvasElRef.current
       if (!canvas) return
       const r = canvas.getBoundingClientRect()
-      const anchor = pxOriginFrac(r, outputAnchor, nodeRefRes)
+      const anchor = pxOriginFrac(r, outputAnchor)
       const latest = useGraphStore.getState().nodes.find((n) => n.id === nodeId)
       const latestParams = (latest?.data.params ?? {}) as Record<string, unknown>
 
@@ -412,14 +383,14 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
       window.removeEventListener('pointerup', onEnd)
       window.removeEventListener('pointercancel', onEnd)
     }
-  }, [dragging, outputAnchor, nodeRefRes, selectedNode, updateNodeData, gizmo, allParams])
+  }, [dragging, outputAnchor, selectedNode, updateNodeData, gizmo, allParams])
 
   if (!gizmoActive || !gizmo || !canvasRect) return null
 
   // Built from ALL gizmo points (not just currently-visible ones) so aspect
   // handles/outline can resolve their centerPoint/endPoint even if that point
   // itself isn't rendered as a handle.
-  const pxAnchor = pxOriginFrac(canvasRect, outputAnchor, nodeRefRes)
+  const pxAnchor = pxOriginFrac(canvasRect, outputAnchor)
   const pointScreenPos = new Map<string, { x: number; y: number }>()
   for (const p of gizmo.points) {
     // Fall back to the param's DEFINITION default (not 0) for points the user
