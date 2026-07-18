@@ -112,6 +112,7 @@ export function generateNodeIR(
   userUniforms: UniformSpec[],
   imageSamplers: Set<string>,
   textureBoundaries?: TextureBoundaryEdge[],
+  isPreview = false,
 ): NodeIRResult {
   const errors: Array<{ message: string; nodeId?: string }> = []
   const preambleStatements: import('./ir/types').IRStmt[] = []
@@ -259,6 +260,7 @@ export function generateNodeIR(
   // Build IR context
   const irContext: IRContext = {
     nodeId: node.id,
+    isPreview,
     inputs,
     outputs,
     params: node.data.params || {},

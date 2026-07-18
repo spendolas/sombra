@@ -125,7 +125,7 @@ function compileSinglePassPreview(
     const result = generateNodeGlsl(
       nodeId, nodeMap, edgesByTarget,
       uniforms, functions, functionRegistry, userUniforms,
-      undefined, imageSamplers,
+      undefined, imageSamplers, true, // isPreview → canonical node thumbnail
     )
     glslLines.push(...result.glslLines)
     errors.push(...result.errors)
@@ -241,7 +241,7 @@ function compileMultiPassPreview(
       const result = generateNodeGlsl(
         nodeId, nodeMap, edgesByTarget,
         uniforms, functions, functionRegistry, passUserUniforms,
-        passBoundaries, imageSamplers,
+        passBoundaries, imageSamplers, true, // isPreview → canonical node thumbnail
       )
       glslLines.push(...result.glslLines)
       allErrors.push(...result.errors)

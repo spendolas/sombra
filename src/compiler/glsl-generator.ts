@@ -394,6 +394,7 @@ export function generateNodeGlsl(
   userUniforms: UniformSpec[],
   textureBoundaries?: TextureBoundaryEdge[],
   imageSamplers?: Set<string>,
+  isPreview = false,
 ): NodeCodegenResult {
   const errors: Array<{ message: string; nodeId?: string }> = []
   const glslLines: string[] = []
@@ -597,6 +598,7 @@ export function generateNodeGlsl(
     functionRegistry,
     textureSamplers: Object.keys(textureSamplers).length > 0 ? textureSamplers : undefined,
     imageSamplers,
+    isPreview,
   }
 
   try {

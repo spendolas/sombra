@@ -125,6 +125,7 @@ function compileSinglePass(
     const result = generateNodeIR(
       nodeId, nodeMap, edgesByTarget,
       standardUniforms, userUniforms, imageSamplers,
+      undefined, true, // isPreview → canonical node thumbnail
     )
 
     if (result.errors.length > 0) return fail(result.errors)
@@ -267,7 +268,7 @@ function compileMultiPass(
       const result = generateNodeIR(
         nodeId, nodeMap, edgesByTarget,
         standardUniforms, passUserUniforms, imageSamplers,
-        passBoundaries,
+        passBoundaries, true, // isPreview → canonical node thumbnail
       )
 
       if (result.errors.length > 0) return fail(result.errors)

@@ -209,6 +209,10 @@ export interface IRNodeOutput {
 export interface IRContext {
   /** Unique node instance ID (React Flow ID) */
   readonly nodeId: string
+  /** True when compiling for a node mini-preview thumbnail (fixed 80×80, centre
+   *  anchor). Nodes may render a canonical, placement-independent view — e.g. the
+   *  gradient shows itself centred + fitted rather than at its pinned position. */
+  readonly isPreview?: boolean
   /** Input port/param IDs → resolved variable names */
   readonly inputs: Record<string, string>
   /** Output port IDs → output variable names */

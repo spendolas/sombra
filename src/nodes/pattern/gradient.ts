@@ -229,7 +229,24 @@ export const gradientNode: NodeDefinition = {
 
     const lines: string[] = []
 
-    if (drawMode === 'pinned') {
+    if (ctx.isPreview) {
+      // Node thumbnail: a canonical centred + fitted view (the old Stretch
+      // formulas over raw v_uv), independent of drawMode / pin / output anchor —
+      // a predictable preview of the gradient itself.
+      switch (gradType) {
+        case 'radial':
+          lines.push(`float ${field} = clamp(length(v_uv - 0.5) * 2.0, 0.0, 1.0);`)
+          break
+        case 'angular':
+          lines.push(`float ${field} = atan(v_uv.y - 0.5, v_uv.x - 0.5) * (1.0 / 6.28318530718) + 0.5;`)
+          break
+        case 'diamond':
+          lines.push(`float ${field} = clamp((abs(v_uv.x - 0.5) + abs(v_uv.y - 0.5)) * 2.0, 0.0, 1.0);`)
+          break
+        default: // linear
+          lines.push(`float ${field} = v_uv.x;`)
+      }
+    } else if (drawMode === 'pinned') {
       // Pinned: P0/P1 are CSS px offsets from `grad_center`, which pins against the
       // CAPTURED reference resolution (refRes = preview-canvas CSS size at
       // authoring). grad_center = u_anchor + (0.5 - u_anchor) * refRes / u_ref_size
@@ -395,7 +412,55 @@ export const gradientNode: NodeDefinition = {
     const statements: IRStmt[] = []
     const standardUniforms = new Set<string>()
 
-    if (drawMode === 'pinned') {
+    if (ctx.isPreview) {
+      // Node thumbnail: canonical centred + fitted view (old Stretch formulas over
+      // raw v_uv), independent of drawMode / pin / output anchor. Mirrors GLSL.
+      const uv = variable('v_uv')
+      switch (gradType) {
+        case 'radial':
+          statements.push(declare(field, 'float',
+            call('clamp', [
+              binary('*', call('length', [binary('-', uv, literal('vec2', [0.5, 0.5]), 'vec2')], 'float'), literal('float', 2.0), 'float'),
+              literal('float', 0.0), literal('float', 1.0),
+            ], 'float'),
+          ))
+          break
+        case 'angular':
+          statements.push(declare(field, 'float',
+            binary('+',
+              binary('*',
+                call('atan', [
+                  binary('-', swizzle(uv, 'y', 'float'), literal('float', 0.5), 'float'),
+                  binary('-', swizzle(uv, 'x', 'float'), literal('float', 0.5), 'float'),
+                ], 'float'),
+                literal('float', 1.0 / 6.28318530718),
+                'float',
+              ),
+              literal('float', 0.5),
+              'float',
+            ),
+          ))
+          break
+        case 'diamond':
+          statements.push(declare(field, 'float',
+            call('clamp', [
+              binary('*',
+                binary('+',
+                  call('abs', [binary('-', swizzle(uv, 'x', 'float'), literal('float', 0.5), 'float')], 'float'),
+                  call('abs', [binary('-', swizzle(uv, 'y', 'float'), literal('float', 0.5), 'float')], 'float'),
+                  'float',
+                ),
+                literal('float', 2.0),
+                'float',
+              ),
+              literal('float', 0.0), literal('float', 1.0),
+            ], 'float'),
+          ))
+          break
+        default: // linear
+          statements.push(declare(field, 'float', swizzle(uv, 'x', 'float')))
+      }
+    } else if (drawMode === 'pinned') {
       // Pinned: P0/P1 are CSS px offsets from `grad_center`, a fixed coords value
       // (0.5) that maps to the canvas centre at the REFERENCE size. Because
       // `auto_uv` (coords) is anchor-relative, holding grad_center constant makes

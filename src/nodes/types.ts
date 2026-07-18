@@ -82,6 +82,10 @@ export interface GLSLContext {
   functionRegistry: Map<string, string>    // Deduplicated shared functions (key -> GLSL code)
   textureSamplers?: Record<string, string> // portId → sampler2D uniform name (multi-pass)
   imageSamplers?: Set<string>              // Image node sampler2D uniform names
+  /** True when compiling for a node mini-preview thumbnail (fixed 80×80, centre
+   *  anchor). Nodes may render a canonical, placement-independent view — e.g. the
+   *  gradient shows itself centred + fitted rather than at its pinned position. */
+  isPreview?: boolean
 }
 
 /**
