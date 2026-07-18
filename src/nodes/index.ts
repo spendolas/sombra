@@ -41,6 +41,7 @@ import { reededGlassNode } from './transform/reeded-glass'
 
 // Color nodes
 import { hsvToRgbNode } from './color/hsv-to-rgb'
+import { hueShiftNode } from './color/hue-shift'
 import { brightnessContrastNode } from './color/brightness-contrast'
 import { colorRampNode } from './color/color-ramp'
 import { invertNode } from './color/invert'
@@ -106,6 +107,7 @@ export const ALL_NODES = [
 
   // Color
   hsvToRgbNode,
+  hueShiftNode,
   brightnessContrastNode,
   colorRampNode,
   invertNode,

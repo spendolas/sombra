@@ -38,6 +38,7 @@ import { invertNode } from '../src/nodes/color/invert'
 import { grayscaleNode } from '../src/nodes/color/grayscale'
 import { posterizeNode } from '../src/nodes/color/posterize'
 import { hsvToRgbNode } from '../src/nodes/color/hsv-to-rgb'
+import { hueShiftNode } from '../src/nodes/color/hue-shift'
 import { colorRampNode } from '../src/nodes/color/color-ramp'
 
 // ---------------------------------------------------------------------------
@@ -637,6 +638,47 @@ function verify(
   }
   if (invPaOk) {
     console.log('  [PASS] invert: preserveAlpha inverts rgb only, passes input alpha through')
+    passed++
+  } else {
+    failed++
+  }
+}
+
+// 12c. Hue Shift — rgb rotated via shared hueShift(), alpha passed through
+{
+  const [g, i] = ctx({
+    nodeId: 'hue-lll222',
+    inputs: { color: 'node_noise_xyz_color', shift: 'u_hue_lll222_shift' },
+    outputs: { result: 'node_hue_lll222_result' },
+    params: { shift: 45 },
+  })
+  verify('Hue Shift', hueShiftNode, g, i)
+
+  testNum++
+  console.log(`\n  ${testNum}. Hue Shift — rgb-rotate + alpha-passthrough, GLSL↔IR parity`)
+  let hueOk = true
+  const refGLSL = hueShiftNode.glsl(g)
+  // rgb goes through hueShift(radians(shift)); alpha (.a) rides through untouched
+  if (!/hueShift\(node_noise_xyz_color\.rgb, radians\(u_hue_lll222_shift\)\)/.test(refGLSL) ||
+      !/vec4 node_hue_lll222_result = vec4\(hs_rgb_hue_lll222, node_noise_xyz_color\.a\);/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected hueShift(rgb, radians(shift)) + alpha passthrough. Got:\n    ${refGLSL}`)
+    hueOk = false
+  }
+  const irOut = hueShiftNode.ir!(i)
+  const irGLSL = lowerNodeOutputToGLSL(irOut).join('\n')
+  if (!/hueShift\(node_noise_xyz_color\.rgb, radians\(u_hue_lll222_shift\)\)/.test(irGLSL) ||
+      !/vec4 node_hue_lll222_result = vec4\(hs_rgb_hue_lll222, node_noise_xyz_color\.a\);/.test(irGLSL)) {
+    console.log(`  [FAIL] IR->GLSL: expected hueShift + alpha passthrough. Got:\n    ${irGLSL}`)
+    hueOk = false
+  }
+  const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
+  if (!/hueShift\(node_noise_xyz_color\.rgb, radians\(u_hue_lll222_shift\)\)/.test(irWGSL) ||
+      !/var node_hue_lll222_result: vec4f = vec4f\(hs_rgb_hue_lll222, node_noise_xyz_color\.a\);/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected hueShift + alpha passthrough. Got:\n    ${irWGSL}`)
+    hueOk = false
+  }
+  if (hueOk) {
+    console.log('  [PASS] hue_shift: rgb rotated via hueShift(), alpha passed through; GLSL↔IR↔WGSL match')
     passed++
   } else {
     failed++
