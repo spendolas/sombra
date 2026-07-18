@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { flushSync } from 'react-dom'
 import { useGraphStore } from '../stores/graphStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { nodeRegistry } from '../nodes/registry'
@@ -187,6 +188,8 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
 
   const canvasElRef = useRef<HTMLCanvasElement | null>(null)
   const [canvasRect, setCanvasRect] = useState<Rect | null>(null)
+  // Mirror of canvasRect for the rAF change-check (avoids a stale-closure read).
+  const canvasRectRef = useRef<Rect | null>(null)
   const [dragging, setDragging] = useState<DragState | null>(null)
 
   // Resolve the active target container's <canvas> child and keep canvasRect
@@ -195,6 +198,7 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
   useEffect(() => {
     if (!gizmoActive) {
       canvasElRef.current = null
+      canvasRectRef.current = null
       setCanvasRect(null)
       return
     }
@@ -213,7 +217,9 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
 
     const updateRect = () => {
       const r = canvas.getBoundingClientRect()
-      setCanvasRect({ left: r.left, top: r.top, width: r.width, height: r.height })
+      const next = { left: r.left, top: r.top, width: r.width, height: r.height }
+      canvasRectRef.current = next
+      setCanvasRect(next)
     }
     updateRect()
 
@@ -240,11 +246,19 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
       const canvas = canvasElRef.current
       if (canvas) {
         const r = canvas.getBoundingClientRect()
-        setCanvasRect((prev) =>
-          prev && prev.left === r.left && prev.top === r.top && prev.width === r.width && prev.height === r.height
-            ? prev
-            : { left: r.left, top: r.top, width: r.width, height: r.height },
-        )
+        const prev = canvasRectRef.current
+        const changed =
+          !prev || prev.left !== r.left || prev.top !== r.top || prev.width !== r.width || prev.height !== r.height
+        if (changed) {
+          const next = { left: r.left, top: r.top, width: r.width, height: r.height }
+          canvasRectRef.current = next
+          // flushSync so handles reposition in the SAME frame the canvas moved/
+          // resized (plain setState commits a frame later — visible lag while
+          // dragging the window/split). Only runs when the rect actually changed
+          // (a canvas resize), so a static preview — and anchor switches, which
+          // don't resize the canvas — cost nothing and are unaffected.
+          flushSync(() => setCanvasRect(next))
+        }
       }
       raf = requestAnimationFrame(tick)
     }
