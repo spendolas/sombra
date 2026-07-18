@@ -89,7 +89,7 @@ Three change classes, keyed separately, to avoid needless recompiles:
 
 **Status:** WebGPU migration complete for both main renderer (167/167 WGSL GPU compilation tests) and preview thumbnails (shared `GPUDevice`, 80×80 render texture, async readback with 512 `bytesPerRow` alignment, LRU pipeline cache). WebGL2 remains the fallback for both and must keep working.
 
-### Node system (41 nodes)
+### Node system (42 nodes)
 
 Each node is one file in `src/nodes/<category>/`, registered in `src/nodes/index.ts` `ALL_NODES`. A `NodeDefinition` has typed ports (float, vec2, vec3, vec4, color, sampler2D), params, and **both** a `glsl(ctx)` and an `ir(ctx)` generator — new nodes need both so they work on both backends. Key mechanics (full detail in `NODE_AUTHORING_GUIDE.md`):
 
@@ -174,4 +174,4 @@ Non-trivial changes propagate across layers. Check what applies:
 
 ## Status
 
-Phases 0–5 complete: editor, compiler, 41 nodes, save/load `.sombra` files, compact share URLs, per-node mini-previews, Cmd+K palette, design-system pipeline. **WebGPU migration complete** (main + preview renderers; WebGL2 fallback retained). Recent work: **Phase 6 multi-pass composable effects** (`PHASE6-MULTIPASS.md`) — relay passes for fragColor conflicts, ping-pong aliasing fixes for deep pass chains, 9-point anchor pin on Fragment Output. Sprint-by-sprint history lives in `ROADMAP.md`.
+Phases 0–5 complete: editor, compiler, 42 nodes, save/load `.sombra` files, compact share URLs, per-node mini-previews, Cmd+K palette, design-system pipeline. **WebGPU migration complete** (main + preview renderers; WebGL2 fallback retained). Recent work: **Phase 6 multi-pass composable effects** (`PHASE6-MULTIPASS.md`) — relay passes for fragColor conflicts, ping-pong aliasing fixes for deep pass chains, 9-point anchor pin on Fragment Output. Sprint-by-sprint history lives in `ROADMAP.md`.

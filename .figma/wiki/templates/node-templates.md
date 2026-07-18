@@ -2,7 +2,9 @@
 
 ## Overview
 
-23 node templates on the Figma Templates page. Each template is a **COMPONENT** that composes child instances (Node Header, Labeled Handles, Connectable Param Rows, Float Sliders, Enum Selects, etc.) configured for that node type.
+24 node templates on the Figma Templates page. Each template is a **COMPONENT** that composes child instances (Node Header, Labeled Handles, Connectable Param Rows, Float Sliders, Enum Selects, etc.) configured for that node type.
+
+> **Figma ID drift:** the `Figma ID` column below is stale for the pre-2026-07 rows (e.g. HSV to RGB / Brightness are `123:1832` / `123:1833` here but `123:1822` / `123:1823` in `tokens/sombra.ds.json` + live Figma). The DB (`nodeTemplates`) is the authoritative map. Newly added rows (Hue Shift, `802:1951`) use the real live IDs. Re-audit this table against the DB when convenient.
 
 **Figma Page:** Templates
 **Figma URL:** [Open Templates page](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=44:3164)
@@ -29,6 +31,7 @@
 | FBM | `123:1813` | Noise | 2 (coords, phase) | 1 (value) | 5 (octaves, lacunarity, gain, scale, seed) | 2 (noiseType, fractalMode) | — |
 | Warp UV | `123:1814` | Transform | 2 (coords, phase) | 2 (warped, warpedPhase) | 3 (strength, frequency, seed) | 1 (noiseType) | — |
 | HSV to RGB | `123:1832` | Color | 3 (h, s, v) | 1 (rgb) | 0 | 0 | — |
+| Hue Shift | `802:1951` | Color | 1 (color) | 1 (result) | 1 (shift) | 0 | — |
 | Brightness/Contrast | `123:1833` | Color | 1 (color) | 1 (result) | 2 (brightness, contrast) | 0 | — |
 | Color Ramp | `123:1834` | Color | 1 (value) | 1 (color) | 0 | 1 (interpolation) | ColorRampEditor |
 | Dither | `123:1825` | Effect | 1 (color) | 1 (result) | 2 (pixelSize, dither) | 1 (shape) | — |
@@ -65,4 +68,4 @@ All 23 templates audited:
 - **Port colors:** All handle strokes bound to Port Types collection
 - **Float Sliders:** SombraSlider style — filled track with no visible thumb, indigo range fill
 
-## Parity: ✅ All 23 templates match app source
+## Parity: ✅ All 24 templates match app source

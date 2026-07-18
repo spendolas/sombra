@@ -2166,6 +2166,11 @@
       "category": "Color",
       "nodeFile": "src/nodes/color/hsv-to-rgb.ts"
     },
+    "802:1951": {
+      "name": "Hue Shift",
+      "category": "Color",
+      "nodeFile": "src/nodes/color/hue-shift.ts"
+    },
     "123:1824": {
       "name": "Color Ramp",
       "category": "Color",

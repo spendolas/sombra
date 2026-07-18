@@ -244,6 +244,7 @@ The **GraphToolbar** in the top-left of the canvas provides Save (download) and 
 | Type | Label | Inputs | Outputs | Params |
 |---|---|---|---|---|
 | `hsv_to_rgb` | HSV to RGB | `h` (float), `s` (float), `v` (float) | `rgb` (color, RGBA — alpha always 1.0) | — |
+| `hue_shift` | Hue Shift | `color` (color) | `result` (color, alpha passthrough) | `shift` (connectable, degrees −180..180; grey-axis rotation, luma-stable) |
 | `brightness_contrast` | Brightness/Contrast | `color` (color) | `result` (color) | `brightness` (connectable), `contrast` (connectable), `preserveAlpha` (bool, default false — when true, only rgb channels are affected and alpha passes through unchanged) |
 | `color_ramp` | Color Ramp | `t` (float) | `color` (color, RGBA — stops carry alpha) | `interpolation` (enum: smooth/linear/constant) |
 | `invert` | Invert | `color` (color) | `result` (color) | `preserveAlpha` (bool, default false — when true, only rgb channels are inverted and alpha passes through unchanged) |
