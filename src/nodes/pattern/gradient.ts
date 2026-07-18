@@ -219,7 +219,7 @@ export const gradientNode: NodeDefinition = {
       const asp = drawMode === 'stretch' ? inputs.aspectUV : inputs.aspect
       const dirExpr = drawMode === 'stretch'
         ? `vec2(${inputs.p1u} - ${inputs.p0u}, ${inputs.p1v} - ${inputs.p0v})`
-        : `vec2(${inputs.p1x} - ${inputs.p0x}, -(${inputs.p1y} - ${inputs.p0y}))` // px Y-down → coords Y-up
+        : `vec2(${inputs.p1x} - ${inputs.p0x}, ${inputs.p1y} - ${inputs.p0y})` // px py>0 = up = v_uv +y (thumbnail is v_uv Y-up, not coords Y-down)
       lines.push(`vec2 rg_dir_${id} = ${dirExpr};`)
       lines.push(`float rg_dl_${id} = length(rg_dir_${id});`)
       lines.push(`vec2 rg_uh_${id} = rg_dl_${id} > 1e-4 ? rg_dir_${id} / rg_dl_${id} : vec2(1.0, 0.0);`)
@@ -422,7 +422,7 @@ export const gradientNode: NodeDefinition = {
           ])
         : construct('vec2', [
             binary('-', variable(ctx.inputs.p1x), variable(ctx.inputs.p0x), 'float'),
-            binary('*', literal('float', -1.0), binary('-', variable(ctx.inputs.p1y), variable(ctx.inputs.p0y), 'float'), 'float'),
+            binary('-', variable(ctx.inputs.p1y), variable(ctx.inputs.p0y), 'float'), // px py>0 = up = v_uv +y (thumbnail is v_uv Y-up, not coords Y-down)
           ])
       statements.push(declare(dir, 'vec2', dirExpr))
       statements.push(declare(dl, 'float', call('length', [variable(dir)], 'float')))
