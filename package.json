@@ -28,7 +28,8 @@
     "build:embed": "vite build --config vite.embed.config.ts",
     "verify:embed:artifact": "tsx scripts/verify-artifact-roundtrip.ts",
     "verify:embed:manifest": "tsx scripts/verify-manifest.ts",
-    "verify:embed:bundle": "tsx scripts/verify-embed-bundle.ts"
+    "verify:embed:bundle": "tsx scripts/verify-embed-bundle.ts",
+    "verify:embed:snippets": "tsx scripts/verify-embed-snippets.ts"
   },
   "dependencies": {
     "@dagrejs/dagre": "^2.0.4",
