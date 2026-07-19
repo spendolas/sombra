@@ -20,13 +20,15 @@
     "predev": "npm run check-deps && npm run tokens",
     "prebuild": "npm run check-deps && npm run tokens",
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && npm run build:embed",
     "lint": "eslint .",
     "preview": "vite preview",
     "self-validate": "tsx scripts/self-validate/index.ts",
     "self-validate:fast": "tsx scripts/self-validate/index.ts --no-gpu",
+    "build:embed": "vite build --config vite.embed.config.ts",
     "verify:embed:artifact": "tsx scripts/verify-artifact-roundtrip.ts",
-    "verify:embed:manifest": "tsx scripts/verify-manifest.ts"
+    "verify:embed:manifest": "tsx scripts/verify-manifest.ts",
+    "verify:embed:bundle": "tsx scripts/verify-embed-bundle.ts"
   },
   "dependencies": {
     "@dagrejs/dagre": "^2.0.4",
