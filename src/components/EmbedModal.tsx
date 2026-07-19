@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useGraphStore } from '@/stores/graphStore'
 import { encodeCompactHash } from '@/utils/sombra-file'
 import { publishScene, type PublishResult } from '@/embed/publish'
@@ -47,8 +48,10 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
     void navigator.clipboard.writeText(text).then(() => { setCopied(which); setTimeout(() => setCopied(null), 1500) })
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+  // Portal to <body> so the overlay escapes the React Flow viewport's transformed
+  // stacking context — otherwise z-index can't lift it above the preview canvas.
+  return createPortal(
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60" onClick={onClose}>
       <div className="w-[720px] max-w-[92vw] max-h-[88vh] overflow-auto rounded-lg bg-surface-alt p-5 text-fg" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-fg font-medium">Embed shader</h2>
@@ -97,6 +100,7 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
