@@ -91,8 +91,28 @@ function base64UrlToBytes(s: string): Uint8Array {
   return bytes
 }
 
+// Maps do NOT survive JSON.stringify (they serialize to `{}`). The WGSL
+// uniformLayout.offsets (Map<string,number>) is the one Map in a RenderPlan,
+// and the WebGPU renderer calls `.get()` on it — so the codec must preserve
+// Maps or WebGPU embeds throw at first uniform upload. Tag them generically so
+// any Map added to the plan later is also round-tripped losslessly.
+function mapReplacer(_key: string, value: unknown): unknown {
+  if (value instanceof Map) return { __map: [...value.entries()] }
+  return value
+}
+
+function mapReviver(_key: string, value: unknown): unknown {
+  if (
+    value && typeof value === 'object' &&
+    Array.isArray((value as { __map?: unknown }).__map)
+  ) {
+    return new Map((value as { __map: [unknown, unknown][] }).__map)
+  }
+  return value
+}
+
 export function encodeArtifact(a: SceneArtifact): string {
-  const json = JSON.stringify(a)
+  const json = JSON.stringify(a, mapReplacer)
   const deflated = pako.deflate(json)
   return bytesToBase64Url(deflated)
 }
@@ -100,5 +120,5 @@ export function encodeArtifact(a: SceneArtifact): string {
 export function decodeArtifact(s: string): SceneArtifact {
   const bytes = base64UrlToBytes(s)
   const json = pako.inflate(bytes, { to: 'string' })
-  return JSON.parse(json) as SceneArtifact
+  return JSON.parse(json, mapReviver) as SceneArtifact
 }

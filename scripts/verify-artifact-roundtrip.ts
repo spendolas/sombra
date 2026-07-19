@@ -34,6 +34,17 @@ const artifact: SceneArtifact = {
     qualityTier: 'adaptive',
     fragmentShader: 'unused-top-level',
     userUniforms: [{ name: 'u_a_scale', glslType: 'float', value: 0.5, nodeId: 'a', paramId: 'scale' }],
+    // WGSL pass carries a Map (uniformLayout.offsets) — the WebGPU renderer calls
+    // .get() on it, so the codec MUST preserve it across JSON. Regression guard.
+    wgsl: {
+      passes: [{
+        shaderCode: 'struct Uniforms { u_a_scale: f32 }; @fragment fn fs() {}',
+        uniformLayout: { totalSize: 16, offsets: new Map([['u_a_scale', 0]]), struct: 'struct Uniforms {}' },
+        textureBindings: [],
+        inputTextures: [],
+        isTimeLive: false,
+      }],
+    },
   } as SceneArtifact['plan'],
   manifest: [{
     key: 'scale', uniform: 'u_a_scale', label: 'Scale',
@@ -46,6 +57,12 @@ const artifact: SceneArtifact = {
 const decoded = decodeArtifact(encodeArtifact(artifact))
 check('round-trips deep-equal', JSON.stringify(decoded) === JSON.stringify(artifact))
 check('decoded artifact has no vertexShader in passes', !('vertexShader' in decoded.plan.passes[0]))
+
+// Map preservation — the bug the browser smoke caught: offsets must come back as
+// a real Map (WebGPU renderer calls .get() on it), not a plain {} object.
+const offsets = decoded.plan.wgsl?.passes[0].uniformLayout.offsets
+check('wgsl uniformLayout.offsets survives as a Map', offsets instanceof Map)
+check('wgsl offsets Map keeps its entries', offsets instanceof Map && offsets.get('u_a_scale') === 0)
 
 console.log('='.repeat(60))
 console.log(`  SUMMARY: ${passed} passed, ${failed} failed`)
