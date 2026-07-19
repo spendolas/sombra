@@ -25,7 +25,8 @@
     "preview": "vite preview",
     "self-validate": "tsx scripts/self-validate/index.ts",
     "self-validate:fast": "tsx scripts/self-validate/index.ts --no-gpu",
-    "verify:embed:artifact": "tsx scripts/verify-artifact-roundtrip.ts"
+    "verify:embed:artifact": "tsx scripts/verify-artifact-roundtrip.ts",
+    "verify:embed:manifest": "tsx scripts/verify-manifest.ts"
   },
   "dependencies": {
     "@dagrejs/dagre": "^2.0.4",
