@@ -17,15 +17,53 @@ function knobType(paramType: NodeParameter['type']): KnobDescriptor['type'] {
 }
 
 /**
+ * Resolve a stable, unique display name per node that owns a knob. Prefers the
+ * node's custom label, then the node type's friendly label, then the raw type.
+ * Duplicates are disambiguated with " 2", " 3" so two Noise nodes read as
+ * "Noise" and "Noise 2" — this is what makes the flat knob list legible.
+ */
+function buildNodeNames(
+  nodeIds: string[],
+  nodes: Node<NodeData>[],
+): Map<string, string> {
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  const usedBase = new Map<string, number>()
+  const names = new Map<string, string>()
+
+  for (const id of nodeIds) {
+    const node = byId.get(id)
+    const type = node?.data.type
+    const def = type ? nodeRegistry.get(type) : undefined
+    const custom = typeof node?.data.label === 'string' ? node.data.label.trim() : ''
+    const base = custom || def?.label || type || 'node'
+    const n = usedBase.get(base) ?? 0
+    usedBase.set(base, n + 1)
+    names.set(id, n > 0 ? `${base} ${n + 1}` : base)
+  }
+  return names
+}
+
+/**
  * Build the public knob list from the compiler's uniform specs joined with each
- * param's static NodeDefinition metadata. Keys are slugified labels, deduped
- * with -2/-3 suffixes. Call after initializeNodeLibrary().
+ * param's static NodeDefinition metadata. Keys are node-scoped (`<node>-<param>`,
+ * e.g. "noise-scale", "noise-2-scale") so the host can tell which effect each
+ * knob drives — a flat "scale-2" list is unreadable in graphs that reuse nodes.
+ * Call after initializeNodeLibrary().
  */
 export function buildManifest(
   uniforms: UniformSpec[],
   nodes: Node<NodeData>[],
 ): KnobDescriptor[] {
   const nodeType = new Map(nodes.map((n) => [n.id, n.data.type]))
+
+  // Only nodes that actually own a knob need a display name, in first-seen order.
+  const ownerIds: string[] = []
+  const seenOwner = new Set<string>()
+  for (const u of uniforms) {
+    if (!seenOwner.has(u.nodeId)) { seenOwner.add(u.nodeId); ownerIds.push(u.nodeId) }
+  }
+  const nodeNames = buildNodeNames(ownerIds, nodes)
+
   const usedKeys = new Map<string, number>()
   const out: KnobDescriptor[] = []
 
@@ -35,7 +73,12 @@ export function buildManifest(
     const param = def?.params?.find((p) => p.id === u.paramId)
     if (!param) continue // no metadata → skip (defensive)
 
-    let key = slugify(param.label) || u.paramId
+    const nodeName = nodeNames.get(u.nodeId) ?? 'node'
+    const nodeSlug = slugify(nodeName) || 'node'
+    const paramSlug = slugify(param.label) || u.paramId
+    // Node display names are already unique, so `<node>-<param>` is unique too;
+    // the counter is a belt-and-braces guard (e.g. slug collisions).
+    let key = `${nodeSlug}-${paramSlug}`
     const n = usedKeys.get(key) ?? 0
     usedKeys.set(key, n + 1)
     if (n > 0) key = `${key}-${n + 1}`
@@ -43,6 +86,7 @@ export function buildManifest(
     out.push({
       key,
       uniform: u.name,
+      node: nodeName,
       label: param.label,
       type: knobType(param.type),
       glslType: u.glslType,

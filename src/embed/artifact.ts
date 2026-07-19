@@ -5,9 +5,10 @@ import { GLSL_VERTEX_SHADER } from './vertex'
 
 /** A knob exposed to the host page. One per unwired updateMode:'uniform' param. */
 export interface KnobDescriptor {
-  key: string                              // friendly, deduped (e.g. "scale", "scale-2")
+  key: string                              // node-scoped, deduped (e.g. "noise-scale", "noise-2-scale")
   uniform: string                          // wire name, e.g. "u_abc123_scale"
-  label: string
+  node: string                             // owning node's display name (e.g. "Noise", "Noise 2")
+  label: string                            // the param's own label (e.g. "Scale")
   type: 'float' | 'vec2' | 'vec3' | 'color'
   glslType: 'float' | 'vec2' | 'vec3' | 'vec4'
   min?: number

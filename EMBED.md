@@ -95,14 +95,24 @@ interface SceneArtifact {
 }
 
 interface KnobDescriptor {
-  key: string                    // friendly, deduped slug: "scale", "scale-2"
+  key: string                    // node-scoped, deduped: "noise-scale", "noise-2-scale"
   uniform: string                // wire name: "u_<nodeId>_<param>"
-  label: string
+  node: string                   // owning node's display name: "Noise", "Noise 2"
+  label: string                  // the param's own label: "Scale"
   type: 'float' | 'vec2' | 'vec3' | 'color'
   glslType: 'float' | 'vec2' | 'vec3' | 'vec4'
   min?: number; max?: number; step?: number
   default: number | number[]
 }
+```
+
+Keys are **node-scoped** — `<node>-<param>` (e.g. `noise-scale`, `noise-2-scale`,
+`warp-offset-x`) — so a knob is traceable to the effect it drives even when many
+nodes expose same-named params. The node name is the node's custom label if set,
+else its type label ("Noise"), disambiguated with " 2"/" 3". The Embed modal's
+Developer tab groups the knob table under these node names.
+
+```ts
 
 interface ImageAsset {
   sampler: string                // "u_<sanitizedNodeId>_image"

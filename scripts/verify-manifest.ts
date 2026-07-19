@@ -38,6 +38,9 @@ check('one descriptor per uniform', manifest.length === 2)
 check('first key is slugified label', manifest[0].key.length > 0 && manifest[0].key === manifest[0].key.toLowerCase())
 check('duplicate label is deduped', manifest[0].key !== manifest[1].key)
 check('descriptor carries label + uniform wire name', manifest[0].label === testLabel && manifest[0].uniform === `u_n1_${testParamId}`)
+check('descriptor carries owning node display name', manifest[0].node.length > 0)
+check('duplicate nodes get distinct display names', manifest[0].node !== manifest[1].node)
+check('key is node-scoped (node prefix + param)', manifest[0].key.includes('-') && manifest[0].key.length > testLabel.length)
 check('unknown node is skipped', buildManifest(
   [{ name: 'u_x_y', glslType: 'float', value: 0, nodeId: 'ghost', paramId: 'y' }],
   nodes,

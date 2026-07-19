@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useGraphStore } from '@/stores/graphStore'
 import { encodeCompactHash } from '@/utils/sombra-file'
@@ -41,6 +41,18 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
 
   const sizeKb = useMemo(() => result ? (result.sizeBytes / 1024).toFixed(1) : '0', [result])
   const heavy = !!result && result.sizeBytes > 200 * 1024
+
+  // Group knobs by owning node so the list is readable even when many nodes
+  // expose same-named params (scale, seed, offset…).
+  const grouped = useMemo(() => {
+    const m = new Map<string, PublishResult['manifest']>()
+    for (const k of result?.manifest ?? []) {
+      const arr = m.get(k.node) ?? []
+      arr.push(k)
+      m.set(k.node, arr)
+    }
+    return [...m.entries()]
+  }, [result])
 
   if (!open) return null
   const snippet = result ? (tab === 'copy' ? result.snippets.copyPaste : tab === 'dev' ? result.snippets.developer : result.snippets.iframe) : ''
@@ -85,15 +97,21 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
           <div className="mt-4">
             <div className="text-sm text-fg-dim mb-1">Knobs ({result.manifest.length})</div>
             <table className="w-full text-xs text-fg-dim">
-              <thead><tr className="text-fg-subtle text-left"><th>key</th><th>type</th><th>range</th><th>example</th></tr></thead>
+              <thead><tr className="text-fg-subtle text-left"><th>param</th><th>key</th><th>type</th><th>range</th><th>example</th></tr></thead>
               <tbody>
-                {result.manifest.map((k) => (
-                  <tr key={k.key}>
-                    <td className="font-mono">{k.key}</td>
-                    <td>{k.type}</td>
-                    <td>{k.min ?? '—'} … {k.max ?? '—'}</td>
-                    <td className="font-mono">shader.set('{k.key}', {k.type === 'color' ? '[1,0,0]' : (k.max ?? 1)})</td>
-                  </tr>
+                {grouped.map(([node, knobs]) => (
+                  <Fragment key={node}>
+                    <tr><td colSpan={5} className="pt-3 pb-1 text-fg font-medium">{node}</td></tr>
+                    {knobs.map((k) => (
+                      <tr key={k.key}>
+                        <td className="pl-2">{k.label}</td>
+                        <td className="font-mono">{k.key}</td>
+                        <td>{k.type}</td>
+                        <td>{k.min ?? '—'} … {k.max ?? '—'}</td>
+                        <td className="font-mono">shader.set('{k.key}', {k.type === 'color' ? '[1,0,0]' : (k.max ?? 1)})</td>
+                      </tr>
+                    ))}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

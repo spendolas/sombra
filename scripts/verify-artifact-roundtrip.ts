@@ -47,7 +47,7 @@ const artifact: SceneArtifact = {
     },
   } as SceneArtifact['plan'],
   manifest: [{
-    key: 'scale', uniform: 'u_a_scale', label: 'Scale',
+    key: 'noise-scale', uniform: 'u_a_scale', node: 'Noise', label: 'Scale',
     type: 'float', glslType: 'float', min: 0, max: 1, step: 0.01, default: 0.5,
   }],
   images: [{ sampler: 'u_b_image', dataUrl: 'data:image/png;base64,AAAA' }],
