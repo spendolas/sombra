@@ -81,7 +81,7 @@ export const warpNode: NodeDefinition = {
       ctx.uniforms.add('u_ref_size')
       ctx.uniforms.add('u_anchor')
       lines.push(`vec2 ${noiseCoords} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * u_anchor) / (u_dpr * u_ref_size) + u_anchor;`)
-      lines.push(`${noiseCoords} = (${noiseCoords} - 0.5) / vec2(${inputs.srt_scale}) - vec2(${inputs.srt_translateX}, -(${inputs.srt_translateY})) / (u_dpr * u_ref_size) + 0.5;`)
+      lines.push(`${noiseCoords} = (${noiseCoords} - u_anchor) / vec2(${inputs.srt_scale}) - vec2(${inputs.srt_translateX}, -(${inputs.srt_translateY})) / (u_dpr * u_ref_size) + u_anchor;`)
     } else {
       // Single-pass: coords is already auto_uv
       lines.push(`vec2 ${noiseCoords} = ${inputs.coords};`)
@@ -159,7 +159,7 @@ export const warpNode: NodeDefinition = {
       standardUniforms.add('u_anchor')
       stmts.push(
         raw(`vec2 ${noiseCoords} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * u_anchor) / (u_dpr * u_ref_size) + u_anchor;`),
-        raw(`${noiseCoords} = (${noiseCoords} - 0.5) / vec2(${ctx.inputs.srt_scale}) - vec2(${ctx.inputs.srt_translateX}, -(${ctx.inputs.srt_translateY})) / (u_dpr * u_ref_size) + 0.5;`),
+        raw(`${noiseCoords} = (${noiseCoords} - u_anchor) / vec2(${ctx.inputs.srt_scale}) - vec2(${ctx.inputs.srt_translateX}, -(${ctx.inputs.srt_translateY})) / (u_dpr * u_ref_size) + u_anchor;`),
       )
     } else {
       // Single-pass: coords is already auto_uv

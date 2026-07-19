@@ -108,7 +108,7 @@ export const pixelateNode: NodeDefinition = {
       declare(ctx.outputs.uv, 'vec2',
         binary('+',
           binary('/',
-            binary('-', variable(`pxl_px_${id}`), binary('*', variable('u_resolution'), literal('float', 0.5), 'vec2'), 'vec2'),
+            binary('-', variable(`pxl_px_${id}`), binary('*', variable('u_resolution'), variable('u_anchor'), 'vec2'), 'vec2'),
             binary('*', variable('u_dpr'), variable('u_ref_size'), 'float'),
             'vec2',
           ),

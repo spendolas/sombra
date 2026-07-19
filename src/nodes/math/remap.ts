@@ -20,30 +20,6 @@ export const remapNode: NodeDefinition = {
       type: 'float',
       default: 0.5,
     },
-    {
-      id: 'inMin',
-      label: 'In Min',
-      type: 'float',
-      default: 0.0,
-    },
-    {
-      id: 'inMax',
-      label: 'In Max',
-      type: 'float',
-      default: 1.0,
-    },
-    {
-      id: 'outMin',
-      label: 'Out Min',
-      type: 'float',
-      default: 0.0,
-    },
-    {
-      id: 'outMax',
-      label: 'Out Max',
-      type: 'float',
-      default: 1.0,
-    },
   ],
 
   outputs: [
@@ -54,7 +30,15 @@ export const remapNode: NodeDefinition = {
     },
   ],
 
-  params: [],
+  // Range values are connectable uniform params (handle + inline slider), like
+  // clamp/power — tweakable without wiring a Constant, and no recompile on drag.
+  // Matches the Figma Remap template (4 connectable params). Read via ctx.inputs.
+  params: [
+    { id: 'inMin', label: 'In Min', type: 'float', default: 0.0, min: -2, max: 2, step: 0.01, connectable: true, updateMode: 'uniform' },
+    { id: 'inMax', label: 'In Max', type: 'float', default: 1.0, min: -2, max: 2, step: 0.01, connectable: true, updateMode: 'uniform' },
+    { id: 'outMin', label: 'Out Min', type: 'float', default: 0.0, min: -2, max: 2, step: 0.01, connectable: true, updateMode: 'uniform' },
+    { id: 'outMax', label: 'Out Max', type: 'float', default: 1.0, min: -2, max: 2, step: 0.01, connectable: true, updateMode: 'uniform' },
+  ],
 
   glsl: (ctx) => {
     const { inputs, outputs } = ctx

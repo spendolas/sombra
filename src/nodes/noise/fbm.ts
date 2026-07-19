@@ -39,9 +39,9 @@ export const fbmNode: NodeDefinition = {
       ],
       updateMode: 'recompile',
     },
-    // Phase 2 candidate: currently baked as loop bound literal. To promote to uniform,
-    // rewrite FBM loop with compile-time MAX_OCTAVES and uniform-driven early break.
-    { id: 'octaves', label: 'Octaves', type: 'float', default: 4, min: 1, max: 8, step: 1, connectable: true, updateMode: 'recompile', warnAbove: 6 },
+    // Loop has a compile-time bound (8) + runtime early break `if (float(i) >= oct)`,
+    // so octaves rides as a uniform (`oct` arg) — changing it uploads, no recompile.
+    { id: 'octaves', label: 'Octaves', type: 'float', default: 4, min: 1, max: 8, step: 1, connectable: true, updateMode: 'uniform', warnAbove: 6 },
     { id: 'lacunarity', label: 'Lacunarity', type: 'float', default: 2.0, min: 1.0, max: 4.0, step: 0.1, connectable: true, updateMode: 'uniform' },
     { id: 'gain', label: 'Gain', type: 'float', default: 0.5, min: 0.1, max: 0.9, step: 0.05, connectable: true, updateMode: 'uniform' },
     { id: 'seed', label: 'Seed', type: 'float', default: 12345, min: 0, max: 99999, step: 1, connectable: true, updateMode: 'uniform' },

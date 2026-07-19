@@ -253,10 +253,9 @@ export const gradientNode: NodeDefinition = {
       // app compensates p0/p1 (graphStore.setOutputAnchor) so it holds position
       // (survives) — the node thumbnail stays stable regardless because it renders
       // the isPreview canonical branch above, not p0/p1. Y flipped (px Y-down).
+      // Pinned body divides by u_ref_size only; u_anchor/u_resolution/u_dpr are
+      // added by auto_uv (unwired coords) or the SRT preamble when actually used.
       ctx.uniforms.add('u_ref_size')
-      ctx.uniforms.add('u_anchor')
-      ctx.uniforms.add('u_resolution')
-      ctx.uniforms.add('u_dpr')
       lines.push(`vec2 grad_center_${id} = vec2(0.5);`)
 
       const pt = (varName: string, pxExpr: string, pyExpr: string) => {
@@ -482,10 +481,9 @@ export const gradientNode: NodeDefinition = {
       // the gradient PIN to the output anchor on resize (like the rest of the
       // output) instead of staying centred. Y flipped (px Y-down, coords Y-up);
       // px→units divides by u_ref_size only.
+      // Pinned body divides by u_ref_size only; u_anchor/u_resolution/u_dpr are
+      // added by auto_uv (unwired coords) or the SRT preamble when actually used.
       standardUniforms.add('u_ref_size')
-      standardUniforms.add('u_anchor')
-      standardUniforms.add('u_resolution')
-      standardUniforms.add('u_dpr')
 
       // grad_center = vec2(0.5) (see GLSL comment): fixed coords → pins to the
       // Fragment Output anchor on resize via anchor-relative auto_uv; the app

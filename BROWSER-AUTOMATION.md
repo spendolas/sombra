@@ -226,7 +226,7 @@ The **GraphToolbar** in the top-left of the canvas provides Save (download) and 
 | `arithmetic` | Arithmetic | `in_0`..`in_N` (float, dynamic) | `result` (float) | `operation` (enum: add/subtract/multiply/divide) |
 | `trig` | Trig | `value` (float) | `result` (float) | `func` (enum: sin/cos/tan/abs), `frequency` (connectable), `amplitude` (connectable) |
 | `mix` | Mix | `a` (color), `b` (color) | `result` (color) | `factor` (connectable) |
-| `remap` | Remap | `value` (float), `inMin` (float), `inMax` (float), `outMin` (float), `outMax` (float) | `result` (float) | — |
+| `remap` | Remap | `value` (float) | `result` (float) | `inMin` (connectable), `inMax` (connectable), `outMin` (connectable), `outMax` (connectable) — all uniform, inline sliders |
 | `clamp` | Clamp | `value` (float) | `result` (float) | `min` (connectable), `max` (connectable) |
 | `power` | Power | `base` (float) | `result` (float) | `exponent` (connectable) |
 | `round` | Round | `value` (float) | `result` (float) | `mode` (enum: floor/ceil/fract/round/sign) |

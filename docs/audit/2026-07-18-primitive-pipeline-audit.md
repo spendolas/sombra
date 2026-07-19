@@ -14,6 +14,16 @@ bounds, Y-space), (4) uniform packing.
 
 ## Totals: 1 P1 · 4 P2 · 13 P3
 
+> **Resolved 2026-07-19:** P1 (pixelate IR anchor) fixed. P2 random `decimals` +
+> fbm `octaves` → `uniform`; remap range values → connectable uniform params
+> (also matches the Figma template); dither alpha handled separately (no invented
+> alpha — see the alpha-rule commits). P3 anchor-family fixed: warp texture-mode
+> transform recentred on `u_anchor`; gradient pinned-branch dead uniforms trimmed.
+> Remaining open P3s: cosmetics (grayscale double-swizzle, image vec4 rebuild,
+> arithmetic dead fallback), remap divide-by-zero guard (skipped — naïve `max()`
+> would break inverted ranges), warp `warped`-space semantics, softness-range
+> consistency across pattern nodes.
+
 37 of 41 files fully clean. No node is broken today; the P1 is latent
 (non-center anchor only). Recurring themes: (A) a small anchor/parity bug
 family — same class the gradient work fixed; (B) a few live-edit params stuck

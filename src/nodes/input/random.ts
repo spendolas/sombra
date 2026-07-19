@@ -33,7 +33,7 @@ export const randomNode: NodeDefinition = {
   params: [
     { id: 'min', label: 'Min', type: 'float', default: 0, min: -99999, max: 99999, step: 1, connectable: true, updateMode: 'uniform' },
     { id: 'max', label: 'Max', type: 'float', default: 1, min: -99999, max: 99999, step: 1, connectable: true, updateMode: 'uniform' },
-    { id: 'decimals', label: 'Decimals', type: 'float', default: 7, min: 0, max: 7, step: 1, updateMode: 'recompile' },
+    { id: 'decimals', label: 'Decimals', type: 'float', default: 7, min: 0, max: 7, step: 1, updateMode: 'uniform' },
     { id: 'seed', label: 'Seed', type: 'float', default: 0, hidden: true, updateMode: 'uniform' },
   ],
 
@@ -41,27 +41,24 @@ export const randomNode: NodeDefinition = {
 
   glsl: (ctx) => {
     const { inputs, outputs } = ctx
-    const decimals = Number(ctx.params.decimals ?? 7)
     const nodeHash = hashNodeId(ctx.nodeId).toFixed(6)
-    const decimalsStr = Number.isInteger(decimals) ? `${decimals}.0` : `${decimals}`
-    return `float ${outputs.value}_step = pow(10.0, -${decimalsStr});
+    // decimals is a uniform (updateMode:'uniform') — computed at runtime, no recompile on change.
+    return `float ${outputs.value}_step = pow(10.0, -1.0 * ${inputs.decimals});
 float ${outputs.value}_raw = ${inputs.min} + fract(${inputs.seed} + ${nodeHash}) * (${inputs.max} - ${inputs.min});
 float ${outputs.value} = floor(${outputs.value}_raw / ${outputs.value}_step + 0.5) * ${outputs.value}_step;`
   },
 
   ir: (ctx) => {
-    const decimals = Number(ctx.params.decimals ?? 7)
     const nodeHash = hashNodeId(ctx.nodeId).toFixed(6)
-    const decimalsStr = Number.isInteger(decimals) ? `${decimals}.0` : `${decimals}`
     const out = ctx.outputs.value
     const stepVar = `${out}_step`
     const rawVar = `${out}_raw`
 
     return {
       statements: [
-        // float step = pow(10.0, -decimals);
+        // float step = pow(10.0, -decimals);  (decimals is a runtime uniform)
         declare(stepVar, 'float',
-          call('pow', [literal('float', 10.0), literal('float', -Number(decimalsStr))], 'float'),
+          call('pow', [literal('float', 10.0), binary('*', literal('float', -1.0), variable(ctx.inputs.decimals), 'float')], 'float'),
         ),
         // float raw = min + fract(seed + nodeHash) * (max - min);
         declare(rawVar, 'float',
