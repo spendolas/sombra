@@ -99,7 +99,7 @@ export type CompilationResult = RenderPlan
 /**
  * Standard vertex shader (passthrough with UV)
  */
-const VERTEX_SHADER = `#version 300 es
+export const VERTEX_SHADER = `#version 300 es
 precision highp float;
 
 in vec2 a_position;
