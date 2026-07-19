@@ -97,16 +97,6 @@ export const ditherNode: NodeDefinition = {
       updateMode: 'recompile',
     },
     {
-      id: 'premultiply',
-      label: 'Premultiply Alpha',
-      type: 'bool',
-      // false (default): mask only darkens RGB; alpha passes through untouched
-      //   → no invented transparency (masked areas are opaque black).
-      // true: mask multiplies alpha too → transparent cutout (premultiplied).
-      default: false,
-      updateMode: 'recompile',
-    },
-    {
       id: 'shape',
       label: 'Shape',
       type: 'enum',
@@ -206,15 +196,10 @@ export const ditherNode: NodeDefinition = {
       lines.push(`vec4 ${colVar} = ${inputs.color};`)
     }
 
-    // Output: masked colour on a black background. Premultiply → mask also
-    // scales alpha (transparent cutout); otherwise alpha passes through so the
-    // node never invents transparency (masked areas are opaque black).
-    const premultiply = params.premultiply === true
-    if (premultiply) {
-      lines.push(`vec4 ${outputs.result} = ${colVar} * ${mask};`)
-    } else {
-      lines.push(`vec4 ${outputs.result} = vec4(${colVar}.rgb * ${mask}, ${colVar}.a);`)
-    }
+    // Output: mask darkens RGB only; alpha always passes through untouched.
+    // Rule: mask/effect primitives never feed a composite into the alpha channel
+    // (no invented alpha) — masked-out cells are opaque black, not transparent.
+    lines.push(`vec4 ${outputs.result} = vec4(${colVar}.rgb * ${mask}, ${colVar}.a);`)
 
     return lines.join('\n  ')
   },
@@ -409,26 +394,17 @@ export const ditherNode: NodeDefinition = {
       stmts.push(declare(colVar, 'vec4', variable(ctx.inputs.color)))
     }
 
-    // Output: masked colour on a black background. Premultiply → mask also
-    // scales alpha (transparent cutout); otherwise alpha passes through so the
-    // node never invents transparency (masked areas are opaque black). Mirrors GLSL.
-    const premultiply = ctx.params.premultiply === true
-    if (premultiply) {
-      stmts.push(
-        declare(ctx.outputs.result, 'vec4',
-          binary('*', variable(colVar), variable(mask), 'vec4'),
-        ),
-      )
-    } else {
-      stmts.push(
-        declare(ctx.outputs.result, 'vec4',
-          construct('vec4', [
-            binary('*', swizzle(variable(colVar), 'rgb', 'vec3'), variable(mask), 'vec3'),
-            swizzle(variable(colVar), 'a', 'float'),
-          ]),
-        ),
-      )
-    }
+    // Output: mask darkens RGB only; alpha always passes through untouched.
+    // Rule: mask/effect primitives never feed a composite into the alpha channel
+    // (no invented alpha) — masked-out cells are opaque black, not transparent. Mirrors GLSL.
+    stmts.push(
+      declare(ctx.outputs.result, 'vec4',
+        construct('vec4', [
+          binary('*', swizzle(variable(colVar), 'rgb', 'vec3'), variable(mask), 'vec3'),
+          swizzle(variable(colVar), 'a', 'float'),
+        ]),
+      ),
+    )
 
     return {
       statements: stmts,

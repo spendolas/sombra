@@ -449,6 +449,15 @@ addFunction(ctx, fbmKey, `float ${fbmKey}(vec3 p, float oct, ...) {
 | showWhen types | `showWhen: { octaves: 4 }` | `showWhen: { noiseType: 'box' }` (values are strings, matched via `===`) |
 | Dynamic inputs without fallback | only `dynamicInputs` | must also provide static `inputs` array as fallback |
 | Output variable naming | done manually | compiler auto-generates as `node_<sanitizedId>_<portId>` — just use `ctx.outputs.portId` |
+| Inventing alpha (mask/effect primitives) | `result = color * mask` (mask scales alpha too) | `vec4(color.rgb * mask, color.a)` — alpha passes through |
+
+**Alpha rule:** mask/effect primitives (dither, pixelate, and similar — anything
+that computes a mask/composite over an input) must **never feed a computed value
+into the alpha channel**. Alpha always passes through from the input
+(`vec4(<computed rgb>, color.a)`); when sampling an upstream texture, the sampled
+`.a` rides through. Do not offer a "premultiply"/cutout toggle for these — no
+invented alpha. (Per-channel *color* ops like invert/posterize may intentionally
+touch alpha, gated behind `preserveAlpha`; that's a different case.)
 
 ---
 
