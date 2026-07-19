@@ -24,3 +24,6 @@ mount(document.getElementById('box')!, { scene }).then((h) => {
   ;(window as unknown as { __embedHandle: unknown }).__embedHandle = h
   console.log('[embed-dev] mounted; knobs:', h.variables().map((k) => k.key))
 })
+
+document.getElementById('auto')!.dataset.sombraScene = scene
+import('./embed/index').then((m) => m.init())
