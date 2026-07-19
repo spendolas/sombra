@@ -4,6 +4,7 @@ import {
   decodeArtifact, reconstructPlan, collectPlanUniforms,
   type SceneArtifact, type KnobDescriptor,
 } from './artifact'
+import { PerfHarness } from './perf-harness'
 
 export interface MountOptions {
   scene: string                                   // base64url artifact
@@ -107,18 +108,26 @@ export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneH
   renderer.setAnimated(isAnimated)
   renderer.setQualityTier((plan.qualityTier ?? 'adaptive') as QualityTier)
 
-  const play = () => { if (isAnimated) { renderer.setAnimationSpeed(artifact.meta.timeSpeed); renderer.startAnimation() } }
-  const pause = () => renderer.stopAnimation()
-  if (opts.autoplay !== false) play()
-  else renderer.notifyChange()
+  const rawPlay = () => { if (isAnimated) { renderer.setAnimationSpeed(artifact.meta.timeSpeed); renderer.startAnimation() } }
+  const rawPause = () => renderer.stopAnimation()
+
+  let autoplayWanted = opts.autoplay !== false
+  const harness = new PerfHarness(el, {
+    onVisible: () => { if (autoplayWanted) rawPlay() },
+    onHidden: rawPause,
+    onResize: () => renderer.requestRender(),
+  })
+  if (harness.reducedMotion) renderer.notifyChange() // one static frame, no loop
+  else harness.start()
 
   const handle: SceneHandle = {
     set: applyOverride,
     get: (key) => byKey.get(key)?.default,
     variables: () => manifest.slice(),
-    play, pause,
+    play: () => { autoplayWanted = true; rawPlay() },
+    pause: () => { autoplayWanted = false; rawPause() },
     resize: () => renderer.requestRender(),
-    destroy: () => { renderer.stopAnimation(); renderer.dispose(); canvas.remove() },
+    destroy: () => { harness.stop(); renderer.stopAnimation(); renderer.dispose(); canvas.remove() },
     on: (ev, cb) => { (listeners[ev] ??= []).push(cb) },
   }
   opts.onLoad?.(handle)
