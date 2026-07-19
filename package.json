@@ -29,7 +29,9 @@
     "verify:embed:artifact": "tsx scripts/verify-artifact-roundtrip.ts",
     "verify:embed:manifest": "tsx scripts/verify-manifest.ts",
     "verify:embed:bundle": "tsx scripts/verify-embed-bundle.ts",
-    "verify:embed:snippets": "tsx scripts/verify-embed-snippets.ts"
+    "verify:embed:snippets": "tsx scripts/verify-embed-snippets.ts",
+    "verify:embed:smoke": "tsx scripts/verify-embed-smoke.ts",
+    "verify:embed": "npm run verify:embed:artifact && npm run verify:embed:manifest && npm run verify:embed:snippets"
   },
   "dependencies": {
     "@dagrejs/dagre": "^2.0.4",

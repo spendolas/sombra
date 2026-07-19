@@ -31,6 +31,12 @@ npm run drift:collect  # / drift:check — token drift detection
 npx tsx scripts/verify-ir-poc.ts              # GLSL vs IR-generated output parity (--verbose for full output)
 npx tsx scripts/validate-wgsl-multipass.ts    # WGSL GPU compilation tests for all nodes/passes
 npx tsx scripts/schema.ts                     # Zod validation of tokens/sombra.ds.json
+
+# Shader embed (see EMBED.md)
+npm run build:embed          # build the standalone UMD player → dist/embed/sombra-player.<version>.umd.js
+npm run verify:embed         # pure offline checks: artifact roundtrip + manifest + snippets
+npm run verify:embed:bundle  # post-build gate: player pulls in no React/xyflow/compiler/nodes, under size budget
+npm run verify:embed:smoke   # playwright end-to-end smoke (needs dev server + Chromium)
 ```
 
 There are no unit tests. Verification = the scripts above + manual testing via dev server + browser automation through `window.__sombra` (see `BROWSER-AUTOMATION.md`).
@@ -88,6 +94,14 @@ Three change classes, keyed separately, to avoid needless recompiles:
 - `src/viewer.ts` — standalone no-React viewer: decode URL hash → compile → render (used by `viewer.html` / embed URLs).
 
 **Status:** WebGPU migration complete for both main renderer (167/167 WGSL GPU compilation tests) and preview thumbnails (shared `GPUDevice`, 80×80 render texture, async readback with 512 `bytesPerRow` alignment, LRU pipeline cache). WebGL2 remains the fallback for both and must keep working.
+
+### Shader embed (`src/embed/`) — see `EMBED.md`
+
+Publish a compiled shader and drop it on any third-party site. **Two halves with a hard import boundary:**
+
+- **Player half (shipped bundle):** `version.ts`, `vertex.ts`, `artifact.ts` (`SceneArtifact` codec — compiled `RenderPlan` minus vertex shaders + knob manifest + baked images, deflated to base64url), `player.ts` (`mount` → `SceneHandle`, reuses `createShaderRenderer`), `perf-harness.ts` (IO/visibility/reduced-motion/resize gating), `auto-init.ts`, `index.ts` (UMD global `Sombra`). **This half must import ONLY `src/renderer/*`, `src/embed/*`, and `pako` — never React, `@xyflow/react`, `src/compiler/*`, `src/nodes/*`, or `sombra-file.ts`** (type-only imports are fine — they erase). Enforced by `scripts/verify-embed-bundle.ts`.
+- **Editor half (runs in the app, not the bundle):** `manifest.ts` (`buildManifest`), `publish.ts` (`publishScene`/`buildSnippets`), `EmbedModal.tsx` — these MAY import compiler/nodes/xyflow.
+- **Build target:** `npm run build:embed` (via `vite.embed.config.ts`) emits a self-contained version-pinned UMD to `dist/embed/`, chained into `npm run build` so it ships to Pages at `/sombra/embed/`. The player owns a byte-identical copy of the compiler's vertex shader (`vertex.ts`); the round-trip test enforces they stay in sync.
 
 ### Node system (42 nodes)
 

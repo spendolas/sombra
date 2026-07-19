@@ -88,6 +88,12 @@ npm run tokens:pull  # Fetch latest values from Figma REST API → update DB
 npm run tokens:sync  # Pull from Figma + regenerate code (the main workflow)
 npm run tokens:check # CI guard: fail if generated files diverge from DB
 npm run tokens:audit # Compare DB component parts against Figma REST API (requires FIGMA_TOKEN)
+
+# Shader embed (see EMBED.md)
+npm run build:embed         # build the standalone UMD player → dist/embed/sombra-player.<version>.umd.js
+npm run verify:embed        # pure offline checks: artifact roundtrip + manifest + snippets
+npm run verify:embed:bundle # post-build gate: player pulls in no React/xyflow/compiler/nodes, under size budget
+npm run verify:embed:smoke  # playwright end-to-end smoke (needs dev server + Chromium)
 ```
 
 ## Architecture
@@ -133,6 +139,14 @@ Key methods: `createNode()`, `connect()`, `setParams()`, `moveNode()`, `removeNo
 Raw store access: `sombra.stores.graph`, `sombra.stores.compiler`, `sombra.stores.settings`.
 
 See [`BROWSER-AUTOMATION.md`](BROWSER-AUTOMATION.md) for the full API reference with examples.
+
+### Shader Embed (`src/embed/`) — see `EMBED.md`
+
+Publish a compiled shader and embed it on any third-party site. **Two halves with a hard import boundary:**
+
+- **Player half (the shipped bundle):** `version.ts`, `vertex.ts`, `artifact.ts` (`SceneArtifact` codec — compiled `RenderPlan` minus vertex shaders + knob manifest + baked images, deflated to base64url), `player.ts` (`mount` → `SceneHandle`, reuses `createShaderRenderer`), `perf-harness.ts` (IntersectionObserver/visibility/reduced-motion/resize gating), `auto-init.ts`, `index.ts` (UMD global `Sombra`). **This half must import ONLY `src/renderer/*`, `src/embed/*`, and `pako` — never React, `@xyflow/react`, `src/compiler/*`, `src/nodes/*`, or `sombra-file.ts`** (type-only imports are fine — they erase). Enforced by `scripts/verify-embed-bundle.ts`.
+- **Editor half (runs in the app, not the bundle):** `manifest.ts` (`buildManifest`), `publish.ts` (`publishScene`/`buildSnippets`), `EmbedModal.tsx` — these MAY import compiler/nodes/xyflow.
+- **Build target:** `npm run build:embed` (via `vite.embed.config.ts`) emits a self-contained version-pinned UMD to `dist/embed/`, chained into `npm run build` so it ships to GitHub Pages at `/sombra/embed/`. The player owns a byte-identical copy of the compiler's vertex shader (`vertex.ts`); the round-trip test keeps them in sync.
 
 ## Development Workflow
 

@@ -458,6 +458,35 @@ Expanded the DS database to capture ALL visual properties per component, elimina
 
 ---
 
+## Phase 7 — Shader Embed ✅ Complete
+
+Publish a finished shader and embed it on any third-party website via a copy-paste
+snippet + a JS toolkit. Full spec/plan in `docs/superpowers/`; runtime docs in `EMBED.md`.
+
+- **Scene Artifact** (`src/embed/artifact.ts`): the compiled `RenderPlan` (minus the
+  constant vertex shaders) + a knob manifest + baked images, deflated (`pako`) to
+  base64url and carried inline in the snippet. Vertex-omission invariant: the player
+  owns a byte-identical vertex copy (`src/embed/vertex.ts`) re-attached on decode.
+- **Standalone player** (`src/embed/player.ts`, `index.ts`): decodes the artifact,
+  reuses `createShaderRenderer` (WebGPU-first, WebGL2 fallback — both backends carried),
+  and drives the loop. Imports **nothing** from React/xyflow/compiler/nodes — enforced by
+  a build-time bundle gate (`scripts/verify-embed-bundle.ts`). Ships to `dist/embed/` as a
+  version-pinned UMD (`sombra-player.<version>.umd.js`).
+- **Performance harness** (`src/embed/perf-harness.ts`): IntersectionObserver + tab
+  visibility + `prefers-reduced-motion` + ResizeObserver gate the render loop.
+- **Two front doors:** `<div data-sombra-scene>` auto-mount (idempotent `init()` scan) and
+  `Sombra.mount(el, opts) → SceneHandle` exposing every knob (`set`/`get`/`variables`/
+  `play`/`pause`/`resize`/`destroy`/`on`).
+- **Editor UI:** `</>` toolbar button opens `EmbedModal` — live preview + three snippets
+  (copy-paste, developer, iframe) + payload-size badge + knob table.
+- **Verification:** `verify:embed` (artifact roundtrip + manifest + snippets), plus
+  `verify:embed:bundle` (post-build gate) and `verify:embed:smoke` (playwright end-to-end).
+- **Scope:** frozen knobs-only (`kind:'frozen'`, door open for `'live'`). Fast-follows in
+  `EMBED.md`: pointer/`u_mouse`, self-hosted player, per-knob rename, shared context,
+  minification, image WebP downscale.
+
+---
+
 ## Phase 6 — Future (Trigger-Based, Not Scheduled)
 
 These happen when specific conditions are met, not on a timeline:
@@ -474,7 +503,7 @@ These happen when specific conditions are met, not on a timeline:
 
 - Refactor node previews — v1 works but needs polish (rendering quality, layout/sizing, performance tuning, visual integration with node cards)
 - "Copy GLSL" button — exports the compiled fragment shader to clipboard
-- Embed HTML snippet generator
+- ~~Embed HTML snippet generator~~ — ✅ shipped in Phase 7 (Shader Embed; see `EMBED.md`)
 - Viewer page branded landing — show Sombra branding when opened without graph data
 - Subgraphs — group nodes into reusable compound nodes
 - Custom GLSL Node — paste arbitrary GLSL with user-defined ports

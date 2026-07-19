@@ -183,6 +183,35 @@ Append `?backend=webgl2` to the editor URL — the only way to exercise the fall
 
 ---
 
+## Shader Embed Player API (`window.Sombra`)
+
+The standalone embed player (`src/embed/`, built to `dist/embed/sombra-player.<version>.umd.js`) is separate from the editor's `window.__sombra` dev bridge. It exposes a global `Sombra` (UMD) for driving a published shader on any host page. Full docs in `EMBED.md`.
+
+```ts
+window.Sombra = {
+  mount(el: HTMLElement, opts: MountOptions): Promise<SceneHandle>
+  init(): void        // idempotent scan + mount of all [data-sombra-scene]
+  version: string     // EMBED_VERSION
+}
+```
+
+- **`Sombra.mount(el, { scene, variables?, autoplay?, debug?, onLoad?, onError? })`** — decodes a base64url `SceneArtifact`, reuses `createShaderRenderer` (WebGPU→WebGL2), and returns a `SceneHandle`. Never rejects: on failure it logs `[Sombra] …`, calls `onError`, and returns a no-op handle.
+- **`SceneHandle`** — `set(key, value)`, `get(key)`, `variables(): KnobDescriptor[]`, `play()`, `pause()`, `resize()`, `destroy()`, `on('load'|'error'|'contextlost', cb)`. Knobs are addressed by their friendly `key` (slugified param label, deduped).
+- **`data-sombra-*` attributes** — `data-sombra-scene` (required, the artifact), `data-sombra-autoplay` (`"false"` mounts paused), `data-sombra-debug` (`"true"` writes init errors into the element).
+
+### `verify-embed-smoke.ts` (end-to-end automation)
+
+`scripts/verify-embed-smoke.ts` drives the dev harness with `playwright-core`:
+
+```bash
+npm run dev                                # terminal 1 (serves /sombra/embed-dev.html)
+npx tsx scripts/verify-embed-smoke.ts      # terminal 2 (needs a Chromium binary)
+```
+
+It waits for `window.__embedHandle`, samples the first canvas for non-black pixels, and calls `handle.set()` on the first knob. Override the URL with `EMBED_DEV_URL`. If no Chromium binary is present, run the two `page.evaluate` bodies manually in the console at `http://localhost:5173/sombra/embed-dev.html`.
+
+---
+
 ## `.sombra` File Format
 
 Sombra graphs are saved as `.sombra` files — JSON with a version envelope:
