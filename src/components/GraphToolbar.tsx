@@ -14,10 +14,12 @@ import {
   encodeCompactHash,
 } from '@/utils/sombra-file'
 import { ds } from '@/generated/ds'
+import { EmbedModal } from '@/components/EmbedModal'
 
 export function GraphToolbar() {
   const { fitView } = useReactFlow()
   const [copied, setCopied] = useState(false)
+  const [embedOpen, setEmbedOpen] = useState(false)
 
   const handleSave = useCallback(() => {
     const { nodes, edges } = useGraphStore.getState()
@@ -51,26 +53,34 @@ export function GraphToolbar() {
   }, [])
 
   return (
-    <Panel
-      position="top-left"
-      className={ds.graphToolbar.root}
-    >
-      <IconButton
-        icon="download"
-        onClick={handleSave}
-        title="Save graph (.sombra)"
-      />
-      <IconButton
-        icon="folderOpen"
-        onClick={handleOpen}
-        title="Open graph (.sombra)"
-      />
-      <IconButton
-        icon={copied ? 'check' : 'share'}
-        iconClassName={copied ? 'text-green-400' : undefined}
-        onClick={handleShare}
-        title="Copy shareable viewer URL"
-      />
-    </Panel>
+    <>
+      <Panel
+        position="top-left"
+        className={ds.graphToolbar.root}
+      >
+        <IconButton
+          icon="download"
+          onClick={handleSave}
+          title="Save graph (.sombra)"
+        />
+        <IconButton
+          icon="folderOpen"
+          onClick={handleOpen}
+          title="Open graph (.sombra)"
+        />
+        <IconButton
+          icon={copied ? 'check' : 'share'}
+          iconClassName={copied ? 'text-green-400' : undefined}
+          onClick={handleShare}
+          title="Copy shareable viewer URL"
+        />
+        <IconButton
+          icon="code"
+          onClick={() => setEmbedOpen(true)}
+          title="Embed on a website"
+        />
+      </Panel>
+      <EmbedModal open={embedOpen} onClose={() => setEmbedOpen(false)} />
+    </>
   )
 }

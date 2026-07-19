@@ -12,7 +12,7 @@ export class PerfHarness {
   readonly reducedMotion: boolean
   private io?: IntersectionObserver
   private ro?: ResizeObserver
-  private onVis = () => { document.hidden ? this.hooks.onHidden() : this.maybeVisible() }
+  private onVis = () => { if (document.hidden) this.hooks.onHidden(); else this.maybeVisible() }
   private inView = false
 
   constructor(private el: HTMLElement, private hooks: HarnessHooks) {
