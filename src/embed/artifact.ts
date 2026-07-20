@@ -10,7 +10,7 @@ export interface KnobDescriptor {
   nodeId: string                           // stable node id — the deliberate addressing handle
   node: string                             // owning node's display name (e.g. "Noise", "Noise 2")
   nodeType: string                         // machine node type (e.g. "noise") — for filtering
-  param: string                            // the param's own id (e.g. "scale") — clean within a node
+  param: string                            // friendly param slug, unique within its node (e.g. "scale")
   label: string                            // the param's own label (e.g. "Scale")
   type: 'float' | 'vec2' | 'vec3' | 'color'
   glslType: 'float' | 'vec2' | 'vec3' | 'vec4'

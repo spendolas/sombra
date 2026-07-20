@@ -57,6 +57,33 @@ check('repeated uniform name is deduped to one knob', buildManifest(
   nodes,
 ).length === 1)
 
+// Intra-node param-slug collision: two uniform params on ONE node whose labels
+// slugify identically must still get distinct node-directed addresses.
+const localSlug = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+let collideType = '', cp1 = '', cp2 = ''
+for (const def of nodeRegistry.getAll()) {
+  const ups = (def.params ?? []).filter((p) => p.updateMode === 'uniform' && !p.hidden)
+  const bySlug = new Map<string, string>()
+  for (const p of ups) {
+    const s = localSlug(p.label)
+    if (bySlug.has(s)) { collideType = def.type; cp1 = bySlug.get(s)!; cp2 = p.id; break }
+    bySlug.set(s, p.id)
+  }
+  if (collideType) break
+}
+if (collideType) {
+  const cn = [{ id: 'c1', data: { type: collideType, params: {} } }] as Node<NodeData>[]
+  const cu: UniformSpec[] = [
+    { name: `u_c1_${cp1}`, glslType: 'float', value: 1, nodeId: 'c1', paramId: cp1 },
+    { name: `u_c1_${cp2}`, glslType: 'float', value: 2, nodeId: 'c1', paramId: cp2 },
+  ]
+  const cm = buildManifest(cu, cn)
+  check('same-label params on one node get distinct node-directed addresses',
+    cm.length === 2 && cm[0].param !== cm[1].param && new Set(cm.map((k) => `${k.nodeId}|${k.param}`)).size === 2)
+} else {
+  console.log(`  (no intra-node label collision in registry to test — skipped)`)
+}
+
 console.log('='.repeat(60))
 console.log(`  SUMMARY: ${passed} passed, ${failed} failed`)
 console.log('='.repeat(60))

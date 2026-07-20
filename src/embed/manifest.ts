@@ -65,6 +65,7 @@ export function buildManifest(
   const nodeNames = buildNodeNames(ownerIds, nodes)
 
   const usedKeys = new Map<string, number>()
+  const usedParams = new Map<string, Map<string, number>>()  // nodeId → paramSlug → count
   const seenUniforms = new Set<string>()
   const out: KnobDescriptor[] = []
 
@@ -83,9 +84,20 @@ export function buildManifest(
     const nodeName = nodeNames.get(u.nodeId) ?? 'node'
     const nodeSlug = slugify(nodeName) || 'node'
     const paramSlug = slugify(param.label) || u.paramId
-    // Node display names are already unique, so `<node>-<param>` is unique too;
-    // the counter is a belt-and-braces guard (e.g. slug collisions).
-    let key = `${nodeSlug}-${paramSlug}`
+
+    // Dedup the param WITHIN its node so (nodeId, param) is a unique address:
+    // one node can expose two uniform params whose labels slugify identically
+    // (e.g. gradient's aspect / aspectUV, both "Aspect"). Without this the
+    // player's byNode index collides and one param becomes unaddressable.
+    const perNode = usedParams.get(u.nodeId) ?? new Map<string, number>()
+    usedParams.set(u.nodeId, perNode)
+    const pc = perNode.get(paramSlug) ?? 0
+    perNode.set(paramSlug, pc + 1)
+    const paramId = pc > 0 ? `${paramSlug}-${pc + 1}` : paramSlug
+
+    // Node names are unique and param is now unique within the node, so the key
+    // is unique too; the global counter stays as a belt-and-braces guard.
+    let key = `${nodeSlug}-${paramId}`
     const n = usedKeys.get(key) ?? 0
     usedKeys.set(key, n + 1)
     if (n > 0) key = `${key}-${n + 1}`
@@ -96,9 +108,9 @@ export function buildManifest(
       nodeId: u.nodeId,
       node: nodeName,
       nodeType: type ?? 'node',
-      // The friendly slug (matches the key's param suffix), NOT the raw param id
-      // (e.g. "scale", not "srt_scale") — so set(id,'scale') and 'noise-scale' agree.
-      param: paramSlug,
+      // Friendly slug, unique within its node (matches the key's param suffix) —
+      // NOT the raw param id ("scale", not "srt_scale"); "aspect-2" on collision.
+      param: paramId,
       label: param.label,
       type: knobType(param.type),
       glslType: u.glslType,

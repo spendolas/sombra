@@ -68,6 +68,7 @@ export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneH
   const byNode = new Map(manifest.map((k) => [nodeKey(k.nodeId, k.param), k]))
   const listeners: Record<string, Array<(...a: unknown[]) => void>> = {}
   const emit = (ev: string, ...a: unknown[]) => (listeners[ev] ?? []).forEach((f) => f(...a))
+  let loaded = false
 
   let renderer: ShaderRenderer
   try {
@@ -192,8 +193,14 @@ export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneH
     pause: () => { autoplayWanted = false; rawPause() },
     resize: () => renderer.requestRender(),
     destroy: () => { harness.stop(); renderer.stopAnimation(); renderer.dispose(); canvas.remove() },
-    on: (ev, cb) => { (listeners[ev] ??= []).push(cb) },
+    on: (ev, cb) => {
+      (listeners[ev] ??= []).push(cb)
+      // 'load' already fired synchronously during mount() — replay it for late
+      // subscribers so handle.on('load', cb) is reliable, not a lost event.
+      if (ev === 'load' && loaded) cb(handle)
+    },
   }
+  loaded = true
   opts.onLoad?.(handle)
   emit('load', handle)
   return handle
