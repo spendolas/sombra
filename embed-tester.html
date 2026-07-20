@@ -28,7 +28,11 @@
         border-radius: 8px; padding: 10px 12px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
       }
       textarea::placeholder { color: var(--muted); }
-      .actions { display: flex; align-items: center; gap: 8px; }
+      .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+      .envsel { display: flex; align-items: center; gap: 6px; color: var(--subtle); font-size: 12px; }
+      select { background: var(--raised); color: var(--dim); border: 1px solid var(--edge); border-radius: 6px; padding: 6px 8px; font-size: 12px; }
+      .envstatus { font-size: 12px; min-height: 16px; color: var(--subtle); }
+      .envstatus .ok { color: var(--green); } .envstatus .bad { color: var(--red); }
       button {
         background: var(--indigo); color: var(--fg); border: 0; border-radius: 6px;
         padding: 7px 14px; font-size: 13px; font-weight: 500; cursor: pointer;
@@ -91,9 +95,17 @@
           <button id="run">▶ Run</button>
           <button id="clear" class="ghost">Clear</button>
           <button id="sample" class="ghost">Load a sample</button>
+          <label class="envsel">Host page:
+            <select id="env">
+              <option value="bare">Bare (nothing linked)</option>
+              <option value="conflict">Has libs we use (pako + globals)</option>
+              <option value="heavy">Heavy effects (6 WebGL contexts + busy loop)</option>
+            </select>
+          </label>
           <span id="mode" class="badge" data-mode="none">no snippet</span>
         </div>
         <div id="error" class="error"></div>
+        <div id="envstatus" class="envstatus"></div>
       </div>
 
       <div class="split">
