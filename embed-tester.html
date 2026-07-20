@@ -72,7 +72,8 @@
       .knob { display: grid; grid-template-columns: 96px 1fr 64px; align-items: center; gap: 8px; padding: 5px 0; }
       .knob .k-label { color: var(--dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .knob .k-label .k-key { color: var(--muted); font: 10px ui-monospace, monospace; display: block; }
-      .knob input[type="range"] { width: 100%; -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; background: var(--edge); cursor: pointer; }
+      .knob input[type="range"] { width: 100%; -webkit-appearance: none; appearance: none; height: 14px; background: transparent; cursor: pointer; margin: 0; }
+      .knob input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--edge); }
       .knob input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 13px; height: 13px; margin-top: -4.5px; border-radius: 50%; background: var(--indigo); cursor: pointer; }
       .knob input[type="range"]::-moz-range-track { height: 4px; border-radius: 2px; background: var(--edge); }
       .knob input[type="range"]::-moz-range-thumb { width: 13px; height: 13px; border: 0; border-radius: 50%; background: var(--indigo); cursor: pointer; }
