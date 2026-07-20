@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sombra · Embed Tester</title>
+    <style>
+      :root {
+        --surface: #0f0f1a; --alt: #1a1a2e; --raised: #252538; --elevated: #2d2d44;
+        --fg: #e8e8f0; --dim: #b8b8c8; --subtle: #88889a; --muted: #5a5a6e;
+        --edge: #3a3a52; --edge-sub: #2a2a3e; --indigo: #6366f1; --indigo-h: #818cf8;
+        --red: #f87171; --amber: #fbbf24; --green: #4ade80;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; }
+      body {
+        background: var(--surface); color: var(--fg);
+        font: 13px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif;
+      }
+      .wrap { display: flex; flex-direction: column; height: 100%; padding: 16px; gap: 12px; }
+      header { display: flex; align-items: center; gap: 10px; }
+      header h1 { font-size: 15px; font-weight: 600; margin: 0; }
+      header .sub { color: var(--subtle); font-size: 12px; }
+      .top { display: flex; flex-direction: column; gap: 8px; }
+      textarea {
+        width: 100%; min-height: 84px; resize: vertical;
+        background: var(--raised); color: var(--dim); border: 1px solid var(--edge);
+        border-radius: 8px; padding: 10px 12px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      textarea::placeholder { color: var(--muted); }
+      .actions { display: flex; align-items: center; gap: 8px; }
+      button {
+        background: var(--indigo); color: var(--fg); border: 0; border-radius: 6px;
+        padding: 7px 14px; font-size: 13px; font-weight: 500; cursor: pointer;
+      }
+      button:hover { background: var(--indigo-h); }
+      button.ghost { background: var(--raised); color: var(--dim); }
+      button.ghost:hover { background: var(--elevated); }
+      .badge {
+        margin-left: auto; font-size: 11px; padding: 3px 9px; border-radius: 999px;
+        background: var(--raised); color: var(--subtle); border: 1px solid var(--edge);
+      }
+      .badge[data-mode="developer"], .badge[data-mode="copy-paste"] { color: var(--green); border-color: #2f5f43; }
+      .badge[data-mode="iframe"] { color: var(--amber); border-color: #6b5320; }
+      .badge[data-mode="none"] { color: var(--red); border-color: #6b2f2f; }
+      .error { color: var(--red); font-size: 12px; min-height: 16px; }
+      .split { flex: 1; display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; min-height: 0; }
+      @media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+      .panel {
+        background: var(--alt); border: 1px solid var(--edge-sub); border-radius: 10px;
+        display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+      }
+      .phead {
+        padding: 9px 12px; font-size: 12px; font-weight: 600; color: var(--dim);
+        border-bottom: 1px solid var(--edge-sub); display: flex; align-items: center; gap: 8px;
+      }
+      .phead .count { color: var(--subtle); font-weight: 400; }
+      #preview { flex: 1; background: #000; min-height: 240px; display: block; }
+      #preview iframe { width: 100%; height: 100%; border: 0; display: block; }
+      .knobs { flex: 1; overflow: auto; padding: 8px 12px 16px; }
+      .note { color: var(--subtle); font-size: 12px; padding: 8px 2px; }
+      .node-group { margin-top: 12px; }
+      .node-group:first-child { margin-top: 2px; }
+      .node-head { display: flex; align-items: baseline; gap: 8px; padding: 4px 0 6px; border-bottom: 1px solid var(--edge-sub); }
+      .node-head .name { font-weight: 600; color: var(--fg); }
+      .node-head .id { font: 11px ui-monospace, monospace; color: var(--muted); cursor: pointer; }
+      .node-head .id:hover { color: var(--dim); }
+      .knob { display: grid; grid-template-columns: 96px 1fr 64px; align-items: center; gap: 8px; padding: 5px 0; }
+      .knob .k-label { color: var(--dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .knob .k-label .k-key { color: var(--muted); font: 10px ui-monospace, monospace; display: block; }
+      .knob input[type="range"] { width: 100%; accent-color: var(--indigo); }
+      .knob input[type="color"] { width: 100%; height: 26px; background: none; border: 1px solid var(--edge); border-radius: 5px; padding: 0; }
+      .knob .k-val { font: 11px ui-monospace, monospace; color: var(--subtle); text-align: right; }
+      .knob .k-vec { display: flex; gap: 4px; }
+      .knob .k-vec input { width: 100%; background: var(--raised); color: var(--dim); border: 1px solid var(--edge); border-radius: 4px; padding: 3px 5px; font: 11px ui-monospace, monospace; }
+      .samples { margin-top: 6px; color: var(--subtle); font-size: 11px; }
+      .samples button { background: var(--raised); color: var(--dim); padding: 3px 8px; font-size: 11px; margin: 2px 4px 0 0; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <h1>Sombra · Embed Tester</h1>
+        <span class="sub">Paste an exported snippet → live preview + auto-discovered knobs.</span>
+      </header>
+
+      <div class="top">
+        <textarea id="input" spellcheck="false"
+          placeholder="Paste the snippet from the Embed modal — Copy-paste, Developer, or Advanced (iframe)…"></textarea>
+        <div class="actions">
+          <button id="run">▶ Run</button>
+          <button id="clear" class="ghost">Clear</button>
+          <button id="sample" class="ghost">Load a sample</button>
+          <span id="mode" class="badge" data-mode="none">no snippet</span>
+        </div>
+        <div id="error" class="error"></div>
+      </div>
+
+      <div class="split">
+        <div class="panel">
+          <div class="phead">Preview</div>
+          <div id="preview"></div>
+        </div>
+        <div class="panel">
+          <div class="phead">Knobs <span id="knobcount" class="count"></span></div>
+          <div id="knobs" class="knobs">
+            <div class="note">Run a Copy-paste or Developer snippet to auto-discover its knobs.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/embed-tester.ts"></script>
+  </body>
+</html>
