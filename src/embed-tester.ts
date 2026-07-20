@@ -237,3 +237,13 @@ $<HTMLButtonElement>('clear').onclick = () => {
   setError(''); setEnvStatus(''); modeBadge.dataset.mode = 'none'; modeBadge.textContent = MODE_LABEL.none
 }
 input.addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); run() } })
+
+// Keep a slider drag alive when the cursor passes over the preview iframe —
+// iframes swallow pointer events and would otherwise abort the drag.
+const setPreviewInert = (inert: boolean) => {
+  const f = preview.querySelector('iframe')
+  if (f) f.style.pointerEvents = inert ? 'none' : ''
+}
+knobsEl.addEventListener('pointerdown', () => setPreviewInert(true))
+window.addEventListener('pointerup', () => setPreviewInert(false))
+window.addEventListener('pointercancel', () => setPreviewInert(false))
