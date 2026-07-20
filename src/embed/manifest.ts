@@ -65,9 +65,16 @@ export function buildManifest(
   const nodeNames = buildNodeNames(ownerIds, nodes)
 
   const usedKeys = new Map<string, number>()
+  const seenUniforms = new Set<string>()
   const out: KnobDescriptor[] = []
 
   for (const u of uniforms) {
+    // A node's uniform appears once per pass it's used in (multi-pass graphs),
+    // so the same wire name can repeat — collapse to one knob, else the host
+    // sees phantom "value-2"/"scale-2" duplicates for a single param.
+    if (seenUniforms.has(u.name)) continue
+    seenUniforms.add(u.name)
+
     const type = nodeType.get(u.nodeId)
     const def = type ? nodeRegistry.get(type) : undefined
     const param = def?.params?.find((p) => p.id === u.paramId)
@@ -86,7 +93,12 @@ export function buildManifest(
     out.push({
       key,
       uniform: u.name,
+      nodeId: u.nodeId,
       node: nodeName,
+      nodeType: type ?? 'node',
+      // The friendly slug (matches the key's param suffix), NOT the raw param id
+      // (e.g. "scale", not "srt_scale") — so set(id,'scale') and 'noise-scale' agree.
+      param: paramSlug,
       label: param.label,
       type: knobType(param.type),
       glslType: u.glslType,

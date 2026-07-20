@@ -7,7 +7,10 @@ import { GLSL_VERTEX_SHADER } from './vertex'
 export interface KnobDescriptor {
   key: string                              // node-scoped, deduped (e.g. "noise-scale", "noise-2-scale")
   uniform: string                          // wire name, e.g. "u_abc123_scale"
+  nodeId: string                           // stable node id — the deliberate addressing handle
   node: string                             // owning node's display name (e.g. "Noise", "Noise 2")
+  nodeType: string                         // machine node type (e.g. "noise") — for filtering
+  param: string                            // the param's own id (e.g. "scale") — clean within a node
   label: string                            // the param's own label (e.g. "Scale")
   type: 'float' | 'vec2' | 'vec3' | 'color'
   glslType: 'float' | 'vec2' | 'vec3' | 'vec4'
@@ -15,6 +18,17 @@ export interface KnobDescriptor {
   max?: number
   step?: number
   default: number | number[]
+}
+
+/** A knob as returned by the read API — descriptor plus its current live value. */
+export type Knob = KnobDescriptor & { value: number | number[] }
+
+/** A node and the knobs it owns, for deliberate node-directed access. */
+export interface NodeInfo {
+  id: string                               // stable node id (pass to set(id, param, value))
+  name: string                             // display name (e.g. "Noise 2")
+  type: string                             // machine type (e.g. "noise")
+  params: Knob[]
 }
 
 /** A baked image texture. */

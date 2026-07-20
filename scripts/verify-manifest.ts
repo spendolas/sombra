@@ -41,10 +41,21 @@ check('descriptor carries label + uniform wire name', manifest[0].label === test
 check('descriptor carries owning node display name', manifest[0].node.length > 0)
 check('duplicate nodes get distinct display names', manifest[0].node !== manifest[1].node)
 check('key is node-scoped (node prefix + param)', manifest[0].key.includes('-') && manifest[0].key.length > testLabel.length)
+check('descriptor carries stable nodeId + type', manifest[0].nodeId === 'n1' && manifest[0].nodeType === testType)
+check('param is the friendly slug matching the key suffix', manifest[0].param.length > 0 && manifest[0].key.endsWith(manifest[0].param))
+check('nodeId addresses distinct instances', manifest[0].nodeId !== manifest[1].nodeId && manifest[1].nodeId === 'n2')
 check('unknown node is skipped', buildManifest(
   [{ name: 'u_x_y', glslType: 'float', value: 0, nodeId: 'ghost', paramId: 'y' }],
   nodes,
 ).length === 0)
+// Multi-pass graphs repeat a node's uniform once per pass — must collapse to one knob.
+check('repeated uniform name is deduped to one knob', buildManifest(
+  [
+    { name: `u_n1_${testParamId}`, glslType: 'float', value: 1, nodeId: 'n1', paramId: testParamId },
+    { name: `u_n1_${testParamId}`, glslType: 'float', value: 1, nodeId: 'n1', paramId: testParamId },
+  ],
+  nodes,
+).length === 1)
 
 console.log('='.repeat(60))
 console.log(`  SUMMARY: ${passed} passed, ${failed} failed`)

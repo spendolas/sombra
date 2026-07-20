@@ -41,7 +41,12 @@ async; use `onLoad` to get the ready `SceneHandle` (same pattern as Rive/Spline)
   Sombra.mount(document.getElementById('my-shader'), {
     scene: "<BASE64URL_ARTIFACT>",
     onLoad: function (shader) {
-      // shader.set('intensity', 0.65);
+      // flat key (terse):
+      shader.set('noise-scale', 3);
+      // stable node-directed (survives graph edits, unambiguous across instances):
+      var noise = shader.nodes().find(function (n) { return n.type === 'noise'; });
+      shader.set(noise.id, 'seed', 12);
+      shader.get(noise.id, 'scale');      // read current live value
     }
   });
 </script>
@@ -97,13 +102,18 @@ interface SceneArtifact {
 interface KnobDescriptor {
   key: string                    // node-scoped, deduped: "noise-scale", "noise-2-scale"
   uniform: string                // wire name: "u_<nodeId>_<param>"
+  nodeId: string                 // stable node id — pass to set(nodeId, param, value)
   node: string                   // owning node's display name: "Noise", "Noise 2"
+  nodeType: string               // machine node type: "noise" — filter with nodes()
+  param: string                  // friendly param slug: "scale" (matches the key suffix)
   label: string                  // the param's own label: "Scale"
   type: 'float' | 'vec2' | 'vec3' | 'color'
   glslType: 'float' | 'vec2' | 'vec3' | 'vec4'
   min?: number; max?: number; step?: number
   default: number | number[]
 }
+// variables() returns Knob = KnobDescriptor & { value }; nodes() returns
+// NodeInfo = { id, name, type, params: Knob[] }.
 ```
 
 Keys are **node-scoped** — `<node>-<param>` (e.g. `noise-scale`, `noise-2-scale`,
@@ -178,14 +188,24 @@ element, making SSR safe.
 
 | Method                       | Behavior |
 |------------------------------|----------|
-| `set(key, value)`            | Override a knob by its `key`. Unknown keys log a warning listing valid keys. A 3‑component value on a `vec4` (color) knob is padded to alpha `1`. |
-| `get(key)`                   | The knob's **default** value (not the live override), or `undefined`. |
-| `variables()`                | A copy of the full `KnobDescriptor[]` — enumerate knobs, ranges, and defaults. |
+| `set(key, value)`            | Override a knob by its flat `key` (e.g. `'noise-scale'`). Unknown keys log a warning listing valid keys. A 3‑component value on a `vec4` (color) knob is padded to alpha `1`. |
+| `set(nodeId, param, value)`  | Override a knob by **stable node id** + friendly param (e.g. `set('noise-1784…','scale',3)`). Same target as the flat form; the stable, unambiguous way to address one node among several of the same type. |
+| `get(key)` / `get(nodeId, param)` | The knob's **current live value** (default, or whatever was last `set`), or `undefined`. |
+| `variables()`                | `Knob[]` — the full flat list, each with its current `value`. Enumerate knobs, ranges, defaults, and node identity. |
+| `nodes()`                    | `NodeInfo[]` — knobs **grouped by owning node** (`{ id, name, type, params }`). The deliberate way to discover and target nodes: `nodes().filter(n => n.type==='noise').forEach(n => set(n.id,'seed',0))`. |
 | `play()`                     | Mark autoplay wanted and resume the loop (only animates if the shader is time‑live). |
 | `pause()`                    | Mark autoplay unwanted and stop the loop. |
 | `resize()`                   | Request one frame (the harness also auto‑resizes via `ResizeObserver`). |
 | `destroy()`                  | Stop the harness + loop, dispose the renderer, remove the canvas. |
 | `on(event, cb)`              | Subscribe to `'load'`, `'error'`, or `'contextlost'`. |
+
+**Addressing knobs.** Every knob has both a flat `key` (`<node>-<param>`, e.g.
+`noise-2-scale`) and a `(nodeId, param)` pair. The flat key is terse for one‑offs;
+the `(nodeId, param)` form is **stable across re‑publish and graph edits** (the
+node id never shifts) and unambiguous when several nodes share a type — prefer it
+for anything you commit to code. `param` is the friendly slug (`scale`), matching
+the key's suffix, not the raw internal id. The Embed modal's Developer tab prints
+the node id + a copy button + a ready `set(id, param, value)` line per node.
 
 Value conventions: `float` → `number`; `vec2`/`vec3` → `number[]`; `color` →
 `[r, g, b]` in 0..1 (alpha auto‑padded). Ranges come from each knob's

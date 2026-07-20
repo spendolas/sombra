@@ -42,16 +42,17 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
   const sizeKb = useMemo(() => result ? (result.sizeBytes / 1024).toFixed(1) : '0', [result])
   const heavy = !!result && result.sizeBytes > 200 * 1024
 
-  // Group knobs by owning node so the list is readable even when many nodes
-  // expose same-named params (scale, seed, offset…).
+  // Group knobs by owning node (stable id) so the list is readable even when many
+  // nodes expose same-named params (scale, seed, offset…). Each group carries the
+  // node's display name + stable id for deliberate set(id, param, value) access.
   const grouped = useMemo(() => {
-    const m = new Map<string, PublishResult['manifest']>()
+    const m = new Map<string, { name: string; knobs: PublishResult['manifest'] }>()
     for (const k of result?.manifest ?? []) {
-      const arr = m.get(k.node) ?? []
-      arr.push(k)
-      m.set(k.node, arr)
+      const g = m.get(k.nodeId) ?? { name: k.node, knobs: [] }
+      g.knobs.push(k)
+      m.set(k.nodeId, g)
     }
-    return [...m.entries()]
+    return [...m.entries()]  // [nodeId, { name, knobs }]
   }, [result])
 
   if (!open) return null
@@ -99,16 +100,27 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
             <table className="w-full text-xs text-fg-dim">
               <thead><tr className="text-fg-subtle text-left"><th>param</th><th>key</th><th>type</th><th>range</th><th>example</th></tr></thead>
               <tbody>
-                {grouped.map(([node, knobs]) => (
-                  <Fragment key={node}>
-                    <tr><td colSpan={5} className="pt-3 pb-1 text-fg font-medium">{node}</td></tr>
+                {grouped.map(([nodeId, { name, knobs }]) => (
+                  <Fragment key={nodeId}>
+                    <tr>
+                      <td colSpan={5} className="pt-3 pb-1">
+                        <span className="text-fg font-medium">{name}</span>{' '}
+                        <button
+                          className="font-mono text-fg-subtle hover:text-fg"
+                          title="Copy node id (for shader.set(id, param, value))"
+                          onClick={() => copy(nodeId, `node:${nodeId}`)}
+                        >
+                          {copied === `node:${nodeId}` ? 'id copied ✓' : `id: ${nodeId} ⧉`}
+                        </button>
+                      </td>
+                    </tr>
                     {knobs.map((k) => (
                       <tr key={k.key}>
                         <td className="pl-2">{k.label}</td>
                         <td className="font-mono">{k.key}</td>
                         <td>{k.type}</td>
                         <td>{k.min ?? '—'} … {k.max ?? '—'}</td>
-                        <td className="font-mono">shader.set('{k.key}', {k.type === 'color' ? '[1,0,0]' : (k.max ?? 1)})</td>
+                        <td className="font-mono">shader.set('{nodeId}', '{k.param}', {k.type === 'color' ? '[1,0,0]' : (k.max ?? 1)})</td>
                       </tr>
                     ))}
                   </Fragment>
