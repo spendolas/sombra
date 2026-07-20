@@ -5,6 +5,7 @@ import {
   type SceneArtifact, type KnobDescriptor, type Knob, type NodeInfo,
 } from './artifact'
 import { PerfHarness } from './perf-harness'
+import { showFallback } from './fallback'
 
 /** Composite index key for (nodeId, param) lookups (param ids never contain a space). */
 const nodeKey = (nodeId: string, param: string) => `${nodeId} ${param}`
@@ -13,7 +14,8 @@ export interface MountOptions {
   scene: string                                   // base64url artifact
   variables?: Record<string, number | number[]>   // initial knob overrides (by key)
   autoplay?: boolean                               // default true
-  debug?: boolean
+  debug?: boolean                                  // show the error message on the fallback
+  fallback?: boolean                               // show the bouncing-SOMBRA screen on error (default true)
   onLoad?: (h: SceneHandle) => void
   onError?: (e: Error) => void
 }
@@ -46,14 +48,22 @@ const NOOP_HANDLE: SceneHandle = {
 export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneHandle> {
   if (typeof window === 'undefined' || !el) return NOOP_HANDLE
 
+  // Any failure ends here: log, notify, and (unless opted out) show the bouncing
+  // "SOMBRA" fallback in the container. The returned handle is a no-op except
+  // destroy(), which removes the fallback.
+  const fail = (e: Error): SceneHandle => {
+    console.error('[Sombra]', e.message)
+    opts.onError?.(e)
+    if (opts.fallback === false) return NOOP_HANDLE
+    const stop = showFallback(el, opts.debug ? e.message : undefined)
+    return { ...NOOP_HANDLE, destroy: stop }
+  }
+
   let artifact: SceneArtifact
   try {
     artifact = decodeArtifact(opts.scene)
   } catch (err) {
-    const e = err instanceof Error ? err : new Error(String(err))
-    console.error('[Sombra] Failed to decode scene:', e.message)
-    opts.onError?.(e)
-    return NOOP_HANDLE
+    return fail(err instanceof Error ? err : new Error(String(err)))
   }
 
   const canvas = document.createElement('canvas')
@@ -76,11 +86,8 @@ export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneH
     const res = renderer.updateRenderPlan(plan)
     if (!res.success) throw new Error(res.error ?? 'updateRenderPlan failed')
   } catch (err) {
-    const e = err instanceof Error ? err : new Error(String(err))
-    console.error('[Sombra] Renderer init failed:', e.message)
-    if (opts.debug) el.textContent = `[Sombra] ${e.message}`
-    opts.onError?.(e)
-    return NOOP_HANDLE
+    canvas.remove()
+    return fail(err instanceof Error ? err : new Error(String(err)))
   }
 
   // Live uniform values (seeded with baked defaults; updated on every set()).
