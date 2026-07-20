@@ -19,48 +19,61 @@ exposes every knob to the host page so the surrounding site can drive the shader
 
 ## 1. Quick start
 
-### Copy‑paste (auto‑mount)
+There is **one** embed snippet. It auto-mounts *and* is controllable — you don't
+choose between "simple" and "developer" up front. An `iframe` fallback exists for
+strict-CSP / paste-and-forget cases.
 
-The simplest snippet. It lazy‑loads the player (once, even across multiple
-embeds), then auto‑mounts every `[data-sombra-scene]` element on the page.
+### Embed (auto-mount, controllable)
+
+Lazy-loads the player once (cached across embeds and across sites), then
+auto-mounts every `[data-sombra-scene]` element. The `id` makes it addressable.
 
 ```html
 <script>!function(){var s=window.Sombra;if(s&&s.init){s.init()}else{var i=document.createElement("script");i.src="https://spendolas.github.io/sombra/embed/sombra-player.0.1.0.umd.js";i.onload=function(){Sombra.init()};(document.head||document.body).appendChild(i)}}();</script>
-<div data-sombra-scene="<BASE64URL_ARTIFACT>" style="width:100%;aspect-ratio:16/9"></div>
+<div id="sombra-shader" data-sombra-scene="<BASE64URL_ARTIFACT>" style="width:100%;aspect-ratio:16/9"></div>
 ```
 
-### Developer (programmatic mount + knobs)
+### Control it (optional — same embed, no second mount)
 
-Use this when the host page needs a handle to drive the shader. `mount()` is
-async; use `onLoad` to get the ready `SceneHandle` (same pattern as Rive/Spline).
+Grab the handle when the scene goes live via the `sombra:load` event, or later
+via `Sombra.get(idOrElement)`. This is the "developer mode" — it's just the embed
+above plus a handle.
 
 ```html
-<script src="https://spendolas.github.io/sombra/embed/sombra-player.0.1.0.umd.js"></script>
-<div id="my-shader" style="width:100%;aspect-ratio:16/9"></div>
 <script>
-  Sombra.mount(document.getElementById('my-shader'), {
-    scene: "<BASE64URL_ARTIFACT>",
-    onLoad: function (shader) {
-      // flat key (terse):
-      shader.set('noise-scale', 3);
-      // stable node-directed (survives graph edits, unambiguous across instances):
-      var noise = shader.nodes().find(function (n) { return n.type === 'noise'; });
-      shader.set(noise.id, 'seed', 12);
-      shader.get(noise.id, 'scale');      // read current live value
-    }
+  document.getElementById('sombra-shader').addEventListener('sombra:load', function (e) {
+    var shader = e.detail.handle;              // or: Sombra.get('sombra-shader')
+    shader.set('noise-scale', 3);              // flat key
+    var noise = shader.nodes().find(function (n) { return n.type === 'noise'; });
+    shader.set(noise.id, 'seed', 12);          // stable, node-directed
+    shader.get(noise.id, 'scale');             // read current live value
   });
 </script>
 ```
 
-### Advanced (iframe fallback)
+`Sombra.mount(el, { scene, onLoad })` is still available for hosts that prefer to
+mount explicitly rather than via the `data-` attribute.
 
-Zero JS, maximum isolation. Renders the full viewer inside an iframe using the
-compact share hash (the same `#g=` hash used by the "Copy shareable viewer URL"
-button). Available only when the modal has a viewer hash to embed.
+### iframe (isolated fallback)
+
+Maximum isolation, zero host JS — but **heaviest at runtime** (it ships the graph
+and recompiles in-frame) and exposes **no knob API**. Use only for strict-CSP
+hosts or true paste-and-forget. Renders the viewer via the compact `#g=` hash.
 
 ```html
 <iframe src="https://spendolas.github.io/sombra/viewer.html#g=<HASH>" style="width:100%;aspect-ratio:16/9;border:0" allowfullscreen></iframe>
 ```
+
+### Playing well with the host page
+
+The player is a self-contained UMD bundle: its dependencies (e.g. `pako`) are
+scoped inside it and are **not** written to the host's globals, so a host that
+already uses `pako` is unaffected (verified by the Embed Tester's conflict mode).
+The only global it defines is `window.Sombra`, and loading the bundle twice is a
+no-op (the loader guards on `Sombra.init`, and auto-init is idempotent). It ships
+no stylesheet — only inline styles on its own canvas/fallback — so it can't
+restyle the host. On a heavy host (many live WebGL contexts) the embed still
+mounts and its offscreen instances pause via IntersectionObserver.
 
 The iframe path ships the *graph* (decoded and recompiled in‑iframe), not the
 frozen artifact, so it is heavier at runtime but needs no player bundle and is
@@ -163,9 +176,15 @@ The UMD bundle assigns a global `Sombra` and auto‑inits on load:
 window.Sombra = {
   mount(el: HTMLElement, opts: MountOptions): Promise<SceneHandle>
   init(): void          // scan + mount all [data-sombra-scene]
+  get(idOrEl: string | HTMLElement): SceneHandle | undefined  // handle of an auto-mounted embed
   version: string       // EMBED_VERSION, e.g. "0.1.0"
 }
 ```
+
+Any successful mount (auto or explicit) registers its handle, so `Sombra.get(el)`
+returns it and a **`sombra:load`** `CustomEvent` (`event.detail.handle`) fires on
+the element. That's what makes the single auto-mount embed controllable without a
+separate `mount()` call.
 
 ### `MountOptions`
 
@@ -174,12 +193,15 @@ window.Sombra = {
 | `scene`     | `string`                                | —       | base64url artifact (required) |
 | `variables` | `Record<string, number \| number[]>`    | —       | initial knob overrides, keyed by knob `key` |
 | `autoplay`  | `boolean`                               | `true`  | start the animation loop when visible |
-| `debug`     | `boolean`                               | `false` | write init errors into the container's text |
+| `fallback`  | `boolean`                               | `true`  | on error, show the bouncing “SOMBRA” placeholder in the container |
+| `debug`     | `boolean`                               | `false` | overlay the error message on the fallback |
 | `onLoad`    | `(h: SceneHandle) => void`              | —       | called once the scene is mounted and rendering |
 | `onError`   | `(e: Error) => void`                    | —       | called on decode/renderer‑init failure |
 
 `mount()` always resolves — it never rejects. On decode or renderer‑init failure
-it logs `[Sombra] …`, calls `onError`, and returns a no‑op handle (every method
+it logs `[Sombra] …`, calls `onError`, shows the DVD-style fallback (unless
+`fallback: false`), and returns a no‑op handle whose `destroy()` removes the
+fallback (every other method
 is a safe stub), so host code can call the handle unconditionally. It also
 returns the no‑op handle when there is no DOM (`window === undefined`) or no
 element, making SSR safe.

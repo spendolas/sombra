@@ -11,7 +11,7 @@ export interface PublishResult {
   sceneB64: string
   manifest: KnobDescriptor[]
   sizeBytes: number
-  snippets: { copyPaste: string; developer: string; iframe: string }
+  snippets: ReturnType<typeof buildSnippets>
 }
 
 function collectImages(nodes: Node<NodeData>[]): ImageAsset[] {
@@ -61,22 +61,31 @@ export function publishScene(
   }
 }
 
-/** Build the three copy-paste snippet strings. */
+/** Build the snippet strings. One self-bootstrapping `embed` (auto-mounts AND is
+ * controllable via the handle), an optional `control` add-on, and the isolated
+ * `iframe` fallback. */
 export function buildSnippets(sceneB64: string, viewerHash?: string) {
-  const copyPaste =
+  // The one snippet: loads the player once (cached across sites), auto-mounts,
+  // and — because it carries an id — is addressable for optional live control.
+  const embed =
 `<script>!function(){var s=window.Sombra;if(s&&s.init){s.init()}else{var i=document.createElement("script");` +
 `i.src="${PLAYER_UMD_URL}";i.onload=function(){Sombra.init()};(document.head||document.body).appendChild(i)}}();</script>\n` +
-`<div data-sombra-scene="${sceneB64}" style="width:100%;aspect-ratio:16/9"></div>`
+`<div id="sombra-shader" data-sombra-scene="${sceneB64}" style="width:100%;aspect-ratio:16/9"></div>`
 
-  // mount() is async; use onLoad to get the ready handle (Rive/Spline pattern).
-  const developer =
-`<script src="${PLAYER_UMD_URL}"></script>\n` +
-`<div id="my-shader" style="width:100%;aspect-ratio:16/9"></div>\n` +
-`<script>\n  Sombra.mount(document.getElementById('my-shader'), {\n    scene: "${sceneB64}",\n    onLoad: function (shader) {\n      // shader.set('intensity', 0.65);\n    }\n  });\n</script>`
+  // Optional: grab the handle to drive the shader. Works with the same embed —
+  // no second mount. Fires once the scene is live.
+  const control =
+`<script>\n` +
+`  document.getElementById('sombra-shader').addEventListener('sombra:load', function (e) {\n` +
+`    var shader = e.detail.handle;              // or: Sombra.get('sombra-shader')\n` +
+`    // shader.set('noise-scale', 3);           // flat key\n` +
+`    // shader.set(shader.nodes()[0].id, 'scale', 3);  // stable, node-directed\n` +
+`  });\n` +
+`</script>`
 
   const iframe = viewerHash
     ? `<iframe src="https://spendolas.github.io/sombra/viewer.html#g=${viewerHash}" style="width:100%;aspect-ratio:16/9;border:0" allowfullscreen></iframe>`
     : '<!-- iframe fallback unavailable: no viewer hash provided -->'
 
-  return { copyPaste, developer, iframe }
+  return { embed, control, iframe }
 }

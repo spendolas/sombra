@@ -5,10 +5,10 @@ import { encodeCompactHash } from '@/utils/sombra-file'
 import { publishScene, type PublishResult } from '@/embed/publish'
 import { mount, type SceneHandle } from '@/embed/player'
 
-type Tab = 'copy' | 'dev' | 'advanced'
+type Tab = 'embed' | 'iframe'
 
 export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [tab, setTab] = useState<Tab>('copy')
+  const [tab, setTab] = useState<Tab>('embed')
   const [result, setResult] = useState<PublishResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
@@ -56,7 +56,7 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
   }, [result])
 
   if (!open) return null
-  const snippet = result ? (tab === 'copy' ? result.snippets.copyPaste : tab === 'dev' ? result.snippets.developer : result.snippets.iframe) : ''
+  const snippet = result ? (tab === 'embed' ? result.snippets.embed : result.snippets.iframe) : ''
   const copy = (text: string, which: string) => {
     void navigator.clipboard.writeText(text).then(() => { setCopied(which); setTimeout(() => setCopied(null), 1500) })
   }
@@ -76,11 +76,11 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
         <div ref={previewRef} className="w-full aspect-video bg-black rounded mb-3" />
 
         <div className="flex gap-2 mb-3">
-          {(['copy', 'dev', 'advanced'] as Tab[]).map((t) => (
+          {(['embed', 'iframe'] as Tab[]).map((t) => (
             <button key={t}
               className={`px-3 py-1 rounded text-sm ${tab === t ? 'bg-indigo text-fg' : 'bg-surface-raised text-fg-dim'}`}
               onClick={() => setTab(t)}>
-              {t === 'copy' ? 'Copy-paste' : t === 'dev' ? 'Developer' : 'Advanced'}
+              {t === 'embed' ? 'Embed' : 'iframe (isolated)'}
             </button>
           ))}
         </div>
@@ -94,9 +94,18 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
           {copied === tab ? 'Copied ✓' : 'Copy'}
         </button>
 
-        {tab === 'dev' && result && (
+        {tab === 'iframe' && (
+          <div className="text-xs text-fg-subtle mt-2">Fully sandboxed — heaviest at runtime and exposes no knob API. Use for strict-CSP hosts or paste-and-forget.</div>
+        )}
+
+        {tab === 'embed' && result && (
           <div className="mt-4">
-            <div className="text-sm text-fg-dim mb-1">Knobs ({result.manifest.length})</div>
+            <div className="text-sm text-fg-dim mb-1">Control it from JavaScript (optional — same embed)</div>
+            <pre className="bg-surface-raised text-fg-dim text-xs p-3 rounded overflow-x-auto whitespace-pre-wrap break-all">{result.snippets.control}</pre>
+            <button className="mt-2 px-3 py-1 rounded bg-surface-elevated text-fg-dim text-sm" onClick={() => copy(result.snippets.control, 'control')}>
+              {copied === 'control' ? 'Copied ✓' : 'Copy control snippet'}
+            </button>
+            <div className="text-sm text-fg-dim mt-4 mb-1">Knobs ({result.manifest.length})</div>
             <table className="w-full text-xs text-fg-dim">
               <thead><tr className="text-fg-subtle text-left"><th>param</th><th>key</th><th>type</th><th>range</th><th>example</th></tr></thead>
               <tbody>

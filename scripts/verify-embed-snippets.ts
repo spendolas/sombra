@@ -11,10 +11,11 @@ function check(name: string, cond: boolean) { if (cond) passed++; else { failed+
 const B64 = 'ABC123_-abc'
 const s = buildSnippets(B64, 'HASH')
 
-check('copyPaste carries the artifact', s.copyPaste.includes(`data-sombra-scene="${B64}"`))
-check('copyPaste is version-pinned', s.copyPaste.includes(`sombra-player.${EMBED_VERSION}.umd.js`))
-check('copyPaste self-bootstraps init', s.copyPaste.includes('Sombra.init()'))
-check('developer uses Sombra.mount', s.developer.includes('Sombra.mount(') && s.developer.includes(`scene: "${B64}"`))
+check('embed carries the artifact', s.embed.includes(`data-sombra-scene="${B64}"`))
+check('embed is version-pinned', s.embed.includes(`sombra-player.${EMBED_VERSION}.umd.js`))
+check('embed self-bootstraps init', s.embed.includes('Sombra.init()'))
+check('embed div has a stable id for control', s.embed.includes('id="sombra-shader"'))
+check('control targets the embed via sombra:load', s.control.includes(`getElementById('sombra-shader')`) && s.control.includes('sombra:load') && s.control.includes('e.detail.handle'))
 check('iframe uses the viewer hash', s.iframe.includes('viewer.html#g=HASH'))
 check('iframe absent without hash', buildSnippets(B64).iframe.includes('unavailable'))
 

@@ -6,6 +6,7 @@ import {
 } from './artifact'
 import { PerfHarness } from './perf-harness'
 import { showFallback } from './fallback'
+import { registerHandle, unregisterHandle } from './registry'
 
 /** Composite index key for (nodeId, param) lookups (param ids never contain a space). */
 const nodeKey = (nodeId: string, param: string) => `${nodeId} ${param}`
@@ -199,7 +200,7 @@ export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneH
     play: () => { autoplayWanted = true; rawPlay() },
     pause: () => { autoplayWanted = false; rawPause() },
     resize: () => renderer.requestRender(),
-    destroy: () => { harness.stop(); renderer.stopAnimation(); renderer.dispose(); canvas.remove() },
+    destroy: () => { unregisterHandle(el); harness.stop(); renderer.stopAnimation(); renderer.dispose(); canvas.remove() },
     on: (ev, cb) => {
       (listeners[ev] ??= []).push(cb)
       // 'load' already fired synchronously during mount() — replay it for late
@@ -208,6 +209,7 @@ export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneH
     },
   }
   loaded = true
+  registerHandle(el, handle)   // expose to the host via Sombra.get(el) + 'sombra:load'
   opts.onLoad?.(handle)
   emit('load', handle)
   return handle
