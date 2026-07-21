@@ -7,6 +7,11 @@ import { EMBED_VERSION } from './src/embed/version'
 export default defineConfig({
   resolve: { alias: { '@': resolve(__dirname, './src') } },
   define: { 'process.env.NODE_ENV': '"production"' },
+  // Don't copy public/ here — this is a library build that only emits the player
+  // UMD. The app build already copies public/ into dist/. Leaving the default
+  // publicDir would re-copy all of public/ INTO dist/embed/ (nesting subfolders +
+  // dumping root assets) — keep dist/embed/ to just the player.
+  publicDir: false,
   build: {
     outDir: 'dist/embed',
     emptyOutDir: true,
