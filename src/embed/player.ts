@@ -125,6 +125,16 @@ export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneH
   for (const u of baked) values.set(u.name, u.value)
 
   renderer.updateUniforms(baked)
+
+  // Randomise Random-node seeds on load: the editor bakes a stable value for
+  // consistency, but a published scene should produce a fresh value each mount.
+  const seedNames = artifact.randomizeOnLoad ?? []
+  if (seedNames.length) {
+    const fresh = seedNames.map((name) => ({ name, value: Math.random() }))
+    for (const f of fresh) values.set(f.name, f.value)
+    renderer.updateUniforms(fresh)
+  }
+
   renderer.setAnchor(artifact.meta.anchor)
 
   // Apply a value to a resolved uniform, padding rgb→rgba for color knobs.

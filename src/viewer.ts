@@ -95,7 +95,7 @@ async function main() {
   // Render
   const canvas = document.getElementById('viewer') as HTMLCanvasElement
   try {
-    const renderer = await createShaderRenderer(canvas)
+    const renderer = await createShaderRenderer(canvas, result)
     const shaderResult = renderer.updateRenderPlan(result)
     if (!shaderResult.success) {
       showError(`WebGL shader error:\n\n${shaderResult.error}`)
@@ -107,6 +107,16 @@ async function main() {
       renderer.updateUniforms(
         result.userUniforms.map((u) => ({ name: u.name, value: u.value }))
       )
+    }
+
+    // Randomise Random-node seeds on load (parity with the embed player): the
+    // editor keeps a stable baked value; a shared/embedded scene randomises per load.
+    const randomIds = new Set(nodes.filter((n) => n.data.type === 'random').map((n) => n.id))
+    const seedUniforms = result.userUniforms.filter(
+      (u) => u.paramId === 'seed' && randomIds.has(u.nodeId)
+    )
+    if (seedUniforms.length) {
+      renderer.updateUniforms(seedUniforms.map((u) => ({ name: u.name, value: Math.random() })))
     }
 
     // Anchor from the Fragment Output node (editor parity — applyCompileResult)

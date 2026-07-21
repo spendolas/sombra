@@ -57,6 +57,13 @@ export function publishScene(
   // already succeeded above (which topo-sorts), so this won't throw.
   const reachable = new Set(topologicalSort(nodes, edges))
 
+  // Random-node seed uniforms — re-seeded per load in the player/viewer so a
+  // published Random node actually randomises (the baked value is editor-only).
+  const randomIds = new Set(nodes.filter((n) => n.data.type === 'random').map((n) => n.id))
+  const randomizeOnLoad = plan.userUniforms
+    .filter((u) => u.paramId === 'seed' && randomIds.has(u.nodeId))
+    .map((u) => u.name)
+
   const outputNode = nodes.find((n) => n.data.type === 'fragment_output')
   const timeNode = nodes.find((n) => n.data.type === 'time')
   const artifact: SceneArtifact = {
@@ -69,6 +76,7 @@ export function publishScene(
       anchor: anchorToVec2((outputNode?.data.params?.anchor as string) ?? 'center'),
       timeSpeed: (timeNode?.data.params?.speed as number) ?? 1,
     },
+    ...(randomizeOnLoad.length ? { randomizeOnLoad } : {}),
   }
 
   const sceneB64 = encodeArtifact(artifact)

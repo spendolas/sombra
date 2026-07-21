@@ -54,6 +54,13 @@ export interface SceneArtifact {
     anchor: [number, number]
     timeSpeed: number
   }
+  /**
+   * Uniform names to re-seed with a fresh random value on each mount (Random-node
+   * seeds). The editor keeps a stable baked value for consistency; a published
+   * scene should randomise per load in the player/viewer. Optional — omitted when
+   * the scene has no Random nodes; old players ignore it (stay frozen).
+   */
+  randomizeOnLoad?: string[]
 }
 
 /** Remove the constant vertex shader from every pass + the top-level field. */
