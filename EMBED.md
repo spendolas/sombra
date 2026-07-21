@@ -44,7 +44,7 @@ its URL. The player lazy-loads once (cached across embeds and sites), then fetch
 
 ```html
 <script>!function(){var s=window.Sombra;if(s&&s.init){s.init()}else{var i=document.createElement("script");i.src="https://spendolas.github.io/sombra/embed/sombra-player.0.1.0.umd.js";i.onload=function(){Sombra.init()};(document.head||document.body).appendChild(i)}}();</script>
-<div id="sombra-shader" data-sombra-src="https://your-host.example/scene.ombra" style="width:100%;aspect-ratio:16/9"></div>
+<div id="sombra-shader" data-sombra-src="https://your-host.example/scene.ombra" style="width:100%;height:100%"></div>
 ```
 
 > **CORS:** if the file is served from a different origin than the page, its host
@@ -59,7 +59,7 @@ string. Best for small scenes / paste-and-forget.
 
 ```html
 <script>!function(){var s=window.Sombra;if(s&&s.init){s.init()}else{var i=document.createElement("script");i.src="https://spendolas.github.io/sombra/embed/sombra-player.0.1.0.umd.js";i.onload=function(){Sombra.init()};(document.head||document.body).appendChild(i)}}();</script>
-<div id="sombra-shader" data-sombra-scene="<BASE64URL_ARTIFACT>" style="width:100%;aspect-ratio:16/9"></div>
+<div id="sombra-shader" data-sombra-scene="<BASE64URL_ARTIFACT>" style="width:100%;height:100%"></div>
 ```
 
 ### Control it (optional — same embed, no second mount)
@@ -91,7 +91,7 @@ and recompiles in-frame) and exposes **no knob API**. Use only for strict-CSP
 hosts or true paste-and-forget. Renders the viewer via the compact `#g=` hash.
 
 ```html
-<iframe src="https://spendolas.github.io/sombra/viewer.html#g=<HASH>" style="width:100%;aspect-ratio:16/9;border:0" allowfullscreen></iframe>
+<iframe src="https://spendolas.github.io/sombra/viewer.html#g=<HASH>" style="width:100%;height:100%;border:0" allowfullscreen></iframe>
 ```
 
 ### Playing well with the host page
@@ -328,8 +328,13 @@ A container declares its scene with **one** of these, checked in order
 | `data-sombra-autoplay` | `"true"`/`"false"` | default `true`; `"false"` mounts paused |
 | `data-sombra-debug`    | `"true"`        | write init errors into the element |
 
-Give the container an explicit size (e.g. `width:100%;aspect-ratio:16/9`); the
-canvas fills it at `width/height:100%`.
+**Sizing.** The generated snippet defaults the container to `width:100%;height:100%`,
+so the embed fills whatever space the host gives it (the canvas fills the container
+at `width/height:100%` and re-renders on resize via `ResizeObserver`). Because
+`height:100%` resolves against the parent, **the host must give the wrapping element
+a height** — e.g. drop it in a sized/flex/grid container, or set an explicit height
+(`height:400px`, `height:100vh`) or `aspect-ratio` on the container. In a plain
+auto-height flow the box would collapse to 0 and show nothing.
 
 ---
 

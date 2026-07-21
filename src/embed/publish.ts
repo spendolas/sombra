@@ -106,12 +106,12 @@ export function buildSnippets(sceneB64: string, viewerHash?: string) {
   // the container is addressable (id) for optional live control. The primary path.
   // (.ombra = compiled shader for the player; .sombra = editable graph for the editor.)
   const hosted =
-`${loader}\n<div id="sombra-shader" data-sombra-src="${HOSTED_URL_PLACEHOLDER}" style="width:100%;aspect-ratio:16/9"></div>`
+`${loader}\n<div id="sombra-shader" data-sombra-src="${HOSTED_URL_PLACEHOLDER}" style="width:100%;height:100%"></div>`
 
   // Inline: the whole (base64) scene lives in the attribute — self-contained, no
   // hosting, but a big string. Good for small scenes / paste-and-forget.
   const embed =
-`${loader}\n<div id="sombra-shader" data-sombra-scene="${sceneB64}" style="width:100%;aspect-ratio:16/9"></div>`
+`${loader}\n<div id="sombra-shader" data-sombra-scene="${sceneB64}" style="width:100%;height:100%"></div>`
 
   // Optional: grab the handle to drive the shader. Works with the same embed —
   // no second mount. Fires once the scene is live.
@@ -125,7 +125,7 @@ export function buildSnippets(sceneB64: string, viewerHash?: string) {
 `</script>`
 
   const iframe = viewerHash
-    ? `<iframe src="https://spendolas.github.io/sombra/viewer.html#g=${viewerHash}" style="width:100%;aspect-ratio:16/9;border:0" allowfullscreen></iframe>`
+    ? `<iframe src="https://spendolas.github.io/sombra/viewer.html#g=${viewerHash}" style="width:100%;height:100%;border:0" allowfullscreen></iframe>`
     : '<!-- iframe fallback unavailable: no viewer hash provided -->'
 
   return { hosted, embed, control, iframe }
