@@ -79,7 +79,7 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
             className="flex items-center gap-1 px-2 py-1 rounded bg-indigo text-fg text-xs hover:bg-indigo-hover"
             onClick={download}
           >
-            <icons.download className="w-3.5 h-3.5" /> Download .sombra
+            <icons.download className="w-3.5 h-3.5" /> Download .ombra
           </button>
         </div>
         <div className="relative">
