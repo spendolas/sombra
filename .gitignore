@@ -24,6 +24,9 @@ dist-ssr
 # Logs
 *.log
 
+# Personal scene files / local self-validate fixtures (not for the public repo)
+shaders/
+
 # Audit artifacts
 artifacts/visual-audit/
 binding-audit.ndjson
