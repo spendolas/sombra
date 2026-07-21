@@ -109,7 +109,9 @@ export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneH
 
   let renderer: ShaderRenderer
   try {
-    renderer = await createShaderRenderer(canvas)
+    // Pass the plan so the factory picks WebGL2 for a no-WGSL artifact (published
+    // from a non-WebGPU browser) instead of hard-failing on a WebGPU device.
+    renderer = await createShaderRenderer(canvas, plan)
     const res = renderer.updateRenderPlan(plan)
     if (!res.success) throw new Error(res.error ?? 'updateRenderPlan failed')
   } catch (err) {

@@ -195,8 +195,11 @@ function rewriteFragCoord(code: string): string {
  * and vertex shader are emitted as template strings, not through this path.
  */
 function rewriteVaryingReferences(code: string): string {
-  // Negative lookbehind avoids double-rewriting `in.v_uv` → `in.in.v_uv`
-  return code.replace(/(?<!\.)v_uv\b/g, 'in.v_uv')
+  // Lookbehind excludes a leading `.` (no `in.v_uv` → `in.in.v_uv`) AND a leading
+  // word char, so `v_uv` as the SUFFIX of a per-node var name (e.g. a node whose
+  // id ends in `v` with a `uv` output → `node_..v_uv`) isn't split into an invalid
+  // `.`-containing identifier. Mirrors the uniform rewrite's guard above.
+  return code.replace(/(?<![\w.])v_uv\b/g, 'in.v_uv')
 }
 
 // ---------------------------------------------------------------------------

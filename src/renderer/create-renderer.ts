@@ -4,7 +4,7 @@
  * Tries WebGPU first, falls back to WebGL2.
  */
 
-import type { ShaderRenderer, PreviewRenderer } from './types'
+import type { ShaderRenderer, PreviewRenderer, RenderPlan } from './types'
 
 /**
  * Create and initialize a main shader renderer on the given canvas.
@@ -18,8 +18,14 @@ export function isWebGL2Forced(): boolean {
 
 export async function createShaderRenderer(
   canvas: HTMLCanvasElement,
+  plan?: RenderPlan,
 ): Promise<ShaderRenderer> {
-  if (typeof navigator !== 'undefined' && navigator.gpu && !isWebGL2Forced()) {
+  // A plan with no WGSL passes (e.g. an embed artifact published from a
+  // non-WebGPU browser) can't run on WebGPU — force WebGL2, which renders the
+  // GLSL passes. Omitting `plan` (app/viewer, which compile fresh) keeps
+  // WebGPU-first behavior unchanged.
+  const planRunsOnWebGPU = !plan || !!plan.wgsl?.passes?.length
+  if (typeof navigator !== 'undefined' && navigator.gpu && !isWebGL2Forced() && planRunsOnWebGPU) {
     try {
       const { WebGPUShaderRenderer } = await import('../webgpu/renderer')
       const renderer = new WebGPUShaderRenderer()

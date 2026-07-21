@@ -29,7 +29,11 @@ export function RandomDisplay({
   const min = (data.min as number) ?? 0
   const max = (data.max as number) ?? 1
   const dp = Math.round((data.decimals as number) ?? 7)
-  const hash = hashNodeId(nodeId)
+  // Match the shader exactly: both generators bake the hash truncated to 6
+  // decimals (`hashNodeId(id).toFixed(6)` in random.ts). Using the full-precision
+  // hash here made the on-node readout diverge from the rendered value at the
+  // 6th–7th decimal.
+  const hash = Number(hashNodeId(nodeId).toFixed(6))
 
   // Match GLSL: floor(raw / stepSize + 0.5) * stepSize
   const stepSize = Math.pow(10, -dp)
