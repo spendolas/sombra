@@ -507,7 +507,7 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
           <div
             key={point.id}
             className={cn(
-              'absolute nodrag nowheel pointer-events-auto',
+              'absolute nodrag nowheel pointer-events-auto touch-none',
               isCenter ? ds.gizmo.center : ds.gizmo.handle,
               markerShapeClass(point.shape),
             )}
@@ -537,7 +537,7 @@ export function PreviewGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetR
           <div
             key={handle.id}
             className={cn(
-              'absolute nodrag nowheel pointer-events-auto',
+              'absolute nodrag nowheel pointer-events-auto touch-none',
               ds.gizmo.handle,
               markerShapeClass(handle.shape),
             )}

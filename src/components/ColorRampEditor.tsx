@@ -235,10 +235,14 @@ export function ColorRampEditor({
       const onUp = () => {
         document.removeEventListener('pointermove', onMove)
         document.removeEventListener('pointerup', onUp)
+        document.removeEventListener('pointercancel', onUp)
       }
 
       document.addEventListener('pointermove', onMove)
       document.addEventListener('pointerup', onUp)
+      // pointercancel: a pen/touch pan-claim ends the drag here instead of leaking
+      // the move listener and stranding the stop mid-drag.
+      document.addEventListener('pointercancel', onUp)
     },
     [stops, updateStops]
   )
@@ -332,7 +336,7 @@ export function ColorRampEditor({
             key={i}
             className={cn(
               ds.gradientEditor.stopHandle,
-              'top-0 -translate-x-1/2 overflow-hidden',
+              'top-0 -translate-x-1/2 overflow-hidden touch-none',
               i === safeIndex && ds.gradientEditor.stopHandleSelected
             )}
             style={{ left: `${stop.position * 100}%` }}

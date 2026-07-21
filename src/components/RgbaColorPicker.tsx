@@ -97,15 +97,73 @@ function valuesEqual(a: Rgba, b: Rgba) {
   return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3]
 }
 
-/** Shared range-input reset so our custom track gradient shows through, with a small visible thumb. */
-const RANGE_CLASS =
-  'relative w-full h-2 rounded-sm appearance-none cursor-pointer bg-transparent ' +
-  '[&::-webkit-slider-runnable-track]:bg-transparent [&::-moz-range-track]:bg-transparent ' +
-  '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 ' +
-  '[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:border ' +
-  '[&::-webkit-slider-thumb]:border-edge [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 ' +
-  '[&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-0 ' +
-  '[&::-moz-range-thumb]:outline [&::-moz-range-thumb]:outline-1 [&::-moz-range-thumb]:outline-edge'
+/**
+ * Custom pointer-driven slider with a gradient track (hue / alpha). NOT a native
+ * <input type=range>: native range drives its thumb via focus + implicit pointer
+ * capture, which some pens/styluses intermittently fail to grant — the drag then
+ * aborts with zero value change. This computes value from clientX under explicit
+ * pointer capture with window move/up/cancel listeners, so pen/touch/mouse behave
+ * identically and a drag can't be lost to focus or a scroll/pan claim.
+ */
+function GradientSlider({ min, max, step, value, onChange, className, style, ariaLabel }: {
+  min: number
+  max: number
+  step: number
+  value: number
+  onChange: (v: number) => void
+  className?: string
+  style?: React.CSSProperties
+  ariaLabel?: string
+}) {
+  const trackRef = useRef<HTMLDivElement>(null)
+  // Always call the latest onChange (hue/alpha handlers close over live hsv/alpha).
+  const onChangeRef = useRef(onChange)
+  onChangeRef.current = onChange
+
+  const valueFromClientX = (clientX: number) => {
+    const rect = trackRef.current?.getBoundingClientRect()
+    if (!rect || rect.width === 0) return value
+    const raw = min + ((clientX - rect.left) / rect.width) * (max - min)
+    return Math.min(max, Math.max(min, Math.round(raw / step) * step))
+  }
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const el = e.currentTarget
+    try { el.setPointerCapture(e.pointerId) } catch { /* pointer already released */ }
+    onChangeRef.current(valueFromClientX(e.clientX))
+    const onMove = (ev: PointerEvent) => onChangeRef.current(valueFromClientX(ev.clientX))
+    const stop = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', stop)
+      window.removeEventListener('pointercancel', stop)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', stop)
+    window.addEventListener('pointercancel', stop)
+  }
+
+  const pct = max === min ? 0 : ((value - min) / (max - min)) * 100
+  return (
+    <div
+      ref={trackRef}
+      role="slider"
+      aria-valuemin={min}
+      aria-valuemax={max}
+      aria-valuenow={value}
+      aria-label={ariaLabel}
+      className={cn('relative w-full h-2 rounded-sm cursor-pointer touch-none select-none', className)}
+      style={style}
+      onPointerDown={onPointerDown}
+    >
+      <div
+        className="absolute top-1/2 w-3 h-3 rounded-full bg-white border border-edge -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+        style={{ left: `${pct}%` }}
+      />
+    </div>
+  )
+}
 
 /** Popover is portaled to document.body; these keep it clear of viewport edges. */
 const VIEWPORT_MARGIN = 8
@@ -223,6 +281,8 @@ export function RgbaColorPicker({ value, onChange, label, className, mode = 'pop
     (e: React.PointerEvent) => {
       e.preventDefault()
       e.stopPropagation()
+      // Bind the drag to the SV area (stable container div) and end cleanly on cancel.
+      try { e.currentTarget.setPointerCapture(e.pointerId) } catch { /* pointer already released */ }
       const rect = svRef.current?.getBoundingClientRect()
       if (!rect) return
 
@@ -239,9 +299,11 @@ export function RgbaColorPicker({ value, onChange, label, className, mode = 'pop
       const onUp = () => {
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onUp)
+        window.removeEventListener('pointercancel', onUp)
       }
       window.addEventListener('pointermove', onMove)
       window.addEventListener('pointerup', onUp)
+      window.addEventListener('pointercancel', onUp)
     },
     [hsv, a, emit]
   )
@@ -285,14 +347,14 @@ export function RgbaColorPicker({ value, onChange, label, className, mode = 'pop
       </div>
 
       {/* Hue slider */}
-      <input
-        type="range"
+      <GradientSlider
         min={0}
         max={360}
         step={1}
         value={hsv.h}
-        onChange={(e) => handleHueChange(Number(e.target.value))}
-        className={cn(RANGE_CLASS, ds.colorPicker.hueSlider, 'w-full')}
+        onChange={handleHueChange}
+        ariaLabel="Hue"
+        className={cn(ds.colorPicker.hueSlider, 'w-full')}
         style={{ backgroundImage: 'linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)' }}
       />
 
@@ -301,14 +363,14 @@ export function RgbaColorPicker({ value, onChange, label, className, mode = 'pop
           and is never clipped by a wrapper's overflow. Omitted when the context
           has no use for opacity. */}
       {showAlpha && (
-        <input
-          type="range"
+        <GradientSlider
           min={0}
           max={1}
           step={0.01}
           value={a}
-          onChange={(e) => handleAlphaChange(Number(e.target.value))}
-          className={cn(RANGE_CLASS, ds.colorPicker.alphaSlider, 'w-full')}
+          onChange={handleAlphaChange}
+          ariaLabel="Alpha"
+          className={cn(ds.colorPicker.alphaSlider, 'w-full')}
           style={{
             backgroundImage:
               `linear-gradient(to right, ${rgbaCss(r, g, b, 0)}, ${rgbaCss(r, g, b, 1)}), ` +

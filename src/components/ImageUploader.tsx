@@ -528,7 +528,7 @@ export function ImageUploader({ nodeId, data }: {
             <img src={imageData} alt={imageName || 'Uploaded image'} className="absolute inset-0 w-full h-full" />
             <svg
               ref={svgRef}
-              className="absolute inset-0 w-full h-full overflow-hidden"
+              className="absolute inset-0 w-full h-full overflow-hidden touch-none"
               viewBox={`0 0 ${tw} ${th}`}
               style={{ cursor: hoverCursor }}
               onPointerDown={handlePointerDown}

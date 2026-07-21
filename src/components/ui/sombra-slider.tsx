@@ -93,6 +93,9 @@ function SombraSlider({
       if (disabled || editingField) return
       e.preventDefault()
       e.stopPropagation()
+      // Bind the drag to the track (survives cursor excursions / cross-origin iframes).
+      // Safe: the track is a plain div (not a native range) and isn't restyled per-frame.
+      try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId) } catch { /* pointer already released */ }
       const rect = trackRef.current?.getBoundingClientRect()
       if (!rect) return
 
@@ -146,9 +149,11 @@ function SombraSlider({
 
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
     return () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
     }
   }, [dragging, xToValue])
 
@@ -211,9 +216,11 @@ function SombraSlider({
 
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
     return () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
     }
   }, [scrubbing, min, max, step])
 
@@ -282,6 +289,9 @@ function SombraSlider({
     <div
       className={cn(
         ds.floatSlider.root,
+        // touch-action:none here covers the whole widget (track + label scrub) via
+        // ancestor intersection, so a pen/touch drag can't be claimed as a pan/scroll.
+        'touch-none',
         disabled && 'opacity-[var(--disabled-opacity)] pointer-events-none',
         className
       )}

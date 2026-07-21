@@ -1,5 +1,7 @@
 /**
- * Slider — thin native range input styled with DS tokens.
+ * Slider — custom pointer-driven track (NOT a native range input) styled with DS
+ * tokens. Value comes from pointer position; the drag uses setPointerCapture +
+ * document pointermove/pointerup/pointercancel so it survives pen/touch/capture loss.
  * Used only by ZoomSlider for viewport zoom control.
  */
 
@@ -52,15 +54,17 @@ function Slider({
       }
 
       update(e.clientX, e.clientY)
-      ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+      try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId) } catch { /* pointer already released */ }
 
       const onMove = (ev: PointerEvent) => update(ev.clientX, ev.clientY)
       const onUp = () => {
         document.removeEventListener("pointermove", onMove)
         document.removeEventListener("pointerup", onUp)
+        document.removeEventListener("pointercancel", onUp)
       }
       document.addEventListener("pointermove", onMove)
       document.addEventListener("pointerup", onUp)
+      document.addEventListener("pointercancel", onUp)
     },
     [min, max, step, orientation, onValueChange]
   )
@@ -79,7 +83,9 @@ function Slider({
         ref={trackRef}
         className={cn(
           ds.sliderTrack.track,
-          "cursor-pointer overflow-hidden",
+          // touch-none on the element that receives pointerdown (touch-action isn't
+          // inherited) so an ancestor can't claim the drag as a pan.
+          "cursor-pointer overflow-hidden touch-none",
           isVertical ? "!h-full !w-slider-track" : "!h-slider-track !w-full"
         )}
         onPointerDown={handlePointerDown}
