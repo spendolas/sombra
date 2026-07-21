@@ -53,6 +53,14 @@ npm install
 
 Note: `npm run check-deps` only hashes package-lock.json — it does not catch wrong-arch node_modules.
 
+**`.git` must ALSO be Dropbox-ignored** — same flag, per machine. Dropbox syncing git internals corrupts refs mid-operation (a history rewrite once reverted a branch to a pruned SHA → "bad object HEAD"). Dropbox still syncs the working files; git syncs via GitHub instead. Verify with `xattr -l .git | grep ignored`; if missing:
+
+```bash
+xattr -w com.dropbox.ignored 1 .git   # local-only, per machine
+```
+
+Because `.git` is per-machine, **GitHub is the source of truth for history**: always `git push` before switching machines, and on the other machine reconcile with `git fetch origin && git reset --hard origin/<branch>` (working files already arrived via Dropbox; this just realigns the local `.git`). A machine whose `.git` is stale/behind can otherwise push old history and undo rewrites.
+
 ## Documentation Map
 
 | File | What it covers |
