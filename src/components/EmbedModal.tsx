@@ -50,7 +50,7 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
     const url = URL.createObjectURL(new Blob([new Uint8Array(result.sceneBytes)], { type: 'application/octet-stream' }))
     const a = document.createElement('a')
     a.href = url
-    a.download = 'scene.sombra'
+    a.download = 'scene.ombra'
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -69,7 +69,8 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
 
         <div ref={previewRef} className="w-full aspect-video bg-black rounded mb-3" />
 
-        {/* Hosted (primary): download the .sombra file, host it anywhere, paste this. */}
+        {/* Hosted (primary): download the compiled .ombra file, host it anywhere, paste this.
+            (.ombra = compiled shader for the player; .sombra = editable graph for the editor.) */}
         <div className="flex items-center justify-between mb-2">
           <div className="text-xs text-fg-subtle">
             Hosted file: {fileKb} KB {heavy && <span className="text-amber-400">— large; consider downscaling baked images</span>}

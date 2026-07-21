@@ -6,11 +6,17 @@ decoder + performance harness — **no React, no xyflow, no compiler, no nodes**
 decodes the shader and drives the render loop. A small JS API (`Sombra.mount`)
 exposes every knob to the host page so the surrounding site can drive the shader.
 
+- **Two file types (distinct extensions):**
+  - **`.sombra`** — the **editor graph** (`{ sombra, nodes, edges }` JSON). What
+    the editor saves/opens; editable. Handled by `src/utils/sombra-file.ts`.
+  - **`.ombra`** — the **compiled shader** (this doc's artifact: deflated binary
+    `SceneArtifact`, no graph). What the player renders; not editable. A `.ombra`
+    is the *compiled output* of a `.sombra` and can't be turned back into one.
 - **Editor entry point:** the `</>` (code) button in the graph toolbar opens the
-  Embed modal. It compiles the current graph and offers a **Download .sombra**
+  Embed modal. It compiles the current graph and offers a **Download .ombra**
   file plus copy-paste snippets (hosted, inline, iframe).
 - **Two scene transports:**
-  - **Hosted file (primary):** download a `.sombra` file (deflated binary — *no*
+  - **Hosted file (primary):** download a `.ombra` file (deflated binary — *no*
     base64, ~25% smaller than inline), host it anywhere, and reference it with
     `data-sombra-src="<url>"`. The player `fetch`es and inflates it.
   - **Inline:** the whole artifact base64url-encoded into `data-sombra-scene` —
@@ -27,18 +33,18 @@ exposes every knob to the host page so the surrounding site can drive the shader
 ## 1. Quick start
 
 Every embed variant auto-mounts *and* is controllable — you don't choose between
-"simple" and "developer" up front. Pick a **transport**: a hosted `.sombra` file
+"simple" and "developer" up front. Pick a **transport**: a hosted `.ombra` file
 (primary), the inline artifact, or the isolated `iframe` fallback.
 
 ### Hosted file (primary) — `data-sombra-src`
 
-Download the `.sombra` file from the Embed modal, host it anywhere, and reference
+Download the `.ombra` file from the Embed modal, host it anywhere, and reference
 its URL. The player lazy-loads once (cached across embeds and sites), then fetches
 + inflates the file and mounts it. Tiny snippet regardless of scene size.
 
 ```html
 <script>!function(){var s=window.Sombra;if(s&&s.init){s.init()}else{var i=document.createElement("script");i.src="https://spendolas.github.io/sombra/embed/sombra-player.0.1.0.umd.js";i.onload=function(){Sombra.init()};(document.head||document.body).appendChild(i)}}();</script>
-<div id="sombra-shader" data-sombra-src="https://your-host.example/scene.sombra" style="width:100%;aspect-ratio:16/9"></div>
+<div id="sombra-shader" data-sombra-src="https://your-host.example/scene.ombra" style="width:100%;aspect-ratio:16/9"></div>
 ```
 
 > **CORS:** if the file is served from a different origin than the page, its host
@@ -120,7 +126,7 @@ graph (nodes+edges)
   → stripPlan(plan)                      (drop vertex shaders)
   → SceneArtifact { plan, manifest, images, meta }
   → JSON.stringify → pako.deflate → ┬─ base64url   (encodeArtifact  → inline string)
-                                    └─ raw bytes    (encodeArtifactBytes → .sombra file)
+                                    └─ raw bytes    (encodeArtifactBytes → .ombra file)
 ```
 
 On the player side the reverse runs — `decodeArtifact` (base64) or
@@ -128,7 +134,7 @@ On the player side the reverse runs — `decodeArtifact` (base64) or
 `createShaderRenderer(canvas).updateRenderPlan(plan)`.
 
 `publishScene` returns both forms: `sceneB64` (inline) and `sceneBytes`
-(`Uint8Array`, the `.sombra` file), plus `sizeBytes`/`fileBytes` for each.
+(`Uint8Array`, the `.ombra` file), plus `sizeBytes`/`fileBytes` for each.
 
 ### Shape (`src/embed/artifact.ts`)
 
@@ -201,7 +207,7 @@ All four codec functions share one core (`JSON.stringify` → `pako.deflate`), a
 differ only in whether the deflated bytes are base64-wrapped:
 
 - **`encodeArtifactBytes(a)` / `decodeArtifactBytes(bytes)`** — deflated JSON as raw
-  `Uint8Array`. This is the hosted `.sombra` file: the player fetches it as an
+  `Uint8Array`. This is the hosted `.ombra` file: the player fetches it as an
   `ArrayBuffer` and inflates. No base64, so it's **~25% smaller** than the inline
   string, and self-compressed (small on any static host, no gzip/brotli needed).
 - **`encodeArtifact(a)` / `decodeArtifact(s)`** — the same bytes wrapped in
@@ -216,7 +222,7 @@ The codec is lossless (verified by round-trip), and `Map`s in the plan (the WGSL
 > **Not minified before deflate.** Stripping shader-source comments/whitespace was
 > built, GPU-verified safe, then **measured and rejected**: it shrinks raw text
 > ~6% but the artifact is deflated, and removing that highly-repetitive text
-> *reduces* the redundancy deflate exploits, making the final `.sombra` **~10%
+> *reduces* the redundancy deflate exploits, making the final `.ombra` **~10%
 > larger**. Deflate already handles whitespace; don't re-add a minify step here.
 
 ---
@@ -248,7 +254,7 @@ hook for a future short-code / CDN service: point ids at a service with one call
 and no page changes —
 
 ```js
-Sombra.configure({ resolve: id => `https://cdn.example/scenes/${id}.sombra` });
+Sombra.configure({ resolve: id => `https://cdn.example/scenes/${id}.ombra` });
 // then: <div data-sombra-id="momsflowers" ...>
 ```
 
@@ -257,7 +263,7 @@ Sombra.configure({ resolve: id => `https://cdn.example/scenes/${id}.sombra` });
 | Field       | Type                                    | Default | Meaning |
 |-------------|-----------------------------------------|---------|---------|
 | `scene`     | `string`                                | —       | inline base64url artifact — one of `scene`/`src` required |
-| `src`       | `string`                                | —       | scene ref (hosted `.sombra` URL, or an id run through the resolver), fetched as binary |
+| `src`       | `string`                                | —       | scene ref (hosted `.ombra` URL, or an id run through the resolver), fetched as binary |
 | `variables` | `Record<string, number \| number[]>`    | —       | initial knob overrides, keyed by knob `key` |
 | `autoplay`  | `boolean`                               | `true`  | start the animation loop when visible |
 | `fallback`  | `boolean`                               | `true`  | on error, show the bouncing “SOMBRA” placeholder in the container |
@@ -317,7 +323,7 @@ A container declares its scene with **one** of these, checked in order
 | Attribute              | Values          | Meaning |
 |------------------------|-----------------|---------|
 | `data-sombra-scene`    | base64url       | inline artifact — self-contained, no fetch |
-| `data-sombra-src`      | URL             | hosted `.sombra` file, fetched as binary (cross-origin ⇒ needs `Access-Control-Allow-Origin`) |
+| `data-sombra-src`      | URL             | hosted `.ombra` file, fetched as binary (cross-origin ⇒ needs `Access-Control-Allow-Origin`) |
 | `data-sombra-id`       | string          | ref resolved to a URL by `Sombra.configure({ resolve })`, then fetched |
 | `data-sombra-autoplay` | `"true"`/`"false"` | default `true`; `"false"` mounts paused |
 | `data-sombra-debug`    | `"true"`        | write init errors into the element |
@@ -422,14 +428,14 @@ erased at build, so type‑only imports of compiler types are fine everywhere.
 
 **v1 (this release):** frozen scenes, knobs‑only. The published artifact is the
 compiled shader plus a manifest of unwired `uniform`‑mode params, shippable inline
-or as a hosted `.sombra` file. The Embed modal shows a file‑size badge and warns
+or as a hosted `.ombra` file. The Embed modal shows a file‑size badge and warns
 when baked images make the artifact large.
 
 **Doors left open:**
 - `SceneArtifact.kind` reserves `'frozen'` today with `'live'` planned — a future
   artifact could ship the graph and recompile on the host for live editing.
 - The `configure({ resolve })` seam + `data-sombra-id` are the hook for a future
-  **short-code / CDN service**: it only needs to map an id → a `.sombra` URL, with
+  **short-code / CDN service**: it only needs to map an id → a `.ombra` URL, with
   zero changes to already-embedded pages.
 
 **Fast‑follows (not in v1):**

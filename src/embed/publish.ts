@@ -10,10 +10,10 @@ import { PLAYER_UMD_URL } from './version'
 
 export interface PublishResult {
   sceneB64: string          // inline artifact (base64url) for data-sombra-scene
-  sceneBytes: Uint8Array    // hosted .sombra file contents (deflated binary, no base64)
+  sceneBytes: Uint8Array    // hosted .ombra file contents (compiled shader, deflated binary, no base64)
   manifest: KnobDescriptor[]
   sizeBytes: number         // inline base64 length (what a data-attribute costs)
-  fileBytes: number         // hosted .sombra file size (~25-33% smaller — no base64)
+  fileBytes: number         // hosted .ombra file size (~25-33% smaller — no base64)
   snippets: ReturnType<typeof buildSnippets>
 }
 
@@ -50,7 +50,7 @@ export function publishScene(
   // NB: shader-source minification (strip comments/whitespace) was measured and
   // REJECTED here — it shrinks raw text ~6% but the artifact is deflated, and
   // stripping that highly-repetitive text removes redundancy deflate exploited,
-  // making the final .sombra ~10% LARGER. Deflate already handles whitespace.
+  // making the final .ombra ~10% LARGER. Deflate already handles whitespace.
 
   // Same reachable set the shader + manifest use — prune baked images to it so
   // dead-ended / disconnected nodes leave no bytes in the artifact. Compilation
@@ -94,7 +94,7 @@ export function publishScene(
 /** Build the snippet strings. One self-bootstrapping `embed` (auto-mounts AND is
  * controllable via the handle), an optional `control` add-on, and the isolated
  * `iframe` fallback. */
-export const HOSTED_URL_PLACEHOLDER = 'REPLACE_WITH_YOUR_FILE_URL.sombra'
+export const HOSTED_URL_PLACEHOLDER = 'REPLACE_WITH_YOUR_FILE_URL.ombra'
 
 export function buildSnippets(sceneB64: string, viewerHash?: string) {
   // Player loader: loads the UMD once (cached across sites) then auto-mounts.
@@ -102,8 +102,9 @@ export function buildSnippets(sceneB64: string, viewerHash?: string) {
 `<script>!function(){var s=window.Sombra;if(s&&s.init){s.init()}else{var i=document.createElement("script");` +
 `i.src="${PLAYER_UMD_URL}";i.onload=function(){Sombra.init()};(document.head||document.body).appendChild(i)}}();</script>`
 
-  // Hosted: reference a .sombra file you host anywhere; tiny snippet, and the
-  // container is addressable (id) for optional live control. The primary path.
+  // Hosted: reference a compiled .ombra file you host anywhere; tiny snippet, and
+  // the container is addressable (id) for optional live control. The primary path.
+  // (.ombra = compiled shader for the player; .sombra = editable graph for the editor.)
   const hosted =
 `${loader}\n<div id="sombra-shader" data-sombra-src="${HOSTED_URL_PLACEHOLDER}" style="width:100%;aspect-ratio:16/9"></div>`
 
