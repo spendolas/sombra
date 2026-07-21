@@ -1,14 +1,12 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useGraphStore } from '@/stores/graphStore'
 import { encodeCompactHash } from '@/utils/sombra-file'
 import { publishScene, type PublishResult } from '@/embed/publish'
 import { mount, type SceneHandle } from '@/embed/player'
-
-type Tab = 'embed' | 'iframe'
+import { icons } from '@/components/icons'
 
 export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [tab, setTab] = useState<Tab>('embed')
   const [result, setResult] = useState<PublishResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
@@ -40,25 +38,21 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
   }, [open, result])
 
   const sizeKb = useMemo(() => result ? (result.sizeBytes / 1024).toFixed(1) : '0', [result])
-  const heavy = !!result && result.sizeBytes > 200 * 1024
-
-  // Group knobs by owning node (stable id) so the list is readable even when many
-  // nodes expose same-named params (scale, seed, offset…). Each group carries the
-  // node's display name + stable id for deliberate set(id, param, value) access.
-  const grouped = useMemo(() => {
-    const m = new Map<string, { name: string; knobs: PublishResult['manifest'] }>()
-    for (const k of result?.manifest ?? []) {
-      const g = m.get(k.nodeId) ?? { name: k.node, knobs: [] }
-      g.knobs.push(k)
-      m.set(k.nodeId, g)
-    }
-    return [...m.entries()]  // [nodeId, { name, knobs }]
-  }, [result])
+  const fileKb = useMemo(() => result ? (result.fileBytes / 1024).toFixed(1) : '0', [result])
+  const heavy = !!result && result.fileBytes > 200 * 1024
 
   if (!open) return null
-  const snippet = result ? (tab === 'embed' ? result.snippets.embed : result.snippets.iframe) : ''
   const copy = (text: string, which: string) => {
     void navigator.clipboard.writeText(text).then(() => { setCopied(which); setTimeout(() => setCopied(null), 1500) })
+  }
+  const download = () => {
+    if (!result) return
+    const url = URL.createObjectURL(new Blob([new Uint8Array(result.sceneBytes)], { type: 'application/octet-stream' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'scene.sombra'
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   // Portal to <body> so the overlay escapes the React Flow viewport's transformed
@@ -75,68 +69,85 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
 
         <div ref={previewRef} className="w-full aspect-video bg-black rounded mb-3" />
 
-        <div className="flex gap-2 mb-3">
-          {(['embed', 'iframe'] as Tab[]).map((t) => (
-            <button key={t}
-              className={`px-3 py-1 rounded text-sm ${tab === t ? 'bg-indigo text-fg' : 'bg-surface-raised text-fg-dim'}`}
-              onClick={() => setTab(t)}>
-              {t === 'embed' ? 'Embed' : 'iframe (isolated)'}
-            </button>
-          ))}
+        {/* Hosted (primary): download the .sombra file, host it anywhere, paste this. */}
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-xs text-fg-subtle">
+            Hosted file: {fileKb} KB {heavy && <span className="text-amber-400">— large; consider downscaling baked images</span>}
+          </div>
+          <button
+            className="flex items-center gap-1 px-2 py-1 rounded bg-indigo text-fg text-xs hover:bg-indigo-hover"
+            onClick={download}
+          >
+            <icons.download className="w-3.5 h-3.5" /> Download .sombra
+          </button>
+        </div>
+        <div className="relative">
+          <pre className="bg-surface-raised text-fg-dim text-xs p-3 pr-10 rounded max-h-32 overflow-auto whitespace-pre-wrap break-all">{result?.snippets.hosted ?? ''}</pre>
+          <button
+            className="absolute top-2 right-2 p-1 rounded text-fg-subtle hover:text-fg hover:bg-surface-elevated"
+            title="Copy embed snippet" aria-label="Copy embed snippet"
+            onClick={() => result && copy(result.snippets.hosted, 'hosted')}
+          >
+            {copied === 'hosted' ? <icons.check className="w-4 h-4" /> : <icons.copy className="w-4 h-4" />}
+          </button>
+        </div>
+        <div className="text-xs text-fg-subtle mt-1">
+          Host the file anywhere and replace the URL. If it's on a different domain than the page, it must send <code className="font-mono">Access-Control-Allow-Origin</code>.
         </div>
 
-        <div className="text-xs text-fg-subtle mb-2">
-          Payload: {sizeKb} KB {heavy && <span className="text-amber-400">— large; consider downscaling baked images</span>}
-        </div>
-
-        <pre className="bg-surface-raised text-fg-dim text-xs p-3 rounded overflow-x-auto whitespace-pre-wrap break-all">{snippet}</pre>
-        <button className="mt-2 px-3 py-1 rounded bg-indigo text-fg text-sm" onClick={() => copy(snippet, tab)}>
-          {copied === tab ? 'Copied ✓' : 'Copy'}
-        </button>
-
-        {tab === 'iframe' && (
-          <div className="text-xs text-fg-subtle mt-2">Fully sandboxed — heaviest at runtime and exposes no knob API. Use for strict-CSP hosts or paste-and-forget.</div>
-        )}
-
-        {tab === 'embed' && result && (
+        {result && (
           <div className="mt-4">
             <div className="text-sm text-fg-dim mb-1">Control it from JavaScript (optional — same embed)</div>
-            <pre className="bg-surface-raised text-fg-dim text-xs p-3 rounded overflow-x-auto whitespace-pre-wrap break-all">{result.snippets.control}</pre>
-            <button className="mt-2 px-3 py-1 rounded bg-surface-elevated text-fg-dim text-sm" onClick={() => copy(result.snippets.control, 'control')}>
-              {copied === 'control' ? 'Copied ✓' : 'Copy control snippet'}
-            </button>
-            <div className="text-sm text-fg-dim mt-4 mb-1">Knobs ({result.manifest.length})</div>
-            <table className="w-full text-xs text-fg-dim">
-              <thead><tr className="text-fg-subtle text-left"><th>param</th><th>key</th><th>type</th><th>range</th><th>example</th></tr></thead>
-              <tbody>
-                {grouped.map(([nodeId, { name, knobs }]) => (
-                  <Fragment key={nodeId}>
-                    <tr>
-                      <td colSpan={5} className="pt-3 pb-1">
-                        <span className="text-fg font-medium">{name}</span>{' '}
-                        <button
-                          className="font-mono text-fg-subtle hover:text-fg"
-                          title="Copy node id (for shader.set(id, param, value))"
-                          onClick={() => copy(nodeId, `node:${nodeId}`)}
-                        >
-                          {copied === `node:${nodeId}` ? 'id copied ✓' : `id: ${nodeId} ⧉`}
-                        </button>
-                      </td>
-                    </tr>
-                    {knobs.map((k) => (
-                      <tr key={k.key}>
-                        <td className="pl-2">{k.label}</td>
-                        <td className="font-mono">{k.key}</td>
-                        <td>{k.type}</td>
-                        <td>{k.min ?? '—'} … {k.max ?? '—'}</td>
-                        <td className="font-mono">shader.set('{nodeId}', '{k.param}', {k.type === 'color' ? '[1,0,0]' : (k.max ?? 1)})</td>
-                      </tr>
-                    ))}
-                  </Fragment>
-                ))}
-              </tbody>
-            </table>
+            <div className="relative">
+              <pre className="bg-surface-raised text-fg-dim text-xs p-3 pr-10 rounded max-h-32 overflow-auto whitespace-pre-wrap break-all">{result.snippets.control}</pre>
+              <button
+                className="absolute top-2 right-2 p-1 rounded text-fg-subtle hover:text-fg hover:bg-surface-elevated"
+                title="Copy control snippet" aria-label="Copy control snippet"
+                onClick={() => copy(result.snippets.control, 'control')}
+              >
+                {copied === 'control' ? <icons.check className="w-4 h-4" /> : <icons.copy className="w-4 h-4" />}
+              </button>
+            </div>
+            <div className="text-xs text-fg-subtle mt-1">
+              List controllable params at runtime with <code className="font-mono">shader.nodes()</code>, then drive them via <code className="font-mono">shader.set(nodeId, param, value)</code>.
+            </div>
           </div>
+        )}
+
+        {/* Inline: the whole scene in the attribute — no hosting, bigger snippet. */}
+        {result && (
+          <details className="mt-4">
+            <summary className="text-sm text-fg-dim cursor-pointer select-none hover:text-fg">Inline — self-contained, no hosting ({sizeKb} KB in the tag)</summary>
+            <div className="relative mt-2">
+              <pre className="bg-surface-raised text-fg-dim text-xs p-3 pr-10 rounded max-h-32 overflow-auto whitespace-pre-wrap break-all">{result.snippets.embed}</pre>
+              <button
+                className="absolute top-2 right-2 p-1 rounded text-fg-subtle hover:text-fg hover:bg-surface-elevated"
+                title="Copy inline snippet" aria-label="Copy inline snippet"
+                onClick={() => copy(result.snippets.embed, 'embed')}
+              >
+                {copied === 'embed' ? <icons.check className="w-4 h-4" /> : <icons.copy className="w-4 h-4" />}
+              </button>
+            </div>
+            <div className="text-xs text-fg-subtle mt-2">The entire scene lives in the tag — no file to host, but a large string. Best for small scenes.</div>
+          </details>
+        )}
+
+        {/* Isolated iframe fallback — a peripheral option, collapsed by default. */}
+        {result && (
+          <details className="mt-4">
+            <summary className="text-sm text-fg-dim cursor-pointer select-none hover:text-fg">Advanced — isolated iframe (strict-CSP hosts, no JS control)</summary>
+            <div className="relative mt-2">
+              <pre className="bg-surface-raised text-fg-dim text-xs p-3 pr-10 rounded max-h-32 overflow-auto whitespace-pre-wrap break-all">{result.snippets.iframe}</pre>
+              <button
+                className="absolute top-2 right-2 p-1 rounded text-fg-subtle hover:text-fg hover:bg-surface-elevated"
+                title="Copy iframe snippet" aria-label="Copy iframe snippet"
+                onClick={() => copy(result.snippets.iframe, 'iframe')}
+              >
+                {copied === 'iframe' ? <icons.check className="w-4 h-4" /> : <icons.copy className="w-4 h-4" />}
+              </button>
+            </div>
+            <div className="text-xs text-fg-subtle mt-2">Fully sandboxed — heaviest at runtime and exposes no knob API. Use for strict-CSP hosts or paste-and-forget.</div>
+          </details>
         )}
       </div>
     </div>,

@@ -126,14 +126,26 @@ function mapReviver(_key: string, value: unknown): unknown {
   return value
 }
 
+/**
+ * Binary transport: deflated JSON, no base64. This is the form a hosted `.sombra`
+ * file takes — the player fetches it as an ArrayBuffer and inflates. Skipping
+ * base64 drops its ~33% tax, so the file is smaller than the inline string and
+ * self-compressed (no reliance on the host serving gzip/brotli).
+ */
+export function encodeArtifactBytes(a: SceneArtifact): Uint8Array {
+  return pako.deflate(JSON.stringify(a, mapReplacer))
+}
+
+export function decodeArtifactBytes(bytes: Uint8Array): SceneArtifact {
+  const json = pako.inflate(bytes, { to: 'string' })
+  return JSON.parse(json, mapReviver) as SceneArtifact
+}
+
+/** Inline transport: the same deflated bytes, base64url-wrapped for a `data-` attribute. */
 export function encodeArtifact(a: SceneArtifact): string {
-  const json = JSON.stringify(a, mapReplacer)
-  const deflated = pako.deflate(json)
-  return bytesToBase64Url(deflated)
+  return bytesToBase64Url(encodeArtifactBytes(a))
 }
 
 export function decodeArtifact(s: string): SceneArtifact {
-  const bytes = base64UrlToBytes(s)
-  const json = pako.inflate(bytes, { to: 'string' })
-  return JSON.parse(json, mapReviver) as SceneArtifact
+  return decodeArtifactBytes(base64UrlToBytes(s))
 }

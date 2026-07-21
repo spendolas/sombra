@@ -1,9 +1,10 @@
 import { createShaderRenderer } from '../renderer/create-renderer'
 import type { ShaderRenderer, QualityTier } from '../renderer/types'
 import {
-  decodeArtifact, reconstructPlan, collectPlanUniforms,
+  decodeArtifact, decodeArtifactBytes, reconstructPlan, collectPlanUniforms,
   type SceneArtifact, type KnobDescriptor, type Knob, type NodeInfo,
 } from './artifact'
+import { resolveRef } from './config'
 import { PerfHarness } from './perf-harness'
 import { showFallback } from './fallback'
 import { registerHandle, unregisterHandle } from './registry'
@@ -12,7 +13,8 @@ import { registerHandle, unregisterHandle } from './registry'
 const nodeKey = (nodeId: string, param: string) => `${nodeId} ${param}`
 
 export interface MountOptions {
-  scene: string                                   // base64url artifact
+  scene?: string                                  // inline base64url artifact (data-sombra-scene)
+  src?: string                                    // scene ref — a hosted .sombra URL (or an id run through the resolver), fetched as binary
   variables?: Record<string, number | number[]>   // initial knob overrides (by key)
   autoplay?: boolean                               // default true
   debug?: boolean                                  // show the error message on the fallback
@@ -46,6 +48,21 @@ const NOOP_HANDLE: SceneHandle = {
   play() {}, pause() {}, resize() {}, destroy() {}, on() {},
 }
 
+/** Fetch a hosted `.sombra` file (binary deflated artifact) and decode it. The ref
+ *  is run through the resolver seam first (URL passthrough by default). */
+async function fetchArtifact(ref: string): Promise<SceneArtifact> {
+  const url = resolveRef(ref)
+  let res: Response
+  try {
+    res = await fetch(url)
+  } catch (e) {
+    // Cross-origin files must send Access-Control-Allow-Origin; most static hosts can.
+    throw new Error(`could not fetch scene "${url}" — network or CORS error (${e instanceof Error ? e.message : String(e)})`)
+  }
+  if (!res.ok) throw new Error(`could not fetch scene "${url}" — HTTP ${res.status}`)
+  return decodeArtifactBytes(new Uint8Array(await res.arrayBuffer()))
+}
+
 export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneHandle> {
   if (typeof window === 'undefined' || !el) return NOOP_HANDLE
 
@@ -55,6 +72,9 @@ export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneH
   const fail = (e: Error): SceneHandle => {
     console.error('[Sombra]', e.message)
     opts.onError?.(e)
+    // DOM event mirror of 'sombra:load' so host pages can react to a failed embed
+    // (e.g. a 404 / CORS-blocked hosted .sombra file) without a JS callback.
+    try { el.dispatchEvent(new CustomEvent('sombra:error', { detail: { error: e } })) } catch { /* no CustomEvent */ }
     if (opts.fallback === false) return NOOP_HANDLE
     const stop = showFallback(el, opts.debug ? e.message : undefined)
     return { ...NOOP_HANDLE, destroy: stop }
@@ -62,7 +82,13 @@ export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneH
 
   let artifact: SceneArtifact
   try {
-    artifact = decodeArtifact(opts.scene)
+    if (opts.scene != null) {
+      artifact = decodeArtifact(opts.scene)
+    } else if (opts.src != null) {
+      artifact = await fetchArtifact(opts.src)
+    } else {
+      throw new Error('mount requires { scene } (inline) or { src } (hosted .sombra url)')
+    }
   } catch (err) {
     return fail(err instanceof Error ? err : new Error(String(err)))
   }

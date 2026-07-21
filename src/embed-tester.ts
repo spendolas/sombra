@@ -54,7 +54,12 @@ const fromHex = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 
 
 type Mode = 'embed' | 'iframe' | 'none'
 function parse(text: string): Mode {
-  if (/data-sombra-scene\s*=/.test(text) || /Sombra\.mount\s*\(/.test(text)) return 'embed'
+  if (
+    /data-sombra-scene\s*=/.test(text) ||
+    /data-sombra-src\s*=/.test(text) ||
+    /data-sombra-id\s*=/.test(text) ||
+    /Sombra\.mount\s*\(/.test(text)
+  ) return 'embed'
   if (/viewer\.html#g=/.test(text)) return 'iframe'
   return 'none'
 }
@@ -125,14 +130,56 @@ function knobRow(h: SceneHandle, node: NodeInfo, k: Knob): HTMLElement {
     val.textContent = cur.map((x) => +Number(x).toFixed(2)).join(', ')
     row.append(wrap, val)
   } else {
+    // Custom pointer-driven slider (NOT a native <input type=range>). Native range
+    // depends on focus + implicit pointer capture; some pens/styluses fail to grant
+    // it, so the drag aborts mid-press (focus falls to <body>, zero value change).
+    // This slider drives value from clientX under explicit pointer capture and never
+    // relies on focus, so it survives pen/touch/mouse identically.
     const min = k.min ?? 0, max = k.max ?? 1, step = k.step ?? ((max - min) / 100 || 0.01)
-    const cur = typeof k.value === 'number' ? k.value : min
-    const slider = el('input') as HTMLInputElement
-    slider.type = 'range'; slider.min = String(min); slider.max = String(max); slider.step = String(step); slider.value = String(cur)
+    let cur = typeof k.value === 'number' ? k.value : min
     const fmt = (v: number) => String(+v.toFixed(step < 1 ? 3 : 0))
-    val.textContent = fmt(cur)
-    slider.oninput = () => { const v = Number(slider.value); apply(v); val.textContent = fmt(v) }
-    row.append(slider, val)
+
+    const track = el('div', 'c-slider')
+    const fill = el('div', 'c-slider-fill')
+    const thumb = el('div', 'c-slider-thumb')
+    track.append(fill, thumb)
+
+    const render = (v: number) => {
+      const pct = max > min ? Math.max(0, Math.min(1, (v - min) / (max - min))) * 100 : 0
+      fill.style.width = `${pct}%`
+      thumb.style.left = `${pct}%`
+      val.textContent = fmt(v)
+    }
+    const valueFromX = (clientX: number) => {
+      const rect = track.getBoundingClientRect()
+      const frac = rect.width > 0 ? (clientX - rect.left) / rect.width : 0
+      const raw = min + Math.max(0, Math.min(1, frac)) * (max - min)
+      return Math.max(min, Math.min(max, Math.round(raw / step) * step))
+    }
+    const applyAt = (clientX: number) => {
+      const v = valueFromX(clientX)
+      render(v)
+      if (v !== cur) { cur = v; apply(v) }
+    }
+
+    track.addEventListener('pointerdown', (e) => {
+      e.preventDefault()
+      try { track.setPointerCapture(e.pointerId) } catch { /* pointer already released */ }
+      applyAt(e.clientX)
+      // Track on window so the drag survives even if capture is lost (button held).
+      const onMove = (ev: PointerEvent) => applyAt(ev.clientX)
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        window.removeEventListener('pointercancel', onUp)
+      }
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+      window.addEventListener('pointercancel', onUp)
+    })
+
+    render(cur)
+    row.append(track, val)
   }
   return row
 }

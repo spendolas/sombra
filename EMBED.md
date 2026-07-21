@@ -7,7 +7,14 @@ decodes the shader and drives the render loop. A small JS API (`Sombra.mount`)
 exposes every knob to the host page so the surrounding site can drive the shader.
 
 - **Editor entry point:** the `</>` (code) button in the graph toolbar opens the
-  Embed modal, which compiles the current graph and hands you three snippets.
+  Embed modal. It compiles the current graph and offers a **Download .sombra**
+  file plus copy-paste snippets (hosted, inline, iframe).
+- **Two scene transports:**
+  - **Hosted file (primary):** download a `.sombra` file (deflated binary — *no*
+    base64, ~25% smaller than inline), host it anywhere, and reference it with
+    `data-sombra-src="<url>"`. The player `fetch`es and inflates it.
+  - **Inline:** the whole artifact base64url-encoded into `data-sombra-scene` —
+    self-contained, no hosting, but a large attribute. Good for small scenes.
 - **Player bundle:** `dist/embed/sombra-player.<version>.umd.js`, served from the
   CDN at `https://spendolas.github.io/sombra/embed/`.
 - **Scope (v1):** *frozen* scenes — the compiled shader plus a manifest of knobs
@@ -19,14 +26,30 @@ exposes every knob to the host page so the surrounding site can drive the shader
 
 ## 1. Quick start
 
-There is **one** embed snippet. It auto-mounts *and* is controllable — you don't
-choose between "simple" and "developer" up front. An `iframe` fallback exists for
-strict-CSP / paste-and-forget cases.
+Every embed variant auto-mounts *and* is controllable — you don't choose between
+"simple" and "developer" up front. Pick a **transport**: a hosted `.sombra` file
+(primary), the inline artifact, or the isolated `iframe` fallback.
 
-### Embed (auto-mount, controllable)
+### Hosted file (primary) — `data-sombra-src`
 
-Lazy-loads the player once (cached across embeds and across sites), then
-auto-mounts every `[data-sombra-scene]` element. The `id` makes it addressable.
+Download the `.sombra` file from the Embed modal, host it anywhere, and reference
+its URL. The player lazy-loads once (cached across embeds and sites), then fetches
++ inflates the file and mounts it. Tiny snippet regardless of scene size.
+
+```html
+<script>!function(){var s=window.Sombra;if(s&&s.init){s.init()}else{var i=document.createElement("script");i.src="https://spendolas.github.io/sombra/embed/sombra-player.0.1.0.umd.js";i.onload=function(){Sombra.init()};(document.head||document.body).appendChild(i)}}();</script>
+<div id="sombra-shader" data-sombra-src="https://your-host.example/scene.sombra" style="width:100%;aspect-ratio:16/9"></div>
+```
+
+> **CORS:** if the file is served from a different origin than the page, its host
+> must send `Access-Control-Allow-Origin` (most static hosts can). Same-origin
+> needs no config. On a 404 / CORS block / malformed file the player fires a
+> `sombra:error` event and shows the fallback instead of crashing.
+
+### Inline (self-contained) — `data-sombra-scene`
+
+The whole artifact base64url'd into the attribute — no file to host, but a large
+string. Best for small scenes / paste-and-forget.
 
 ```html
 <script>!function(){var s=window.Sombra;if(s&&s.init){s.init()}else{var i=document.createElement("script");i.src="https://spendolas.github.io/sombra/embed/sombra-player.0.1.0.umd.js";i.onload=function(){Sombra.init()};(document.head||document.body).appendChild(i)}}();</script>
@@ -51,8 +74,9 @@ above plus a handle.
 </script>
 ```
 
-`Sombra.mount(el, { scene, onLoad })` is still available for hosts that prefer to
-mount explicitly rather than via the `data-` attribute.
+`Sombra.mount(el, { scene, onLoad })` or `Sombra.mount(el, { src, onLoad })` is
+still available for hosts that prefer to mount explicitly rather than via the
+`data-` attribute.
 
 ### iframe (isolated fallback)
 
@@ -83,9 +107,10 @@ fully sandboxed.
 
 ## 2. The Scene Artifact
 
-The snippet carries the whole scene inline as a base64url string. It is produced
-by `src/embed/publish.ts` `publishScene(nodes, edges)` and consumed by
-`src/embed/player.ts` `mount()`.
+The artifact is produced by `src/embed/publish.ts` `publishScene(nodes, edges)`
+and consumed by `src/embed/player.ts` `mount()`. It ships in one of two transports
+— inline in the attribute, or as a hosted file — that differ only in the final
+encoding step (base64 vs raw binary); the artifact itself is identical.
 
 ### Pipeline
 
@@ -94,11 +119,16 @@ graph (nodes+edges)
   → compileGraph / compileGraphIR        (RenderPlan, GLSL + WGSL passes)
   → stripPlan(plan)                      (drop vertex shaders)
   → SceneArtifact { plan, manifest, images, meta }
-  → JSON.stringify → pako.deflate → base64url        (encodeArtifact)
+  → JSON.stringify → pako.deflate → ┬─ base64url   (encodeArtifact  → inline string)
+                                    └─ raw bytes    (encodeArtifactBytes → .sombra file)
 ```
 
-On the player side the reverse runs (`decodeArtifact` → `reconstructPlan`), then
+On the player side the reverse runs — `decodeArtifact` (base64) or
+`decodeArtifactBytes` (fetched `ArrayBuffer`) → `reconstructPlan` — then
 `createShaderRenderer(canvas).updateRenderPlan(plan)`.
+
+`publishScene` returns both forms: `sceneB64` (inline) and `sceneBytes`
+(`Uint8Array`, the `.sombra` file), plus `sizeBytes`/`fileBytes` for each.
 
 ### Shape (`src/embed/artifact.ts`)
 
@@ -132,8 +162,8 @@ interface KnobDescriptor {
 Keys are **node-scoped** — `<node>-<param>` (e.g. `noise-scale`, `noise-2-scale`,
 `warp-offset-x`) — so a knob is traceable to the effect it drives even when many
 nodes expose same-named params. The node name is the node's custom label if set,
-else its type label ("Noise"), disambiguated with " 2"/" 3". The Embed modal's
-Developer tab groups the knob table under these node names.
+else its type label ("Noise"), disambiguated with " 2"/" 3". The host discovers
+these at runtime via `shader.nodes()` / `shader.variables()`.
 
 ```ts
 
@@ -142,6 +172,12 @@ interface ImageAsset {
   dataUrl: string                // base64 data URL
 }
 ```
+
+**Reachable-only baking.** `collectImages` bakes an image node's data URL only if
+the node is reachable from the Fragment Output (same topo-sorted set the shader
+and manifest use). A dead-ended / disconnected image node contributes **zero**
+bytes — no orphan blob the shader never samples. Shader source and the knob
+manifest are already reachable-only for the same reason.
 
 ### Vertex‑omission invariant
 
@@ -161,10 +197,27 @@ Instead:
 
 ### Codec
 
-`encodeArtifact` / `decodeArtifact` use `pako` deflate + base64url
-(`+/=` → `-_`, padding stripped). Base64 encoding is chunked (`0x8000` bytes) to
-avoid `String.fromCharCode(...)` `RangeError` on large buffers. The codec is
-lossless (verified by round‑trip).
+All four codec functions share one core (`JSON.stringify` → `pako.deflate`), and
+differ only in whether the deflated bytes are base64-wrapped:
+
+- **`encodeArtifactBytes(a)` / `decodeArtifactBytes(bytes)`** — deflated JSON as raw
+  `Uint8Array`. This is the hosted `.sombra` file: the player fetches it as an
+  `ArrayBuffer` and inflates. No base64, so it's **~25% smaller** than the inline
+  string, and self-compressed (small on any static host, no gzip/brotli needed).
+- **`encodeArtifact(a)` / `decodeArtifact(s)`** — the same bytes wrapped in
+  base64url (`+/=` → `-_`, padding stripped) for a `data-` attribute. Base64
+  encoding is chunked (`0x8000` bytes) to avoid `String.fromCharCode(...)`
+  `RangeError` on large buffers.
+
+The codec is lossless (verified by round-trip), and `Map`s in the plan (the WGSL
+`uniformLayout.offsets`) are preserved via a tagged replacer/reviver — plain
+`JSON.stringify` would serialize them to `{}` and break WebGPU uniform uploads.
+
+> **Not minified before deflate.** Stripping shader-source comments/whitespace was
+> built, GPU-verified safe, then **measured and rejected**: it shrinks raw text
+> ~6% but the artifact is deflated, and removing that highly-repetitive text
+> *reduces* the redundancy deflate exploits, making the final `.sombra` **~10%
+> larger**. Deflate already handles whitespace; don't re-add a minify step here.
 
 ---
 
@@ -175,8 +228,9 @@ The UMD bundle assigns a global `Sombra` and auto‑inits on load:
 ```ts
 window.Sombra = {
   mount(el: HTMLElement, opts: MountOptions): Promise<SceneHandle>
-  init(): void          // scan + mount all [data-sombra-scene]
+  init(): void          // scan + mount all [data-sombra-scene|src|id]
   get(idOrEl: string | HTMLElement): SceneHandle | undefined  // handle of an auto-mounted embed
+  configure(opts: { resolve?: (ref: string) => string }): void  // scene-ref resolver seam
   version: string       // EMBED_VERSION, e.g. "0.1.0"
 }
 ```
@@ -184,13 +238,26 @@ window.Sombra = {
 Any successful mount (auto or explicit) registers its handle, so `Sombra.get(el)`
 returns it and a **`sombra:load`** `CustomEvent` (`event.detail.handle`) fires on
 the element. That's what makes the single auto-mount embed controllable without a
-separate `mount()` call.
+separate `mount()` call. A failed mount fires **`sombra:error`**
+(`event.detail.error`) on the element instead.
+
+**Resolver seam (`configure`).** A `src`/`id` container references its scene by a
+string ref, which the player runs through `resolve(ref)` before fetching. The
+default resolver is identity (the ref is already a URL). This is the forward-compat
+hook for a future short-code / CDN service: point ids at a service with one call
+and no page changes —
+
+```js
+Sombra.configure({ resolve: id => `https://cdn.example/scenes/${id}.sombra` });
+// then: <div data-sombra-id="momsflowers" ...>
+```
 
 ### `MountOptions`
 
 | Field       | Type                                    | Default | Meaning |
 |-------------|-----------------------------------------|---------|---------|
-| `scene`     | `string`                                | —       | base64url artifact (required) |
+| `scene`     | `string`                                | —       | inline base64url artifact — one of `scene`/`src` required |
+| `src`       | `string`                                | —       | scene ref (hosted `.sombra` URL, or an id run through the resolver), fetched as binary |
 | `variables` | `Record<string, number \| number[]>`    | —       | initial knob overrides, keyed by knob `key` |
 | `autoplay`  | `boolean`                               | `true`  | start the animation loop when visible |
 | `fallback`  | `boolean`                               | `true`  | on error, show the bouncing “SOMBRA” placeholder in the container |
@@ -198,13 +265,13 @@ separate `mount()` call.
 | `onLoad`    | `(h: SceneHandle) => void`              | —       | called once the scene is mounted and rendering |
 | `onError`   | `(e: Error) => void`                    | —       | called on decode/renderer‑init failure |
 
-`mount()` always resolves — it never rejects. On decode or renderer‑init failure
-it logs `[Sombra] …`, calls `onError`, shows the DVD-style fallback (unless
-`fallback: false`), and returns a no‑op handle whose `destroy()` removes the
-fallback (every other method
-is a safe stub), so host code can call the handle unconditionally. It also
-returns the no‑op handle when there is no DOM (`window === undefined`) or no
-element, making SSR safe.
+`mount()` always resolves — it never rejects. On any failure — a `src` fetch error
+(404 / network / CORS), decode, or renderer‑init — it logs `[Sombra] …`, calls
+`onError`, dispatches `sombra:error` on the element, shows the DVD-style fallback
+(unless `fallback: false`), and returns a no‑op handle whose `destroy()` removes
+the fallback (every other method is a safe stub), so host code can call the handle
+unconditionally. It also returns the no‑op handle when there is no DOM
+(`window === undefined`) or no element, making SSR safe.
 
 ### `SceneHandle`
 
@@ -226,8 +293,9 @@ element, making SSR safe.
 the `(nodeId, param)` form is **stable across re‑publish and graph edits** (the
 node id never shifts) and unambiguous when several nodes share a type — prefer it
 for anything you commit to code. `param` is the friendly slug (`scale`), matching
-the key's suffix, not the raw internal id. The Embed modal's Developer tab prints
-the node id + a copy button + a ready `set(id, param, value)` line per node.
+the key's suffix, not the raw internal id. Enumerate them from the live handle:
+`shader.nodes()` gives `{ id, name, type, params }` per node, ready for
+`set(id, param, value)`.
 
 Value conventions: `float` → `number`; `vec2`/`vec3` → `number[]`; `color` →
 `[r, g, b]` in 0..1 (alpha auto‑padded). Ranges come from each knob's
@@ -237,14 +305,20 @@ Value conventions: `float` → `number`; `vec2`/`vec3` → `number[]`; `color` �
 
 ## 4. `data-sombra-*` attributes
 
-`init()` (and the auto‑init on load) scans for `[data-sombra-scene]` and mounts
-each element. It is **idempotent** — a mounted element is marked
-(`data-sombra-mounted`) and skipped on re‑scan, so calling `Sombra.init()` again
-after inserting new DOM is safe and never double‑mounts.
+`init()` (and the auto‑init on load) scans for `[data-sombra-scene]`,
+`[data-sombra-src]`, and `[data-sombra-id]` and mounts each element. It is
+**idempotent** — a mounted element is marked (`data-sombra-mounted`) and skipped
+on re‑scan, so calling `Sombra.init()` again after inserting new DOM is safe and
+never double‑mounts.
+
+A container declares its scene with **one** of these, checked in order
+(`scene` → `src` → `id`):
 
 | Attribute              | Values          | Meaning |
 |------------------------|-----------------|---------|
-| `data-sombra-scene`    | base64url       | the artifact to mount (required) |
+| `data-sombra-scene`    | base64url       | inline artifact — self-contained, no fetch |
+| `data-sombra-src`      | URL             | hosted `.sombra` file, fetched as binary (cross-origin ⇒ needs `Access-Control-Allow-Origin`) |
+| `data-sombra-id`       | string          | ref resolved to a URL by `Sombra.configure({ resolve })`, then fetched |
 | `data-sombra-autoplay` | `"true"`/`"false"` | default `true`; `"false"` mounts paused |
 | `data-sombra-debug`    | `"true"`        | write init errors into the element |
 
@@ -347,12 +421,16 @@ erased at build, so type‑only imports of compiler types are fine everywhere.
 ## 9. Scope & fast‑follows
 
 **v1 (this release):** frozen scenes, knobs‑only. The published artifact is the
-compiled shader plus a manifest of unwired `uniform`‑mode params. The Embed modal
-shows a payload‑size badge and warns when baked images make the artifact large.
+compiled shader plus a manifest of unwired `uniform`‑mode params, shippable inline
+or as a hosted `.sombra` file. The Embed modal shows a file‑size badge and warns
+when baked images make the artifact large.
 
-**Door left open:** `SceneArtifact.kind` reserves `'frozen'` today with `'live'`
-planned — a future artifact could ship the graph and recompile on the host for
-live editing.
+**Doors left open:**
+- `SceneArtifact.kind` reserves `'frozen'` today with `'live'` planned — a future
+  artifact could ship the graph and recompile on the host for live editing.
+- The `configure({ resolve })` seam + `data-sombra-id` are the hook for a future
+  **short-code / CDN service**: it only needs to map an id → a `.sombra` URL, with
+  zero changes to already-embedded pages.
 
 **Fast‑follows (not in v1):**
 
