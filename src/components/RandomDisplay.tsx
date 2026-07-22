@@ -28,7 +28,11 @@ export function RandomDisplay({
   const seed = (data.seed as number) || 0
   const min = (data.min as number) ?? 0
   const max = (data.max as number) ?? 1
-  const dp = Math.round((data.decimals as number) ?? 7)
+  // Clamp to toFixed's valid range [0, 100]. A negative decimals (e.g. scrubbed
+  // below the param's min) would otherwise throw `RangeError: toFixed() digits
+  // argument must be between 0 and 100` mid-render and crash the whole editor.
+  const dpRaw = Math.round((data.decimals as number) ?? 7)
+  const dp = Number.isFinite(dpRaw) ? Math.min(100, Math.max(0, dpRaw)) : 7
   // Match the shader exactly: both generators bake the hash truncated to 6
   // decimals (`hashNodeId(id).toFixed(6)` in random.ts). Using the full-precision
   // hash here made the on-node readout diverge from the rendered value at the

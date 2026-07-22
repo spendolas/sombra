@@ -16,6 +16,7 @@ import { BaseHandle } from '@/components/base-handle'
 import { IconButton } from '@/components/IconButton'
 import { BackgroundModeControl } from './BackgroundModeControl'
 import { RgbaColorPicker, type Rgba } from '@/components/RgbaColorPicker'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
 
@@ -485,7 +486,9 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
             !definition.hidePreview && "mt-xs pt-md",
             !definition.hidePreview && bodyParams.length === 0 && ds.shaderNode.paramDivider,
           )}>
-            <definition.component nodeId={id} data={currentValues} />
+            <ErrorBoundary label={definition.type} fallback={<div className="text-fg-subtle text-xs px-2 py-1">⚠ display unavailable</div>}>
+              <definition.component nodeId={id} data={currentValues} />
+            </ErrorBoundary>
           </div>
         )}
 

@@ -9,6 +9,7 @@ import { nodeRegistry } from '../nodes/registry'
 import { useGraphStore } from '../stores/graphStore'
 import { NodeParameters, type SourceInfo } from './NodeParameters'
 import { BackgroundModeControl } from './BackgroundModeControl'
+import { ErrorBoundary } from './ErrorBoundary'
 import { Separator } from '@/components/ui/separator'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
@@ -203,7 +204,9 @@ export function PropertiesPanel({ selectedNode }: PropertiesPanelProps) {
             Custom Controls
           </Label>
           <div className={ds.propertiesPanel.paramSection}>
-            <definition.component nodeId={selectedNode.id} data={selectedNode.data.params || {}} />
+            <ErrorBoundary label={definition.type} fallback={<div className="text-fg-subtle text-xs">⚠ display unavailable</div>}>
+              <definition.component nodeId={selectedNode.id} data={selectedNode.data.params || {}} />
+            </ErrorBoundary>
           </div>
         </div>
       )}
