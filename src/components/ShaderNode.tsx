@@ -437,12 +437,16 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                   )}
                   {/* auto-height frame (the DS innerFrame is fixed h-36, tuned for
                       sliders — it clips taller controls like dropdowns / anchor grid) */}
-                  <div className="flex flex-col pl-handle-offset pr-xs gap-xs flex-1 min-w-0">{control}</div>
-                  {param.warnAbove != null && !isConnected && displayValue > param.warnAbove && (
-                    <span className={cn(ds.shaderNode.warnText, "px-sm pb-2xs")}>
-                      High value — may impact performance
-                    </span>
-                  )}
+                  <div className="flex flex-col pl-handle-offset pr-xs gap-xs flex-1 min-w-0">
+                    {control}
+                    {/* Warning stacks BELOW the control. As a flex-row sibling of the
+                        slider it stole horizontal space and squished it below full width. */}
+                    {param.warnAbove != null && !isConnected && displayValue > param.warnAbove && (
+                      <span className={cn(ds.shaderNode.warnText, "pb-2xs")}>
+                        High value — may impact performance
+                      </span>
+                    )}
+                  </div>
                 </div>
               )
             })}
