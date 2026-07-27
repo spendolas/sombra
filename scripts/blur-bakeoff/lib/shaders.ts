@@ -332,6 +332,164 @@ export function kawasePass(backend: Backend, offset: number): PassSpec {
   return { body: lines.join('\n'), filter: 'linear' }
 }
 
+// --- directional / radial --------------------------------------------------
+
+/**
+ * Directional (motion) blur: one 1D Gaussian along U.u_direction. Cost is
+ * O(sigma), not O(sigma^2), so full resolution stays affordable where an
+ * isotropic blur would not. `maxTaps` deliberately undersamples to expose the
+ * ghosting that a capped tap count produces.
+ */
+export function directionalPass(backend: Backend, sigma: number, maxTaps?: number): PassSpec {
+  const s = syntax(backend)
+  let weights = Array.from(gaussianKernel1D(sigma))
+  let radius = (weights.length - 1) / 2
+  let step = 1
+  if (maxTaps && maxTaps < weights.length) {
+    // keep the same extent but sample it more sparsely — the classic mistake
+    step = (weights.length - 1) / (maxTaps - 1)
+    const picked: number[] = []
+    for (let i = 0; i < maxTaps; i++) picked.push(weights[Math.round(i * step)])
+    const sum = picked.reduce((a, b) => a + b, 0)
+    weights = picked.map((w) => w / sum)
+    radius = (maxTaps - 1) / 2
+  }
+  const lines = [
+    s.decl('vec4', 'acc', 'vec4(0.0)'),
+    s.decl('vec2', 'dir', 'normalize(U.u_direction)'),
+  ]
+  for (let i = 0; i < weights.length; i++) {
+    const off = (i - radius) * step
+    lines.push(`  acc = acc + sampleSrc(uv + dir * (${off.toPrecision(9)} * U.u_texel)) * ${weights[i].toPrecision(9)};`)
+  }
+  lines.push('  return acc;')
+  return { body: lines.join('\n'), filter: 'linear' }
+}
+
+/**
+ * Radial blur about U.u_center. `mode` 'zoom' scales the sample position along
+ * the ray (so the streak length grows with distance from the centre, as a real
+ * zoom does); 'spin' rotates around it.
+ */
+export function radialPass(backend: Backend, sigma: number, mode: 'zoom' | 'spin', taps = 33): PassSpec {
+  const s = syntax(backend)
+  const k = gaussianKernel1D(sigma)
+  const r = (k.length - 1) / 2
+  const stride = Math.max(1, Math.floor(k.length / taps))
+  const picked: Array<{ off: number; w: number }> = []
+  for (let i = 0; i < k.length; i += stride) picked.push({ off: i - r, w: k[i] })
+  const sum = picked.reduce((a, b) => a + b.w, 0)
+
+  const lines = [
+    s.decl('vec4', 'acc', 'vec4(0.0)'),
+    s.decl('vec2', 'rel', 'uv - U.u_center'),
+    s.decl('float', 'dist', 'length(rel)'),
+  ]
+  for (const p of picked) {
+    const w = (p.w / sum).toPrecision(9)
+    if (mode === 'zoom') {
+      // offset proportional to distance: a scale about the centre
+      lines.push(`  acc = acc + sampleSrc(U.u_center + rel * (1.0 + ${p.off.toPrecision(9)} * U.u_texel.x)) * ${w};`)
+    } else {
+      const ang = `${p.off.toPrecision(9)} * U.u_texel.x`
+      lines.push(
+        `  acc = acc + sampleSrc(U.u_center + vec2(rel.x * cos(${ang}) - rel.y * sin(${ang}), rel.x * sin(${ang}) + rel.y * cos(${ang}))) * ${w};`,
+      )
+    }
+  }
+  lines.push('  return acc;')
+  void lines
+  return { body: lines.join('\n'), filter: 'linear' }
+}
+
+// --- bokeh ------------------------------------------------------------------
+
+/**
+ * Direct disc gather with a sunflower (golden-angle) tap distribution: the taps
+ * land evenly over the aperture, so a modest count still reads as a clean disc.
+ * This is the shape a lens actually produces — flat-topped, hard-edged — which a
+ * Gaussian fundamentally cannot imitate.
+ */
+export function discGatherPass(backend: Backend, radiusPx: number, taps: number): PassSpec {
+  const s = syntax(backend)
+  const GOLDEN = Math.PI * (3 - Math.sqrt(5))
+  const lines = [s.decl('vec4', 'acc', 'vec4(0.0)')]
+  for (let i = 0; i < taps; i++) {
+    const rr = Math.sqrt((i + 0.5) / taps) * radiusPx
+    const th = i * GOLDEN
+    const ox = (Math.cos(th) * rr).toPrecision(9)
+    const oy = (Math.sin(th) * rr).toPrecision(9)
+    lines.push(`  acc = acc + sampleSrc(uv + vec2(${ox}, ${oy}) * U.u_texel);`)
+  }
+  lines.push(`  return acc / ${taps.toFixed(1)};`)
+  return { body: lines.join('\n'), filter: 'linear' }
+}
+
+/** One skewed 1D box along an arbitrary angle — three of these make a hexagon. */
+export function skewedBoxPass(backend: Backend, lengthPx: number, angleDeg: number, taps: number): PassSpec {
+  const s = syntax(backend)
+  const a = (angleDeg * Math.PI) / 180
+  const dx = Math.cos(a)
+  const dy = Math.sin(a)
+  const n = Math.max(2, taps)
+  const w = (1 / n).toPrecision(9)
+  const lines = [s.decl('vec4', 'acc', 'vec4(0.0)')]
+  for (let i = 0; i < n; i++) {
+    const t = (i / (n - 1) - 0.5) * 2 * lengthPx
+    lines.push(
+      `  acc = acc + sampleSrc(uv + vec2(${(dx * t).toPrecision(9)}, ${(dy * t).toPrecision(9)}) * U.u_texel) * ${w};`,
+    )
+  }
+  lines.push('  return acc;')
+  return { body: lines.join('\n'), filter: 'linear' }
+}
+
+// --- progressive / spatially varying ---------------------------------------
+
+/**
+ * One step of a progressive blur. Each pass blurs its input a little more and
+ * then blends between "what we had" and "one level blurrier" using a per-pixel
+ * weight, so pixels the mask marks strongly keep accumulating blur through every
+ * pass while unmarked pixels stop early. Stacking `levels` of these produces a
+ * spatially varying blur with only two bound textures.
+ *
+ * The mask here is uv.x (a linear left-to-right ramp), the Figma-style linear
+ * progressive blur. `level`/`levels` position this pass in the stack.
+ */
+export function progressiveStepPass(
+  backend: Backend,
+  sigma: number,
+  axis: 'h' | 'v',
+  level: number,
+  levels: number,
+  /**
+   * How the mask drives level count. 'linear' makes the PASS COUNT linear in the
+   * mask, which is the obvious implementation and is wrong: repeated blurs
+   * accumulate as sigma ~ sqrt(passes), so perceived blur rises steeply then
+   * saturates and the whole visible transition bunches up at the sharp end.
+   * 'quadratic' squares the mask first, making sigma — what the eye reads —
+   * linear across the ramp.
+   */
+  shaping: 'linear' | 'quadratic' = 'quadratic',
+): PassSpec {
+  const s = syntax(backend)
+  const kernel = gaussianKernel1D(sigma)
+  const r = (kernel.length - 1) / 2
+  const dir = axis === 'h' ? ['1.0', '0.0'] : ['0.0', '1.0']
+  const lines = [s.decl('vec4', 'blurred', 'vec4(0.0)')]
+  for (let i = 0; i < kernel.length; i++) {
+    const off = (i - r).toFixed(1)
+    lines.push(
+      `  blurred = blurred + sampleSrc(uv + vec2(${dir[0]}, ${dir[1]}) * (${off} * U.u_texel)) * ${kernel[i].toPrecision(9)};`,
+    )
+  }
+  lines.push(s.decl('float', 'mask', 'clamp(uv.x, 0.0, 1.0)'))
+  const drive = shaping === 'quadratic' ? 'mask * mask' : 'mask'
+  lines.push(s.decl('float', 't', `clamp((${drive}) * ${levels.toFixed(1)} - ${level.toFixed(1)}, 0.0, 1.0)`))
+  lines.push('  return mix(sampleSrc(uv), blurred, t);')
+  return { body: lines.join('\n'), filter: 'linear' }
+}
+
 /** Bjorge dual-filter downsample: centre weighted 4, plus four diagonals, /8. */
 export function dualFilterDownPass(backend: Backend): PassSpec {
   const s = syntax(backend)
