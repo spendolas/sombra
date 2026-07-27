@@ -413,3 +413,60 @@ One hash for a per-pixel rotation instead of eight seeds; tap `i` at `rot + i·�
 - `:55` "at high IOR × curvature, image inversion" — inversion is present near the rib edges at **every** setting including the defaults.
 - `:90` description — "refracts perpendicular to the ribs; lines parallel to the ribs stay straight" (add only after P6, or phrase it as "parallel to the screen axis selected by Direction", which is what the node does today).
 - `:75`/`:399` — leave the dead `max(1.0 - x2, 0.001)` guard but comment that the 0.99 cap, not the guard, is the limiter; it becomes live again if anyone raises the cap or wires a negative `ribWidth`.
+---
+
+## What shipped (2026-07-28)
+
+Landed in one change, all four reported symptoms plus the divergences found alongside.
+Appearance changes were authorised, so nothing here was gated behind a compatibility flag.
+
+**The S4 verdict was revised after review.** The report called horizontals-don't-bend EXPECTED
+for straight vertical ribs, on the grounds that a cylindrical lens has zero optical power along
+its axis. That reasoning is correct and it is still why cross-rib refraction alone cannot do it —
+the refraction term (ηc₁−c₂)·n vanishes in y for a normal n = (nx, 0, nz), so no amount of Snell's
+law fixes it. But it answered the wrong question. Cross-rib refraction is not the only way a rib
+moves a ray: crossing a slab of *varying thickness* off-axis displaces laterally by
+path-length × tanθ × (1 − 1/n), and a rib's path length is its own height profile — a function of
+the cross-rib coordinate. That scallops parallel lines: bowed at rib centres, pinned at seams.
+
+The node used the profile's *slope* and never its *height*. The height was two instructions away
+from values already in scope.
+
+| Fix | Site | Effect |
+|---|---|---|
+| **Bow** — new signed param, default 1 | `reedLens` returns `vec2(coord, sagitta)` | Horizontals bend with straight vertical ribs. Scales off ribWidth, curvature and (ior−1) — no new tuning surface. Peak ≈10 px per rib at node defaults |
+| **S1** clamp → mirror fold | `REED_LENS_BODY` (now one shared constant) | Kills the frozen-coordinate band. Identity on [0,1], so only bands that were already clamping move |
+| **S2** seed → quantised ref lattice | frost block, both paths | Grain stops re-randomising on resize, DPR flip and every param drag |
+| **S3a** frost radius → px | frost block | Isotropic footprint; no more aspect-shaped reach |
+| **S3b** border taps → mirror fold | frost block | No clamp band at the edges |
+| **S4 BUG 1** rib gradient | `emitScreenDelta` | Wave/circular/noise refract along ∇φ. `disp·∇φ/|∇φ|²` collapses to `(disp, 0)` at ∇w = 0, so straight ribs are unchanged by construction |
+| **S4 BUG 2** `srt_rotate` | `emitScreenDelta` | Offset mapped back through R(−θ); was a venetian shear at 90° |
+| **S4 BUG 3** `srt_scale` | `emitScreenDelta` | Delta co-scales with every other pattern length |
+| **Divergence B** horizontal y sign | two-argument `raw()` on `sampleUV` | Was WebGPU-only lens inversion. Latent while the delta was x-only; bow and the gradient expose it everywhere |
+| **P9 (alpha half)** premultiplied frost | frost block | No fringe on transparent sources. Algebraically identical for opaque ones |
+| Circular ribs read the SRT'd point | `screenWave` | Screen path used raw `v_uv`, so SRT moved the frozen-ref rings and not the rendered ones |
+
+Two structural changes keep this from drifting: `REED_LENS_BODY` is one string shared by the GLSL
+and IR copies (it was duplicated, and the report found `reedLens` in 2 copies and `reedHash` in 3),
+and `screenWave` / `emitScreenDelta` are shared emitters, so the four rib types and the two backends
+cannot each grow their own version. `screenWave` is templated on a *point* rather than emitting one
+fixed expression specifically so the finite difference can evaluate w at p±ε without a third copy.
+
+`square` and `sawtooth` keep cross-rib-only refraction: a central difference across a jump measures
+the jump, not the slope. For `square` that is also the correct answer (piecewise constant → true
+gradient is zero a.e.); for `sawtooth` it is the status quo.
+
+**Verified:** IR parity 85/85 (the RGBA assertion was rewritten for the premultiplied form and
+negative-controlled — reverting the alpha weighting makes it fail), WGSL multipass 159/159,
+self-validate 0 FAIL / 0 WARN across 412 GPU-compiled shaders, wired-branch 51/51, lint + tsc clean.
+Visually confirmed in-app on WebGPU: horizontals straight at bow 0 → scalloped at bow 1, and at
+`srt_rotate: 45` the displacement now runs perpendicular to the ribs instead of staying horizontal.
+
+**Still open** (each needs a decision, none is a correctness bug):
+
+- **P7 / P8** — the `coords` output still disagrees with `color` on rotation handedness and carries a
+  spurious shear. Needs a call on which output is authoritative before code.
+- **P10** — stratified disc frost taps (57.9 → 9.5 codes of speckle). Pure look change.
+- **P9 gamma half** — frost still averages gamma-encoded texels. Gated on hoisting blur's helpers.
+- **P11b/c** — pair `waveShape`/`noiseType` with their parent `ribType` in self-validate so those
+  bodies are generated at all. (P11a is superseded by `npm run verify:wired-branch`.)

@@ -1708,8 +1708,15 @@ function verify(
   verify('Reeded Glass (straight, texture mode)', reededGlassNode, g, i, 'loose')
 
   // RGBA assertion — Spatial: both the frost-blur accumulation loop and the plain sample
-  // widen to full vec4 (both branches are emitted unconditionally; frost is a runtime
-  // uniform, not a compile-time branch) — alpha rides with the pixel (see rgba-node-audit.md).
+  // carry alpha (both branches are emitted unconditionally; frost is a runtime uniform,
+  // not a compile-time branch) — alpha rides with the pixel (see rgba-node-audit.md).
+  //
+  // The frost loop accumulates PREMULTIPLIED: colour weighted by each tap's own alpha
+  // into a vec3, alpha summed separately, un-premultiplied at the end. Averaging
+  // straight-alpha texels would drag opaque colour into transparent taps and fringe the
+  // edge. This is not "inventing alpha" — with every tap at a = 1 it reduces exactly to
+  // sum(rgb)/8 with alpha 1, i.e. the plain average. What the assertions below guard is
+  // that alpha is neither dropped (a .rgb-only path) nor synthesised from luminance.
   testNum++
   console.log(`\n  ${testNum}. Reeded Glass (texture mode) — RGBA sample/accumulate assertion`)
   let reedTexOk = true
@@ -1718,12 +1725,22 @@ function verify(
     console.log(`  [FAIL] GLSL: expected vec4 color declaration. Got:\n    ${refGLSL}`)
     reedTexOk = false
   }
-  if (!/vec4 rg_acc_reed_rrr889 = vec4\(0\.0\);/.test(refGLSL)) {
-    console.log(`  [FAIL] GLSL: expected vec4 frost accumulator. Got:\n    ${refGLSL}`)
+  if (!/vec3 rg_acc_reed_rrr889 = vec3\(0\.0\);/.test(refGLSL) ||
+      !/float rg_aacc_reed_rrr889 = 0\.0;/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected premultiplied accumulator pair (vec3 rgb + float alpha). Got:\n    ${refGLSL}`)
     reedTexOk = false
   }
-  if (!/rg_acc_reed_rrr889 \+= texture\(u_pass0_tex, rg_sampleUV_reed_rrr889 \+ rg_jit_reed_rrr889\);/.test(refGLSL)) {
-    console.log(`  [FAIL] GLSL: expected full vec4 accumulation sample (no .rgb). Got:\n    ${refGLSL}`)
+  // The tap is fetched as a full vec4 and BOTH halves are consumed: rgb weighted by
+  // this tap's alpha, and that same alpha summed. Dropping either half is the bug.
+  if (!/vec4 rg_s_reed_rrr889 = texture\(u_pass0_tex, rg_tap_reed_rrr889\);/.test(refGLSL) ||
+      !/rg_acc_reed_rrr889 \+= rg_s_reed_rrr889\.rgb \* rg_s_reed_rrr889\.a;/.test(refGLSL) ||
+      !/rg_aacc_reed_rrr889 \+= rg_s_reed_rrr889\.a;/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected full vec4 tap accumulated premultiplied. Got:\n    ${refGLSL}`)
+    reedTexOk = false
+  }
+  // Un-premultiply, and carry the MEASURED mean alpha out — never a constant 1.0.
+  if (!/node_reed_rrr889_color = vec4\(rg_acc_reed_rrr889 \/ max\(rg_aacc_reed_rrr889, 1e-5\), rg_aacc_reed_rrr889 \/ 8\.0\);/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: expected un-premultiplied resolve carrying mean alpha. Got:\n    ${refGLSL}`)
     reedTexOk = false
   }
   if (!/node_reed_rrr889_color = texture\(u_pass0_tex, rg_sampleUV_reed_rrr889\);/.test(refGLSL)) {
@@ -1736,15 +1753,22 @@ function verify(
     console.log(`  [FAIL] IR->WGSL: expected vec4f color declaration. Got:\n    ${irWGSL}`)
     reedTexOk = false
   }
-  if (!/var rg_acc_reed_rrr889: vec4f = vec4f\(0\.0\);/.test(irWGSL)) {
-    console.log(`  [FAIL] IR->WGSL: expected vec4f frost accumulator. Got:\n    ${irWGSL}`)
+  if (!/var rg_acc_reed_rrr889: vec3f = vec3f\(0\.0\);/.test(irWGSL) ||
+      !/var rg_aacc_reed_rrr889: f32 = 0\.0;/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected premultiplied accumulator pair (vec3f rgb + f32 alpha). Got:\n    ${irWGSL}`)
     reedTexOk = false
   }
-  // textureSampleLevel, not textureSample: frost is connectable, so the branch can
-  // be non-uniform and WGSL forbids implicit-derivative sampling there. Either name
-  // returns vec4f, which is what this assertion actually guards.
-  if (!/rg_acc_reed_rrr889 = rg_acc_reed_rrr889 \+ textureSampleLevel\(u_pass0_tex_tex, u_pass0_tex_samp, rg_sampleUV_reed_rrr889 \+ rg_jit_reed_rrr889, 0\.0\);/.test(irWGSL)) {
-    console.log(`  [FAIL] IR->WGSL: expected full vec4f accumulation sample. Got:\n    ${irWGSL}`)
+  // textureSampleLevel, not textureSample: frost is connectable, so the branch can be
+  // non-uniform and WGSL forbids implicit-derivative sampling there. Either name returns
+  // vec4f, which is what this assertion actually guards.
+  if (!/let rg_s_reed_rrr889 = textureSampleLevel\(u_pass0_tex_tex, u_pass0_tex_samp, rg_tap_reed_rrr889, 0\.0\);/.test(irWGSL) ||
+      !/rg_acc_reed_rrr889 = rg_acc_reed_rrr889 \+ rg_s_reed_rrr889\.rgb \* rg_s_reed_rrr889\.a;/.test(irWGSL) ||
+      !/rg_aacc_reed_rrr889 = rg_aacc_reed_rrr889 \+ rg_s_reed_rrr889\.a;/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected full vec4f tap accumulated premultiplied. Got:\n    ${irWGSL}`)
+    reedTexOk = false
+  }
+  if (!/node_reed_rrr889_color = vec4f\(rg_acc_reed_rrr889 \/ vec3f\(max\(rg_aacc_reed_rrr889, 1e-5\)\), rg_aacc_reed_rrr889 \/ 8\.0\);/.test(irWGSL)) {
+    console.log(`  [FAIL] IR->WGSL: expected un-premultiplied resolve carrying mean alpha. Got:\n    ${irWGSL}`)
     reedTexOk = false
   }
   if (!/node_reed_rrr889_color = textureSampleLevel\(u_pass0_tex_tex, u_pass0_tex_samp, rg_sampleUV_reed_rrr889, 0\.0\);/.test(irWGSL)) {
@@ -1752,7 +1776,7 @@ function verify(
     reedTexOk = false
   }
   if (reedTexOk) {
-    console.log('  [PASS] reeded_glass (texture mode): color output is full RGBA sample/accumulate (vec4/vec4f), alpha carried')
+    console.log('  [PASS] reeded_glass (texture mode): full RGBA tap, premultiplied accumulate, measured alpha carried out')
     passed++
   } else {
     failed++
