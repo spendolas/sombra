@@ -20,6 +20,7 @@ import {
   groupBoundariesBySourceOutput,
 } from './glsl-generator'
 import type { TextureBoundaryEdge } from './glsl-generator'
+import { expandMultiPassNodes } from './expand-passes'
 
 /** Maximum passes for preview rendering. Beyond this, show placeholder. [P8] */
 const MAX_PREVIEW_PASSES = 6
@@ -53,6 +54,15 @@ export function compileNodePreview(
   targetNodeId: string,
 ): PreviewCompilationResult {
   try {
+    // A multi-pass node (separable blur) must be expanded here too, and the
+    // preview must target the LAST sub-pass — targeting the authored id would
+    // render only the first, so a blur would appear filtered on one axis.
+    {
+      const expanded = expandMultiPassNodes(nodes, edges)
+      nodes = expanded.nodes
+      edges = expanded.edges
+      targetNodeId = expanded.lastOf.get(targetNodeId) ?? targetNodeId
+    }
     const targetNode = nodes.find(n => n.id === targetNodeId)
     if (!targetNode) return fail([{ message: `Target node "${targetNodeId}" not found` }])
 

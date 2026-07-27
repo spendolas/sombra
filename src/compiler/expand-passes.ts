@@ -49,7 +49,16 @@ export function baseNodeId(id: string): string {
 export function expandMultiPassNodes(
   nodes: Node<NodeData>[],
   edges: Edge<EdgeData>[],
-): { nodes: Node<NodeData>[]; edges: Edge<EdgeData>[] } {
+): {
+  nodes: Node<NodeData>[]
+  edges: Edge<EdgeData>[]
+  /**
+   * Authored id → id of its final sub-pass. Callers that render a specific node
+   * (the per-node preview) must retarget through this, or they would render only
+   * the first sub-pass — a blur would come out filtered on one axis only.
+   */
+  lastOf: Map<string, string>
+} {
   // Which nodes actually need expansion?
   const plans = new Map<string, { count: number; from: string; to: string }>()
   for (const node of nodes) {
@@ -63,7 +72,7 @@ export function expandMultiPassNodes(
     const count = Math.max(1, Math.floor(mp.count(node.data.params || {})))
     if (count > 1) plans.set(node.id, { count, from: mp.from, to: mp.to })
   }
-  if (plans.size === 0) return { nodes, edges }
+  if (plans.size === 0) return { nodes, edges, lastOf: new Map() }
 
   const outNodes: Node<NodeData>[] = []
   const outEdges: Edge<EdgeData>[] = [...edges]
@@ -111,5 +120,5 @@ export function expandMultiPassNodes(
     return { ...e, source: last }
   })
 
-  return { nodes: outNodes, edges: rewired }
+  return { nodes: outNodes, edges: rewired, lastOf }
 }

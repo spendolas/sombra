@@ -194,6 +194,11 @@ export const blurNode: NodeDefinition = {
   description: 'Separable Gaussian blur in linear light with premultiplied alpha',
   textureFilter: 'linear',
 
+  // A blur of nothing conveys nothing, so keep the thumbnail hidden until a
+  // source is wired. Without this the node shows a preview area the moment it is
+  // added, which reads as stale content rather than as "no input yet".
+  conditionalPreview: true,
+
   // Two passes: horizontal, then vertical.
   multiPass: { count: () => 2, from: 'color', to: 'source' },
 
@@ -248,9 +253,14 @@ export const blurNode: NodeDefinition = {
 
     const common = { id, out: ctx.outputs.color, sampler, fallback: ctx.inputs.source, radius, axis }
 
-    const stmts: IRStmt[] = [
-      raw(emit({ ...common, wgsl: false }), emit({ ...common, wgsl: true })),
-    ]
+    // With no upstream texture the body is just the passthrough of the port
+    // default, and that default arrives in GLSL syntax (`vec4(...)`). Supplying an
+    // explicit WGSL override here would SKIP the backend's mechanical translation
+    // and emit invalid WGSL, so the shader would fail to compile and the node's
+    // preview would silently render nothing. Let the backend translate instead.
+    const stmts: IRStmt[] = sampler
+      ? [raw(emit({ ...common, wgsl: false }), emit({ ...common, wgsl: true }))]
+      : [raw(emit({ ...common, wgsl: false }))]
 
     return {
       statements: stmts,

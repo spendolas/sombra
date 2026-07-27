@@ -25,6 +25,7 @@ import type { TextureBoundaryEdge } from './glsl-generator'
 import { assembleWGSL } from './ir/wgsl-assembler'
 import type { WGSLPassOutput } from './ir-compiler'
 import { generateNodeIR } from './ir-compiler'
+import { expandMultiPassNodes } from './expand-passes'
 
 /** Maximum passes for preview rendering. Beyond this, show placeholder. */
 const MAX_PREVIEW_PASSES = 6
@@ -52,6 +53,15 @@ export function compileNodePreviewIR(
   targetNodeId: string,
 ): IRPreviewCompilationResult {
   try {
+    // A multi-pass node (separable blur) must be expanded here too, and the
+    // preview must target the LAST sub-pass — targeting the authored id would
+    // render only the first, so a blur would appear filtered on one axis.
+    {
+      const expanded = expandMultiPassNodes(nodes, edges)
+      nodes = expanded.nodes
+      edges = expanded.edges
+      targetNodeId = expanded.lastOf.get(targetNodeId) ?? targetNodeId
+    }
     const targetNode = nodes.find(n => n.id === targetNodeId)
     if (!targetNode) return fail([{ message: `Target node "${targetNodeId}" not found` }])
 

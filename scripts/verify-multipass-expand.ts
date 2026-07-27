@@ -13,6 +13,8 @@
 import { test, run, assert } from './blur-bakeoff/lib/test-util'
 import { initializeNodeLibrary } from '../src/nodes'
 import { expandMultiPassNodes, SUB_PASS_PARAM, baseNodeId } from '../src/compiler/expand-passes'
+import { compileNodePreview } from '../src/compiler/subgraph-compiler'
+import { compileNodePreviewIR } from '../src/compiler/ir-subgraph-compiler'
 import type { Node, Edge } from '@xyflow/react'
 
 initializeNodeLibrary()
@@ -102,6 +104,35 @@ test('an unwired multi-pass node is NOT expanded (nothing to blur)', () => {
   const edges = [e('e2', 'bl', 'color', 'out', 'color')]
   const out = call(nodes, edges)
   assert(out.nodes.length === 2, `unwired node should stay single, got ${out.nodes.length}`)
+})
+
+// --- per-node preview (thumbnails) -----------------------------------------
+// Both of these shipped broken and were caught by looking at the node thumbs.
+
+test('a node preview runs ALL sub-passes, not just the first', () => {
+  const nodes = [n('cb', 'checkerboard'), n('bl', 'blur', { radius: 20 })]
+  const edges = [e('e1', 'cb', 'color', 'bl', 'source')]
+  const r = compileNodePreview(nodes as never, edges as never, 'bl')
+  assert(r.success, `preview failed: ${JSON.stringify(r.errors)}`)
+  const axes = r.passes.map((p) =>
+    /vec2\(1\.0, 0\.0\)/.test(p.fragmentShader) ? 'H' : /vec2\(0\.0, 1\.0\)/.test(p.fragmentShader) ? 'V' : '-',
+  )
+  assert(axes.includes('H'), `horizontal pass missing: ${axes.join(',')}`)
+  assert(axes.includes('V'), `vertical pass missing — preview only ran the first sub-pass: ${axes.join(',')}`)
+})
+
+test('an UNWIRED multi-pass node emits valid WGSL (no GLSL-style constructors)', () => {
+  // An explicit WGSL override skips the backend's mechanical translation, so a
+  // GLSL-syntax port default leaked through as `vec4(...)`, which WGSL rejects.
+  // The shader then failed to compile and the thumbnail showed stale content.
+  const nodes = [n('bl', 'blur', { radius: 20 })]
+  const ir = compileNodePreviewIR(nodes as never, [] as never, 'bl') as unknown as
+    { success: boolean; wgslPasses: Array<{ shaderCode: string }> }
+  assert(ir.success, 'unwired preview should compile')
+  const code = ir.wgslPasses.map((p) => p.shaderCode).join('\n')
+  const bad = code.match(/\bvec[234]\(/g)
+  assert(!bad, `GLSL-style constructor left in WGSL: ${bad?.slice(0, 3).join(', ')}`)
+  assert(!/\bfloat\b/.test(code), 'GLSL `float` left in WGSL')
 })
 
 test('baseNodeId maps a sub-pass id back to the authored node', () => {
