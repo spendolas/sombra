@@ -671,9 +671,25 @@ export const reededGlassNode: NodeDefinition = {
       const frostVar = `rg_frost_${id}`
       stmts.push(declare(frostVar, 'float', variable(ctx.inputs.frost)))
 
-      // Use raw() for the conditional frost blur — complex control flow with loop
+      // Use raw() for the conditional frost blur — complex control flow with loop.
+      //
+      // The WGSL arm MUST be written out rather than left to mechanical
+      // translation. Frost is connectable, so when it is wired the `frost > 0.001`
+      // condition becomes data-dependent, and mechanical translation emits
+      // `textureSample` — which WGSL only permits from uniform control flow. Tint
+      // rejects the module with "must only be called from uniform control flow",
+      // and the failure is silent and total: createRenderPipeline does not throw on
+      // an already-invalid module, so the renderer reports compile SUCCESS, then at
+      // draw time the invalid pipeline invalidates the whole command buffer and the
+      // entire frame is dropped — including the pass's loadOp:'clear'. The graph
+      // still works on the WebGL2 fallback, which has no uniformity rule.
+      // textureSampleLevel takes an explicit LOD and is allowed under non-uniform
+      // control flow; these textures have no mips so level 0 is the only level.
+      const wgslSample = (uv: string) =>
+        `textureSampleLevel(${samplerName}_tex, ${samplerName}_samp, ${uv}, 0.0)`
       const frostStmts: IRStmt[] = [
-        raw(`vec4 ${ctx.outputs.color};
+        raw(
+          `vec4 ${ctx.outputs.color};
   if (${frostVar} > 0.001) {
     vec4 rg_acc_${id} = vec4(0.0);
     float rg_frad_${id} = ${frostVar} * 0.02;
@@ -684,7 +700,20 @@ export const reededGlassNode: NodeDefinition = {
     ${ctx.outputs.color} = rg_acc_${id} / 8.0;
   } else {
     ${ctx.outputs.color} = texture(${samplerName}, ${sampleUV});
-  }`),
+  }`,
+          `var ${ctx.outputs.color}: vec4f;
+  if (${frostVar} > 0.001) {
+    var rg_acc_${id}: vec4f = vec4f(0.0);
+    let rg_frad_${id} = ${frostVar} * 0.02;
+    for (var rg_i_${id}: i32 = 0; rg_i_${id} < 8; rg_i_${id}++) {
+      let rg_jit_${id} = reedHash(${sampleUV} * 0.1 + f32(rg_i_${id}) * 7.31) * rg_frad_${id};
+      rg_acc_${id} = rg_acc_${id} + ${wgslSample(`${sampleUV} + rg_jit_${id}`)};
+    }
+    ${ctx.outputs.color} = rg_acc_${id} / 8.0;
+  } else {
+    ${ctx.outputs.color} = ${wgslSample(sampleUV)};
+  }`,
+        ),
       ]
       stmts.push(...frostStmts)
     } else {

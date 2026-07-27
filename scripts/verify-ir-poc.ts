@@ -1740,11 +1740,14 @@ function verify(
     console.log(`  [FAIL] IR->WGSL: expected vec4f frost accumulator. Got:\n    ${irWGSL}`)
     reedTexOk = false
   }
-  if (!/rg_acc_reed_rrr889 \+= textureSample\(u_pass0_tex_tex, u_pass0_tex_samp, rg_sampleUV_reed_rrr889 \+ rg_jit_reed_rrr889\);/.test(irWGSL)) {
+  // textureSampleLevel, not textureSample: frost is connectable, so the branch can
+  // be non-uniform and WGSL forbids implicit-derivative sampling there. Either name
+  // returns vec4f, which is what this assertion actually guards.
+  if (!/rg_acc_reed_rrr889 = rg_acc_reed_rrr889 \+ textureSampleLevel\(u_pass0_tex_tex, u_pass0_tex_samp, rg_sampleUV_reed_rrr889 \+ rg_jit_reed_rrr889, 0\.0\);/.test(irWGSL)) {
     console.log(`  [FAIL] IR->WGSL: expected full vec4f accumulation sample. Got:\n    ${irWGSL}`)
     reedTexOk = false
   }
-  if (!/node_reed_rrr889_color = textureSample\(u_pass0_tex_tex, u_pass0_tex_samp, rg_sampleUV_reed_rrr889\);/.test(irWGSL)) {
+  if (!/node_reed_rrr889_color = textureSampleLevel\(u_pass0_tex_tex, u_pass0_tex_samp, rg_sampleUV_reed_rrr889, 0\.0\);/.test(irWGSL)) {
     console.log(`  [FAIL] IR->WGSL: expected full vec4f plain sample. Got:\n    ${irWGSL}`)
     reedTexOk = false
   }
