@@ -36,6 +36,8 @@ export type Backend = 'webgpu' | 'webgl2'
 export interface PassSpec {
   /** Fragment body; must `return` a vec4. */
   body: string
+  /** Optional helper declarations emitted before the entry function. */
+  prelude?: string
   /** Output resolution scale for this pass (1 = full). Prototypes pyramids. */
   scale?: number
   /** How this pass samples its source. */
@@ -207,8 +209,8 @@ struct VertexOutput {
 }
 \`;
 
-  function wgslModule(body) {
-    return WGSL_PREAMBLE + \`
+  function wgslModule(body, prelude) {
+    return WGSL_PREAMBLE + (prelude || '') + \`
 fn sombraMain(uv: vec2f) -> vec4f {
 \` + body + \`
 }
@@ -231,7 +233,7 @@ void main() {
 }
 \`;
 
-  function glslFrag(body) {
+  function glslFrag(body, prelude) {
     return \`#version 300 es
 precision highp float;
 in vec2 v_uv;
@@ -251,7 +253,7 @@ uniform sampler2D u_orig;
 
 vec4 sampleSrc(vec2 p) { return texture(u_src, p); }
 vec4 sampleOrig(vec2 p) { return texture(u_orig, p); }
-
+\` + (prelude || '') + \`
 vec4 sombraMain(vec2 uv) {
 \` + body + \`
 }
@@ -352,7 +354,7 @@ void main() { fragColor = sombraMain(v_uv); }
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC,
       });
 
-      const module = device.createShaderModule({ code: wgslModule(pass.body) });
+      const module = device.createShaderModule({ code: wgslModule(pass.body, pass.prelude) });
       const info = await module.getCompilationInfo();
       const errs = info.messages.filter(m => m.type === 'error');
       if (errs.length) throw new Error('WGSL: ' + errs.map(m => 'L' + m.lineNum + ' ' + m.message).join(' | '));
@@ -492,7 +494,7 @@ void main() { fragColor = sombraMain(v_uv); }
       const fbStatus = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
       if (fbStatus !== gl.FRAMEBUFFER_COMPLETE) throw new Error('FBO incomplete: 0x' + fbStatus.toString(16));
 
-      const prog = compileProgram(gl, glslFrag(pass.body));
+      const prog = compileProgram(gl, glslFrag(pass.body, pass.prelude));
       gl.useProgram(prog);
 
       // uniform block

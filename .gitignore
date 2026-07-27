@@ -35,3 +35,6 @@ tokens/.figma-vars-cache.json
 .figma-eval-tmp.*
 reports/self-validate/
 tsconfig.tsbuildinfo
+
+# Generated reports (self-validate, blur-bakeoff)
+reports/
