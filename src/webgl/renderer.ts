@@ -373,6 +373,7 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
     const w = Math.floor(this.canvas.clientWidth * dpr)
     const h = Math.floor(this.canvas.clientHeight * dpr)
 
+    let resized = false
     for (const fbo of this.fboPool) {
       if (fbo.width === w && fbo.height === h) continue
       gl.bindTexture(gl.TEXTURE_2D, fbo.texture)
@@ -380,10 +381,16 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
       gl.bindTexture(gl.TEXTURE_2D, null)
       fbo.width = w
       fbo.height = h
+      resized = true
     }
 
-    // Mark all passes dirty after resize
-    for (const ps of this.passStates) ps.dirty = true
+    // Only invalidate cached passes when something actually changed. This is now
+    // also called as a per-frame revalidation from renderMultiPass, and marking
+    // every pass dirty unconditionally would defeat the [P3] clean-pass skip and
+    // re-render the whole chain every frame.
+    if (resized) {
+      for (const ps of this.passStates) ps.dirty = true
+    }
   }
 
   private destroyFBOs() {
@@ -822,6 +829,20 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
   /** Multi-pass render with FBOs. */
   private renderMultiPass(w: number, h: number, dpr: number, time: number) {
     const gl = this.gl
+
+    // The pool can be stale relative to the size we are about to render at.
+    // setAnimated() changes currentDprScale without resizing, and notifyChange()'s
+    // tier restore does the same — so intermediates would rasterise at the OLD
+    // fbo.width/height while u_viewport is uploaded at the NEW size, giving a
+    // whole-frame scale error plus an anchor offset that persists until some
+    // unrelated layout resize. It also fires on first load, since `animated`
+    // starts true while currentDprScale is still 1.0.
+    // One guarded revalidation covers every path, mirroring WebGPU, where
+    // ensureIntermediateTextures() is already the first statement of its
+    // equivalent. Guarded because resizeFBOs() is a no-op only when nothing moved.
+    if (this.fboPool.length > 0 && (this.fboPool[0].width !== w || this.fboPool[0].height !== h)) {
+      this.resizeFBOs()
+    }
 
     // [P3] Mark time-live passes + downstream as dirty (animation)
     if (this.animated) {
