@@ -119,7 +119,6 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
   private ANIMATED_DPR_SCALE = 0.75
   private STATIC_DPR_SCALE = 1.0
   private currentDprScale = 1.0
-  private snapTimer: ReturnType<typeof setTimeout> | null = null
   private lastAnimationSpeed = 1.0
 
   /** Fixed reference size for DPR-independent UV scaling (shared constant). */
@@ -181,7 +180,6 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
 
   dispose(): void {
     this.stopAnimation()
-    if (this.snapTimer) { clearTimeout(this.snapTimer); this.snapTimer = null }
     this.resizeObserver?.disconnect()
 
     // Clean up GPU resources
@@ -965,7 +963,6 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     } else {
       this.stopAnimation()
       this.currentDprScale = this.STATIC_DPR_SCALE
-      if (this.snapTimer) { clearTimeout(this.snapTimer); this.snapTimer = null }
       this.requestRender()
     }
   }
@@ -1019,19 +1016,23 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
 
   notifyChange(): void {
     if (!this.animated) return
+    // Defensive only: while animating, the animated scale is what should be in
+    // force. Nothing should be able to leave it at STATIC now, but restoring it
+    // here is free and the resize is covered downstream.
     if (this.currentDprScale !== this.ANIMATED_DPR_SCALE) {
       this.currentDprScale = this.ANIMATED_DPR_SCALE
     }
-    if (this.snapTimer) clearTimeout(this.snapTimer)
-    this.snapTimer = setTimeout(() => {
-      if (this.animated) {
-        this.currentDprScale = this.STATIC_DPR_SCALE
-        if (this.isMultiPass) this.resizeIntermediateTextures()
-        this.render()
-        this.currentDprScale = this.ANIMATED_DPR_SCALE
-        if (this.isMultiPass) this.resizeIntermediateTextures()
-      }
-    }, 2000)
+    // There used to be a 2s "snap to static DPR" here: it raised the scale,
+    // resized the intermediates, rendered ONE crisp frame, then reverted and
+    // resized again WITHOUT re-rendering. Because it only ran while `animated` was
+    // true, the animation loop overwrote that frame immediately — so it could never
+    // deliver a crisp frame, and it could not be repaired by dropping the revert
+    // either (that just leaves the scale raised while animating). All it actually
+    // did was one wasted full-resolution multi-pass render plus two full
+    // destroy/recreate cycles of the intermediate pool every 2 seconds, and an
+    // intermittent one-frame flash when the loop skipped the following rAF.
+    // Crispness on settle is already handled: setAnimated(false) restores
+    // STATIC_DPR_SCALE and re-renders.
   }
 
   requestRender(): void {
