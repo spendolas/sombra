@@ -28,6 +28,16 @@ egress   linear premultiplied     ->  sRGB straight + dither
 `N = clamp(floor(log2(sigma / 4)), 0, 5)`, so the coarse-level sigma stays near 4px
 at **every** radius. That single rule is what makes it work — see [why](#why-the-radius-must-drive-the-downscale).
 
+Set the coarse sigma by **subtracting the pyramid's own blur**, not by dividing:
+
+```
+sigma_coarse = sqrt(max(0, sigma_target² − intrinsic²(N))) / 2^N
+```
+
+The down/up chain is itself a blur (measured intrinsic σ: 0.31 / 2.07 / 4.68 / 9.70
+/ 19.21 / 38.99 for N = 0…5). Ignoring it runs 3–4.5% wide and puts a small step in
+the blur width every time N changes — see [temporal](#temporal-stability).
+
 It was the only candidate clean at every radius tested while its cost *falls* as
 the radius grows:
 
@@ -224,6 +234,60 @@ Squaring the mask first makes σ linear across the ramp:
 
 ---
 
+## Temporal stability
+
+The bake-off judged single frames. Two things can still ruin a blur in motion, and
+both were measured through static equivalents (`reports/blur-bakeoff/phase5.md`,
+`phase5b.json`).
+
+### Pyramid crawl — not an issue
+
+A blur commutes with translation, so *shift → blur → unshift* must give the same
+image for any shift. A screen-aligned pyramid need not, and the residual would be
+exactly the shimmer that appears when content moves under it. Measured across every
+phase of the downsample grid:
+
+| | σ12 | σ32 |
+|---|---|---|
+| pyramid Gaussian | 0.306 mean / 2 max | 0.200 / 2 |
+| linear-sampled (control) | 0.270 / 1 | 0.183 / 3 |
+
+The pyramid is as translation-invariant as a plain separable Gaussian. **Moving
+content will not shimmer.**
+
+### Radius pops — real, small, and halved by compensation
+
+The level count steps at σ = 8, 16, 32, 64, and the down/up chain contributes its
+own blur, so its contribution jumps while the coarse Gaussian's sigma drops — and
+the two do not cancel. Sweeping σ in 0.5 steps on structured content:
+
+| | median step | step at σ16 | step at σ32 | worst spike |
+|---|---|---|---|---|
+| naive `σ/2^N` | 0.343 codes | 0.906 | 1.028 | 3.90× at σ32 |
+| intrinsic-compensated | 0.355 | 0.499 | 0.573 | 2.07× at σ32 |
+
+So at a threshold the blur width moves about **3× a normal sweep step** — roughly
+1 code — which compensation halves. Side by side, the naive pair straddling σ32 is
+barely distinguishable, so this was never a large flaw; but it is measurable, and
+the fix costs nothing. Compensation also fixes absolute accuracy (naive returned
+33.98 for a requested 32.5, and 49.13 for 48).
+
+**If a radius is animated**, the safest option is to **hold the level count fixed**
+for the duration — no level transition can then occur. A fixed `N=2` spans σ 4.7 to
+40+ for only 110 taps.
+
+### Radius changes are recompiles
+
+Tap and level counts bake as compile-time literals for GL ES 3.0 portability, so a
+radius change rebuilds the shader rather than updating a uniform. The pyramid keeps
+its tap count nearly constant across radii so its shaders stay small; a
+full-resolution kernel grows without bound. Either way a dragged slider recompiles
+per step — a live-update concern (debounce, or cap max taps and drive the active
+count by uniform, which would also make radius fully continuous) rather than an
+image-quality one.
+
+---
+
 ## How "flawless" was decided
 
 Flawlessness was enforced as a **gate, not a score**: detector screens run first and
@@ -264,11 +328,12 @@ to see the effect" false negatives.
 
 Stated explicitly so the recommendation is not over-trusted:
 
-1. **No temporal / animation testing.** No flicker detector was built and no
-   animated sequences were evaluated. A continuous radius sweep could still pop
-   where the pyramid changes level count — **this is the most important remaining
-   check**, and it matters because tap/level counts must bake as compile-time
-   literals on GL ES 3.0, so radius changes trigger recompiles.
+1. **Temporal testing is indirect.** Crawl and radius pops were measured through
+   static equivalents (translation invariance; a fine radius sweep) rather than by
+   playing an animation, because the rig cannot animate. No true motion sequence was
+   viewed, and no per-frame flicker detector on time-varying *content* was built.
+   The σ-estimator's noise floor (~2× the expected step at 0.5σ granularity) also
+   means pops smaller than ~3% of blur width cannot be resolved.
 2. **The rig is not the engine.** Byte-exact passthrough proves the rig is
    internally faithful, but the winner has not been implemented as a real
    `NodeDefinition` and compared against the rig through Sombra's own compiler.
@@ -293,6 +358,8 @@ npx tsx scripts/blur-bakeoff/phase2-pipeline.ts    # pipeline isolation
 npx tsx scripts/blur-bakeoff/phase3-bakeoff.ts     # isotropic bake-off
 npx tsx scripts/blur-bakeoff/phase3b-winner.ts     # real photos + both backends
 npx tsx scripts/blur-bakeoff/phase3c-suite.ts      # directional/radial/bokeh/progressive
+npx tsx scripts/blur-bakeoff/phase5-temporal.ts    # crawl + radius sweep
+npx tsx scripts/blur-bakeoff/phase5b-fix.ts        # intrinsic-blur compensation
 ```
 
 Reports and proof images land in `reports/blur-bakeoff/` (gitignored — regenerate
