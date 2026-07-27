@@ -191,9 +191,9 @@ function multiPassFBMGraph(
 const NOISE_TYPES = ['simplex', 'value', 'worley', 'worley_fast', 'worley2d', 'box']
 
 const TEXTURE_NODES: Array<{ type: string; params?: Record<string, unknown>; label: string }> = [
-  { type: 'warp', params: { edgeMode: 'clamp' }, label: 'Warp (clamp)' },
-  { type: 'warp', params: { edgeMode: 'repeat' }, label: 'Warp (repeat)' },
-  { type: 'warp', params: { edgeMode: 'mirror' }, label: 'Warp (mirror)' },
+  { type: 'warp', params: { edge: 'clamp' }, label: 'Warp (clamp)' },
+  { type: 'warp', params: { edge: 'repeat' }, label: 'Warp (repeat)' },
+  { type: 'warp', params: { edge: 'mirror' }, label: 'Warp (mirror)' },
   { type: 'pixelate', label: 'Pixelate' },
   { type: 'tile', params: { mirror: 'none' }, label: 'Tile (none)' },
   { type: 'tile', params: { mirror: 'x' }, label: 'Tile (mirror x)' },

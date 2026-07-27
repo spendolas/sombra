@@ -512,9 +512,9 @@ async function validateAllWGSL(): Promise<{
   // --- Test matrix ---
   const NOISE_TYPES = ['simplex', 'value', 'worley', 'worley_fast', 'worley2d', 'box']
   const TEXTURE_NODES: Array<{ type: string; params?: Record<string, unknown>; label: string }> = [
-    { type: 'warp', params: { edgeMode: 'clamp' }, label: 'Warp(clamp)' },
-    { type: 'warp', params: { edgeMode: 'repeat' }, label: 'Warp(repeat)' },
-    { type: 'warp', params: { edgeMode: 'mirror' }, label: 'Warp(mirror)' },
+    { type: 'warp', params: { edge: 'clamp' }, label: 'Warp(clamp)' },
+    { type: 'warp', params: { edge: 'repeat' }, label: 'Warp(repeat)' },
+    { type: 'warp', params: { edge: 'mirror' }, label: 'Warp(mirror)' },
     { type: 'pixelate', label: 'Pixelate' },
     { type: 'tile', params: { mirror: 'none' }, label: 'Tile(none)' },
     { type: 'tile', params: { mirror: 'x' }, label: 'Tile(mirrorX)' },
@@ -613,7 +613,7 @@ async function validateAllWGSL(): Promise<{
       makeNode(pxId, 'pixelate', { pixelSize: 12 }),
       makeNode(dtId, 'dither', { pixelSize: 12 }),
       makeNode(fId, 'fbm', { noiseType: 'value', octaves: 2 }),
-      makeNode(wId, 'warp', { edgeMode: 'clamp' }),
+      makeNode(wId, 'warp', { edge: 'clamp' }),
       makeNode(px2Id, 'pixelate', { pixelSize: 55 }),
       makeNode(dt2Id, 'dither', { pixelSize: 8 }),
       makeNode(smId, 'smoothstep', { min: 0.44, max: 0.68 }),
@@ -715,7 +715,7 @@ async function validateAllWGSL(): Promise<{
     const nId = id(), rId = id(), wId = id(), pId = id(), oId = id()
     results.push(await runTest('Chain: Noise→Ramp→Warp→Pixelate→Out',
       [makeNode(nId, 'noise', { noiseType: 'simplex' }), makeNode(rId, 'color_ramp'),
-       makeNode(wId, 'warp', { edgeMode: 'clamp' }), makeNode(pId, 'pixelate'),
+       makeNode(wId, 'warp', { edge: 'clamp' }), makeNode(pId, 'pixelate'),
        makeNode(oId, 'fragment_output')],
       [makeEdge(nId, rId, 'value', 'value'), makeEdge(rId, wId, 'color', 'source'),
        makeEdge(wId, pId, 'color', 'source'), makeEdge(pId, oId, 'color', 'color')],
