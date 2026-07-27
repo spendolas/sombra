@@ -150,16 +150,23 @@ export const ditherNode: NodeDefinition = {
     const id = ctx.nodeId.replace(/-/g, '_')
     const px = `pg_px_${id}`
     const cell = `pg_cell_${id}`
+    const size = `pg_size_${id}`
     const bv = `pg_bv_${id}`
     const mask = `pg_m_${id}`
 
     const lines: string[] = []
     ctx.uniforms.add('u_resolution')
     ctx.uniforms.add('u_anchor')
+    ctx.uniforms.add('u_dpr')
     // Screen-space pixel coordinates centered on canvas center (stable on resize)
     lines.push(`vec2 ${px} = gl_FragCoord.xy - u_resolution * u_anchor;`)
     // Cell index (which big pixel)
-    lines.push(`vec2 ${cell} = floor(${px} / ${inputs.pixelSize});`)
+    // Pixel Size is authored in reference px; without the u_dpr scale a cell is
+    // u_dpr times smaller on a hi-DPI display, unlike every other spatial node.
+    // Quantised once and reused at EVERY site — scaling the cell floor but not the
+    // fract() below would make the shape walk across its cell.
+    lines.push(`float ${size} = max(1.0, floor(${inputs.pixelSize} * u_dpr + 0.5));`)
+    lines.push(`vec2 ${cell} = floor(${px} / ${size});`)
     // Bayer threshold at cell index
     lines.push(`float ${bv} = bayer8x8(${cell});`)
 
@@ -171,7 +178,7 @@ export const ditherNode: NodeDefinition = {
       const cf = `pg_cf_${id}`
       const dist = `pg_d_${id}`
       const sm = `pg_sm_${id}`
-      lines.push(`vec2 ${cf} = fract(${px} / ${inputs.pixelSize}) - 0.5;`)
+      lines.push(`vec2 ${cf} = fract(${px} / ${size}) - 0.5;`)
       lines.push(`float ${dist} = ${sdfFn}(${cf});`)
       lines.push(`float ${sm} = step(${dist} - ${inputs.dither} * (${bv} - 0.5) * 0.5, 0.0);`)
       lines.push(`float ${mask} = ${sm} * step(${bv}, ${inputs.threshold});`)
@@ -189,7 +196,7 @@ export const ditherNode: NodeDefinition = {
       if (colorSource === 'live') {
         lines.push(`vec2 ${suv} = gl_FragCoord.xy / u_viewport;`)
       } else {
-        lines.push(`vec2 ${suv} = ((${cell} + 0.5) * ${inputs.pixelSize} + u_resolution * u_anchor) / u_viewport;`)
+        lines.push(`vec2 ${suv} = ((${cell} + 0.5) * ${size} + u_resolution * u_anchor) / u_viewport;`)
       }
       lines.push(`vec4 ${colVar} = texture(${samplerName}, ${suv});`)
     } else {
@@ -286,6 +293,7 @@ export const ditherNode: NodeDefinition = {
     // --- Main computation as IR statements ---
     const px = `pg_px_${id}`
     const cell = `pg_cell_${id}`
+    const size = `pg_size_${id}`
     const bv = `pg_bv_${id}`
     const mask = `pg_m_${id}`
 
@@ -294,10 +302,16 @@ export const ditherNode: NodeDefinition = {
       declare(px, 'vec2',
         binary('-', variable('gl_FragCoord.xy'), binary('*', variable('u_resolution'), variable('u_anchor'), 'vec2'), 'vec2'),
       ),
+      // See the glsl() note: reference px -> device px, quantised, shared by the
+      // cell grid, the in-cell fract and the cell-centre resample.
+      raw(
+        `float ${size} = max(1.0, floor(${ctx.inputs.pixelSize} * u_dpr + 0.5));`,
+        `let ${size} = max(1.0, floor(${ctx.inputs.pixelSize} * u_dpr + 0.5));`,
+      ),
       // Cell index (which big pixel)
       declare(cell, 'vec2',
         call('floor', [
-          binary('/', variable(px), variable(ctx.inputs.pixelSize), 'vec2'),
+          binary('/', variable(px), variable(size), 'vec2'),
         ], 'vec2'),
       ),
       // Bayer threshold at cell index
@@ -322,7 +336,7 @@ export const ditherNode: NodeDefinition = {
         declare(cf, 'vec2',
           binary('-',
             call('fract', [
-              binary('/', variable(px), variable(ctx.inputs.pixelSize), 'vec2'),
+              binary('/', variable(px), variable(size), 'vec2'),
             ], 'vec2'),
             literal('float', 0.5),
             'vec2',
@@ -366,7 +380,7 @@ export const ditherNode: NodeDefinition = {
     const colorSource = (ctx.params.colorSource as string) || 'cell'
     const colVar = `pg_col_${id}`
     const samplerName = ctx.textureSamplers?.color
-    const standardUniforms = new Set(['u_resolution', 'u_anchor'])
+    const standardUniforms = new Set(['u_resolution', 'u_anchor', 'u_dpr'])
     if (samplerName) {
       standardUniforms.add('u_viewport')
       const suv = `pg_suv_${id}`
@@ -379,7 +393,7 @@ export const ditherNode: NodeDefinition = {
             binary('+',
               binary('*',
                 binary('+', variable(cell), literal('vec2', [0.5, 0.5]), 'vec2'),
-                construct('vec2', [variable(ctx.inputs.pixelSize)]),
+                construct('vec2', [variable(size)]),
                 'vec2',
               ),
               binary('*', variable('u_resolution'), variable('u_anchor'), 'vec2'),

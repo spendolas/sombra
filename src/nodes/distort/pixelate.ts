@@ -52,8 +52,13 @@ export const pixelateNode: NodeDefinition = {
 
     // Grid in pixel space, centered on canvas center
     lines.push(`vec2 pxl_centered_${id} = gl_FragCoord.xy - u_resolution * u_anchor;`)
-    lines.push(`vec2 pxl_cell_${id} = floor(pxl_centered_${id} / vec2(${inputs.pixelSize}));`)
-    lines.push(`vec2 pxl_px_${id} = (pxl_cell_${id} + 0.5) * vec2(${inputs.pixelSize}) + u_resolution * u_anchor;`)
+    // Pixel Size is authored in reference px, so scale by u_dpr to get device px —
+    // without it a block is u_dpr times smaller on a hi-DPI display, unlike every
+    // other spatial node in the repo. Quantised and reused at BOTH sites so the
+    // cell grid and the cell centre cannot disagree.
+    lines.push(`float pxl_size_${id} = max(1.0, floor(${inputs.pixelSize} * u_dpr + 0.5));`)
+    lines.push(`vec2 pxl_cell_${id} = floor(pxl_centered_${id} / vec2(pxl_size_${id}));`)
+    lines.push(`vec2 pxl_px_${id} = (pxl_cell_${id} + 0.5) * vec2(pxl_size_${id}) + u_resolution * u_anchor;`)
     // Screen UV for FBO sampling
     lines.push(`vec2 pxl_screenUV_${id} = pxl_px_${id} / u_viewport;`)
     // Frozen-ref UV for downstream nodes
@@ -83,9 +88,15 @@ export const pixelateNode: NodeDefinition = {
       declare(`pxl_centered_${id}`, 'vec2',
         binary('-', variable('gl_FragCoord.xy'), binary('*', variable('u_resolution'), variable('u_anchor'), 'vec2'), 'vec2'),
       ),
+      // See the glsl() note: reference px -> device px, quantised, shared by the
+      // cell grid and the cell centre.
+      raw(
+        `float pxl_size_${id} = max(1.0, floor(${ctx.inputs.pixelSize} * u_dpr + 0.5));`,
+        `let pxl_size_${id} = max(1.0, floor(${ctx.inputs.pixelSize} * u_dpr + 0.5));`,
+      ),
       declare(`pxl_cell_${id}`, 'vec2',
         call('floor', [
-          binary('/', variable(`pxl_centered_${id}`), construct('vec2', [variable(ctx.inputs.pixelSize)]), 'vec2'),
+          binary('/', variable(`pxl_centered_${id}`), construct('vec2', [variable(`pxl_size_${id}`)]), 'vec2'),
         ], 'vec2'),
       ),
       // Pixel center in screen space (add center offset back)
@@ -93,7 +104,7 @@ export const pixelateNode: NodeDefinition = {
         binary('+',
           binary('*',
             binary('+', variable(`pxl_cell_${id}`), literal('vec2', [0.5, 0.5]), 'vec2'),
-            construct('vec2', [variable(ctx.inputs.pixelSize)]),
+            construct('vec2', [variable(`pxl_size_${id}`)]),
             'vec2',
           ),
           binary('*', variable('u_resolution'), variable('u_anchor'), 'vec2'),
