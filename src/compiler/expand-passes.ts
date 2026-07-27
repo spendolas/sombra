@@ -104,6 +104,15 @@ export function expandMultiPassNodes(
           target: id,
           targetHandle: plan.to,
         } as Edge<EdgeData>)
+        // Every OTHER incoming edge — connectable params especially — has to reach
+        // the later sub-passes too. Without this a wired param feeds only the first
+        // sub-pass and the rest silently fall back to the stored default, which for
+        // a blur means the two axes disagree and the result is anisotropic.
+        for (const e of edges) {
+          if (e.target !== node.id) continue
+          if (e.targetHandle === plan.to) continue // that is the chain input
+          outEdges.push({ ...e, id: `${e.id}${SUFFIX}${k}`, target: id } as Edge<EdgeData>)
+        }
       }
       prevId = id
     }

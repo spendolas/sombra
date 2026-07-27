@@ -21,8 +21,8 @@
  *  - DITHERS the 8-bit write. Banding in a wide blur comes from the final
  *    quantization, not from intermediate precision; one LSB of noise removes it.
  *
- * Taps are folded into bilinear pairs (each fetch averages two neighbours), which
- * halves the texture reads at identical quality.
+ * Radius is wireable and rides as a uniform: weights are evaluated per tap at
+ * runtime, so changing or animating it neither recompiles nor pops.
  */
 
 import type { NodeDefinition } from '../types'
@@ -32,13 +32,28 @@ import { raw } from '../../compiler/ir/types'
 /** Kernel extent is 3 sigma, so the Radius slider reads as the visible reach. */
 const SIGMA_PER_RADIUS = 1 / 3
 
-interface Tap {
-  off: number
-  w: number
-}
+/** Largest radius the slider offers, and the ceiling a wired value is clamped to. */
+const RADIUS_MAX = 128
 
 /**
- * 1D Gaussian taps, one fetch per texel, offsets in reference pixels.
+ * Loop half-width in texels, baked from the largest radius the node supports.
+ * Truncating at 4 sigma matches the reference kernel this was verified against.
+ *
+ * There is deliberately no user-facing "max radius" knob. The bound is a loop
+ * limit, not a tap list: the body breaks at 4 sigma of the LIVE radius, so runtime
+ * cost follows the actual radius and a generous bound costs nothing — not even
+ * shader length, since only this literal changes. (That was not true of the
+ * earlier unrolled form, where the bound really did set the cost.)
+ */
+const BAKED_HALF_WIDTH = Math.max(1, Math.ceil(RADIUS_MAX * SIGMA_PER_RADIUS * 4))
+
+/**
+ * Taps are one fetch per texel with weights evaluated AT RUNTIME from the radius,
+ * inside a loop with a constant bound that breaks early once past 4 sigma of the
+ * live radius. That is the repo's documented shape for a connectable param
+ * (NODE_AUTHORING_GUIDE "Connectable params with loop bounds"), and it is what
+ * lets Radius be wired at all: a wired value only exists at runtime, so a kernel
+ * baked from it is impossible.
  *
  * Deliberately NOT using the linear-sampling trick (folding adjacent tap pairs
  * into one bilinear fetch at their weighted midpoint). That optimization halves
@@ -46,29 +61,9 @@ interface Tap {
  * space, and these passes store sRGB-encoded 8-bit. Blending gamma-encoded values
  * is the same error as blurring in sRGB — measured here as ~11 codes too dark on
  * high-frequency content, while smooth content hid it because neighbouring texels
- * are nearly equal.
- *
- * Folding is only valid when the sampled texture holds linear light. Should the
- * engine ever gain float/linear intermediates, this can go back to half the taps.
+ * are nearly equal. Folding is only valid when the sampled texture holds linear
+ * light; should the engine gain float/linear intermediates, it can come back.
  */
-function buildTaps(radius: number): Tap[] {
-  const sigma = Math.max(0.35, radius * SIGMA_PER_RADIUS)
-  // Truncate at 4 sigma, matching the reference kernel this was verified against.
-  const r = Math.max(1, Math.ceil(sigma * 4))
-  const g = (x: number) => Math.exp(-(x * x) / (2 * sigma * sigma))
-
-  const weights: number[] = []
-  for (let i = -r; i <= r; i++) weights.push(g(i))
-  const total = weights.reduce((a, b) => a + b, 0)
-
-  const taps: Tap[] = []
-  for (let i = -r; i <= r; i++) {
-    const w = weights[i + r] / total
-    if (w <= 1e-7) continue
-    taps.push({ off: i, w })
-  }
-  return taps
-}
 
 const GLSL_HELPERS = `vec3 sombra_blur_toLin(vec3 c) {
   return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
@@ -126,48 +121,80 @@ interface EmitOpts {
   out: string
   sampler: string | undefined
   fallback: string
-  radius: number
+  /** GLSL/WGSL expression for the live radius — may be a wired value. */
+  radiusExpr: string
   axis: string
   wgsl: boolean
 }
 
 function emit(o: EmitOpts): string {
-  const { id, out, sampler, fallback, radius, axis, wgsl } = o
+  const { id, out, sampler, fallback, radiusExpr, axis, wgsl } = o
   const v4 = wgsl ? 'vec4f' : 'vec4'
   const v3 = wgsl ? 'vec3f' : 'vec3'
   const v2 = wgsl ? 'vec2f' : 'vec2'
   const f = wgsl ? 'f32' : 'float'
   const decl = (t: string, n: string, init: string) => (wgsl ? `var ${n}: ${t} = ${init};` : `${t} ${n} = ${init};`)
   const frag = wgsl ? 'in.position.xy' : 'gl_FragCoord.xy'
-  const sample = (uv: string) => (wgsl ? `textureSample(${sampler}_tex, ${sampler}_samp, ${uv})` : `texture(${sampler}, ${uv})`)
+  // Explicit LOD. A wired radius makes the loop's break condition vary per pixel,
+  // and WGSL forbids implicit-derivative textureSample under non-uniform control
+  // flow. These textures have no mips, so level 0 is the only level anyway.
+  const sample = (uv: string) =>
+    wgsl
+      ? `textureSampleLevel(${sampler}_tex, ${sampler}_samp, ${uv}, 0.0)`
+      : `textureLod(${sampler}, ${uv}, 0.0)`
 
   // No upstream texture: nothing to blur, pass the input through untouched.
   if (!sampler) return `${decl(v4, out, fallback)}`
 
   const dir = axis === 'vertical' ? [0, 1] : [1, 0]
-  const taps = buildTaps(radius)
+  const R = BAKED_HALF_WIDTH
   const L: string[] = []
 
   L.push(decl(v2, `blr_uv_${id}`, `${frag} / u_viewport`))
   // One reference pixel along the blur axis, in screen UV. u_dpr keeps the blur
   // the same visual size regardless of device pixel ratio.
   L.push(decl(v2, `blr_step_${id}`, `${v2}(${dir[0].toFixed(1)}, ${dir[1].toFixed(1)}) * (u_dpr / u_viewport)`))
+  // Live sigma from the (possibly wired) radius, capped at what the loop covers so
+  // a wired value beyond the slider's range stops getting blurrier rather than
+  // undersampling into ghosting.
+  L.push(decl(f, `blr_sig_${id}`, `clamp((${radiusExpr}) * ${SIGMA_PER_RADIUS.toPrecision(9)}, 0.35, ${(RADIUS_MAX * SIGMA_PER_RADIUS).toPrecision(9)})`))
+  L.push(decl(f, `blr_inv_${id}`, `1.0 / (2.0 * blr_sig_${id} * blr_sig_${id})`))
+  L.push(decl(f, `blr_cut_${id}`, `blr_sig_${id} * 4.0`))
   L.push(decl(v3, `blr_acc_${id}`, `${v3}(0.0)`))
   L.push(decl(f, `blr_alpha_${id}`, `0.0`))
+  L.push(decl(f, `blr_wsum_${id}`, `0.0`))
   L.push(decl(v4, `blr_t_${id}`, `${v4}(0.0)`))
+  L.push(decl(f, `blr_w_${id}`, `0.0`))
 
-  for (const t of taps) {
-    const uv = `blr_uv_${id} + blr_step_${id} * (${t.off.toPrecision(8)})`
-    L.push(`blr_t_${id} = ${sample(uv)};`)
-    // premultiplied accumulation in linear light
-    L.push(`blr_acc_${id} = blr_acc_${id} + sombra_blur_toLin(blr_t_${id}.rgb) * (blr_t_${id}.a * ${t.w.toPrecision(9)});`)
-    L.push(`blr_alpha_${id} = blr_alpha_${id} + blr_t_${id}.a * ${t.w.toPrecision(9)};`)
+  // Bound is baked; the break makes a small radius cheap.
+  const body: string[] = []
+  body.push(`  ${decl(f, `blr_fi_${id}`, wgsl ? `f32(blr_i_${id})` : `float(blr_i_${id})`)}`)
+  body.push(wgsl
+    ? `    if (blr_fi_${id} > blr_cut_${id}) { break; }`
+    : `    if (blr_fi_${id} > blr_cut_${id}) break;`)
+  body.push(`    blr_w_${id} = exp(-blr_fi_${id} * blr_fi_${id} * blr_inv_${id});`)
+  // centre tap once, every other offset mirrored
+  for (const sign of ['+', '-']) {
+    body.push(wgsl
+      ? `    if (${sign === '+' ? 'true' : `blr_i_${id} > 0`}) {`
+      : `    if (${sign === '+' ? 'true' : `blr_i_${id} > 0`}) {`)
+    body.push(`      blr_t_${id} = ${sample(`blr_uv_${id} ${sign} blr_step_${id} * blr_fi_${id}`)};`)
+    body.push(`      blr_acc_${id} = blr_acc_${id} + sombra_blur_toLin(blr_t_${id}.rgb) * (blr_t_${id}.a * blr_w_${id});`)
+    body.push(`      blr_alpha_${id} = blr_alpha_${id} + blr_t_${id}.a * blr_w_${id};`)
+    body.push(`      blr_wsum_${id} = blr_wsum_${id} + blr_w_${id};`)
+    body.push(`    }`)
   }
+  L.push(wgsl
+    ? `for (var blr_i_${id}: i32 = 0; blr_i_${id} <= ${R}; blr_i_${id}++) {\n${body.join('\n')}\n  }`
+    : `for (int blr_i_${id} = 0; blr_i_${id} <= ${R}; blr_i_${id}++) {\n${body.join('\n')}\n  }`)
 
-  const unpremul = wgsl
-    ? `select(${v3}(0.0), blr_acc_${id} / blr_alpha_${id}, blr_alpha_${id} > 0.0)`
-    : `blr_alpha_${id} > 0.0 ? blr_acc_${id} / blr_alpha_${id} : ${v3}(0.0)`
-  L.push(decl(v3, `blr_lin_${id}`, unpremul))
+  // Weights are evaluated at runtime, so normalize by what was actually summed.
+  const safeDiv = (num: string, den: string, cond: string) =>
+    wgsl ? `select(${v3}(0.0), ${num} / ${den}, ${cond})` : `${cond} ? ${num} / ${den} : ${v3}(0.0)`
+  L.push(decl(v3, `blr_lin_${id}`, safeDiv(`blr_acc_${id}`, `blr_alpha_${id}`, `blr_alpha_${id} > 0.0`)))
+  L.push(decl(f, `blr_a_${id}`, wgsl
+    ? `select(0.0, blr_alpha_${id} / blr_wsum_${id}, blr_wsum_${id} > 0.0)`
+    : `blr_wsum_${id} > 0.0 ? blr_alpha_${id} / blr_wsum_${id} : 0.0`))
   L.push(
     decl(
       v3,
@@ -177,7 +204,7 @@ function emit(o: EmitOpts): string {
   )
   // Alpha is the same weighted average as the colour — the blur filters alpha,
   // it does not invent it.
-  L.push(decl(v4, out, `${v4}(blr_enc_${id}, blr_alpha_${id})`))
+  L.push(decl(v4, out, `${v4}(blr_enc_${id}, blr_a_${id})`))
 
   return L.join('\n  ')
 }
@@ -217,9 +244,13 @@ export const blurNode: NodeDefinition = {
       min: 0,
       max: 128,
       step: 0.5,
-      // Tap count scales with the radius and bakes as literals (GL ES 3.0 needs
-      // constant loop bounds), so this cannot ride as a uniform.
-      updateMode: 'recompile',
+      // Wireable, and a uniform: weights are evaluated per-tap at runtime, so
+      // changing or animating the radius neither recompiles nor pops. Values above
+      // Max Radius are clamped in-shader.
+      connectable: true,
+      updateMode: 'uniform',
+      // A big radius is genuinely expensive (~343 fetches per pass at the max),
+      // so warn even though it no longer recompiles.
       warnAbove: 96,
     },
   ],
@@ -238,7 +269,9 @@ export const blurNode: NodeDefinition = {
       out: outputs.color,
       sampler,
       fallback: inputs.source,
-      radius: Number(params.radius ?? 12),
+      // Connectable, so it MUST be read through inputs (the compiler resolves it to
+      // either a uniform or an upstream expression); params would miss a wire.
+      radiusExpr: inputs.radius,
       axis: axisFor(params),
       wgsl: false,
     })
@@ -248,10 +281,16 @@ export const blurNode: NodeDefinition = {
     const id = ctx.nodeId.replace(/-/g, '_')
     const sampler = ctx.textureSamplers?.source
     const standardUniforms = new Set<string>(['u_viewport', 'u_dpr'])
-    const radius = Number(ctx.params.radius ?? 12)
     const axis = axisFor(ctx.params)
 
-    const common = { id, out: ctx.outputs.color, sampler, fallback: ctx.inputs.source, radius, axis }
+    const common = {
+      id,
+      out: ctx.outputs.color,
+      sampler,
+      fallback: ctx.inputs.source,
+      radiusExpr: ctx.inputs.radius,
+      axis,
+    }
 
     // With no upstream texture the body is just the passthrough of the port
     // default, and that default arrives in GLSL syntax (`vec4(...)`). Supplying an

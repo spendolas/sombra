@@ -134,8 +134,26 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   // Computed before the early return so the animation hooks below stay
   // unconditional (rules of hooks).
   const showPreview = !!definition && !definition.hidePreview && (!definition.conditionalPreview || (() => {
+    /**
+     * Sources feeding a node's actual input PORTS. Connectable params are
+     * deliberately excluded: wiring a scalar into a param cannot make a preview
+     * meaningful. A Gaussian Blur with no Source renders black no matter what
+     * drives its Radius, and following the Radius wire made it show that black
+     * thumbnail as though content were upstream.
+     */
+    const portFedSources = (nodeId: string): string[] => {
+      const data = allNodes.find(n => n.id === nodeId)?.data as NodeData | undefined
+      const def = data?.type ? nodeRegistry.get(data.type) : undefined
+      if (!def) return []
+      const ports = def.dynamicInputs ? def.dynamicInputs(data?.params ?? {}) : def.inputs
+      const portIds = new Set(ports.map(p => p.id))
+      return edges
+        .filter(e => e.target === nodeId && portIds.has(e.targetHandle ?? ''))
+        .map(e => e.source)
+    }
+
     const visited = new Set<string>()
-    const queue = edges.filter(e => e.target === id).map(e => e.source)
+    const queue = portFedSources(id)
     while (queue.length > 0) {
       const srcId = queue.pop()!
       if (visited.has(srcId)) continue
@@ -145,7 +163,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
       if (!srcDef || srcDef.hidePreview) continue
       if (!srcDef.conditionalPreview) return true // found always-visual upstream
       // Conditional — keep searching its inputs
-      edges.filter(e => e.target === srcId).forEach(e => queue.push(e.source))
+      queue.push(...portFedSources(srcId))
     }
     return false
   })())

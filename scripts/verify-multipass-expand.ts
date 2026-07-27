@@ -135,6 +135,28 @@ test('an UNWIRED multi-pass node emits valid WGSL (no GLSL-style constructors)',
   assert(!/\bfloat\b/.test(code), 'GLSL `float` left in WGSL')
 })
 
+test('a wired connectable param reaches EVERY sub-pass, not just the first', () => {
+  // Shipped broken: only the first sub-pass saw the wire, so the second silently
+  // used the stored default — a blur whose two axes disagreed.
+  const nodes = [n('cb', 'checkerboard'), n('bl', 'blur', { radius: 12 }), n('out', 'fragment_output'), n('num', 'float_constant', { value: 40 })]
+  const edges = [
+    e('e1', 'cb', 'color', 'bl', 'source'),
+    e('e2', 'bl', 'color', 'out', 'color'),
+    e('e3', 'num', 'value', 'bl', 'radius'),
+  ]
+  const out = call(nodes, edges)
+  const subs = out.nodes.filter((x) => baseNodeId(x.id) === 'bl').map((x) => x.id)
+  assert(subs.length === 2, `expected 2 sub-passes, got ${subs.length}`)
+  for (const id of subs) {
+    const fed = out.edges.some((x) => x.target === id && x.targetHandle === 'radius' && x.source === 'num')
+    assert(fed, `sub-pass ${id} is missing the wired radius`)
+  }
+  // and the chain input must NOT be duplicated onto the later sub-pass
+  const chainInputs = out.edges.filter((x) => x.targetHandle === 'source' && x.target === subs[1])
+  assert(chainInputs.length === 1, `sub-pass 2 should have exactly one source edge, got ${chainInputs.length}`)
+  assert(baseNodeId(chainInputs[0].source) === 'bl', 'sub-pass 2 must read the previous sub-pass, not the original source')
+})
+
 test('baseNodeId maps a sub-pass id back to the authored node', () => {
   assert(baseNodeId('bl') === 'bl', 'plain id unchanged')
   assert(baseNodeId('bl-sp1') === 'bl', 'sub-pass id resolves to base')
