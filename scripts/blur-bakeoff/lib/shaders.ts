@@ -214,3 +214,152 @@ export function boxPass(opts: {
 export function passthroughPass(filter: 'linear' | 'nearest' = 'linear'): PassSpec {
   return { body: 'return sampleSrc(uv);', filter }
 }
+
+// ===========================================================================
+// Bake-off candidates.
+//
+// Phase 2 settled two things, so they are no longer per-candidate options:
+// averaging happens in linear light (E1) and alpha is premultiplied (E2). Rather
+// than convert inside every pass, each candidate is bracketed by one ingest and
+// one egress pass:
+//
+//   ingest:  sRGB straight  ->  linear premultiplied
+//   kernels: plain weighted averages of premultiplied linear RGBA
+//   egress:  linear premultiplied -> sRGB straight (+ optional dither)
+//
+// Averaging premultiplied linear RGBA is exactly the correct operation, so the
+// kernels need no colour knowledge at all. That makes them directly comparable,
+// and it is also how a real implementation should be built: two conversions
+// total instead of two per pass.
+// ===========================================================================
+
+/** sRGB straight -> linear premultiplied. */
+export function ingestPass(backend: Backend): PassSpec {
+  return {
+    prelude: srgbPrelude(backend),
+    body: `
+  ${syntax(backend).decl('vec4', 'c', 'sampleSrc(uv)')}
+  return vec4(toLin(c.rgb) * c.a, c.a);`,
+    filter: 'nearest',
+  }
+}
+
+/** linear premultiplied -> sRGB straight. Optional one-LSB dither (Phase 2 E3). */
+export function egressPass(backend: Backend, opts?: { dither?: boolean }): PassSpec {
+  const s = syntax(backend)
+  const lines = [
+    s.decl('vec4', 'c', 'sampleSrc(uv)'),
+    s.decl('vec3', 'lin', s.sel('c.a > 0.0', 'c.rgb / c.a', 'vec3(0.0)')),
+    s.decl('vec3', 'enc', 'toSrgb(lin)'),
+  ]
+  if (opts?.dither) lines.push(`  enc = enc + vec3((ditherNoise(uv * U.u_resolution) - 0.5) / 255.0);`)
+  lines.push(`  return vec4(enc, c.a);`)
+  return {
+    prelude: srgbPrelude(backend) + (opts?.dither ? ditherPrelude(backend) : ''),
+    body: lines.join('\n'),
+    filter: 'linear',
+  }
+}
+
+/** Pure separable Gaussian kernel (no colour conversion), one axis. */
+export function gaussKernelPass(backend: Backend, sigma: number, axis: 'h' | 'v'): PassSpec {
+  return separableGaussianPass({ backend, sigma, axis, linearize: false, premultiply: false })
+}
+
+/**
+ * Linear-sampled separable Gaussian (RasterGrid): fold adjacent tap pairs into a
+ * single bilinear fetch at a weighted offset, roughly halving texture reads.
+ * Requires linear filtering — with nearest it degenerates and drops taps.
+ */
+export function linearSampledGaussPass(backend: Backend, sigma: number, axis: 'h' | 'v'): PassSpec {
+  const s = syntax(backend)
+  const k = gaussianKernel1D(sigma)
+  const r = (k.length - 1) / 2
+  const dir = axis === 'h' ? ['1.0', '0.0'] : ['0.0', '1.0']
+
+  // centre tap alone, then fold pairs (1,2), (3,4), ... outward on both sides
+  const taps: Array<{ off: number; w: number }> = [{ off: 0, w: k[r] }]
+  for (let i = 1; i <= r; i += 2) {
+    const w1 = k[r + i]
+    const w2 = i + 1 <= r ? k[r + i + 1] : 0
+    const w = w1 + w2
+    if (w <= 0) continue
+    const off = (i * w1 + (i + 1) * w2) / w
+    taps.push({ off, w })
+    taps.push({ off: -off, w })
+  }
+
+  const lines = [s.decl('vec4', 'acc', 'vec4(0.0)')]
+  for (const t of taps) {
+    lines.push(
+      `  acc = acc + sampleSrc(uv + vec2(${dir[0]}, ${dir[1]}) * (${t.off.toPrecision(9)} * U.u_texel)) * ${t.w.toPrecision(9)};`,
+    )
+  }
+  lines.push('  return acc;')
+  return { body: lines.join('\n'), filter: 'linear' }
+}
+
+/** Pure box kernel, one axis. Three H+V rounds approach a Gaussian (CLT). */
+export function boxKernelPass(backend: Backend, radiusPx: number, axis: 'h' | 'v'): PassSpec {
+  const s = syntax(backend)
+  const r = Math.max(1, Math.round(radiusPx))
+  const w = (1 / (r * 2 + 1)).toPrecision(9)
+  const dir = axis === 'h' ? ['1.0', '0.0'] : ['0.0', '1.0']
+  const lines = [s.decl('vec4', 'acc', 'vec4(0.0)')]
+  for (let i = -r; i <= r; i++) {
+    lines.push(`  acc = acc + sampleSrc(uv + vec2(${dir[0]}, ${dir[1]}) * (${i.toFixed(1)} * U.u_texel)) * ${w};`)
+  }
+  lines.push('  return acc;')
+  return { body: lines.join('\n'), filter: 'nearest' }
+}
+
+/**
+ * Kawase pass: four bilinear fetches at the diagonals of a square of half-width
+ * `offset`, exploiting hardware filtering so each fetch averages four texels.
+ * Successive passes with growing offsets accumulate toward a Gaussian-ish shape.
+ */
+export function kawasePass(backend: Backend, offset: number): PassSpec {
+  const s = syntax(backend)
+  const d = (offset + 0.5).toPrecision(9)
+  const lines = [
+    s.decl('vec4', 'acc', 'vec4(0.0)'),
+    `  acc = acc + sampleSrc(uv + vec2( ${d}, ${d}) * U.u_texel);`,
+    `  acc = acc + sampleSrc(uv + vec2(-${d}, ${d}) * U.u_texel);`,
+    `  acc = acc + sampleSrc(uv + vec2( ${d}, -${d}) * U.u_texel);`,
+    `  acc = acc + sampleSrc(uv + vec2(-${d}, -${d}) * U.u_texel);`,
+    '  return acc * 0.25;',
+  ]
+  return { body: lines.join('\n'), filter: 'linear' }
+}
+
+/** Bjorge dual-filter downsample: centre weighted 4, plus four diagonals, /8. */
+export function dualFilterDownPass(backend: Backend): PassSpec {
+  const s = syntax(backend)
+  const lines = [
+    s.decl('vec4', 'sum', 'sampleSrc(uv) * 4.0'),
+    `  sum = sum + sampleSrc(uv + vec2(-1.0, -1.0) * U.u_texel);`,
+    `  sum = sum + sampleSrc(uv + vec2( 1.0, 1.0) * U.u_texel);`,
+    `  sum = sum + sampleSrc(uv + vec2( 1.0, -1.0) * U.u_texel);`,
+    `  sum = sum + sampleSrc(uv + vec2(-1.0, 1.0) * U.u_texel);`,
+    '  return sum / 8.0;',
+  ]
+  return { body: lines.join('\n'), filter: 'linear' }
+}
+
+/** Bjorge dual-filter upsample: 8 taps, edge midpoints weighted 2, corners 1, /12. */
+export function dualFilterUpPass(backend: Backend): PassSpec {
+  const s = syntax(backend)
+  const lines = [
+    s.decl('vec4', 'sum', 'vec4(0.0)'),
+    `  sum = sum + sampleSrc(uv + vec2(-1.0,  0.0) * U.u_texel) * 2.0;`,
+    `  sum = sum + sampleSrc(uv + vec2( 1.0,  0.0) * U.u_texel) * 2.0;`,
+    `  sum = sum + sampleSrc(uv + vec2( 0.0, -1.0) * U.u_texel) * 2.0;`,
+    `  sum = sum + sampleSrc(uv + vec2( 0.0,  1.0) * U.u_texel) * 2.0;`,
+    `  sum = sum + sampleSrc(uv + vec2(-1.0, -1.0) * U.u_texel);`,
+    `  sum = sum + sampleSrc(uv + vec2( 1.0, -1.0) * U.u_texel);`,
+    `  sum = sum + sampleSrc(uv + vec2(-1.0,  1.0) * U.u_texel);`,
+    `  sum = sum + sampleSrc(uv + vec2( 1.0,  1.0) * U.u_texel);`,
+    '  return sum / 12.0;',
+  ]
+  return { body: lines.join('\n'), filter: 'linear' }
+}
