@@ -314,6 +314,25 @@ export interface NodeDefinition {
   textureFilter?: 'linear' | 'nearest'
 
   /**
+   * Declares that this node needs several sequential render passes.
+   *
+   * The compiler assigns one pass depth per node, so an effect that must store an
+   * intermediate result — a separable Gaussian blur filtering horizontally then
+   * vertically — cannot express itself in a single generator call. Declaring
+   * `multiPass` makes the compiler expand the node into a chain of virtual nodes
+   * before partitioning (see src/compiler/expand-passes.ts); the generator is then
+   * invoked once per pass and can read its index from `params.__subPass`.
+   *
+   * `from` is the output port feeding the next pass, `to` the textureInput port
+   * receiving it. Expansion is skipped when `to` is unwired.
+   */
+  multiPass?: {
+    count: (params: Record<string, unknown>) => number
+    from: string
+    to: string
+  }
+
+  /**
    * Declares draggable control points for this node, rendered by the preview
    * gizmo overlay (handles + inline sliders' on-canvas counterpart). Point
    * params are read/written in the same CSS-px-relative-to-anchor space as

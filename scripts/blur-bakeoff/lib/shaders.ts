@@ -490,6 +490,41 @@ export function progressiveStepPass(
   return { body: lines.join('\n'), filter: 'linear' }
 }
 
+/**
+ * Single-pass 2D Gaussian gather on a sunflower (golden-angle) point set.
+ *
+ * This is the shape a real Sombra node can take TODAY: the compiler gives a node
+ * exactly one pass, so a separable H-then-V blur is not expressible in one node.
+ * Its compensating advantage is that the tap count is fixed and the offsets are a
+ * unit disc scaled by the radius, so RADIUS CAN BE A UNIFORM — no recompile per
+ * step, which matters because tap counts otherwise bake as literals.
+ *
+ * Taps are area-uniform over the disc and weighted by the Gaussian at their
+ * radius, with the disc edge placed at `trunc` sigma.
+ */
+export function sunflowerGaussPass(backend: Backend, sigma: number, taps: number, trunc = 3): PassSpec {
+  const s = syntax(backend)
+  const GOLDEN = Math.PI * (3 - Math.sqrt(5))
+  const R = sigma * trunc
+  const offs: Array<{ x: number; y: number; w: number }> = []
+  let sum = 0
+  for (let i = 0; i < taps; i++) {
+    const rNorm = Math.sqrt((i + 0.5) / taps)
+    const th = i * GOLDEN
+    const w = Math.exp(-(trunc * trunc * rNorm * rNorm) / 2)
+    offs.push({ x: Math.cos(th) * rNorm * R, y: Math.sin(th) * rNorm * R, w })
+    sum += w
+  }
+  const lines = [s.decl('vec4', 'acc', 'vec4(0.0)')]
+  for (const o of offs) {
+    lines.push(
+      `  acc = acc + sampleSrc(uv + vec2(${o.x.toPrecision(8)}, ${o.y.toPrecision(8)}) * U.u_texel) * ${(o.w / sum).toPrecision(9)};`,
+    )
+  }
+  lines.push('  return acc;')
+  return { body: lines.join('\n'), filter: 'linear' }
+}
+
 /** Bjorge dual-filter downsample: centre weighted 4, plus four diagonals, /8. */
 export function dualFilterDownPass(backend: Backend): PassSpec {
   const s = syntax(backend)

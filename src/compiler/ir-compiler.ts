@@ -21,6 +21,7 @@ import {
 } from './glsl-generator'
 import type { TextureBoundaryEdge } from './glsl-generator'
 import { assembleWGSL } from './ir/wgsl-assembler'
+import { expandMultiPassNodes } from './expand-passes'
 
 // ---------------------------------------------------------------------------
 // WGSL type coercion (IR-level, parallel to type-coercion.ts GLSL rules)
@@ -447,6 +448,10 @@ export function compileGraphIR(
 ): WGSLMultiPassOutput | null {
   try {
     if (hasCycles(nodes, edges)) return null
+
+    // Must mirror compileGraph: expand multi-pass nodes before anything else, or
+    // the two backends would disagree on the pass structure.
+    ;({ nodes, edges } = expandMultiPassNodes(nodes, edges))
 
     const executionOrder = topologicalSort(nodes, edges)
     const nodeMap = new Map(nodes.map((n) => [n.id, n]))

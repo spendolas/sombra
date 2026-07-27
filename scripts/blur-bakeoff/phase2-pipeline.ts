@@ -23,7 +23,7 @@ import { srgbToLinear } from './lib/color'
 import { gaussianBlur } from './lib/reference'
 import { bandingScore } from './lib/detectors'
 import { encodePng } from './lib/png'
-import { stepEdge, smoothGradient, transparentEdgeSprite, pointOnBlack } from './lib/corpus'
+import { stepEdge, smoothGradient, transparentEdgeSprite } from './lib/corpus'
 
 const OUT_DIR = path.join('reports', 'blur-bakeoff')
 const IMG_DIR = path.join(OUT_DIR, 'phase2')

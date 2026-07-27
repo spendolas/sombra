@@ -12,6 +12,7 @@ import type { NodeData, EdgeData, GLSLContext, UniformSpec } from '../nodes/type
 import { nodeRegistry } from '../nodes/registry'
 import { topologicalSort, hasCycles } from './topological-sort'
 import { coerceType } from '../nodes/type-coercion'
+import { expandMultiPassNodes } from './expand-passes'
 
 export function uniformName(sanitizedNodeId: string, paramId: string): string {
   return `u_${sanitizedNodeId}_${paramId}`
@@ -634,6 +635,10 @@ export function compileGraph(
     if (hasCycles(nodes, edges)) {
       return errorPlan([{ message: 'Graph contains cycles. Remove circular dependencies.' }])
     }
+
+    // Effects needing more than one pass (separable blur) are expanded into a
+    // chain of virtual nodes first, so everything below sees an ordinary graph.
+    ;({ nodes, edges } = expandMultiPassNodes(nodes, edges))
 
     const executionOrder = topologicalSort(nodes, edges)
     const nodeMap = new Map(nodes.map((n) => [n.id, n]))

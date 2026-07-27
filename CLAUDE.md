@@ -111,7 +111,7 @@ Publish a compiled shader and drop it on any third-party site. **Two halves with
 - **Editor half (runs in the app, not the bundle):** `manifest.ts` (`buildManifest`), `publish.ts` (`publishScene`/`buildSnippets`), `EmbedModal.tsx` — these MAY import compiler/nodes/xyflow.
 - **Build target:** `npm run build:embed` (via `vite.embed.config.ts`) emits a self-contained version-pinned UMD to `dist/embed/`, chained into `npm run build` so it ships to Pages at `/sombra/embed/`. The player owns a byte-identical copy of the compiler's vertex shader (`vertex.ts`); the round-trip test enforces they stay in sync.
 
-### Node system (42 nodes)
+### Node system (43 nodes)
 
 Each node is one file in `src/nodes/<category>/`, registered in `src/nodes/index.ts` `ALL_NODES`. A `NodeDefinition` has typed ports (float, vec2, vec3, vec4, color, sampler2D), params, and **both** a `glsl(ctx)` and an `ir(ctx)` generator — new nodes need both so they work on both backends. Key mechanics (full detail in `NODE_AUTHORING_GUIDE.md`):
 
@@ -196,4 +196,4 @@ Non-trivial changes propagate across layers. Check what applies:
 
 ## Status
 
-Phases 0–5 complete: editor, compiler, 42 nodes, save/load `.sombra` files, compact share URLs, per-node mini-previews, Cmd+K palette, design-system pipeline. **WebGPU migration complete** (main + preview renderers; WebGL2 fallback retained). Recent work: **Phase 6 multi-pass composable effects** (`PHASE6-MULTIPASS.md`) — relay passes for fragColor conflicts, ping-pong aliasing fixes for deep pass chains, 9-point anchor pin on Fragment Output. Sprint-by-sprint history lives in `ROADMAP.md`.
+Phases 0–5 complete: editor, compiler, 43 nodes, save/load `.sombra` files, compact share URLs, per-node mini-previews, Cmd+K palette, design-system pipeline. **WebGPU migration complete** (main + preview renderers; WebGL2 fallback retained). Recent work: **Phase 6 multi-pass composable effects** (`PHASE6-MULTIPASS.md`) — relay passes for fragColor conflicts, ping-pong aliasing fixes for deep pass chains, 9-point anchor pin on Fragment Output. Sprint-by-sprint history lives in `ROADMAP.md`.

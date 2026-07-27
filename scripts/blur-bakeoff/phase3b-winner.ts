@@ -10,9 +10,9 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { createRig, type Rig, type Backend, type PassSpec } from './lib/gpu-rig'
+import { createRig, type Backend, type PassSpec } from './lib/gpu-rig'
 import {
-  ingestPass, egressPass, linearSampledGaussPass, gaussKernelPass,
+  ingestPass, egressPass, linearSampledGaussPass,
   dualFilterDownPass, dualFilterUpPass, kawasePass,
 } from './lib/shaders'
 import { decodeToLinear, encodeToSrgb8, type Rgba8 } from './lib/image'

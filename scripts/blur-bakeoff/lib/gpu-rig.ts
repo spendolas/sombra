@@ -58,9 +58,36 @@ export interface CaptureSpec {
   params?: [number, number, number, number]
 }
 
+/** A complete, engine-generated GLSL pass, executed verbatim. */
+export interface RawGlslPass {
+  fragmentShader: string
+  vertexShader: string
+  /** Sampler uniform through which this pass reads the previous one. */
+  sampler: string
+  /**
+   * The pass's own user uniforms with their compile-time values. These MUST be
+   * bound: an unbound uniform reads as 0, and Fragment Output multiplies by
+   * `u_out_alpha`, so leaving it unset turns the whole frame transparent black.
+   */
+  userUniforms?: Array<{ name: string; glslType: 'float' | 'vec2' | 'vec3' | 'vec4'; value: number | number[] }>
+}
+
+export interface RawCaptureSpec {
+  width: number
+  height: number
+  input: Rgba8
+  passes: RawGlslPass[]
+}
+
 export interface Rig {
   available: { webgpu: boolean; webgl2: boolean }
   capture(spec: CaptureSpec): Promise<Rgba8>
+  /**
+   * Run shaders produced by Sombra's own compiler, unmodified. Used to check the
+   * research rig and the real engine agree; the rig's own wrapper is bypassed
+   * entirely, only the standard uniforms are bound by name.
+   */
+  captureRawGlsl(spec: RawCaptureSpec): Promise<Rgba8>
   /** Decode an arbitrary image file (JPEG/PNG/WebP) to Rgba8 using Chrome's decoders. */
   decodeImage(bytes: Uint8Array, mime: string, maxSize?: number): Promise<Rgba8>
   close(): Promise<void>
@@ -114,6 +141,25 @@ export async function createRig(): Promise<Rig> {
         payload,
       )
       if (!res.ok) throw new Error(`capture failed: ${res.error}`)
+      const raw = Buffer.from(res.b64, 'base64')
+      return { width: res.width, height: res.height, data: new Uint8ClampedArray(raw) }
+    },
+    async captureRawGlsl(spec: RawCaptureSpec): Promise<Rgba8> {
+      const payload = {
+        width: spec.width,
+        height: spec.height,
+        passes: spec.passes,
+        input: {
+          width: spec.input.width,
+          height: spec.input.height,
+          b64: toBase64(new Uint8Array(spec.input.data.buffer, spec.input.data.byteOffset, spec.input.data.length)),
+        },
+      }
+      const res = await page.evaluate(
+        async (p) => await (window as unknown as { __rig: { captureRaw(p: unknown): Promise<{ ok: boolean; error?: string; width: number; height: number; b64: string }> } }).__rig.captureRaw(p),
+        payload,
+      )
+      if (!res.ok) throw new Error(`raw capture failed: ${res.error}`)
       const raw = Buffer.from(res.b64, 'base64')
       return { width: res.width, height: res.height, data: new Uint8ClampedArray(raw) }
     },
@@ -551,7 +597,109 @@ void main() { fragColor = sombraMain(v_uv); }
     return { width: outW, height: outH, bytes: px };
   }
 
+  // Execute engine-generated GLSL verbatim. Only the standard uniforms are bound,
+  // looked up by name — absent ones return a null location and are skipped.
+  async function captureRawGlsl(spec) {
+    const gl = getGL();
+    if (!gl) throw new Error('WebGL2 unavailable');
+    const W = spec.width, H = spec.height;
+
+    const vbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, QUAD, gl.STATIC_DRAW);
+
+    const inW = spec.input.width, inH = spec.input.height;
+    let srcTex = makeTex(gl, inW, inH, false, b64ToBytes(spec.input.b64));
+    const created = [srcTex];
+    const fbo = gl.createFramebuffer();
+
+    for (let i = 0; i < spec.passes.length; i++) {
+      const pass = spec.passes[i];
+      const target = makeTex(gl, W, H, false, null);
+      created.push(target);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, target, 0);
+      const st = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+      if (st !== gl.FRAMEBUFFER_COMPLETE) throw new Error('FBO incomplete: 0x' + st.toString(16));
+
+      const vs = gl.createShader(gl.VERTEX_SHADER);
+      gl.shaderSource(vs, pass.vertexShader); gl.compileShader(vs);
+      if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) throw new Error('vert: ' + gl.getShaderInfoLog(vs));
+      const fs = gl.createShader(gl.FRAGMENT_SHADER);
+      gl.shaderSource(fs, pass.fragmentShader); gl.compileShader(fs);
+      if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) throw new Error('frag: ' + gl.getShaderInfoLog(fs));
+      const prog = gl.createProgram();
+      gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error('link: ' + gl.getProgramInfoLog(prog));
+      gl.deleteShader(vs); gl.deleteShader(fs);
+      gl.useProgram(prog);
+
+      const setF = (n, v) => { const l = gl.getUniformLocation(prog, n); if (l) gl.uniform1f(l, v); };
+      const set2 = (n, a, b) => { const l = gl.getUniformLocation(prog, n); if (l) gl.uniform2f(l, a, b); };
+      setF('u_time', 0);
+      setF('u_dpr', 1);
+      setF('u_ref_size', 512);
+      set2('u_resolution', W, H);
+      set2('u_viewport', W, H);
+      set2('u_mouse', 0, 0);
+      set2('u_anchor', 0.5, 0.5);
+
+      // The pass's own user uniforms, at their compile-time values.
+      for (const u of (pass.userUniforms || [])) {
+        const l = gl.getUniformLocation(prog, u.name);
+        if (!l) continue;
+        const v = u.value;
+        if (u.glslType === 'float') gl.uniform1f(l, Array.isArray(v) ? v[0] : v);
+        else if (u.glslType === 'vec2') gl.uniform2fv(l, v);
+        else if (u.glslType === 'vec3') gl.uniform3fv(l, v);
+        else gl.uniform4fv(l, v);
+      }
+
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, srcTex);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      const sl = gl.getUniformLocation(prog, pass.sampler);
+      if (sl) gl.uniform1i(sl, 0);
+
+      const loc = gl.getAttribLocation(prog, 'a_position');
+      if (loc < 0) throw new Error('pass ' + i + ': a_position attribute not found');
+      // sl may legitimately be null if a shader does not sample (e.g. a probe).
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.enableVertexAttribArray(loc);
+      gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+      gl.viewport(0, 0, W, H);
+      gl.disable(gl.BLEND);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      const de = gl.getError();
+      if (de !== gl.NO_ERROR) throw new Error('pass ' + i + ' draw error 0x' + de.toString(16));
+      gl.deleteProgram(prog);
+      srcTex = target;
+    }
+
+    const px = new Uint8Array(W * H * 4);
+    gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    const err = gl.getError();
+    if (err !== gl.NO_ERROR) throw new Error('GL error 0x' + err.toString(16));
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.deleteFramebuffer(fbo);
+    for (const t of created) gl.deleteTexture(t);
+    gl.deleteBuffer(vbo);
+    return { width: W, height: H, bytes: px };
+  }
+
   window.__rig = {
+    async captureRaw(spec) {
+      try {
+        const r = await captureRawGlsl(spec);
+        return { ok: true, width: r.width, height: r.height, b64: bytesToB64(r.bytes) };
+      } catch (e) {
+        return { ok: false, error: String(e && e.message ? e.message : e), width: 0, height: 0, b64: '' };
+      }
+    },
     async probe() {
       let webgpu = false;
       try { webgpu = !!(await getDevice()); } catch (e) { webgpu = false; }
