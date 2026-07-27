@@ -294,7 +294,7 @@ The **GraphToolbar** in the top-left of the canvas provides Save (download) and 
 
 | Type | Label | Inputs | Outputs | Params |
 |---|---|---|---|---|
-| `blur` | Gaussian Blur | `source` (color, textureInput) | `color` (color) | `radius` |
+| `blur` | Gaussian Blur | `source` (color, textureInput) | `color` (color) | `radius` (connectable), `edgeMode` (enum: fit/repeat) |
 | `pixelate` | Pixelate | `source` (color, textureInput) | `color` (color, RGBA — full vec4 sampled), `uv` (vec2) | `pixelSize` (connectable) |
 | `reeded_glass` | Reeded Glass | `source` (color, textureInput) | `color` (color, RGBA — full vec4 sampled/frosted), `coords` (vec2) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `ribWidth` (connectable), `ior` (connectable), `curvature` (connectable), `frost` (connectable), `direction` (enum: vertical/horizontal), `ribType` (enum: straight/wave/circular/noise), `waveShape` (enum: sine/triangle/square/sawtooth/chevron/u_shape; when ribType=wave), `noiseType` (enum: simplex/value/worley; when ribType=noise), `amplitude` (connectable; when ribType=wave|circular|noise), `wavelength` (connectable; when ribType=wave|circular|noise) |
 | `dither` | Dither | `color` (color, `textureInput` — FBO-sampled when wired + colorSource=cell) | `result` (color — mask darkens RGB, **alpha always passes through**, never composited) | `pixelSize` (connectable), `colorSource` (enum: cell/live — default cell = per-cell block/true pixelation via FBO resample; live = per-pixel screen mask), `shape` (enum: square/circle/diamond/triangle), `threshold` (connectable), `dither` (connectable; when shape=circle) |

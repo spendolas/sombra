@@ -77,6 +77,8 @@ export interface RawCaptureSpec {
   height: number
   input: Rgba8
   passes: RawGlslPass[]
+  /** Value uploaded as u_dpr. Lets a DPR-dependent bug be reproduced at dpr 2. */
+  dpr?: number
 }
 
 export interface Rig {
@@ -149,6 +151,7 @@ export async function createRig(): Promise<Rig> {
         width: spec.width,
         height: spec.height,
         passes: spec.passes,
+        dpr: spec.dpr ?? 1,
         input: {
           width: spec.input.width,
           height: spec.input.height,
@@ -637,7 +640,7 @@ void main() { fragColor = sombraMain(v_uv); }
       const setF = (n, v) => { const l = gl.getUniformLocation(prog, n); if (l) gl.uniform1f(l, v); };
       const set2 = (n, a, b) => { const l = gl.getUniformLocation(prog, n); if (l) gl.uniform2f(l, a, b); };
       setF('u_time', 0);
-      setF('u_dpr', 1);
+      setF('u_dpr', spec.dpr || 1);
       setF('u_ref_size', 512);
       set2('u_resolution', W, H);
       set2('u_viewport', W, H);
