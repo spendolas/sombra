@@ -102,10 +102,20 @@ const REED_LENS_BODY = `float local = mod(coord, ribW) / ribW;
   // rib centre. Pre-scaled by the same (ior-1) × amp the refraction uses.
   float sag = (sqrt(max(1.0 - x2, 0.0)) - sqrt(max(1.0 - c2 * c2, 0.0))) / c2;
 
-  return vec2((floor(coord / ribW) + lensed) * ribW, sag * (ior - 1.0) * amp);`
+  // Cross-rib derivative d(sampled)/d(screen), in closed form:
+  //   d(slope)/d(local) = 2·c2/(1-x²c2²)^{3/2}, so L' = 1 - A/(1-x2)^{3/2}
+  //   with A = (ior-1)·amp·c2.
+  // |L'| < 1 is magnification and harmless. |L'| > 1 is MINIFICATION: one screen
+  // pixel spans |L'| source pixels, which a single bilinear tap cannot represent
+  // — that is the ragged/sparkling rib edge. Onset is curvature 0.8095 at ior
+  // 1.5 (the default is 0.80, one slider step below), and |L'| reaches 175 at
+  // curvature 1.0 and 352 at 2.0. Returned so the caller can size its filter.
+  float lp = 1.0 - (ior - 1.0) * amp * c2 / pow(max(1.0 - x2, 1e-6), 1.5);
+
+  return vec3((floor(coord / ribW) + lensed) * ribW, sag * (ior - 1.0) * amp, lp);`
 
 function registerLensFn(ctx: GLSLContext): void {
-  addFunction(ctx, 'reedLens', `vec2 reedLens(float coord, float ribW, float ior, float curvature) {
+  addFunction(ctx, 'reedLens', `vec3 reedLens(float coord, float ribW, float ior, float curvature) {
   ${REED_LENS_BODY}
 }`)
 }
@@ -325,7 +335,7 @@ function emitLensTail(o: {
   radScr: string
   scale: string
   grad: RibGradient
-}): { lines: string[]; delta: string } {
+}): { lines: string[]; delta: string; lens: string } {
   const { id, sfx, isVert, offPx, wmCentre, ribUVScreen, gradRate } = o
   const resPerp = isVert ? 'u_resolution.y' : 'u_resolution.x'
   const lines: string[] = []
@@ -337,7 +347,7 @@ function emitLensTail(o: {
   const bowV = `rg_bow${sfx}_${id}`
 
   lines.push(`float ${wm} = ${wmCentre} + (${offPx}) * ${gradRate} * ${ribUVScreen};`)
-  lines.push(`vec2 ${lens} = reedLens(${wm}, ${ribUVScreen}, ${o.ior}, ${o.curvature});`)
+  lines.push(`vec3 ${lens} = reedLens(${wm}, ${ribUVScreen}, ${o.ior}, ${o.curvature});`)
   lines.push(`float ${disp} = ${lens}.x - ${wm};`)
   // Thickness bow, in rib half-widths → device px → perp-axis screen UV
   lines.push(`float ${bowV} = ${lens}.y * (${o.ribWidth} * u_dpr * 0.5) * ${o.bow} / ${resPerp};`)
@@ -346,7 +356,110 @@ function emitLensTail(o: {
     aspScr: o.aspScr, radScr: o.radScr, scale: o.scale, grad: o.grad,
   })
   lines.push(...tail.lines)
-  return { lines, delta: tail.delta }
+  return { lines, delta: tail.delta, lens }
+}
+
+/** Fixed loop bound for the minification supersample. GLSL ES needs a
+ *  compile-time constant, so the count is capped here and the loop breaks early
+ *  at the per-fragment count (the pattern blur.ts uses). 8 is where a
+ *  low-contrast source stops improving: at |L'| 2-4 a 255-code step wants ~64
+ *  taps but a 30-code one wants 8, and heavily-filtered content is where high
+ *  curvature is actually used. */
+const MINIF_MAX_TAPS = 8
+
+/**
+ * Minification supersampling: N colour samples across the pixel footprint along
+ * the rib normal, averaged premultiplied.
+ *
+ * Where |L'| > 1 the lens minifies — one screen pixel covers |L'| source pixels —
+ * and a single bilinear tap simply cannot represent that. It reads as a ragged,
+ * sparkling rib edge, and it is NOT what the seam-coverage split fixes: coverage
+ * models one clean step per pixel, whereas past the cliff there are extra creases
+ * inside every rib.
+ *
+ * Sub-samples are spaced uniformly in SCREEN space and their COLOURS averaged,
+ * which is exactly the pixel box filter. That matters because it sidesteps the
+ * hard part: the pre-image of one pixel is up to two disjoint intervals with
+ * folds and multiplicity 4 (measured at ior 1.65 / curvature 2.15), so
+ * integrating in source space would need the map inverted and its branches
+ * tracked. Each sub-sample instead traverses the whole map independently and the
+ * branch structure takes care of itself. Averaging the sampled POSITION would be
+ * wrong for the same reason it is wrong at a seam — that only equals averaging
+ * colour if the image is locally affine, and across a 52-107 px jump it is not.
+ *
+ * N comes from the analytic derivative, so this costs nothing where it is not
+ * needed: at the node defaults 0% of the rib minifies and N is exactly 1.
+ */
+function emitMinifSupersample(o: {
+  id: string
+  lang: 'glsl' | 'wgsl'
+  isVert: boolean
+  sampler: string
+  out: string
+  taps: string
+  wmCentre: string
+  ribUVScreen: string
+  rate: string
+  halfWidth: string
+  normal: string
+  ribWidth: string
+  ior: string
+  curvature: string
+  bow: string
+  aspScr: string
+  radScr: string
+  scale: string
+  grad: RibGradient
+}): string {
+  const { id, lang, isVert, sampler, out, taps } = o
+  const { gm, gp, den } = o.grad
+  const resMain = isVert ? 'u_resolution.x' : 'u_resolution.y'
+  const resPerp = isVert ? 'u_resolution.y' : 'u_resolution.x'
+  const w = lang === 'wgsl'
+  const f = (n: string) => (w ? `f32(${n})` : `float(${n})`)
+  // `let` is illegal for a reassigned var; everything here is single-assignment
+  // except the accumulators, which are `var`.
+  const dcl = (t: string) => (w ? 'let ' : `${t} `)
+  const v2 = w ? 'vec2f' : 'vec2'
+  const v3 = w ? 'vec3f' : 'vec3'
+  const v4 = w ? 'vec4f' : 'vec4'
+  const fetch = (uv: string) => (w
+    ? `textureSampleLevel(${sampler}_tex, ${sampler}_samp, ${uv}, 0.0)`
+    : `texture(${sampler}, ${uv})`)
+  const base = w ? 'in.position.xy' : 'gl_FragCoord.xy'
+  const vp = w ? 'uniforms.u_viewport' : 'u_viewport'
+  // y-DOWN base vs y-UP normal and delta: each needs its own negation on WGSL.
+  const nrm = w ? `${v2}(${o.normal}.x, -${o.normal}.y)` : o.normal
+  const dlt = (d: string) => (w ? `${v2}(${d}.x, -${d}.y)` : d)
+  const A = `rg_ms_acc_${id}`, AA = `rg_ms_a_${id}`
+  const L = `rg_ms_l_${id}`, T = `rg_ms_t_${id}`, WM = `rg_ms_wm_${id}`
+  const D = `rg_ms_d_${id}`, S = `rg_ms_s_${id}`, UV = `rg_ms_uv_${id}`
+  const DSP = `rg_ms_dsp_${id}`, BW = `rg_ms_bw_${id}`
+  const dMain = `(${DSP} * (1.0 + ${gm}) / ${den})`
+  const dPerp = `(${DSP} * ${gp} * (${resMain} / ${resPerp}) / ${den} + ${BW})`
+
+  return [
+    `${w ? `var ${A}: ${v3} = ${v3}(0.0);` : `${v3} ${A} = ${v3}(0.0);`}`,
+    `${w ? `var ${AA}: f32 = 0.0;` : `float ${AA} = 0.0;`}`,
+    `for (${w ? 'var rg_ms_i_' + id + ': i32 = 0' : 'int rg_ms_i_' + id + ' = 0'}; rg_ms_i_${id} < ${MINIF_MAX_TAPS}; rg_ms_i_${id}++) {`,
+    `  if (${f(`rg_ms_i_${id}`)} >= ${taps}) { break; }`,
+    `  ${dcl('float')}${T} = ((2.0 * (${f(`rg_ms_i_${id}`)} + 0.5) / ${taps}) - 1.0) * ${o.halfWidth};`,
+    `  ${dcl('float')}${WM} = ${o.wmCentre} + ${T} * ${o.rate} * ${o.ribUVScreen};`,
+    `  ${dcl('vec3')}${L} = reedLens(${WM}, ${o.ribUVScreen}, ${o.ior}, ${o.curvature});`,
+    `  ${dcl('float')}${DSP} = ${L}.x - ${WM};`,
+    `  ${dcl('float')}${BW} = ${L}.y * (${o.ribWidth} * u_dpr * 0.5) * ${o.bow} / ${resPerp};`,
+    `  ${w ? 'var' : 'vec2'} ${D}${w ? ': vec2f' : ''} = ${isVert ? `${v2}(${dMain}, ${dPerp})` : `${v2}(${dPerp}, ${dMain})`};`,
+    `  ${D}.x *= ${o.aspScr};`,
+    `  ${D} = ${v2}(${D}.x * cos(${o.radScr}) + ${D}.y * sin(${o.radScr}), -${D}.x * sin(${o.radScr}) + ${D}.y * cos(${o.radScr}));`,
+    `  ${D}.x /= ${o.aspScr};`,
+    `  ${D} *= ${v2}(${o.scale});`,
+    `  ${dcl('vec2')}${UV} = (${base} + ${nrm} * ${T}) / ${vp} + ${dlt(D)};`,
+    `  ${dcl('vec4')}${S} = ${fetch(UV)};`,
+    `  ${A} = ${A} + ${S}.rgb * ${S}.a;`,
+    `  ${AA} = ${AA} + ${S}.a;`,
+    `}`,
+    `${out} = ${v4}(${A} / ${w ? `${v3}(max(${AA}, 1e-5))` : `max(${AA}, 1e-5)`}, ${AA} / ${taps});`,
+  ].join('\n  ')
 }
 
 /**
@@ -381,7 +494,7 @@ function emitSeamGeometry(o: {
   scale: string
   radScr: string
   grad: RibGradient
-}): { lines: string[]; rate: string; centroidA: string; centroidB: string; weightA: string; normal: string; split: string } {
+}): { lines: string[]; rate: string; centroidA: string; centroidB: string; weightA: string; normal: string; split: string; halfWidth: string } {
   const { id, isVert, wmCentre, ribUVScreen, ribWidth, scale, radScr, grad } = o
   const { gm, gp, den } = grad
   const lines: string[] = []
@@ -414,7 +527,7 @@ function emitSeamGeometry(o: {
   return {
     lines, rate,
     centroidA: `rg_ca_${id}`, centroidB: `rg_cb_${id}`,
-    weightA: `rg_wa_${id}`, normal: n, split: `rg_split_${id}`,
+    weightA: `rg_wa_${id}`, normal: n, split: `rg_split_${id}`, halfWidth: hw,
   }
 }
 
@@ -597,7 +710,7 @@ export const reededGlassNode: NodeDefinition = {
 
     // Lens remap in frozen-ref space (for coords output)
     const lensRef = `rg_lens_ref_${id}`
-    lines.push(`vec2 ${lensRef} = reedLens(${warpedMain}, ${ribUVRef}, ${inputs.ior}, ${inputs.curvature});`)
+    lines.push(`vec3 ${lensRef} = reedLens(${warpedMain}, ${ribUVRef}, ${inputs.ior}, ${inputs.curvature});`)
     // Thickness bow, in rib half-widths → frozen-ref UV (isotropic, no aspect)
     const bowRef = `rg_bow_ref_${id}`
     lines.push(`float ${bowRef} = ${lensRef}.y * ${ribUVRef} * 0.5 * ${inputs.bow};`)
@@ -678,6 +791,11 @@ export const reededGlassNode: NodeDefinition = {
       const subA = emitLensTail({ ...tailArgs, sfx: '_a', offPx: seam.centroidA })
       const subB = emitLensTail({ ...tailArgs, sfx: '_b', offPx: seam.centroidB })
       lines.push(...mid.lines, ...subA.lines, ...subB.lines)
+      // Supersample count from the analytic cross-rib derivative: 1 wherever the
+      // lens magnifies (which is everywhere at the defaults), rising with the
+      // minification factor and capped.
+      const taps = `rg_nt_${id}`
+      lines.push(`float ${taps} = clamp(ceil(abs(${mid.lens}.z)), 1.0, ${MINIF_MAX_TAPS}.0);`)
 
       // Use gl_FragCoord/viewport instead of v_uv for FBO sampling —
       // on WGSL, in.position.y=0 at top matches WebGPU texture convention,
@@ -714,6 +832,15 @@ export const reededGlassNode: NodeDefinition = {
       lines.push(`    rg_aacc_${id} += rg_s_${id}.a;`)
       lines.push(`  }`)
       lines.push(`  ${outputs.color} = vec4(rg_acc_${id} / max(rg_aacc_${id}, 1e-5), rg_aacc_${id} / 8.0);`)
+      // The lens minifies here, so one tap cannot represent the footprint.
+      lines.push(`} else if (${taps} > 1.0) {`)
+      lines.push('  ' + emitMinifSupersample({
+        id, lang: 'glsl', isVert, sampler: samplerName, out: `${outputs.color}`, taps,
+        wmCentre: warpedMainScr, ribUVScreen, rate: seam.rate, halfWidth: seam.halfWidth,
+        normal: seam.normal, ribWidth: `${inputs.ribWidth}`, ior: `${inputs.ior}`,
+        curvature: `${inputs.curvature}`, bow: `${inputs.bow}`,
+        aspScr, radScr, scale: `${inputs.srt_scale}`, grad,
+      }))
       // A rib seam cutting through this pixel: sample each side at its own
       // centroid and weight by coverage. Premultiplied, matching the frost
       // accumulator — straight-alpha averaging fringes a transparent edge and is
@@ -755,7 +882,7 @@ export const reededGlassNode: NodeDefinition = {
         { name: 'ior', type: 'float' },
         { name: 'curvature', type: 'float' },
       ],
-      returnType: 'vec2',
+      returnType: 'vec3',
       body: [raw(REED_LENS_BODY)],
     }
     functions.push(lensFn)
@@ -894,13 +1021,13 @@ export const reededGlassNode: NodeDefinition = {
     // Lens remap in frozen-ref space (for coords output)
     const lensRef = `rg_lens_ref_${id}`
     stmts.push(
-      declare(lensRef, 'vec2',
+      declare(lensRef, 'vec3',
         call('reedLens', [
           variable(warpedMain),
           variable(ribUVRef),
           variable(ctx.inputs.ior),
           variable(ctx.inputs.curvature),
-        ], 'vec2'),
+        ], 'vec3'),
       ),
     )
     // Thickness bow, in rib half-widths → frozen-ref UV (isotropic, no aspect)
@@ -982,6 +1109,19 @@ export const reededGlassNode: NodeDefinition = {
       const subA = emitLensTail({ ...tailArgs, sfx: '_a', offPx: seam.centroidA })
       const subB = emitLensTail({ ...tailArgs, sfx: '_b', offPx: seam.centroidB })
       for (const l of [...mid.lines, ...subA.lines, ...subB.lines]) stmts.push(raw(l))
+      // Supersample count from the analytic cross-rib derivative: 1 wherever the
+      // lens magnifies (which is everywhere at the defaults), rising with the
+      // minification factor and capped.
+      const taps = `rg_nt_${id}`
+      stmts.push(raw(`float ${taps} = clamp(ceil(abs(${mid.lens}.z)), 1.0, ${MINIF_MAX_TAPS}.0);`))
+      const minifArgs = {
+        id, isVert, sampler: samplerName, out: `${ctx.outputs.color}`, taps,
+        wmCentre: warpedMainScr, ribUVScreen, rate: seam.rate, halfWidth: seam.halfWidth,
+        normal: seam.normal, ribWidth: `${ctx.inputs.ribWidth}`, ior: `${ctx.inputs.ior}`,
+        curvature: `${ctx.inputs.curvature}`, bow: `${ctx.inputs.bow}`,
+        aspScr: `rg_asp_scr_${id}`, radScr: `rg_rad_scr_${id}`,
+        scale: `${ctx.inputs.srt_scale}`, grad,
+      } as const
 
       // Use gl_FragCoord/viewport instead of v_uv — matches WebGPU texture convention.
       //
@@ -1052,6 +1192,8 @@ export const reededGlassNode: NodeDefinition = {
       rg_aacc_${id} += rg_s_${id}.a;
     }
     ${ctx.outputs.color} = vec4(rg_acc_${id} / max(rg_aacc_${id}, 1e-5), rg_aacc_${id} / 8.0);
+  } else if (${taps} > 1.0) {
+    ${emitMinifSupersample({ ...minifArgs, lang: 'glsl' })}
   } else if (${seam.split}) {
     vec4 rg_A_${id} = texture(${samplerName}, ${sampleUV}_a);
     vec4 rg_B_${id} = texture(${samplerName}, ${sampleUV}_b);
@@ -1077,6 +1219,8 @@ export const reededGlassNode: NodeDefinition = {
       rg_aacc_${id} = rg_aacc_${id} + rg_s_${id}.a;
     }
     ${ctx.outputs.color} = vec4f(rg_acc_${id} / vec3f(max(rg_aacc_${id}, 1e-5)), rg_aacc_${id} / 8.0);
+  } else if (${taps} > 1.0) {
+    ${emitMinifSupersample({ ...minifArgs, lang: 'wgsl' })}
   } else if (${seam.split}) {
     let rg_A_${id} = ${wgslSample(`${sampleUV}_a`)};
     let rg_B_${id} = ${wgslSample(`${sampleUV}_b`)};

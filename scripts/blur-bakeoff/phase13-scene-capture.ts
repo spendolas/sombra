@@ -94,6 +94,8 @@ const CROP = 96
 /** Along-seam strip crop, native px. */
 const STRIP_W = 40
 const STRIP_H = 150
+/** Escalating attempts to force one render out of a non-animated plan. */
+const NUDGES = 3
 
 const arg = (k: string): string | undefined => {
   const hit = process.argv.find((a) => a.startsWith(`--${k}=`))
@@ -109,7 +111,8 @@ const CAPTURE_SHIM = `(() => {
   const cap = {
     armed: false, pending: null, error: null, submits: 0, skipped: 0,
     isWebGPU: false, isWebGL2: false, format: null, device: null,
-    lastTex: null, freshTex: false, canvasW: 0, canvasH: 0, gpuErrors: [],
+    lastTex: null, freshTex: false, canvasW: 0, canvasH: 0, gpuErrors: [], deviceLost: null,
+    mainFrames: 0,
   };
   window.__cap = cap;
 
@@ -127,6 +130,12 @@ const CAPTURE_SHIM = `(() => {
     GPUCanvasContext.prototype.configure = function (cfg) {
       cap.isWebGPU = true;
       cap.format = cfg.format;
+      // Take the device FROM THE CONFIG, not from the last requestDevice(): the app
+      // creates throwaway devices (WGSL validation probes) and destroys them, and
+      // copyTextureToBuffer on a destroyed device fails with
+      // "Device was lost before mapping was resolved". cfg.device is by definition
+      // the device that owns this canvas' textures.
+      this.__p13dev = cfg.device;
       const usage = (cfg.usage === undefined ? GPUTextureUsage.RENDER_ATTACHMENT : cfg.usage)
         | GPUTextureUsage.COPY_SRC;
       return origCfg.call(this, Object.assign({}, cfg, { usage: usage }));
@@ -140,6 +149,8 @@ const CAPTURE_SHIM = `(() => {
       const c = this.canvas;
       if (c && typeof HTMLCanvasElement !== 'undefined' && c instanceof HTMLCanvasElement && c.isConnected) {
         cap.lastTex = t; cap.canvasW = c.width; cap.canvasH = c.height;
+        cap.mainFrames++;
+        if (this.__p13dev) cap.device = this.__p13dev;
         // Marks the texture as belonging to the CURRENT frame. Preview thumbnails
         // share this GPUDevice and submit their own work; without this flag an
         // armed capture fired on a preview's submit and copied the PREVIOUS
@@ -158,6 +169,8 @@ const CAPTURE_SHIM = `(() => {
             if (cap.gpuErrors.length < 20) cap.gpuErrors.push(String(ev.error).slice(0, 300));
           });
         } catch (e) { /* older impls */ }
+        try { d.lost.then((info) => { cap.deviceLost = String(info && info.reason) + ': ' + String(info && info.message); }); }
+        catch (e) { /* ignore */ }
         return d;
       });
     };
@@ -280,10 +293,15 @@ async function grabNative(page: Page, nudge: () => Promise<void>): Promise<Grab>
 
   await arm()
   let r = (await collect(700)) as Record<string, unknown>
-  if (!r.ok) {
-    // Static path: the renderer only draws on request. Force one.
-    await nudge()
+  // A NON-animated plan renders once, on request, and that render already happened
+  // during the settle — so there is no frame to catch. Escalate until one is drawn.
+  // ARM BEFORE NUDGING. Nudging first draws the frame, the shim captures it into
+  // cap.pending, and then arm() would zero cap.pending again — throwing away the
+  // one frame we asked for and then waiting forever for another. That is why
+  // D_static reported "no frame submitted" while the counter showed 4 frames drawn.
+  for (let attempt = 0; !r.ok && attempt < NUDGES; attempt++) {
     await arm()
+    await nudge()
     r = (await collect(3000)) as Record<string, unknown>
   }
   if (!r.ok) {
@@ -371,6 +389,52 @@ function magnify(img: Rgba8, k: number): Rgba8 {
   return { width: w, height: h, data: out }
 }
 
+/**
+ * Per-crop min/max contrast stretch on luma, applied equally to R/G/B so hue is
+ * preserved.
+ *
+ * This scene's ENTIRE frame spans ~30 of 255 code values (blur radius 51, then the
+ * warp's srt_scale 4.35 magnifies that blurred result), so the rib artefact is
+ * real but only ~10 codes tall — invisible at native contrast and easily mistaken
+ * for a clean gradient. The stretch is a VIEWING aid only: every number in the
+ * report is computed on the unstretched pixels, and the raw crop is written too.
+ */
+function stretch(img: Rgba8): Rgba8 {
+  const L = luma(img)
+  let lo = Infinity
+  let hi = -Infinity
+  for (let i = 0; i < L.length; i++) {
+    if (L[i] < lo) lo = L[i]
+    if (L[i] > hi) hi = L[i]
+  }
+  const span = Math.max(1e-6, hi - lo)
+  const out = new Uint8ClampedArray(img.data.length)
+  for (let i = 0; i < L.length; i++) {
+    const gain = 255 / span
+    for (let c = 0; c < 3; c++) out[i * 4 + c] = (img.data[i * 4 + c] - lo) * gain
+    out[i * 4 + 3] = 255
+  }
+  return { width: img.width, height: img.height, data: out }
+}
+
+/** Row where this seam is locally sharpest — the most diagnostic place to crop. */
+function sharpestRow(L: Float32Array, w: number, h: number, xs: number, m: number): number {
+  let bestY = (h / 2) | 0
+  let best = -1
+  for (let y = m; y < h - m; y++) {
+    let mx = 0
+    for (let dx = -POS_HALF; dx < POS_HALF; dx++) {
+      const x = Math.min(w - 2, Math.max(0, xs + dx))
+      mx = Math.max(mx, Math.abs(L[y * w + x + 1] - L[y * w + x]))
+    }
+    if (mx > best) {
+      best = mx
+      bestY = y
+    }
+  }
+  return bestY
+}
+
 function writePng(file: string, img: Rgba8): void {
   fs.mkdirSync(path.dirname(file), { recursive: true })
   fs.writeFileSync(file, encodePng(img))
@@ -396,11 +460,34 @@ interface SeamMetrics {
   transitionMean: number
   transitionP90: number
   hardCutFraction: number
+  /** Fraction of rows where the transition/position measure hit its own window
+   *  edge. Anything above ~0.05 means that measure is censored, not measured. */
+  transitionSaturatedFrac: number
+  posSaturatedFrac: number
+  /** Fraction of the local feature amplitude carried by the single sharpest pixel
+   *  boundary: 1.0 = hard cut / zero transition px, 0.5 = one AA px, 0.14 = ~8 px.
+   *  The only seam-core measure here that is immune to the rib's soft shoulder. */
+  maxAdjacentJumpMedian: number
+  jumpShareMedian: number
+  jumpShareP90: number
+  jumpRows: number
   /** A seam can be a NOTCH (dark line, plateaus equal on both sides) rather than
    *  a STEP. Then the step metrics above have nothing to measure, so these carry
    *  the signal instead. */
   notchDepthMedian: number
   notchWidthMedian: number
+  /**
+   * Staircase measures, computed on the per-row seam column AFTER removing a
+   * linear fit in y. Detrending is essential: the seam in this scene is OBLIQUE,
+   * so raw posStd/runLength mostly measure the seam's SLOPE, not its raggedness.
+   * A perfectly rendered straight oblique edge sampled at one sample/px quantises
+   * its position to integers, giving posResidStd ~0.29 px (uniform quantisation)
+   * and ZERO reversals. Excess residual, and any reversal against the fitted
+   * slope, is raggedness that quantisation alone cannot produce.
+   */
+  posSlopePxPerRow: number
+  posResidStd: number
+  posReversalFrac: number
   /** per-row seam column, in px relative to the nominal seam */
   posStd: number
   posRange: number
@@ -482,10 +569,74 @@ function bestPhase(s: Float64Array, w: number, P: number, m: number): { phase: n
  * narrow enough that the source image's own structure does not dominate.
  */
 const HALF = 4
-/** Rows below this step magnitude carry no seam signal to measure. */
-const MIN_STEP = 8
+/**
+ * Half-window for the PLATEAU reference and the transition count.
+ *
+ * 12, not 4. With HALF=4 the counting window was 7 px wide and the scene reported
+ * a transition of 6 — i.e. the measure was SATURATED and "6" really meant ">=6,
+ * cannot tell". 12 gives a 23-px window, still only ~19% of the 120-px rib period,
+ * so the plateau references stay inside the same rib. `transitionSaturatedFrac`
+ * reports how often even this window is exceeded, so saturation can never again be
+ * mistaken for a measurement.
+ */
+const PLATEAU_HALF = 12
+/**
+ * Half-window for the per-row seam POSITION search. 10, not 4: with HALF=4 the
+ * reported `posRange` was 7 px for nearly every variant, which is exactly the
+ * window width — censored, not measured.
+ */
+const POS_HALF = 10
+/**
+ * Rows below this step magnitude carry no seam signal to measure.
+ *
+ * 3 codes, not 8. This scene's source is blurred with radius 51 and then MAGNIFIED
+ * 4.35x by the warp's srt_scale, so the whole frame spans ~30 code values and an
+ * 8-code threshold admitted only 17-45 of 312 rows — a biased sample of the very
+ * strongest rows. 3 codes is still ~15x the measured vertical content gradient
+ * (~0.2 codes/px) and ~6x the 8-bit quantisation step, and `rowsQualifying` is
+ * reported alongside every number so the sample size is never hidden.
+ */
+const MIN_STEP = 3
 
-function seamStats(L: Float32Array, w: number, h: number, xs: number, m: number, period: number) {
+/**
+ * Follow ONE seam down the image, row by row.
+ *
+ * A fixed nominal column cannot measure this scene: the seam is oblique, so over
+ * 300 rows it walks far outside any fixed +-10 px window, and the position spread
+ * then reports the seam's SLOPE plus window saturation instead of its raggedness.
+ * (Measured: a synthetic CLEAN oblique edge of slope 0.4 px/row scored
+ * posResidStd 6.59 px against a true value of ~0.29.)
+ *
+ * So: start at the row where the seam is locally sharpest, and step outwards in
+ * both directions, each row searching only +-TRACK_HALF px around the PREVIOUS
+ * row's position. Slopes up to TRACK_HALF px/row are followed exactly, and what
+ * remains in the residual is raggedness.
+ */
+const TRACK_HALF = 3
+
+function trackSeam(L: Float32Array, w: number, h: number, xs: number, y0: number, m: number): Int32Array {
+  const track = new Int32Array(h).fill(-1)
+  const findNear = (y: number, centre: number) => {
+    let bestD = -1
+    let bestX = centre
+    for (let dx = -TRACK_HALF; dx < TRACK_HALF; dx++) {
+      const x = Math.min(w - 2, Math.max(0, centre + dx))
+      const d = Math.abs(L[y * w + x + 1] - L[y * w + x])
+      if (d > bestD) {
+        bestD = d
+        bestX = x
+      }
+    }
+    return bestX
+  }
+  track[y0] = findNear(y0, xs)
+  for (let y = y0 + 1; y < h - m; y++) track[y] = findNear(y, track[y - 1])
+  for (let y = y0 - 1; y >= m; y--) track[y] = findNear(y, track[y + 1])
+  return track
+}
+
+function seamStats(L: Float32Array, w: number, h: number, xs: number, m: number, period: number, y0: number) {
+  const track = trackSeam(L, w, h, xs, y0, m)
   const transitions: number[] = []
   const steps: number[] = []
   const positions: number[] = []
@@ -493,12 +644,17 @@ function seamStats(L: Float32Array, w: number, h: number, xs: number, m: number,
   const control: number[] = []
   const notchDepth: number[] = []
   const notchWidth: number[] = []
-  const xc = xs + Math.round(period / 2) // rib centre
+  const jumpAmps: number[] = []
+  const jumpShares: number[] = []
   let rowsTotal = 0
 
   for (let y = m; y < h - m; y++) {
     rowsTotal++
     const row = (x: number) => L[y * w + Math.min(w - 1, Math.max(0, x))]
+    // Every per-row measure is centred on the TRACKED seam for this row, not on a
+    // fixed column, so none of them silently measure the seam's slope.
+    const xs = track[y]
+    const xc = xs + Math.round(period / 2) // rib centre, same row
 
     // darkest value inside the seam window, and at the rib centre (content control)
     let dmin = Infinity
@@ -519,32 +675,43 @@ function seamStats(L: Float32Array, w: number, h: number, xs: number, m: number,
       notchWidth.push(wcount)
     }
 
-    const lft = row(xs - HALF)
-    const rgt = row(xs + HALF)
+    const lft = row(xs - PLATEAU_HALF)
+    const rgt = row(xs + PLATEAU_HALF)
     const step = rgt - lft
     if (Math.abs(step) < MIN_STEP) continue
     steps.push(Math.abs(step))
 
     // pixels strictly between the plateaus
     let inter = 0
-    for (let dx = -HALF + 1; dx <= HALF - 1; dx++) {
+    for (let dx = -PLATEAU_HALF + 1; dx <= PLATEAU_HALF - 1; dx++) {
       const t = (row(xs + dx) - lft) / step
       if (t > 0.1 && t < 0.9) inter++
     }
     transitions.push(inter)
 
-    // where the dominant edge actually sits on this row
-    let bestD = -1
-    let bestX = xs
-    for (let dx = -HALF; dx < HALF; dx++) {
-      const d = Math.abs(row(xs + dx + 1) - row(xs + dx))
-      if (d > bestD) {
-        bestD = d
-        bestX = xs + dx
-      }
+    // The tracked column IS the edge position for this row.
+    const bestX = xs
+    const bestD = Math.abs(row(xs + 1) - row(xs))
+    positions.push(bestX)
+
+    // How much of the LOCAL feature amplitude is delivered by the single sharpest
+    // pixel boundary. Scale-free, and the only measure here that isolates the seam
+    // core from the rib's own soft magnification shoulder: 1.0 = a hard cut with
+    // zero transition px, 0.5 = one antialiased px, ~0.14 = spread over ~8 px.
+    let plo = Infinity
+    let phi = -Infinity
+    for (let dx = -3; dx <= 4; dx++) {
+      const v = row(bestX + dx)
+      if (v < plo) plo = v
+      if (v > phi) phi = v
     }
-    positions.push(bestX - xs)
+    const amp = phi - plo
+    if (amp >= MIN_STEP) {
+      jumpAmps.push(bestD)
+      jumpShares.push(bestD / amp)
+    }
   }
+  const transitionMax = 2 * PLATEAU_HALF - 1
 
   // vertical content gradient in a band beside the seam (never on it)
   let vg = 0
@@ -580,6 +747,40 @@ function seamStats(L: Float32Array, w: number, h: number, xs: number, m: number,
     return s[Math.min(s.length - 1, Math.floor(s.length * 0.9))]
   }
 
+  // Linear detrend of position(y): slope, residual spread, and reversals.
+  let slope = NaN
+  let residStd = NaN
+  let reversalFrac = NaN
+  if (positions.length >= 8) {
+    const n = positions.length
+    let sx = 0
+    let sy = 0
+    let sxx = 0
+    let sxy = 0
+    for (let i = 0; i < n; i++) {
+      sx += i
+      sy += positions[i]
+      sxx += i * i
+      sxy += i * positions[i]
+    }
+    const den = n * sxx - sx * sx
+    slope = den ? (n * sxy - sx * sy) / den : 0
+    const intercept = (sy - slope * sx) / n
+    let acc = 0
+    for (let i = 0; i < n; i++) acc += (positions[i] - (intercept + slope * i)) ** 2
+    residStd = Math.sqrt(acc / (n - 2))
+    // A step opposite in sign to the overall slope is a genuine reversal.
+    let rev = 0
+    let steps = 0
+    for (let i = 1; i < n; i++) {
+      const d = positions[i] - positions[i - 1]
+      if (d === 0) continue
+      steps++
+      if (Math.sign(d) !== Math.sign(slope) && slope !== 0) rev++
+    }
+    reversalFrac = steps ? rev / steps : 0
+  }
+
   // run-length structure of the per-row seam position: flat runs = staircase
   let runs = 0
   let changes = 0
@@ -598,8 +799,24 @@ function seamStats(L: Float32Array, w: number, h: number, xs: number, m: number,
     transitionMean: mean(transitions),
     transitionP90: p90(transitions),
     hardCutFraction: transitions.length ? transitions.filter((v) => v === 0).length / transitions.length : NaN,
+    transitionSaturatedFrac: transitions.length
+      ? transitions.filter((v) => v >= transitionMax).length / transitions.length
+      : NaN,
+    // With a tracker there is no fixed window to saturate against; what matters is
+    // whether the tracker ever hit its own per-row step limit.
+    posSaturatedFrac: positions.length > 1
+      ? positions.slice(1).filter((v, i) => Math.abs(v - positions[i]) >= TRACK_HALF - 1).length /
+        (positions.length - 1)
+      : NaN,
+    maxAdjacentJumpMedian: median(jumpAmps),
+    jumpShareMedian: median(jumpShares),
+    jumpShareP90: p90(jumpShares),
+    jumpRows: jumpShares.length,
     notchDepthMedian: median(notchDepth),
     notchWidthMedian: median(notchWidth),
+    posSlopePxPerRow: slope,
+    posResidStd: residStd,
+    posReversalFrac: reversalFrac,
     posStd: std(positions),
     posRange: positions.length ? Math.max(...positions) - Math.min(...positions) : NaN,
     posChangeFraction: positions.length > 1 ? changes / (positions.length - 1) : NaN,
@@ -632,7 +849,7 @@ function analyseSeams(img: Rgba8, periodAnalytic: number, margin = 24): SeamMetr
   const meanSeam = cols.length ? cols.reduce((a, x) => a + s[x], 0) / cols.length : 0
   let strongest = cols[0] ?? margin
   for (const x of cols) if (s[x] > s[strongest]) strongest = x
-  const st = seamStats(L, img.width, img.height, strongest, margin, periodAnalytic)
+  const st = seamStats(L, img.width, img.height, strongest, margin, periodAnalytic, sharpestRow(L, img.width, img.height, strongest, margin))
   return {
     periodPxAnalytic: periodAnalytic,
     periodPxMeasured: measured,
@@ -696,8 +913,11 @@ function validateMetrics(): { name: string; expect: string; got: Record<string, 
     hardCutFraction: +m.hardCutFraction.toFixed(3),
     notchDepthMedian: +m.notchDepthMedian.toFixed(1),
     notchWidthMedian: m.notchWidthMedian,
+    jumpShareMedian: +m.jumpShareMedian.toFixed(3),
     beadMeanAbsDiff: +m.beadMeanAbsDiff.toFixed(3),
     posStd: +m.posStd.toFixed(3),
+    posResidStd: +m.posResidStd.toFixed(3),
+    posReversalFrac: +m.posReversalFrac.toFixed(3),
     meanRunLength: +m.meanRunLength.toFixed(1),
     periodPxMeasured: m.periodPxMeasured,
   })
@@ -710,9 +930,10 @@ function validateMetrics(): { name: string; expect: string; got: Record<string, 
     const m = analyseSeams(from1d(p), P)
     rows.push({
       name: 'hard-step',
-      expect: 'transition 0, bead ~0, posStd 0',
+      expect: 'transition 0, bead ~0, posStd 0, jumpShare 1.0 (hard cut)',
       got: pick(m),
-      pass: m.transitionMedian === 0 && m.beadMeanAbsDiff < 0.01 && m.posStd < 0.01,
+      pass: m.transitionMedian === 0 && m.beadMeanAbsDiff < 0.01 && m.posStd < 0.01
+        && Math.abs(m.jumpShareMedian - 1) < 0.02,
     })
   }
   // 2. exactly one antialiased pixel at EVERY boundary
@@ -722,9 +943,9 @@ function validateMetrics(): { name: string; expect: string; got: Record<string, 
     const m = analyseSeams(from1d(p), P)
     rows.push({
       name: 'one-px-AA',
-      expect: 'transition 1',
+      expect: 'transition 1, jumpShare ~0.5 (one AA px)',
       got: pick(m),
-      pass: m.transitionMedian === 1,
+      pass: m.transitionMedian === 1 && Math.abs(m.jumpShareMedian - 0.5) < 0.06,
     })
   }
   // 3. broad smooth ramp across 8 px at EVERY boundary
@@ -741,9 +962,9 @@ function validateMetrics(): { name: string; expect: string; got: Record<string, 
     const m = analyseSeams(from1d(p), P)
     rows.push({
       name: 'broad-ramp-8px',
-      expect: 'transition >= 5',
+      expect: 'transition >= 5, jumpShare <= 0.25 (spread over ~8 px)',
       got: pick(m),
-      pass: m.transitionMedian >= 5,
+      pass: m.transitionMedian >= 5 && m.jumpShareMedian <= 0.25,
     })
   }
   // 4. beaded: the darkest seam pixel alternates row to row (KNOWN BAD)
@@ -768,6 +989,29 @@ function validateMetrics(): { name: string; expect: string; got: Record<string, 
       expect: 'transition 0, posStd > 0.5, runLen ~10',
       got: pick(m),
       pass: m.transitionMedian === 0 && m.posStd > 0.5 && m.meanRunLength > 5,
+    })
+  }
+  // 5b. CLEAN OBLIQUE edge: slope 0.4 px/row, no jitter. Quantisation only.
+  {
+    const { p } = profile(W, P, LO, HI)
+    const m = analyseSeams(from1d(p, (y) => Math.round(y * 0.4)), P)
+    rows.push({
+      name: 'oblique-clean',
+      expect: 'residStd <= 0.45, reversals 0',
+      got: pick(m),
+      pass: m.posResidStd <= 0.45 && m.posReversalFrac === 0,
+    })
+  }
+  // 5c. RAGGED OBLIQUE edge: same slope plus deterministic +-1 px jitter (KNOWN BAD)
+  {
+    const { p } = profile(W, P, LO, HI)
+    const jitter = (y: number) => (y % 3 === 0 ? 1 : y % 3 === 1 ? -1 : 0)
+    const m = analyseSeams(from1d(p, (y) => Math.round(y * 0.4) + jitter(y)), P)
+    rows.push({
+      name: 'oblique-ragged',
+      expect: 'residStd > 0.6, reversals > 0.2',
+      got: pick(m),
+      pass: m.posResidStd > 0.6 && m.posReversalFrac > 0.2,
     })
   }
   // 6. NOTCH: a 1-px dark line, identical plateaus either side. The step metrics
@@ -819,6 +1063,7 @@ const REEDED = 'reeded_glass-1784049273586'
 const TIME = 'def-time'
 const OUTPUT = 'def-output'
 const BLUR = 'blur-1785192733582'
+const WARP = 'warp-1785192279448'
 
 const FROZEN = { [TIME]: { speed: 0 } }
 const HIQ = { [OUTPUT]: { quality: 'high' } }
@@ -840,6 +1085,11 @@ const VARIANTS: Variant[] = [
   { id: 'Z1_noblur_hiq', desc: 'C + blur radius 0 — does the JPEG actually decode?', params: { ...FROZEN, ...HIQ, [BLUR]: { radius: 0 } } },
   { id: 'Z2_norib_hiq', desc: 'C + ior 1.0 — rib disabled, shows the source the rib is fed', params: { ...FROZEN, ...HIQ, [REEDED]: { ior: 1.0 } } },
   { id: 'Z3_noblur_norib_hiq', desc: 'C + blur 0 + ior 1.0 — the bare warped image', params: { ...FROZEN, ...HIQ, [BLUR]: { radius: 0 }, [REEDED]: { ior: 1.0 } } },
+  {
+    id: 'Z4_bare_image_hiq',
+    desc: 'blur 0 + ior 1.0 + warp strength 0 and srt_scale 1 — proves the JPEG decodes',
+    params: { ...FROZEN, ...HIQ, [BLUR]: { radius: 0 }, [REEDED]: { ior: 1.0 }, [WARP]: { strength: 0, srt_scale: 1 } },
+  },
 ]
 
 // ---------------------------------------------------------------------------
@@ -900,40 +1150,62 @@ async function main() {
   try {
     const ctx = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: DEVICE_SCALE })
     await ctx.addInitScript({ content: CAPTURE_SHIM })
-    const page = await ctx.newPage()
     const consoleErrors: string[] = []
-    page.on('console', (m) => {
-      if (m.type() === 'error') consoleErrors.push(m.text().slice(0, 300))
-    })
-    page.on('pageerror', (e) => consoleErrors.push(`pageerror: ${String(e).slice(0, 300)}`))
-
-    await page.goto(APP_URL, { waitUntil: 'domcontentloaded' })
-    await page.waitForFunction(() => !!(window as never as { __sombra?: unknown }).__sombra, null, { timeout: 30_000 })
-
-    const backend = await page.evaluate(() => {
-      const cap = (window as never as { __cap: { isWebGPU: boolean; isWebGL2: boolean } }).__cap
-      return { isWebGPU: cap.isWebGPU, isWebGL2: cap.isWebGL2 }
-    })
-    console.log(`\napp backend: WebGPU=${backend.isWebGPU} WebGL2=${backend.isWebGL2}`)
-
-    let nudgeParity = 0
-    const nudge = async () => {
-      nudgeParity++
-      const alpha = 1 - (nudgeParity % 2) * 1e-6
-      await page.evaluate(
-        ([id, a]) => {
-          ;(window as never as { __sombra: { setParams(i: string, p: Record<string, unknown>): void } }).__sombra
-            .setParams(id as string, { alpha: a as number })
-        },
-        [OUTPUT, alpha] as const,
-      )
-      await page.waitForTimeout(120)
-    }
+    const backend = { isWebGPU: false, isWebGL2: false }
 
     for (const v of todo) {
       console.log(`\n--- ${v.id}: ${v.desc}`)
 
-      // fresh import every time, so no variant inherits another's state
+      // ONE PAGE PER VARIANT. A GPUDevice loss in any single variant used to
+      // cascade: every later variant failed with "Device was lost before mapping
+      // was resolved" on a device it never touched. A fresh page also guarantees
+      // no variant inherits another's store, renderer or quality tier.
+      const page = await ctx.newPage()
+      page.on('console', (m) => {
+        if (m.type() === 'error') consoleErrors.push(`[${v.id}] ${m.text().slice(0, 300)}`)
+      })
+      page.on('pageerror', (e) => consoleErrors.push(`[${v.id}] pageerror: ${String(e).slice(0, 300)}`))
+
+      await page.goto(APP_URL, { waitUntil: 'domcontentloaded' })
+      await page.waitForFunction(() => !!(window as never as { __sombra?: unknown }).__sombra, null, { timeout: 30_000 })
+
+      let nudgeParity = 0
+      const nudge = async () => {
+        nudgeParity++
+        if (nudgeParity === 1) {
+          // uniform-path nudge
+          await page.evaluate(
+            (id) => {
+              ;(window as never as { __sombra: { setParams(i: string, p: Record<string, unknown>): void } }).__sombra
+                .setParams(id as string, { alpha: 1 - 1e-6 })
+            },
+            OUTPUT,
+          )
+        } else if (nudgeParity === 2) {
+          // RECOMPILE-path nudge. On a non-animated plan the uniform path cannot
+          // repaint at all: App.tsx handleUniformUpdate calls renderer.notifyChange(),
+          // and notifyChange() early-returns when `!this.animated`. Only the compile
+          // path calls requestRender() (App.tsx:93-95). `alphaOp` is a recompile
+          // param, and with alpha == 1 'replace' and 'multiply' are numerically
+          // identical, so this forces a repaint without changing a pixel.
+          await page.evaluate(
+            (id) => {
+              ;(window as never as { __sombra: { setParams(i: string, p: Record<string, unknown>): void } }).__sombra
+                .setParams(id as string, { alphaOp: 'replace' })
+            },
+            OUTPUT,
+          )
+          await page.waitForTimeout(700)
+        } else {
+          // last resort: a real resize, which always reaches the renderer
+          await page.setViewportSize({ width: VIEWPORT.width - 2, height: VIEWPORT.height })
+          await page.waitForTimeout(200)
+          await page.setViewportSize(VIEWPORT)
+        }
+        await page.waitForTimeout(200)
+      }
+
+      try {
       await page.evaluate((g) => {
         ;(window as never as { __sombra: { importGraph(o: unknown): void } }).__sombra.importGraph(g)
       }, scene)
@@ -1000,9 +1272,32 @@ async function main() {
         }
       }, REEDED)
 
+      const caps = await page.evaluate(() => {
+        const cap = (window as never as {
+          __cap: { isWebGPU: boolean; isWebGL2: boolean; deviceLost: string | null; gpuErrors: string[]; skipped: number }
+        }).__cap
+        return { isWebGPU: cap.isWebGPU, isWebGL2: cap.isWebGL2, deviceLost: cap.deviceLost, gpuErrors: cap.gpuErrors, skipped: cap.skipped }
+      })
+      backend.isWebGPU ||= caps.isWebGPU
+      backend.isWebGL2 ||= caps.isWebGL2
+      console.log(
+        `    backend WebGPU=${caps.isWebGPU} WebGL2=${caps.isWebGL2} deviceLost=${caps.deviceLost ?? 'no'} ` +
+          `compileErrors=${state.errors} canvases=${state.canvasCount}`,
+      )
+
+      const framesBefore = await page.evaluate(
+        () => (window as never as { __cap: { mainFrames: number } }).__cap.mainFrames,
+      )
       const g = await grabNative(page, nudge)
       if (!g.ok) {
-        console.log(`    READBACK FAILED: ${g.error} (backend ${g.backend}, submits ${g.submits})`)
+        const framesAfter = await page.evaluate(
+          () => (window as never as { __cap: { mainFrames: number } }).__cap.mainFrames,
+        )
+        console.log(
+          `    READBACK FAILED: ${g.error} (backend ${g.backend}, submits ${g.submits}, skipped ${caps.skipped})\n` +
+            `      main-canvas frames drawn during capture: ${framesAfter - framesBefore} ` +
+            `(total ${framesAfter}) — 0 means the renderer never drew, not that we missed it`,
+        )
         continue
       }
       const img = toRgba8(g)
@@ -1031,8 +1326,25 @@ async function main() {
         continue
       }
 
-      // element screenshot for the dimension comparison the brief asks for
+      // Element screenshot, for the dimension comparison the brief asks for.
+      // `elementHandle.screenshot()` snaps the element's FRACTIONAL CSS box out to
+      // whole device px, so it can land 1-2 px over on each axis even when the
+      // scale is right; the integer `clip` below removes that confound and gives a
+      // dimension that is exactly `round(cssSize) * deviceScaleFactor`.
       const el = await page.$('canvas[data-p13-main="1"]')
+      const box = el ? await el.boundingBox() : null
+      if (el && box) {
+        const clipBuf = await page.screenshot({
+          clip: { x: Math.round(box.x), y: Math.round(box.y), width: Math.round(box.width), height: Math.round(box.height) },
+        })
+        const cw = clipBuf.readUInt32BE(16)
+        const ch = clipBuf.readUInt32BE(20)
+        console.log(
+          `    integer-clip shot ${cw}x${ch} vs backing ${img.width}x${img.height} ` +
+            `→ ratio ${(cw / img.width).toFixed(4)} (expected 1/dprScale = ${(1 / dprScale).toFixed(4)})`,
+        )
+        fs.writeFileSync(path.join(OUT, `${v.id}-clipshot-${cw}x${ch}.png`), clipBuf)
+      }
       const shotBuf = el ? await el.screenshot() : null
       let sw = 0
       let sh = 0
@@ -1052,16 +1364,23 @@ async function main() {
       files.full = full
 
       const cx = metrics.strongestSeamX
-      const cy = Math.max(0, ((img.height / 2) | 0) - (CROP >> 1))
-      const sq = magnify(crop(img, cx - (CROP >> 1), cy, CROP, CROP), MAG)
-      const sqName = `${v.id}-seam-x${cx}-${CROP}px-${MAG}x.png`
-      writePng(path.join(OUT, sqName), sq)
+      const sy = sharpestRow(luma(img), img.width, img.height, cx, 24)
+      const cy = Math.max(0, sy - (CROP >> 1))
+      const sqRaw = crop(img, cx - (CROP >> 1), cy, CROP, CROP)
+      const sqName = `${v.id}-seam-x${cx}y${sy}-${CROP}px-${MAG}x.png`
+      writePng(path.join(OUT, sqName), magnify(sqRaw, MAG))
       files.seamCrop = sqName
+      const sqStretchName = `${v.id}-seam-x${cx}y${sy}-${CROP}px-${MAG}x-STRETCHED.png`
+      writePng(path.join(OUT, sqStretchName), magnify(stretch(sqRaw), MAG))
+      files.seamCropStretched = sqStretchName
 
-      const strip = magnify(crop(img, cx - (STRIP_W >> 1), Math.max(0, ((img.height / 2) | 0) - (STRIP_H >> 1)), STRIP_W, STRIP_H), MAG)
-      const stripName = `${v.id}-seamstrip-x${cx}-${STRIP_W}x${STRIP_H}-${MAG}x.png`
-      writePng(path.join(OUT, stripName), strip)
+      const stripRaw = crop(img, cx - (STRIP_W >> 1), Math.max(0, sy - (STRIP_H >> 1)), STRIP_W, STRIP_H)
+      const stripName = `${v.id}-seamstrip-x${cx}y${sy}-${STRIP_W}x${STRIP_H}-${MAG}x.png`
+      writePng(path.join(OUT, stripName), magnify(stripRaw, MAG))
       files.seamStrip = stripName
+      const stripStretchName = `${v.id}-seamstrip-x${cx}y${sy}-${STRIP_W}x${STRIP_H}-${MAG}x-STRETCHED.png`
+      writePng(path.join(OUT, stripStretchName), magnify(stretch(stripRaw), MAG))
+      files.seamStripStretched = stripStretchName
 
       const row: Row = {
         id: v.id,
@@ -1094,11 +1413,19 @@ async function main() {
         `    period analytic ${period.toFixed(1)}px measured ${metrics.periodPxMeasured}px  seamContrast ${metrics.seamContrast.toFixed(2)}  seam@x=${cx}`,
       )
       console.log(
-        `    step ${metrics.stepMedian.toFixed(1)} codes | transition med ${metrics.transitionMedian} mean ${metrics.transitionMean.toFixed(2)} p90 ${metrics.transitionP90} | hardCut ${(metrics.hardCutFraction * 100).toFixed(0)}%`,
+        `    step ${metrics.stepMedian.toFixed(1)} codes | transition med ${metrics.transitionMedian} mean ${metrics.transitionMean.toFixed(2)} p90 ${metrics.transitionP90} | hardCut ${(metrics.hardCutFraction * 100).toFixed(0)}% | satur trans ${(metrics.transitionSaturatedFrac * 100).toFixed(0)}% pos ${(metrics.posSaturatedFrac * 100).toFixed(0)}%`,
       )
       console.log(
-        `    pos std ${metrics.posStd.toFixed(2)}px range ${metrics.posRange}px runLen ${metrics.meanRunLength.toFixed(1)} | bead ${metrics.beadMeanAbsDiff.toFixed(2)} vs control ${metrics.controlMeanAbsDiff.toFixed(2)} (ratio ${metrics.beadRatio.toFixed(2)}) | contentVert ${metrics.contentVertGradient.toFixed(2)}`,
+        `    JUMPSHARE med ${metrics.jumpShareMedian.toFixed(3)} p90 ${metrics.jumpShareP90.toFixed(3)} (1.0=hard cut, .5=1px AA) | maxJump ${metrics.maxAdjacentJumpMedian.toFixed(1)} codes/px | n=${metrics.jumpRows}\n` +
+          `    notch depth ${metrics.notchDepthMedian.toFixed(1)} codes width ${metrics.notchWidthMedian}px | rows qualifying ${metrics.rowsQualifying}/${metrics.rowsTotal}`,
       )
+      console.log(
+        `    DETRENDED slope ${metrics.posSlopePxPerRow.toFixed(3)}px/row residStd ${metrics.posResidStd.toFixed(2)}px (0.29=clean quantisation) reversals ${(metrics.posReversalFrac * 100).toFixed(0)}%\n` +
+          `    pos std ${metrics.posStd.toFixed(2)}px range ${metrics.posRange}px runLen ${metrics.meanRunLength.toFixed(1)} | bead ${metrics.beadMeanAbsDiff.toFixed(2)} vs control ${metrics.controlMeanAbsDiff.toFixed(2)} (ratio ${metrics.beadRatio.toFixed(2)}) | contentVert ${metrics.contentVertGradient.toFixed(2)}`,
+      )
+      } finally {
+        await page.close()
+      }
     }
 
     fs.writeFileSync(
