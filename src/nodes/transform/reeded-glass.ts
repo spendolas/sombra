@@ -716,7 +716,7 @@ export const reededGlassNode: NodeDefinition = {
       // lattice was purely a quantisation of the seed, so this is an aesthetic
       // control and does not change how accurate the gather is.
       id: 'grain', label: 'Grain', type: 'float', default: 0,
-      min: 0, max: 32, step: 0.5,
+      min: 0, max: 16, step: 0.5,
       connectable: true, updateMode: 'uniform',
     },
     {
