@@ -201,34 +201,46 @@ function screenWave(o: {
  * Emitting all of it at one site is what stops the four rib types and the two
  * backends from each growing their own version.
  */
-function emitScreenDelta(o: {
+interface RibGradient { lines: string[]; gm: string; gp: string; den: string }
+
+/**
+ * ∂w/∂main and ∂w/∂perp of the rib field, plus |∇φ|² — emitted ONCE per fragment.
+ *
+ * Split out from the delta so the seam-coverage sub-samples can reuse it instead
+ * of re-differencing the wave field. That is the whole reason noise ribs stay
+ * affordable: three sub-samples cost three `reedLens` calls, not fifteen noise
+ * evaluations. Differencing in the pattern basis (not on screen) is what makes
+ * srt_scale cancel here and apply exactly once, in emitDeltaTail.
+ */
+function emitRibGradient(o: {
   id: string
   isVert: boolean
   srtScr: string
-  disp: string
-  bowPerp: string
-  aspScr: string
-  radScr: string
-  scale: string
   wave: ScreenWave | null
-}): { lines: string[]; delta: string } {
-  const { id, isVert, srtScr, disp, bowPerp, aspScr, radScr, scale, wave } = o
+}): RibGradient {
+  const { id, isVert, srtScr, wave } = o
   const resMain = isVert ? 'u_resolution.x' : 'u_resolution.y'
   const resPerp = isVert ? 'u_resolution.y' : 'u_resolution.x'
   const gm = `rg_gm_${id}`
   const gp = `rg_gp_${id}`
   const den = `rg_den_${id}`
-  const d = `rg_d_${id}`
   const lines: string[] = []
 
-  // ∂w/∂main and ∂w/∂perp, both in pixels-per-pixel. Differencing in the
-  // pattern basis (not on screen) is what makes srt_scale cancel out here and
-  // apply once, below.
   if (wave && wave.differentiable && wave.dependsOnMain) {
     const em = isVert ? `vec2(1.0 / ${resMain}, 0.0)` : `vec2(0.0, 1.0 / ${resMain})`
     lines.push(`vec2 rg_em_${id} = ${em};`)
     lines.push(`float ${gm} = (${wave.expr(`${srtScr} + rg_em_${id}`)} - ${wave.expr(`${srtScr} - rg_em_${id}`)}) * 0.5 * ${resMain};`)
+    // The first-order inverse below divides by (1 + gm), which vanishes exactly
+    // where the rib field folds along its own main axis — the map stops being
+    // invertible and the deviation is unbounded. Reachable: for circular/noise
+    // ribs |∂w/∂main| hits 1 at amplitude/wavelength = 1/2π ≈ 0.159, i.e.
+    // amplitude 32 at wavelength 200, both inside the sliders. Clamping the
+    // gradient (not the quotient) keeps the sign and caps the amplification;
+    // clamping `den` alone does nothing, because the numerator vanishes too.
+    lines.push(`${gm} = max(${gm}, -0.75);`)
   } else {
+    // Pure cross-rib fields (every wave shape) have no main-axis dependence at
+    // all, so this is exact, not a fallback — and it keeps `den` at 1.
     lines.push(`float ${gm} = 0.0;`)
   }
   if (wave && wave.differentiable) {
@@ -238,8 +250,44 @@ function emitScreenDelta(o: {
   } else {
     lines.push(`float ${gp} = 0.0;`)
   }
-
   lines.push(`float ${den} = (1.0 + ${gm}) * (1.0 + ${gm}) + ${gp} * ${gp};`)
+  return { lines, gm, gp, den }
+}
+
+/**
+ * Map ONE sub-sample's lens result from the SRT'd pattern basis back to a
+ * screen-UV offset, reusing the shared rib gradient.
+ *
+ * `disp` is a scalar measured along the pattern main axis, which is only the
+ * on-screen cross-rib direction when the ribs are straight and unrotated.
+ * Everything else puts a perpendicular component into the offset:
+ *
+ *  - a wave/circular/noise rib tilts the field, so refraction runs along ∇φ, not
+ *    along the main axis. The first-order inverse of φ = main + w is
+ *    disp·∇φ/|∇φ|², which collapses to (disp, 0) at ∇w = 0 — straight ribs are
+ *    unchanged by construction.
+ *  - `bow` displaces along the perp axis (rib thickness, see reedLens).
+ *  - `srt_rotate` rotates the basis, so the offset needs R(−θ) to get back.
+ *  - `srt_scale` divides the basis, so a pattern-space delta reaches
+ *    proportionally further on screen.
+ */
+function emitDeltaTail(o: {
+  id: string
+  sfx: string
+  isVert: boolean
+  disp: string
+  bowPerp: string
+  aspScr: string
+  radScr: string
+  scale: string
+  grad: RibGradient
+}): { lines: string[]; delta: string } {
+  const { id, sfx, isVert, disp, bowPerp, aspScr, radScr, scale, grad } = o
+  const resMain = isVert ? 'u_resolution.x' : 'u_resolution.y'
+  const resPerp = isVert ? 'u_resolution.y' : 'u_resolution.x'
+  const { gm, gp, den } = grad
+  const d = `rg_d${sfx}_${id}`
+  const lines: string[] = []
   const dMain = `(${disp} * (1.0 + ${gm}) / ${den})`
   const dPerp = `(${disp} * ${gp} * (${resMain} / ${resPerp}) / ${den} + ${bowPerp})`
   lines.push(`vec2 ${d} = ${isVert ? `vec2(${dMain}, ${dPerp})` : `vec2(${dPerp}, ${dMain})`};`)
@@ -250,6 +298,124 @@ function emitScreenDelta(o: {
   lines.push(`${d}.x /= ${aspScr};`)
   lines.push(`${d} *= vec2(${scale});`)
   return { lines, delta: d }
+}
+
+/**
+ * reedLens + disp + bow + delta, evaluated `offPx` device px along the seam
+ * normal from the pixel centre.
+ *
+ * The rib phase is FIRST-ORDER EXTRAPOLATED rather than re-derived: Δwm =
+ * t·|∇φ|·ribUV, which is exact for straight ribs and accurate to O(¼·w″) over
+ * the ±0.5 px a pixel spans. That is what lets a sub-sample cost one reedLens
+ * call and no wave-field evaluation at all.
+ */
+function emitLensTail(o: {
+  id: string
+  sfx: string
+  isVert: boolean
+  offPx: string
+  wmCentre: string
+  ribUVScreen: string
+  gradRate: string
+  ior: string
+  curvature: string
+  ribWidth: string
+  bow: string
+  aspScr: string
+  radScr: string
+  scale: string
+  grad: RibGradient
+}): { lines: string[]; delta: string } {
+  const { id, sfx, isVert, offPx, wmCentre, ribUVScreen, gradRate } = o
+  const resPerp = isVert ? 'u_resolution.y' : 'u_resolution.x'
+  const lines: string[] = []
+  // `rg_swm`, not `rg_wm`: the centre sub-sample has an empty suffix, and
+  // `rg_wm_<id>` is already the frozen-ref path's warped main axis.
+  const wm = `rg_swm${sfx}_${id}`
+  const lens = `rg_lens${sfx}_${id}`
+  const disp = `rg_disp${sfx}_${id}`
+  const bowV = `rg_bow${sfx}_${id}`
+
+  lines.push(`float ${wm} = ${wmCentre} + (${offPx}) * ${gradRate} * ${ribUVScreen};`)
+  lines.push(`vec2 ${lens} = reedLens(${wm}, ${ribUVScreen}, ${o.ior}, ${o.curvature});`)
+  lines.push(`float ${disp} = ${lens}.x - ${wm};`)
+  // Thickness bow, in rib half-widths → device px → perp-axis screen UV
+  lines.push(`float ${bowV} = ${lens}.y * (${o.ribWidth} * u_dpr * 0.5) * ${o.bow} / ${resPerp};`)
+  const tail = emitDeltaTail({
+    id, sfx, isVert, disp, bowPerp: bowV,
+    aspScr: o.aspScr, radScr: o.radScr, scale: o.scale, grad: o.grad,
+  })
+  lines.push(...tail.lines)
+  return { lines, delta: tail.delta }
+}
+
+/**
+ * Seam-coverage antialiasing geometry.
+ *
+ * `sampleUV` is C0-discontinuous at every rib seam: across one pixel boundary the
+ * sampled position jumps by 2/3 of a rib period (≈107 device px at ribWidth 80,
+ * DPR 2), and the shader draws that step at one sample per pixel with no coverage
+ * term. Where the seam is axis-aligned that reads as a hard-but-straight cut;
+ * where it is oblique or curved it staircases.
+ *
+ * So: find the signed distance from the pixel centre to the nearest seam along
+ * the seam normal, in device px. If a seam falls inside the pixel, the caller
+ * splits it and samples each side at the centroid of its own sub-interval,
+ * weighted by coverage; otherwise it takes the single centre tap.
+ *
+ * NO HARDWARE DERIVATIVES. The rate comes from the analytic gradient above and a
+ * closed form for the rib period, which sidesteps three separate problems:
+ * `fwidth` is illegal under the possibly-non-uniform `frost` branch and Tint
+ * rejects it silently; `mechanicalGlslToWgsl` has no dFdx→dpdx rule, so the name
+ * would pass through unmapped and fail at Tint; and `fwidth` of the FOLDED
+ * coordinate returns the jump (~52 px/px) rather than the slope, and only on the
+ * ~half of sub-pixel phases where a 2×2 quad straddles the discontinuity — so a
+ * derivative-driven detector would blink on and off as the canvas is resized.
+ */
+function emitSeamGeometry(o: {
+  id: string
+  isVert: boolean
+  wmCentre: string
+  ribUVScreen: string
+  ribWidth: string
+  scale: string
+  radScr: string
+  grad: RibGradient
+}): { lines: string[]; rate: string; centroidA: string; centroidB: string; weightA: string; normal: string; split: string } {
+  const { id, isVert, wmCentre, ribUVScreen, ribWidth, scale, radScr, grad } = o
+  const { gm, gp, den } = grad
+  const lines: string[] = []
+  const phi = `rg_phi_${id}`
+  const prd = `rg_prd_${id}`
+  const rate = `rg_gl_${id}`
+  const ss = `rg_ss_${id}`
+  const n = `rg_n_${id}`
+  const hw = `rg_hw_${id}`
+
+  // Seams sit at integer rib phase. |∇φ| per SCREEN device px is exact:
+  // sqrt(den) / (ribWidth · u_dpr · srt_scale).
+  lines.push(`float ${phi} = ${wmCentre} / ${ribUVScreen};`)
+  lines.push(`float ${prd} = ${ribWidth} * u_dpr * ${scale};`)
+  lines.push(`float ${rate} = sqrt(${den}) / max(abs(${prd}), 1e-6);`)
+  lines.push(`float ${ss} = (floor(${phi} + 0.5) - ${phi}) / max(${rate}, 1e-9);`)
+  // Seam normal in screen axes. Device px are isotropic, so this is a plain
+  // R(-rad) — no aspect conjugation (that exists in emitDeltaTail only because
+  // the delta there is expressed in per-axis UV, not px).
+  lines.push(`vec2 ${n} = ${isVert ? `vec2(1.0 + ${gm}, ${gp})` : `vec2(${gp}, 1.0 + ${gm})`};`)
+  lines.push(`${n} = vec2(${n}.x * cos(${radScr}) + ${n}.y * sin(${radScr}), -${n}.x * sin(${radScr}) + ${n}.y * cos(${radScr})) / max(sqrt(${den}), 1e-9);`)
+  // Half the unit pixel's support projected on the normal: 0.5 axis-aligned,
+  // 0.707 at 45°.
+  lines.push(`float ${hw} = (abs(${n}.x) + abs(${n}.y)) * 0.5;`)
+  // Coverage of the near side, and the centroid of each sub-interval, in px.
+  lines.push(`float rg_wa_${id} = (${ss} + ${hw}) / max(2.0 * ${hw}, 1e-6);`)
+  lines.push(`float rg_ca_${id} = (${ss} - ${hw}) * 0.5;`)
+  lines.push(`float rg_cb_${id} = (${ss} + ${hw}) * 0.5;`)
+  lines.push(`bool rg_split_${id} = abs(${ss}) < ${hw};`)
+  return {
+    lines, rate,
+    centroidA: `rg_ca_${id}`, centroidB: `rg_cb_${id}`,
+    weightA: `rg_wa_${id}`, normal: n, split: `rg_split_${id}`,
+  }
 }
 
 export const reededGlassNode: NodeDefinition = {
@@ -490,27 +656,37 @@ export const reededGlassNode: NodeDefinition = {
         lines.push(`float ${warpedMainScr} = ${mainScr} + rg_wv_scr_${id};`)
       }
 
-      // Lens in screen UV space
-      const lensScr = `rg_lens_scr_${id}`
-      lines.push(`vec2 ${lensScr} = reedLens(${warpedMainScr}, ${ribUVScreen}, ${inputs.ior}, ${inputs.curvature});`)
-      const disp = `rg_disp_${id}`
-      lines.push(`float ${disp} = ${lensScr}.x - ${warpedMainScr};`)
-      // Thickness bow, in rib half-widths → device px → perp-axis screen UV
-      const bowScr = `rg_bow_scr_${id}`
-      lines.push(`float ${bowScr} = ${lensScr}.y * (${inputs.ribWidth} * u_dpr * 0.5) * ${inputs.bow} / ${resPerp};`)
-
-      const { lines: deltaLines, delta } = emitScreenDelta({
-        id, isVert, srtScr, disp, bowPerp: bowScr,
-        aspScr, radScr, scale: `${inputs.srt_scale}`, wave,
+      // Rib gradient and seam geometry: emitted once, shared by all three
+      // sub-samples below.
+      const grad = emitRibGradient({ id, isVert, srtScr, wave })
+      lines.push(...grad.lines)
+      const seam = emitSeamGeometry({
+        id, isVert, wmCentre: warpedMainScr, ribUVScreen,
+        ribWidth: `${inputs.ribWidth}`, scale: `${inputs.srt_scale}`, radScr, grad,
       })
-      lines.push(...deltaLines)
+      lines.push(...seam.lines)
+
+      // Lens + delta at the pixel centre, and at the centroid of each side of a
+      // seam that cuts through this pixel.
+      const tailArgs = {
+        id, isVert, wmCentre: warpedMainScr, ribUVScreen, gradRate: seam.rate,
+        ior: `${inputs.ior}`, curvature: `${inputs.curvature}`,
+        ribWidth: `${inputs.ribWidth}`, bow: `${inputs.bow}`,
+        aspScr, radScr, scale: `${inputs.srt_scale}`, grad,
+      }
+      const mid = emitLensTail({ ...tailArgs, sfx: '', offPx: '0.0' })
+      const subA = emitLensTail({ ...tailArgs, sfx: '_a', offPx: seam.centroidA })
+      const subB = emitLensTail({ ...tailArgs, sfx: '_b', offPx: seam.centroidB })
+      lines.push(...mid.lines, ...subA.lines, ...subB.lines)
 
       // Use gl_FragCoord/viewport instead of v_uv for FBO sampling —
       // on WGSL, in.position.y=0 at top matches WebGPU texture convention,
       // while v_uv.y=0 at bottom does not.
       ctx.uniforms.add('u_viewport')
       const sampleUV = `rg_sampleUV_${id}`
-      lines.push(`vec2 ${sampleUV} = gl_FragCoord.xy / u_viewport + ${delta};`)
+      lines.push(`vec2 ${sampleUV} = gl_FragCoord.xy / u_viewport + ${mid.delta};`)
+      lines.push(`vec2 ${sampleUV}_a = (gl_FragCoord.xy + ${seam.normal} * (${seam.centroidA})) / u_viewport + ${subA.delta};`)
+      lines.push(`vec2 ${sampleUV}_b = (gl_FragCoord.xy + ${seam.normal} * (${seam.centroidB})) / u_viewport + ${subB.delta};`)
 
       // Frosted glass: hash-based jitter blur (grainy texture).
       // Premultiplied accumulation — averaging straight-alpha texels drags
@@ -538,6 +714,17 @@ export const reededGlassNode: NodeDefinition = {
       lines.push(`    rg_aacc_${id} += rg_s_${id}.a;`)
       lines.push(`  }`)
       lines.push(`  ${outputs.color} = vec4(rg_acc_${id} / max(rg_aacc_${id}, 1e-5), rg_aacc_${id} / 8.0);`)
+      // A rib seam cutting through this pixel: sample each side at its own
+      // centroid and weight by coverage. Premultiplied, matching the frost
+      // accumulator — straight-alpha averaging fringes a transparent edge and is
+      // algebraically identical on opaque content.
+      lines.push(`} else if (${seam.split}) {`)
+      lines.push(`  vec4 rg_A_${id} = texture(${samplerName}, ${sampleUV}_a);`)
+      lines.push(`  vec4 rg_B_${id} = texture(${samplerName}, ${sampleUV}_b);`)
+      lines.push(`  float rg_pa_${id} = rg_A_${id}.a * ${seam.weightA};`)
+      lines.push(`  float rg_pb_${id} = rg_B_${id}.a * (1.0 - ${seam.weightA});`)
+      lines.push(`  float rg_ao_${id} = rg_pa_${id} + rg_pb_${id};`)
+      lines.push(`  ${outputs.color} = vec4((rg_A_${id}.rgb * rg_pa_${id} + rg_B_${id}.rgb * rg_pb_${id}) / max(rg_ao_${id}, 1e-5), rg_ao_${id});`)
       lines.push(`} else {`)
       lines.push(`  ${outputs.color} = texture(${samplerName}, ${sampleUV});`)
       lines.push(`}`)
@@ -771,30 +958,30 @@ export const reededGlassNode: NodeDefinition = {
         stmts.push(raw(`float ${warpedMainScr} = ${mainScr} + rg_wv_scr_${id};`))
       }
 
-      // Lens in screen UV space
-      const lensScr = `rg_lens_scr_${id}`
-      stmts.push(
-        declare(lensScr, 'vec2',
-          call('reedLens', [
-            variable(warpedMainScr),
-            variable(ribUVScreen),
-            variable(ctx.inputs.ior),
-            variable(ctx.inputs.curvature),
-          ], 'vec2'),
-        ),
-      )
-      const disp = `rg_disp_${id}`
-      stmts.push(raw(`float ${disp} = ${lensScr}.x - ${warpedMainScr};`))
-      // Thickness bow, in rib half-widths → device px → perp-axis screen UV
-      const bowScr = `rg_bow_scr_${id}`
-      stmts.push(raw(`float ${bowScr} = ${lensScr}.y * (${ctx.inputs.ribWidth} * u_dpr * 0.5) * ${ctx.inputs.bow} / ${resPerpIR};`))
-
-      const { lines: deltaLines, delta } = emitScreenDelta({
-        id, isVert, srtScr, disp, bowPerp: bowScr,
-        aspScr: `rg_asp_scr_${id}`, radScr: `rg_rad_scr_${id}`,
-        scale: `${ctx.inputs.srt_scale}`, wave,
+      // Rib gradient and seam geometry: emitted once, shared by all three
+      // sub-samples below.
+      const grad = emitRibGradient({ id, isVert, srtScr, wave })
+      for (const l of grad.lines) stmts.push(raw(l))
+      const seam = emitSeamGeometry({
+        id, isVert, wmCentre: warpedMainScr, ribUVScreen,
+        ribWidth: `${ctx.inputs.ribWidth}`, scale: `${ctx.inputs.srt_scale}`,
+        radScr: `rg_rad_scr_${id}`, grad,
       })
-      for (const l of deltaLines) stmts.push(raw(l))
+      for (const l of seam.lines) stmts.push(raw(l))
+
+      // Lens + delta at the pixel centre, and at the centroid of each side of a
+      // seam that cuts through this pixel.
+      const tailArgs = {
+        id, isVert, wmCentre: warpedMainScr, ribUVScreen, gradRate: seam.rate,
+        ior: `${ctx.inputs.ior}`, curvature: `${ctx.inputs.curvature}`,
+        ribWidth: `${ctx.inputs.ribWidth}`, bow: `${ctx.inputs.bow}`,
+        aspScr: `rg_asp_scr_${id}`, radScr: `rg_rad_scr_${id}`,
+        scale: `${ctx.inputs.srt_scale}`, grad,
+      }
+      const mid = emitLensTail({ ...tailArgs, sfx: '', offPx: '0.0' })
+      const subA = emitLensTail({ ...tailArgs, sfx: '_a', offPx: seam.centroidA })
+      const subB = emitLensTail({ ...tailArgs, sfx: '_b', offPx: seam.centroidB })
+      for (const l of [...mid.lines, ...subA.lines, ...subB.lines]) stmts.push(raw(l))
 
       // Use gl_FragCoord/viewport instead of v_uv — matches WebGPU texture convention.
       //
@@ -806,11 +993,24 @@ export const reededGlassNode: NodeDefinition = {
       // magnification at rib centres becoming compression). Harmless while the
       // delta was x-only for vertical ribs; the moment bow, a rib gradient or
       // srt_rotate puts anything in y, every configuration is exposed.
+      //
+      // The sub-sample lines carry TWO independent y negations for two different
+      // reasons: the seam normal is y-up (pattern basis) and so is the delta.
+      // Dropping either one still *looks* antialiased while losing almost all of
+      // the benefit, and reads exactly 0.000 at the defaults, where the perp
+      // component is never consumed — i.e. invisible in the first thing anyone
+      // would eyeball.
       const sampleUV = `rg_sampleUV_${id}`
       stmts.push(raw(
-        `vec2 ${sampleUV} = gl_FragCoord.xy / u_viewport + ${delta};`,
-        `let ${sampleUV} = in.position.xy / uniforms.u_viewport + vec2f(${delta}.x, -${delta}.y);`,
+        `vec2 ${sampleUV} = gl_FragCoord.xy / u_viewport + ${mid.delta};`,
+        `let ${sampleUV} = in.position.xy / uniforms.u_viewport + vec2f(${mid.delta}.x, -${mid.delta}.y);`,
       ))
+      for (const [s, c, dv] of [['_a', seam.centroidA, subA.delta], ['_b', seam.centroidB, subB.delta]] as const) {
+        stmts.push(raw(
+          `vec2 ${sampleUV}${s} = (gl_FragCoord.xy + ${seam.normal} * (${c})) / u_viewport + ${dv};`,
+          `let ${sampleUV}${s} = (in.position.xy + vec2f(${seam.normal}.x, -${seam.normal}.y) * (${c})) / uniforms.u_viewport + vec2f(${dv}.x, -${dv}.y);`,
+        ))
+      }
 
       // Frosted glass: hash-based jitter blur (8 taps).
       // Premultiplied accumulation — averaging straight-alpha texels drags opaque
@@ -852,6 +1052,13 @@ export const reededGlassNode: NodeDefinition = {
       rg_aacc_${id} += rg_s_${id}.a;
     }
     ${ctx.outputs.color} = vec4(rg_acc_${id} / max(rg_aacc_${id}, 1e-5), rg_aacc_${id} / 8.0);
+  } else if (${seam.split}) {
+    vec4 rg_A_${id} = texture(${samplerName}, ${sampleUV}_a);
+    vec4 rg_B_${id} = texture(${samplerName}, ${sampleUV}_b);
+    float rg_pa_${id} = rg_A_${id}.a * ${seam.weightA};
+    float rg_pb_${id} = rg_B_${id}.a * (1.0 - ${seam.weightA});
+    float rg_ao_${id} = rg_pa_${id} + rg_pb_${id};
+    ${ctx.outputs.color} = vec4((rg_A_${id}.rgb * rg_pa_${id} + rg_B_${id}.rgb * rg_pb_${id}) / max(rg_ao_${id}, 1e-5), rg_ao_${id});
   } else {
     ${ctx.outputs.color} = texture(${samplerName}, ${sampleUV});
   }`,
@@ -870,6 +1077,13 @@ export const reededGlassNode: NodeDefinition = {
       rg_aacc_${id} = rg_aacc_${id} + rg_s_${id}.a;
     }
     ${ctx.outputs.color} = vec4f(rg_acc_${id} / vec3f(max(rg_aacc_${id}, 1e-5)), rg_aacc_${id} / 8.0);
+  } else if (${seam.split}) {
+    let rg_A_${id} = ${wgslSample(`${sampleUV}_a`)};
+    let rg_B_${id} = ${wgslSample(`${sampleUV}_b`)};
+    let rg_pa_${id} = rg_A_${id}.a * ${seam.weightA};
+    let rg_pb_${id} = rg_B_${id}.a * (1.0 - ${seam.weightA});
+    let rg_ao_${id} = rg_pa_${id} + rg_pb_${id};
+    ${ctx.outputs.color} = vec4f((rg_A_${id}.rgb * rg_pa_${id} + rg_B_${id}.rgb * rg_pb_${id}) / vec3f(max(rg_ao_${id}, 1e-5)), rg_ao_${id});
   } else {
     ${ctx.outputs.color} = ${wgslSample(sampleUV)};
   }`,
