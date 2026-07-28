@@ -18,7 +18,7 @@ import type { NodeDefinition, GLSLContext } from '../types'
 import { addFunction, getSpatialParams } from '../types'
 import { registerNoiseType, resolveNoiseFn, getIRNoiseFunctions } from '../noise/noise-functions'
 import type { IRContext, IRFunction, IRNodeOutput, IRStmt } from '../../compiler/ir/types'
-import { variable, call, declare, binary, raw } from '../../compiler/ir/types'
+import { variable, declare, binary, raw } from '../../compiler/ir/types'
 
 const RIB_TYPE_OPTIONS = [
   { value: 'straight', label: 'Straight' },
@@ -138,18 +138,60 @@ interface ScreenWave {
   dependsOnMain: boolean
 }
 
+/**
+ * The coordinate space a lens evaluation happens in.
+ *
+ * The node produces two outputs from the same optics — `color` (a filtered image,
+ * in screen space) and `coords` (a remapped UV, in frozen-ref space). Those used to
+ * be two hand-written implementations, and they drifted: different chevron
+ * formulas, opposite y handedness, and only one of them ever learned about the rib
+ * gradient, srt_rotate or srt_scale. Describing the space as data instead lets ONE
+ * set of emitters serve both, so they cannot disagree again.
+ *
+ * The two spaces differ in exactly four ways:
+ *
+ *   screen  point = SRT'd v_uv       per-axis, so resMain != resPerp
+ *                                    aspect conjugation needed to rotate rigidly
+ *   ref     point = SRT'd auto_uv    isotropic: one unit is u_dpr*u_ref_size device
+ *                                    px on BOTH axes, so no conjugation (applying
+ *                                    one, as the old ref path did, made the
+ *                                    rotation non-rigid and skewed the rib angle)
+ */
+interface Basis {
+  /** vec2 expression: the SRT'd point the rib pattern is evaluated at. */
+  point: string
+  /** Device px per 1 unit of the main / perp axis. */
+  resMain: string
+  resPerp: string
+  /** Rib width expressed in this basis. */
+  ribUV: string
+  /** Convert a vec2 in this basis to device px (for isotropic noise/circular). */
+  toPx: (p: string) => string
+  /** Aspect conjugation for the delta rotate — '1.0' where the space is already
+   *  isotropic. */
+  asp: string
+  rad: string
+  scale: string
+  /** Amplitude / wavelength expressed in this basis. */
+  amp: string
+  wl: string
+  /** Wavelength in device px. */
+  wlPx: string
+}
+
 function screenWave(o: {
   ribType: string
   waveShape: string
   noiseType: string
   isVert: boolean
-  ampScr: string
-  wlScr: string
-  wlPx: string
+  basis: Basis
 }): ScreenWave | null {
-  const { isVert, ampScr, wlScr, wlPx } = o
-  const resMain = isVert ? 'u_resolution.x' : 'u_resolution.y'
-  const resPerp = isVert ? 'u_resolution.y' : 'u_resolution.x'
+  const { isVert, basis } = o
+  const ampScr = basis.amp
+  const wlScr = basis.wl
+  const wlPx = basis.wlPx
+  const resMain = basis.resMain
+  const resPerp = basis.resPerp
   const perp = (p: string) => (isVert ? `(${p}).y` : `(${p}).x`)
   const main = (p: string) => (isVert ? `(${p}).x` : `(${p}).y`)
   const perpOnly = (expr: (p: string) => string, differentiable = true): ScreenWave =>
@@ -178,7 +220,7 @@ function screenWave(o: {
     // Rings are built from the SRT'd point, so scale/translate move them — the
     // frozen-ref path has always done this and the screen path used to read raw
     // v_uv, which left the two disagreeing under any SRT.
-    return { expr: (p) => `sin(length((${p}) * u_resolution) / ${wlPx} * 6.28318) * ${ampScr}`, differentiable: true, dependsOnMain: true }
+    return { expr: (p) => `sin(length(${basis.toPx(p)}) / ${wlPx} * 6.28318) * ${ampScr}`, differentiable: true, dependsOnMain: true }
   }
   if (o.ribType === 'noise') {
     const fn = resolveNoiseFn(o.noiseType)
@@ -224,22 +266,25 @@ interface RibGradient { lines: string[]; gm: string; gp: string; den: string }
  */
 function emitRibGradient(o: {
   id: string
+  sfx?: string
   isVert: boolean
-  srtScr: string
+  basis: Basis
   wave: ScreenWave | null
 }): RibGradient {
-  const { id, isVert, srtScr, wave } = o
-  const resMain = isVert ? 'u_resolution.x' : 'u_resolution.y'
-  const resPerp = isVert ? 'u_resolution.y' : 'u_resolution.x'
-  const gm = `rg_gm_${id}`
-  const gp = `rg_gp_${id}`
-  const den = `rg_den_${id}`
+  const { id, isVert, basis, wave } = o
+  const sfx = o.sfx ?? ''
+  const srtScr = basis.point
+  const resMain = basis.resMain
+  const resPerp = basis.resPerp
+  const gm = `rg_gm${sfx}_${id}`
+  const gp = `rg_gp${sfx}_${id}`
+  const den = `rg_den${sfx}_${id}`
   const lines: string[] = []
 
   if (wave && wave.differentiable && wave.dependsOnMain) {
     const em = isVert ? `vec2(1.0 / ${resMain}, 0.0)` : `vec2(0.0, 1.0 / ${resMain})`
-    lines.push(`vec2 rg_em_${id} = ${em};`)
-    lines.push(`float ${gm} = (${wave.expr(`${srtScr} + rg_em_${id}`)} - ${wave.expr(`${srtScr} - rg_em_${id}`)}) * 0.5 * ${resMain};`)
+    lines.push(`vec2 rg_em${sfx}_${id} = ${em};`)
+    lines.push(`float ${gm} = (${wave.expr(`${srtScr} + rg_em${sfx}_${id}`)} - ${wave.expr(`${srtScr} - rg_em${sfx}_${id}`)}) * 0.5 * ${resMain};`)
     // The first-order inverse below divides by (1 + gm), which vanishes exactly
     // where the rib field folds along its own main axis — the map stops being
     // invertible and the deviation is unbounded. Reachable: for circular/noise
@@ -255,8 +300,8 @@ function emitRibGradient(o: {
   }
   if (wave && wave.differentiable) {
     const ep = isVert ? `vec2(0.0, 1.0 / ${resPerp})` : `vec2(1.0 / ${resPerp}, 0.0)`
-    lines.push(`vec2 rg_ep_${id} = ${ep};`)
-    lines.push(`float ${gp} = (${wave.expr(`${srtScr} + rg_ep_${id}`)} - ${wave.expr(`${srtScr} - rg_ep_${id}`)}) * 0.5 * ${resMain};`)
+    lines.push(`vec2 rg_ep${sfx}_${id} = ${ep};`)
+    lines.push(`float ${gp} = (${wave.expr(`${srtScr} + rg_ep${sfx}_${id}`)} - ${wave.expr(`${srtScr} - rg_ep${sfx}_${id}`)}) * 0.5 * ${resMain};`)
   } else {
     lines.push(`float ${gp} = 0.0;`)
   }
@@ -287,14 +332,15 @@ function emitDeltaTail(o: {
   isVert: boolean
   disp: string
   bowPerp: string
-  aspScr: string
-  radScr: string
-  scale: string
+  basis: Basis
   grad: RibGradient
 }): { lines: string[]; delta: string } {
-  const { id, sfx, isVert, disp, bowPerp, aspScr, radScr, scale, grad } = o
-  const resMain = isVert ? 'u_resolution.x' : 'u_resolution.y'
-  const resPerp = isVert ? 'u_resolution.y' : 'u_resolution.x'
+  const { id, sfx, isVert, disp, bowPerp, basis, grad } = o
+  const aspScr = basis.asp
+  const radScr = basis.rad
+  const scale = basis.scale
+  const resMain = basis.resMain
+  const resPerp = basis.resPerp
   const { gm, gp, den } = grad
   const d = `rg_d${sfx}_${id}`
   const lines: string[] = []
@@ -325,19 +371,17 @@ function emitLensTail(o: {
   isVert: boolean
   offPx: string
   wmCentre: string
-  ribUVScreen: string
   gradRate: string
   ior: string
   curvature: string
   ribWidth: string
   bow: string
-  aspScr: string
-  radScr: string
-  scale: string
+  basis: Basis
   grad: RibGradient
 }): { lines: string[]; delta: string; lens: string } {
-  const { id, sfx, isVert, offPx, wmCentre, ribUVScreen, gradRate } = o
-  const resPerp = isVert ? 'u_resolution.y' : 'u_resolution.x'
+  const { id, sfx, isVert, offPx, wmCentre, gradRate, basis } = o
+  const ribUVScreen = basis.ribUV
+  const resPerp = basis.resPerp
   const lines: string[] = []
   // `rg_swm`, not `rg_wm`: the centre sub-sample has an empty suffix, and
   // `rg_wm_<id>` is already the frozen-ref path's warped main axis.
@@ -351,10 +395,7 @@ function emitLensTail(o: {
   lines.push(`float ${disp} = ${lens}.x - ${wm};`)
   // Thickness bow, in rib half-widths → device px → perp-axis screen UV
   lines.push(`float ${bowV} = ${lens}.y * (${o.ribWidth} * u_dpr * 0.5) * ${o.bow} / ${resPerp};`)
-  const tail = emitDeltaTail({
-    id, sfx, isVert, disp, bowPerp: bowV,
-    aspScr: o.aspScr, radScr: o.radScr, scale: o.scale, grad: o.grad,
-  })
+  const tail = emitDeltaTail({ id, sfx, isVert, disp, bowPerp: bowV, basis, grad: o.grad })
   lines.push(...tail.lines)
   return { lines, delta: tail.delta, lens }
 }
@@ -798,94 +839,85 @@ export const reededGlassNode: NodeDefinition = {
     ctx.uniforms.add('u_dpr')
     ctx.uniforms.add('u_ref_size')
     ctx.uniforms.add('u_anchor')
+    // Canonical auto_uv, kept BEFORE the SRT. This is what `coords` is measured
+    // from: the SRT positions the rib pattern, it must not rotate the coordinate
+    // frame we hand downstream. (The old path SRT'd this value in place, so
+    // rotating the glass 47° returned coords in a 47°-rotated frame.)
+    const autoUv = `rg_auv_${id}`
     const coordsVar = `rg_coords_${id}`
-    lines.push(`vec2 ${coordsVar} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * u_anchor) / (u_dpr * u_ref_size) + u_anchor;`)
-    // SRT: center → scale → rotate (aspect-corrected) → translate → re-center
+    lines.push(`vec2 ${autoUv} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * u_anchor) / (u_dpr * u_ref_size) + u_anchor;`)
+    lines.push(`vec2 ${coordsVar} = ${autoUv};`)
+    // SRT the PATTERN basis: center → scale → rotate → translate → re-center.
+    // No aspect conjugation here: ref space is already isotropic (one unit is
+    // u_dpr * u_ref_size device px on BOTH axes), so conjugating — as this path
+    // used to — makes the rotation non-rigid and skews the rib angle on a
+    // non-square canvas. The screen path needs it because v_uv is per-axis.
+    const radRef = `rg_rad_ref_${id}`
     lines.push(`${coordsVar} -= u_anchor;`)
     lines.push(`${coordsVar} /= vec2(${inputs.srt_scale});`)
-    const aspRef = `rg_asp_ref_${id}`
-    const radRef = `rg_rad_ref_${id}`
-    lines.push(`float ${aspRef} = u_resolution.x / u_resolution.y;`)
     lines.push(`float ${radRef} = ${inputs.srt_rotate} * 0.01745329;`)
-    lines.push(`${coordsVar}.x *= ${aspRef};`)
     lines.push(`${coordsVar} = vec2(${coordsVar}.x * cos(${radRef}) - ${coordsVar}.y * sin(${radRef}), ${coordsVar}.x * sin(${radRef}) + ${coordsVar}.y * cos(${radRef}));`)
-    lines.push(`${coordsVar}.x /= ${aspRef};`)
     lines.push(`${coordsVar} -= vec2(${inputs.srt_translateX}, -(${inputs.srt_translateY})) / (u_dpr * u_ref_size);`)
     lines.push(`${coordsVar} += u_anchor;`)
 
-    // main = axis being sliced, perp = perpendicular axis
-    const main = isVert ? `${coordsVar}.x` : `${coordsVar}.y`
-    const perp = isVert ? `${coordsVar}.y` : `${coordsVar}.x`
-
-    const warpedMain = `rg_wm_${id}`
-
-    // Convert amplitude and wavelength from pixels to frozen-ref UV
     const ampRef = `rg_amp_ref_${id}`
     const wlRef = `rg_wl_ref_${id}`
+    const ribUVRef = `rg_ribUV_ref_${id}`
     lines.push(`float ${ampRef} = ${inputs.amplitude} / u_ref_size;`)
     lines.push(`float ${wlRef} = ${inputs.wavelength} / u_ref_size;`)
-
-    if (ribType === 'straight') {
-      lines.push(`float ${warpedMain} = ${main};`)
-    } else {
-      const waveVal = `rg_wv_${id}`
-
-      if (ribType === 'wave') {
-        const waveShape = (params.waveShape as string) || 'sine'
-        switch (waveShape) {
-          case 'sine':
-            lines.push(`float ${waveVal} = sin(${perp} / ${wlRef} * 6.28318) * ${ampRef};`); break
-          case 'triangle':
-            lines.push(`float ${waveVal} = (abs(fract(${perp} / ${wlRef}) - 0.5) * 4.0 - 1.0) * ${ampRef};`); break
-          case 'square':
-            lines.push(`float ${waveVal} = (step(0.5, fract(${perp} / ${wlRef})) * 2.0 - 1.0) * ${ampRef};`); break
-          case 'sawtooth':
-            lines.push(`float ${waveVal} = (fract(${perp} / ${wlRef}) * 2.0 - 1.0) * ${ampRef};`); break
-          case 'chevron':
-            lines.push(`float ${waveVal} = (abs(${perp} * 2.0 - 1.0)) * ${ampRef} * sin(${perp} / ${wlRef} * 6.28318);`); break
-          case 'u_shape':
-            lines.push(`float ${waveVal} = (pow(abs(fract(${perp} / ${wlRef}) * 2.0 - 1.0), 2.0) * 2.0 - 1.0) * ${ampRef};`); break
-        }
-      } else if (ribType === 'circular') {
-        lines.push(`float ${waveVal} = sin(length(${coordsVar} - 0.5) / ${wlRef} * 6.28318) * ${ampRef};`)
-      } else if (ribType === 'noise') {
-        const noiseType = (params.noiseType as string) || 'simplex'
-        registerNoiseType(ctx, noiseType)
-        const noiseFn = resolveNoiseFn(noiseType)
-        lines.push(`float ${waveVal} = (${noiseFn}(vec3(${perp} / ${wlRef}, ${main} / ${wlRef}, 0.0)) * 2.0 - 1.0) * ${ampRef};`)
-      }
-
-      lines.push(`float ${warpedMain} = ${main} + ${waveVal};`)
-    }
-
-    // Rib width in frozen-ref UV space (for coords output)
-    ctx.uniforms.add('u_ref_size')
-    const ribUVRef = `rg_ribUV_ref_${id}`
     lines.push(`float ${ribUVRef} = ${inputs.ribWidth} / u_ref_size;`)
+    if (ribType === 'noise') registerNoiseType(ctx, (params.noiseType as string) || 'simplex')
 
-    // Rib width in screen UV space (for texture mode sampling)
-    ctx.uniforms.add('u_resolution')
-    ctx.uniforms.add('u_dpr')
-    const ribUVScreen = `rg_ribUV_scr_${id}`
-    lines.push(`float ${ribUVScreen} = ${inputs.ribWidth} * u_dpr / u_resolution.${isVert ? 'x' : 'y'};`)
+    // The rib pattern must be evaluated in the SAME orientation as the colour
+    // path, or the two outputs describe mirror-image glass. `rg_coords` is
+    // canonical auto_uv — y-DOWN, which is right for the OUTPUT — while srtScr
+    // comes from v_uv and is y-UP. Mirroring after the rotate would give R(-theta),
+    // so the pattern point is built y-up from the start and SRT'd in that
+    // orientation, exactly as srtScr is. No aspect conjugation: ref space is
+    // isotropic.
+    const patRef = `rg_pat_ref_${id}`
+    lines.push(`vec2 ${patRef} = vec2(${autoUv}.x - u_anchor.x, -(${autoUv}.y - u_anchor.y));`)
+    lines.push(`${patRef} /= vec2(${inputs.srt_scale});`)
+    lines.push(`${patRef} = vec2(${patRef}.x * cos(${radRef}) - ${patRef}.y * sin(${radRef}), ${patRef}.x * sin(${radRef}) + ${patRef}.y * cos(${radRef}));`)
+    lines.push(`${patRef} -= vec2(${inputs.srt_translateX}, -(${inputs.srt_translateY})) / (u_dpr * u_ref_size);`)
 
-    // Lens remap in frozen-ref space (for coords output)
-    const lensRef = `rg_lens_ref_${id}`
-    lines.push(`vec3 ${lensRef} = reedLens(${warpedMain}, ${ribUVRef}, ${inputs.ior}, ${inputs.curvature});`)
-    // Thickness bow, in rib half-widths → frozen-ref UV (isotropic, no aspect)
-    const bowRef = `rg_bow_ref_${id}`
-    lines.push(`float ${bowRef} = ${lensRef}.y * ${ribUVRef} * 0.5 * ${inputs.bow};`)
-
-    // Reconstruct distorted vec2 (frozen-ref coords output)
-    const distorted = `rg_distorted_${id}`
-    if (isVert) {
-      lines.push(`vec2 ${distorted} = vec2(${lensRef}.x, ${coordsVar}.y + ${bowRef});`)
-    } else {
-      lines.push(`vec2 ${distorted} = vec2(${coordsVar}.x + ${bowRef}, ${lensRef}.x);`)
+    const refBasis: Basis = {
+      point: patRef,
+      resMain: '(u_dpr * u_ref_size)', resPerp: '(u_dpr * u_ref_size)',
+      ribUV: ribUVRef,
+      toPx: (pt) => `(${pt}) * (u_dpr * u_ref_size)`,
+      asp: '1.0', rad: radRef, scale: `${inputs.srt_scale}`,
+      amp: ampRef, wl: wlRef, wlPx: `(${inputs.wavelength} * u_dpr)`,
     }
 
-    // Coords output — always populated
-    lines.push(`vec2 ${outputs.coords} = ${distorted};`)
+    // Same emitters the colour path uses — that is the whole point. The two
+    // outputs cannot describe different optics because there is only one
+    // implementation of the optics.
+    const waveRef = screenWave({
+      ribType, waveShape: (params.waveShape as string) || 'sine',
+      noiseType: (params.noiseType as string) || 'simplex',
+      isVert, basis: refBasis,
+    })
+    const warpedMainRef = `rg_wm_ref_${id}`
+    const mainRef = isVert ? `${patRef}.x` : `${patRef}.y`
+    if (!waveRef) {
+      lines.push(`float ${warpedMainRef} = ${mainRef};`)
+    } else {
+      lines.push(`float rg_wv_ref_${id} = ${waveRef.expr(patRef)};`)
+      lines.push(`float ${warpedMainRef} = ${mainRef} + rg_wv_ref_${id};`)
+    }
+    const gradRef = emitRibGradient({ id, sfx: '_r', isVert, basis: refBasis, wave: waveRef })
+    lines.push(...gradRef.lines)
+    const tailRef = emitLensTail({
+      id, sfx: '_r', isVert, offPx: '0.0', gradRate: '0.0',
+      wmCentre: warpedMainRef, ior: `${inputs.ior}`, curvature: `${inputs.curvature}`,
+      ribWidth: `${inputs.ribWidth}`, bow: `${inputs.bow}`, basis: refBasis, grad: gradRef,
+    })
+    lines.push(...tailRef.lines)
+
+    // Coords output — always populated, and always the same distortion `color`
+    // applies, expressed in canonical auto_uv units.
+    lines.push(`vec2 ${outputs.coords} = ${autoUv} + vec2(${tailRef.delta}.x, -${tailRef.delta}.y);`)
 
     // Color output — texture mode (source wired) vs fallback
     const samplerName = ctx.textureSamplers?.source
@@ -917,11 +949,20 @@ export const reededGlassNode: NodeDefinition = {
       lines.push(`float ${wlScr} = ${inputs.wavelength} * u_dpr / ${resPerp};`)
       // Pixel-space wavelength for isotropic noise/circular sampling
       const wlPx = `(${inputs.wavelength} * u_dpr)`
+      // Rib width in screen UV — per-axis, hence the resMain divisor
+      const ribUVScreen = `rg_ribUV_scr_${id}`
+      lines.push(`float ${ribUVScreen} = ${inputs.ribWidth} * u_dpr / ${resMain};`)
 
+      const scrBasis: Basis = {
+        point: srtScr, resMain, resPerp, ribUV: ribUVScreen,
+        toPx: (pt) => `(${pt}) * u_resolution`,
+        asp: aspScr, rad: radScr, scale: `${inputs.srt_scale}`,
+        amp: ampScr, wl: wlScr, wlPx,
+      }
       const wave = screenWave({
         ribType, waveShape: (params.waveShape as string) || 'sine',
         noiseType: (params.noiseType as string) || 'simplex',
-        isVert, ampScr, wlScr, wlPx,
+        isVert, basis: scrBasis,
       })
       if (!wave) {
         lines.push(`float ${warpedMainScr} = ${mainScr};`)
@@ -932,7 +973,7 @@ export const reededGlassNode: NodeDefinition = {
 
       // Rib gradient and seam geometry: emitted once, shared by all three
       // sub-samples below.
-      const grad = emitRibGradient({ id, isVert, srtScr, wave })
+      const grad = emitRibGradient({ id, isVert, basis: scrBasis, wave })
       lines.push(...grad.lines)
       const seam = emitSeamGeometry({
         id, isVert, wmCentre: warpedMainScr, ribUVScreen,
@@ -943,10 +984,10 @@ export const reededGlassNode: NodeDefinition = {
       // Lens + delta at the pixel centre, and at the centroid of each side of a
       // seam that cuts through this pixel.
       const tailArgs = {
-        id, isVert, wmCentre: warpedMainScr, ribUVScreen, gradRate: seam.rate,
+        id, isVert, wmCentre: warpedMainScr, gradRate: seam.rate,
         ior: `${inputs.ior}`, curvature: `${inputs.curvature}`,
         ribWidth: `${inputs.ribWidth}`, bow: `${inputs.bow}`,
-        aspScr, radScr, scale: `${inputs.srt_scale}`, grad,
+        basis: scrBasis, grad,
       }
       const mid = emitLensTail({ ...tailArgs, sfx: '', offPx: '0.0' })
       const subA = emitLensTail({ ...tailArgs, sfx: '_a', offPx: seam.centroidA })
@@ -1089,137 +1130,90 @@ export const reededGlassNode: NodeDefinition = {
     // --- Main computation ---
     const stmts: IRStmt[] = []
 
-    // Generate auto_uv with SRT applied (frozen-ref space)
-    // WGSL: in.position.y is already top-to-bottom — NO y-flip needed
+    // Canonical auto_uv, kept BEFORE the SRT — see the glsl() comment. Two-argument
+    // raw() because the base differs per backend: gl_FragCoord is y-up here and the
+    // assembler rewrites it to in.position, which is y-down.
+    const autoUv = `rg_auv_${id}`
     const coordsVar = `rg_coords_${id}`
-    // WGSL needs `var` (mutable) since SRT modifies it in-place
     stmts.push(raw(
-      // GLSL
-      `vec2 ${coordsVar} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * u_anchor) / (u_dpr * u_ref_size) + u_anchor;`,
-      // WGSL
-      `var ${coordsVar}: vec2f = (in.position.xy - uniforms.u_resolution * uniforms.u_anchor) / (uniforms.u_dpr * uniforms.u_ref_size) + uniforms.u_anchor;`,
+      `vec2 ${autoUv} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * u_anchor) / (u_dpr * u_ref_size) + u_anchor;`,
+      `let ${autoUv} = (in.position.xy - uniforms.u_resolution * uniforms.u_anchor) / (uniforms.u_dpr * uniforms.u_ref_size) + uniforms.u_anchor;`,
     ))
-    // SRT: center → scale → rotate (aspect-corrected) → translate → re-center
+    const radRef = `rg_rad_ref_${id}`
+    // No aspect conjugation: ref space is isotropic, so conjugating would make the
+    // rotate non-rigid and skew the rib angle on a non-square canvas.
     stmts.push(raw(
-      // GLSL
-      `${coordsVar} -= u_anchor;\n` +
+      `vec2 ${coordsVar} = ${autoUv};\n` +
+      `  ${coordsVar} -= u_anchor;\n` +
       `  ${coordsVar} /= vec2(${ctx.inputs.srt_scale});\n` +
-      `  float rg_asp_ref_${id} = u_resolution.x / u_resolution.y;\n` +
-      `  float rg_rad_ref_${id} = ${ctx.inputs.srt_rotate} * 0.01745329;\n` +
-      `  ${coordsVar}.x *= rg_asp_ref_${id};\n` +
-      `  ${coordsVar} = vec2(${coordsVar}.x * cos(rg_rad_ref_${id}) - ${coordsVar}.y * sin(rg_rad_ref_${id}), ${coordsVar}.x * sin(rg_rad_ref_${id}) + ${coordsVar}.y * cos(rg_rad_ref_${id}));\n` +
-      `  ${coordsVar}.x /= rg_asp_ref_${id};\n` +
+      `  float ${radRef} = ${ctx.inputs.srt_rotate} * 0.01745329;\n` +
+      `  ${coordsVar} = vec2(${coordsVar}.x * cos(${radRef}) - ${coordsVar}.y * sin(${radRef}), ${coordsVar}.x * sin(${radRef}) + ${coordsVar}.y * cos(${radRef}));\n` +
       `  ${coordsVar} -= vec2(${ctx.inputs.srt_translateX}, -(${ctx.inputs.srt_translateY})) / (u_dpr * u_ref_size);\n` +
       `  ${coordsVar} += u_anchor;`,
-      // WGSL
-      `${coordsVar} -= uniforms.u_anchor;\n` +
+      `var ${coordsVar}: vec2f = ${autoUv};\n` +
+      `  ${coordsVar} -= uniforms.u_anchor;\n` +
       `  ${coordsVar} /= vec2f(${ctx.inputs.srt_scale});\n` +
-      `  var rg_asp_ref_${id}: f32 = uniforms.u_resolution.x / uniforms.u_resolution.y;\n` +
-      `  var rg_rad_ref_${id}: f32 = ${ctx.inputs.srt_rotate} * 0.01745329;\n` +
-      `  ${coordsVar}.x *= rg_asp_ref_${id};\n` +
-      `  ${coordsVar} = vec2f(${coordsVar}.x * cos(rg_rad_ref_${id}) - ${coordsVar}.y * sin(rg_rad_ref_${id}), ${coordsVar}.x * sin(rg_rad_ref_${id}) + ${coordsVar}.y * cos(rg_rad_ref_${id}));\n` +
-      `  ${coordsVar}.x /= rg_asp_ref_${id};\n` +
+      `  let ${radRef} = ${ctx.inputs.srt_rotate} * 0.01745329;\n` +
+      `  ${coordsVar} = vec2f(${coordsVar}.x * cos(${radRef}) - ${coordsVar}.y * sin(${radRef}), ${coordsVar}.x * sin(${radRef}) + ${coordsVar}.y * cos(${radRef}));\n` +
       `  ${coordsVar} -= vec2f(${ctx.inputs.srt_translateX}, -(${ctx.inputs.srt_translateY})) / (uniforms.u_dpr * uniforms.u_ref_size);\n` +
       `  ${coordsVar} += uniforms.u_anchor;`,
     ))
 
-    const mainAxis = isVert ? `${coordsVar}.x` : `${coordsVar}.y`
-    const perpAxis = isVert ? `${coordsVar}.y` : `${coordsVar}.x`
-
-    const warpedMain = `rg_wm_${id}`
-
-    // Convert amplitude and wavelength from pixels to frozen-ref UV
     const ampRef = `rg_amp_ref_${id}`
     const wlRef = `rg_wl_ref_${id}`
+    const ribUVRef = `rg_ribUV_ref_${id}`
     stmts.push(raw(`float ${ampRef} = ${ctx.inputs.amplitude} / u_ref_size;`))
     stmts.push(raw(`float ${wlRef} = ${ctx.inputs.wavelength} / u_ref_size;`))
+    stmts.push(raw(`float ${ribUVRef} = ${ctx.inputs.ribWidth} / u_ref_size;`))
+    if (ribType === 'noise') functions.push(...getIRNoiseFunctions((ctx.params.noiseType as string) || 'simplex'))
 
-    if (ribType === 'straight') {
-      stmts.push(declare(warpedMain, 'float', variable(mainAxis)))
-    } else {
-      const waveVal = `rg_wv_${id}`
+    // Same orientation as the colour path — see the glsl() comment.
+    const patRef = `rg_pat_ref_${id}`
+    stmts.push(raw(
+      `vec2 ${patRef} = vec2(${autoUv}.x - u_anchor.x, -(${autoUv}.y - u_anchor.y));\n` +
+      `  ${patRef} /= vec2(${ctx.inputs.srt_scale});\n` +
+      `  ${patRef} = vec2(${patRef}.x * cos(${radRef}) - ${patRef}.y * sin(${radRef}), ${patRef}.x * sin(${radRef}) + ${patRef}.y * cos(${radRef}));\n` +
+      `  ${patRef} -= vec2(${ctx.inputs.srt_translateX}, -(${ctx.inputs.srt_translateY})) / (u_dpr * u_ref_size);`,
+      `var ${patRef}: vec2f = vec2f(${autoUv}.x - uniforms.u_anchor.x, -(${autoUv}.y - uniforms.u_anchor.y));\n` +
+      `  ${patRef} /= vec2f(${ctx.inputs.srt_scale});\n` +
+      `  ${patRef} = vec2f(${patRef}.x * cos(${radRef}) - ${patRef}.y * sin(${radRef}), ${patRef}.x * sin(${radRef}) + ${patRef}.y * cos(${radRef}));\n` +
+      `  ${patRef} -= vec2f(${ctx.inputs.srt_translateX}, -(${ctx.inputs.srt_translateY})) / (uniforms.u_dpr * uniforms.u_ref_size);`,
+    ))
 
-      if (ribType === 'wave') {
-        const waveShape = (ctx.params.waveShape as string) || 'sine'
-        switch (waveShape) {
-          case 'sine':
-            stmts.push(raw(`float ${waveVal} = sin(${perpAxis} / ${wlRef} * 6.28318) * ${ampRef};`)); break
-          case 'triangle':
-            stmts.push(raw(`float ${waveVal} = (abs(fract(${perpAxis} / ${wlRef}) - 0.5) * 4.0 - 1.0) * ${ampRef};`)); break
-          case 'square':
-            stmts.push(raw(`float ${waveVal} = (step(0.5, fract(${perpAxis} / ${wlRef})) * 2.0 - 1.0) * ${ampRef};`)); break
-          case 'sawtooth':
-            stmts.push(raw(`float ${waveVal} = (fract(${perpAxis} / ${wlRef}) * 2.0 - 1.0) * ${ampRef};`)); break
-          case 'chevron':
-            stmts.push(raw(`float ${waveVal} = (abs(${perpAxis} * 2.0 - 1.0)) * ${ampRef} * sin(${perpAxis} / ${wlRef} * 6.28318);`)); break
-          case 'u_shape':
-            stmts.push(raw(`float ${waveVal} = (pow(abs(fract(${perpAxis} / ${wlRef}) * 2.0 - 1.0), 2.0) * 2.0 - 1.0) * ${ampRef};`)); break
-        }
-      } else if (ribType === 'circular') {
-        stmts.push(raw(`float ${waveVal} = sin(length(${coordsVar} - 0.5) / ${wlRef} * 6.28318) * ${ampRef};`))
-      } else if (ribType === 'noise') {
-        const noiseType = (ctx.params.noiseType as string) || 'simplex'
-        const noiseFn = resolveNoiseFn(noiseType)
-        functions.push(...getIRNoiseFunctions(noiseType))
-        stmts.push(raw(`float ${waveVal} = (${noiseFn}(vec3(${perpAxis} / ${wlRef}, ${mainAxis} / ${wlRef}, 0.0)) * 2.0 - 1.0) * ${ampRef};`))
-      }
-
-      stmts.push(
-        declare(warpedMain, 'float',
-          binary('+', variable(mainAxis), variable(waveVal), 'float'),
-        ),
-      )
+    const refBasis: Basis = {
+      point: patRef,
+      resMain: '(u_dpr * u_ref_size)', resPerp: '(u_dpr * u_ref_size)',
+      ribUV: ribUVRef,
+      toPx: (pt) => `(${pt}) * (u_dpr * u_ref_size)`,
+      asp: '1.0', rad: radRef, scale: `${ctx.inputs.srt_scale}`,
+      amp: ampRef, wl: wlRef, wlPx: `(${ctx.inputs.wavelength} * u_dpr)`,
     }
 
-    // Rib width in frozen-ref UV (for coords output)
-    const ribUVRef = `rg_ribUV_ref_${id}`
-    stmts.push(
-      declare(ribUVRef, 'float',
-        binary('/', variable(ctx.inputs.ribWidth), variable('u_ref_size'), 'float'),
-      ),
-    )
-
-    // Rib width in screen UV (for texture mode)
-    const resComponent = isVert ? 'u_resolution.x' : 'u_resolution.y'
-    const ribUVScreen = `rg_ribUV_scr_${id}`
-    stmts.push(
-      declare(ribUVScreen, 'float',
-        binary('/',
-          binary('*', variable(ctx.inputs.ribWidth), variable('u_dpr'), 'float'),
-          variable(resComponent),
-          'float',
-        ),
-      ),
-    )
-
-    // Lens remap in frozen-ref space (for coords output)
-    const lensRef = `rg_lens_ref_${id}`
-    stmts.push(
-      declare(lensRef, 'vec3',
-        call('reedLens', [
-          variable(warpedMain),
-          variable(ribUVRef),
-          variable(ctx.inputs.ior),
-          variable(ctx.inputs.curvature),
-        ], 'vec3'),
-      ),
-    )
-    // Thickness bow, in rib half-widths → frozen-ref UV (isotropic, no aspect)
-    const bowRef = `rg_bow_ref_${id}`
-    stmts.push(raw(`float ${bowRef} = ${lensRef}.y * ${ribUVRef} * 0.5 * ${ctx.inputs.bow};`))
-
-    // Reconstruct distorted vec2 (frozen-ref coords output)
-    const distorted = `rg_distorted_${id}`
-    if (isVert) {
-      stmts.push(raw(`vec2 ${distorted} = vec2(${lensRef}.x, ${coordsVar}.y + ${bowRef});`))
+    const waveRef = screenWave({
+      ribType, waveShape: (ctx.params.waveShape as string) || 'sine',
+      noiseType: (ctx.params.noiseType as string) || 'simplex',
+      isVert, basis: refBasis,
+    })
+    const warpedMainRef = `rg_wm_ref_${id}`
+    const mainRef = isVert ? `${patRef}.x` : `${patRef}.y`
+    if (!waveRef) {
+      stmts.push(raw(`float ${warpedMainRef} = ${mainRef};`))
     } else {
-      stmts.push(raw(`vec2 ${distorted} = vec2(${coordsVar}.x + ${bowRef}, ${lensRef}.x);`))
+      stmts.push(raw(`float rg_wv_ref_${id} = ${waveRef.expr(patRef)};`))
+      stmts.push(raw(`float ${warpedMainRef} = ${mainRef} + rg_wv_ref_${id};`))
     }
+    const gradRef = emitRibGradient({ id, sfx: '_r', isVert, basis: refBasis, wave: waveRef })
+    for (const l of gradRef.lines) stmts.push(raw(l))
+    const tailRef = emitLensTail({
+      id, sfx: '_r', isVert, offPx: '0.0', gradRate: '0.0',
+      wmCentre: warpedMainRef, ior: `${ctx.inputs.ior}`, curvature: `${ctx.inputs.curvature}`,
+      ribWidth: `${ctx.inputs.ribWidth}`, bow: `${ctx.inputs.bow}`, basis: refBasis, grad: gradRef,
+    })
+    for (const l of tailRef.lines) stmts.push(raw(l))
 
-    // Coords output
-    stmts.push(
-      declare(ctx.outputs.coords, 'vec2', variable(distorted)),
-    )
+    // Coords output — always populated, same distortion `color` applies, in
+    // canonical auto_uv units.
+    stmts.push(raw(`vec2 ${ctx.outputs.coords} = ${autoUv} + vec2(${tailRef.delta}.x, -${tailRef.delta}.y);`))
 
     // Color output — texture mode vs non-texture fallback
     const samplerName = ctx.textureSamplers?.source
@@ -1246,11 +1240,24 @@ export const reededGlassNode: NodeDefinition = {
       stmts.push(raw(`float ${ampScrIR} = ${ctx.inputs.amplitude} * u_dpr / ${resMainIR};`))
       stmts.push(raw(`float ${wlScrIR} = ${ctx.inputs.wavelength} * u_dpr / ${resPerpIR};`))
       const wlPxIR = `(${ctx.inputs.wavelength} * u_dpr)`
+      // Rib width in screen UV — per-axis, hence the resMain divisor. Built as an
+      // IR expression rather than a raw string so the WGSL backend parenthesises it
+      // exactly as it did before, keeping the colour path byte-identical.
+      const ribUVScreen = `rg_ribUV_scr_${id}`
+      stmts.push(declare(ribUVScreen, 'float',
+        binary('/', binary('*', variable(ctx.inputs.ribWidth), variable('u_dpr'), 'float'),
+          variable(resMainIR), 'float')))
 
+      const scrBasis: Basis = {
+        point: srtScr, resMain: resMainIR, resPerp: resPerpIR, ribUV: ribUVScreen,
+        toPx: (pt) => `(${pt}) * u_resolution`,
+        asp: `rg_asp_scr_${id}`, rad: `rg_rad_scr_${id}`, scale: `${ctx.inputs.srt_scale}`,
+        amp: ampScrIR, wl: wlScrIR, wlPx: wlPxIR,
+      }
       const wave = screenWave({
         ribType, waveShape: (ctx.params.waveShape as string) || 'sine',
         noiseType: (ctx.params.noiseType as string) || 'simplex',
-        isVert, ampScr: ampScrIR, wlScr: wlScrIR, wlPx: wlPxIR,
+        isVert, basis: scrBasis,
       })
       if (!wave) {
         stmts.push(raw(`float ${warpedMainScr} = ${mainScr};`))
@@ -1261,7 +1268,7 @@ export const reededGlassNode: NodeDefinition = {
 
       // Rib gradient and seam geometry: emitted once, shared by all three
       // sub-samples below.
-      const grad = emitRibGradient({ id, isVert, srtScr, wave })
+      const grad = emitRibGradient({ id, isVert, basis: scrBasis, wave })
       for (const l of grad.lines) stmts.push(raw(l))
       const seam = emitSeamGeometry({
         id, isVert, wmCentre: warpedMainScr, ribUVScreen,
@@ -1273,11 +1280,10 @@ export const reededGlassNode: NodeDefinition = {
       // Lens + delta at the pixel centre, and at the centroid of each side of a
       // seam that cuts through this pixel.
       const tailArgs = {
-        id, isVert, wmCentre: warpedMainScr, ribUVScreen, gradRate: seam.rate,
+        id, isVert, wmCentre: warpedMainScr, gradRate: seam.rate,
         ior: `${ctx.inputs.ior}`, curvature: `${ctx.inputs.curvature}`,
         ribWidth: `${ctx.inputs.ribWidth}`, bow: `${ctx.inputs.bow}`,
-        aspScr: `rg_asp_scr_${id}`, radScr: `rg_rad_scr_${id}`,
-        scale: `${ctx.inputs.srt_scale}`, grad,
+        basis: scrBasis, grad,
       }
       const mid = emitLensTail({ ...tailArgs, sfx: '', offPx: '0.0' })
       const subA = emitLensTail({ ...tailArgs, sfx: '_a', offPx: seam.centroidA })
