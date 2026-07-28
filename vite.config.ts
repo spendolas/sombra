@@ -33,6 +33,11 @@ export default defineConfig({
   plugins: [react(), tailwindcss(), serveEmbedDist()],
   base: '/sombra/',
   server: {
+    // Honour an externally assigned port. Vite does NOT read PORT by default —
+    // without this it would keep trying 5173, silently auto-increment when that
+    // is taken, and land somewhere the caller isn't watching. Unset falls back
+    // to 5173, so plain `npm run dev` is unchanged.
+    port: Number(process.env.PORT) || 5173,
     // Allow access over the Tailscale tailnet (leading dot = this tailnet + all
     // its device hostnames, e.g. grater.tail59ddf4.ts.net).
     allowedHosts: ['.tail59ddf4.ts.net'],
