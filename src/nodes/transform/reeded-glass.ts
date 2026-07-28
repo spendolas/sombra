@@ -359,6 +359,141 @@ function emitLensTail(o: {
   return { lines, delta: tail.delta, lens }
 }
 
+/** Frost gather tap count. 16 is where a stratified disc stops improving on the
+ *  content high curvature is actually used on: measured against a 256-tap disc,
+ *  8 taps read 5.37 codes, 12 read 3.89, 16 read 2.93, 24 read 2.01. Today's 8
+ *  white-noise taps read 10.34. */
+const FROST_TAPS = 16
+
+/** Golden angle, the Vogel/sunflower spiral increment. */
+const GOLDEN_ANGLE = '2.39996323'
+
+/**
+ * Frosted glass: a stratified disc gather.
+ *
+ * Replaces 8 white-noise taps in a square footprint seeded from a coarse lattice.
+ * Three separate defects made that read as pixelation rather than frost, and they
+ * were multiplicative, not additive:
+ *
+ *  - The seed lattice quantised to 4 CSS px, so a whole cell shared one tap set —
+ *    8x8 device px at DPR 2. Measured: it was 100% of the block structure
+ *    (blockExcess 15.13 -> 0.10 when removed) and removed ZERO error (10.34 ->
+ *    9.96 codes vs a 256-tap disc). It only moved the estimator's variance off
+ *    individual pixels and onto a grid, which is why deleting it alone DOUBLES the
+ *    speckle. It is now exposed as `grain`, since it is purely an aesthetic knob.
+ *  - 8 iid taps is a hopeless estimator: sigma = sigma_tap/sqrt(N) is 45 codes at
+ *    a hard edge, the output is literally 8 rigidly shifted copies at 31.9 codes
+ *    each (ghosting), and alpha takes only 9 discrete values. Stratification, not
+ *    raw N, is what buys the win: reaching 2 codes with iid taps needs N ~ 8100.
+ *  - `reedHash` is one LCG round over raw float bits, so on an integer pixel grid
+ *    it inherits the LCG lattice: peak |ACF| 0.647 used as a rotation and 0.843 as
+ *    radial jitter, against an iid floor of 0.009. Remove the block grid and a
+ *    diagonal moire takes its place. pcg2d reads 0.008, i.e. at the noise floor.
+ *
+ * Taps are unjittered Vogel: measured identical to the radially-jittered variant
+ * (2.93 vs 2.95 codes) while leaving the hash's second component free for the
+ * coverage stratification below, which is what closes the seam-AA gap.
+ *
+ * Each tap's BASE is also stratified across the pixel footprint along the seam
+ * normal. That is what makes the gather subsume the seam discontinuity and the
+ * minification supersample instead of disabling them: this branch runs whenever
+ * frost > 0.001, and at frost 0.002 the jitter radius is 0.048 device px — far too
+ * small to antialias anything — so without this the seam error snapped straight
+ * back to its pre-fix value. The offset is at most +/-0.707 px, so the frost look
+ * itself is unchanged.
+ */
+function emitFrostGather(o: {
+  id: string
+  lang: 'glsl' | 'wgsl'
+  isVert: boolean
+  sampler: string
+  out: string
+  coords: string
+  frost: string
+  grain: string
+  wmCentre: string
+  ribUVScreen: string
+  rate: string
+  halfWidth: string
+  normal: string
+  ribWidth: string
+  ior: string
+  curvature: string
+  bow: string
+  aspScr: string
+  radScr: string
+  scale: string
+  grad: RibGradient
+}): string {
+  const { id, lang, isVert, sampler, out } = o
+  const { gm, gp, den } = o.grad
+  const resMain = isVert ? 'u_resolution.x' : 'u_resolution.y'
+  const resPerp = isVert ? 'u_resolution.y' : 'u_resolution.x'
+  const w = lang === 'wgsl'
+  const f = (n: string) => (w ? `f32(${n})` : `float(${n})`)
+  const dcl = (t: string) => (w ? 'let ' : `${t} `)
+  const v2 = w ? 'vec2f' : 'vec2'
+  const v3 = w ? 'vec3f' : 'vec3'
+  const v4 = w ? 'vec4f' : 'vec4'
+  const fetch = (uv: string) => (w
+    ? `textureSampleLevel(${sampler}_tex, ${sampler}_samp, ${uv}, 0.0)`
+    : `texture(${sampler}, ${uv})`)
+  const base = w ? 'in.position.xy' : 'gl_FragCoord.xy'
+  const vp = w ? 'uniforms.u_viewport' : 'u_viewport'
+  const refSz = w ? 'uniforms.u_ref_size' : 'u_ref_size'
+  const dprU = w ? 'uniforms.u_dpr' : 'u_dpr'
+  const nrm = w ? `${v2}(rg_n_${id}.x, -rg_n_${id}.y)` : `rg_n_${id}`
+  const dlt = (d: string) => (w ? `${v2}(${d}.x, -${d}.y)` : d)
+  const i = `rg_fi_${id}`
+  const A = `rg_acc_${id}`, AA = `rg_aacc_${id}`
+  const N = FROST_TAPS
+
+  return [
+    // Radius as a LENGTH in device px, not per-axis UV — in UV it picks up the
+    // canvas aspect and reshapes the footprint on resize. Divided by the viewport
+    // per tap, so the footprint is a true circle in device px.
+    `${dcl('float')}rg_fradpx_${id} = ${o.frost} * 24.0 * ${dprU};`,
+    // Cell size in CSS px. grain 0 -> one device pixel, i.e. per-pixel grain;
+    // grain 4 reproduces the old lattice pitch exactly.
+    `${dcl('float')}rg_cell_${id} = max(${o.grain}, 1.0 / ${dprU});`,
+    // Seeded off the frozen-ref coordinate, NOT the sample position: the hash is
+    // over raw float bits, so seeding from anything the lens touches
+    // re-randomises the whole grain field on every resize, DPR flip and param drag.
+    `${dcl('vec2')}rg_gc_${id} = floor(${o.coords} * (${refSz} / rg_cell_${id}));`,
+    `${dcl('vec2')}rg_h_${id} = reedPcg(rg_gc_${id});`,
+    `${dcl('float')}rg_rot_${id} = rg_h_${id}.x * 6.28318530718;`,
+    `${w ? `var ${A}: ${v3} = ${v3}(0.0);` : `${v3} ${A} = ${v3}(0.0);`}`,
+    `${w ? `var ${AA}: f32 = 0.0;` : `float ${AA} = 0.0;`}`,
+    `for (${w ? `var ${i}: i32 = 0` : `int ${i} = 0`}; ${i} < ${N}; ${i}++) {`,
+    // Stratified position across the pixel footprint along the seam normal.
+    `  ${dcl('float')}rg_ft_${id} = (((${f(i)} + rg_h_${id}.y) / ${N}.0) - 0.5) * 2.0 * ${o.halfWidth};`,
+    `  ${dcl('float')}rg_fwm_${id} = ${o.wmCentre} + rg_ft_${id} * ${o.rate} * ${o.ribUVScreen};`,
+    `  ${dcl('vec3')}rg_fl_${id} = reedLens(rg_fwm_${id}, ${o.ribUVScreen}, ${o.ior}, ${o.curvature});`,
+    `  ${dcl('float')}rg_fdsp_${id} = rg_fl_${id}.x - rg_fwm_${id};`,
+    `  ${dcl('float')}rg_fbw_${id} = rg_fl_${id}.y * (${o.ribWidth} * ${dprU} * 0.5) * ${o.bow} / ${resPerp};`,
+    `  ${w ? 'var' : 'vec2'} rg_fd_${id}${w ? ': vec2f' : ''} = ${isVert
+      ? `${v2}((rg_fdsp_${id} * (1.0 + ${gm}) / ${den}), (rg_fdsp_${id} * ${gp} * (${resMain} / ${resPerp}) / ${den} + rg_fbw_${id}))`
+      : `${v2}((rg_fdsp_${id} * ${gp} * (${resMain} / ${resPerp}) / ${den} + rg_fbw_${id}), (rg_fdsp_${id} * (1.0 + ${gm}) / ${den}))`};`,
+    `  rg_fd_${id}.x *= ${o.aspScr};`,
+    `  rg_fd_${id} = ${v2}(rg_fd_${id}.x * cos(${o.radScr}) + rg_fd_${id}.y * sin(${o.radScr}), -rg_fd_${id}.x * sin(${o.radScr}) + rg_fd_${id}.y * cos(${o.radScr}));`,
+    `  rg_fd_${id}.x /= ${o.aspScr};`,
+    `  rg_fd_${id} *= ${v2}(${o.scale});`,
+    // Vogel spiral: equal-area radii, golden-angle spacing, rotated per cell.
+    `  ${dcl('float')}rg_fa_${id} = rg_rot_${id} + ${f(i)} * ${GOLDEN_ANGLE};`,
+    `  ${dcl('float')}rg_fr_${id} = rg_fradpx_${id} * sqrt((${f(i)} + 0.5) / ${N}.0);`,
+    `  ${w ? 'var' : 'vec2'} rg_tap_${id}${w ? ': vec2f' : ''} = (${base} + ${nrm} * rg_ft_${id}) / ${vp} + ${dlt(`rg_fd_${id}`)} + ${v2}(cos(rg_fa_${id}), sin(rg_fa_${id})) * rg_fr_${id} / ${vp};`,
+    // Mirror into range rather than clamping, so the border does not smear.
+    `  rg_tap_${id} = ${v2}(1.0) - abs(fract(rg_tap_${id} * 0.5) * 2.0 - ${v2}(1.0));`,
+    `  ${dcl('vec4')}rg_s_${id} = ${fetch(`rg_tap_${id}`)};`,
+    // Premultiplied: averaging straight-alpha texels drags opaque colour into
+    // transparent taps. Reduces exactly to sum(rgb)/N with alpha 1 when opaque.
+    `  ${A} = ${A} + rg_s_${id}.rgb * rg_s_${id}.a;`,
+    `  ${AA} = ${AA} + rg_s_${id}.a;`,
+    `}`,
+    `${out} = ${v4}(${A} / ${w ? `${v3}(max(${AA}, 1e-5))` : `max(${AA}, 1e-5)`}, ${AA} / ${N}.0);`,
+  ].join('\n  ')
+}
+
 /** Fixed loop bound for the minification supersample. GLSL ES needs a
  *  compile-time constant, so the count is capped here and the loop breaks early
  *  at the per-fragment count (the pattern blur.ts uses). 8 is where a
@@ -576,6 +711,15 @@ export const reededGlassNode: NodeDefinition = {
       connectable: true, updateMode: 'uniform',
     },
     {
+      // Frost grain cell size in CSS px. 0 = per-device-pixel (smooth frost).
+      // 4 reproduces the pitch of the original lattice-seeded look exactly; the
+      // lattice was purely a quantisation of the seed, so this is an aesthetic
+      // control and does not change how accurate the gather is.
+      id: 'grain', label: 'Grain', type: 'float', default: 0,
+      min: 0, max: 32, step: 0.5,
+      connectable: true, updateMode: 'uniform',
+    },
+    {
       id: 'direction', label: 'Direction', type: 'enum', default: 'vertical',
       options: DIRECTION_OPTIONS,
       updateMode: 'recompile',
@@ -627,6 +771,23 @@ export const reededGlassNode: NodeDefinition = {
   q.y += q.x * 1013904223u;
   q = q ^ (q >> 16u);
   return vec2(q) / float(0xFFFFFFFFu) * 2.0 - 1.0;
+}`)
+
+    // Two-round pcg2d for the frost rotation. reedHash cannot be used here: it is
+    // ONE LCG round over raw float bits, so on an integer pixel grid the bitcast
+    // input is itself a linear ramp and the output inherits the LCG lattice —
+    // measured peak |ACF| 0.647 as a rotation source against an iid floor of
+    // 0.009, which weaves a diagonal moire the moment the block lattice is gone.
+    // pcg2d reads 0.008, i.e. at the noise floor.
+    addFunction(ctx, 'reedPcg', `vec2 reedPcg(vec2 p) {
+  uvec2 v = uvec2(ivec2(floor(p))) * 1664525u + 1013904223u;
+  v.x += v.y * 1664525u;
+  v.y += v.x * 1664525u;
+  v = v ^ (v >> 16u);
+  v.x += v.y * 1664525u;
+  v.y += v.x * 1664525u;
+  v = v ^ (v >> 16u);
+  return vec2(v) / 4294967296.0;
 }`)
 
     const isVert = direction === 'vertical'
@@ -806,33 +967,18 @@ export const reededGlassNode: NodeDefinition = {
       lines.push(`vec2 ${sampleUV}_a = (gl_FragCoord.xy + ${seam.normal} * (${seam.centroidA})) / u_viewport + ${subA.delta};`)
       lines.push(`vec2 ${sampleUV}_b = (gl_FragCoord.xy + ${seam.normal} * (${seam.centroidB})) / u_viewport + ${subB.delta};`)
 
-      // Frosted glass: hash-based jitter blur (grainy texture).
-      // Premultiplied accumulation — averaging straight-alpha texels drags
-      // opaque colour into transparent taps. Reduces exactly to sum(rgb)/8 with
-      // alpha 1 for a fully opaque source (see rgba-node-audit.md).
       const frostVar = `rg_frost_${id}`
       lines.push(`float ${frostVar} = ${inputs.frost};`)
       lines.push(`vec4 ${outputs.color};`)
       lines.push(`if (${frostVar} > 0.001) {`)
-      lines.push(`  vec3 rg_acc_${id} = vec3(0.0);`)
-      lines.push(`  float rg_aacc_${id} = 0.0;`)
-      // Radius is a length, so it belongs in px, not in per-axis UV where it
-      // picks up the canvas aspect and reshapes the grain footprint on resize.
-      lines.push(`  vec2 rg_frad_${id} = vec2(${frostVar} * 24.0 * u_dpr) / u_viewport;`)
-      // Seed off a quantised frozen-ref lattice, NOT the sample position: the
-      // hash is over raw float bits, so seeding from anything the lens touches
-      // fully re-randomises the grain on every resize, DPR flip and param drag.
-      lines.push(`  vec2 rg_gc_${id} = floor(${coordsVar} * (u_ref_size * 0.25));`)
-      lines.push(`  for (int rg_i_${id} = 0; rg_i_${id} < 8; rg_i_${id}++) {`)
-      lines.push(`    vec2 rg_jit_${id} = reedHash(rg_gc_${id} + vec2(float(rg_i_${id}) * 7.31, float(rg_i_${id}) * -11.13)) * rg_frad_${id};`)
-      lines.push(`    vec2 rg_tap_${id} = ${sampleUV} + rg_jit_${id};`)
-      lines.push(`    rg_tap_${id} = 1.0 - abs(fract(rg_tap_${id} * 0.5) * 2.0 - 1.0);`)
-      lines.push(`    vec4 rg_s_${id} = texture(${samplerName}, rg_tap_${id});`)
-      lines.push(`    rg_acc_${id} += rg_s_${id}.rgb * rg_s_${id}.a;`)
-      lines.push(`    rg_aacc_${id} += rg_s_${id}.a;`)
-      lines.push(`  }`)
-      lines.push(`  ${outputs.color} = vec4(rg_acc_${id} / max(rg_aacc_${id}, 1e-5), rg_aacc_${id} / 8.0);`)
-      // The lens minifies here, so one tap cannot represent the footprint.
+      lines.push('  ' + emitFrostGather({
+        id, lang: 'glsl', isVert, sampler: samplerName, out: `${outputs.color}`,
+        coords: coordsVar, frost: frostVar, grain: `${inputs.grain}`,
+        wmCentre: warpedMainScr, ribUVScreen, rate: seam.rate, halfWidth: seam.halfWidth,
+        normal: seam.normal, ribWidth: `${inputs.ribWidth}`, ior: `${inputs.ior}`,
+        curvature: `${inputs.curvature}`, bow: `${inputs.bow}`,
+        aspScr, radScr, scale: `${inputs.srt_scale}`, grad,
+      }))
       lines.push(`} else if (${taps} > 1.0) {`)
       lines.push('  ' + emitMinifSupersample({
         id, lang: 'glsl', isVert, sampler: samplerName, out: `${outputs.color}`, taps,
@@ -911,6 +1057,34 @@ export const reededGlassNode: NodeDefinition = {
       )],
     }
     functions.push(hashFn)
+
+    // Two-round pcg2d for the frost rotation — see the glsl() comment. WGSL needs
+    // a vec2<u32> shift RHS, hence the explicit second argument.
+    const pcgFn: IRFunction = {
+      key: 'reedPcg',
+      name: 'reedPcg',
+      params: [{ name: 'p', type: 'vec2' }],
+      returnType: 'vec2',
+      body: [raw(
+        `uvec2 v = uvec2(ivec2(floor(p))) * 1664525u + 1013904223u;
+  v.x += v.y * 1664525u;
+  v.y += v.x * 1664525u;
+  v = v ^ (v >> 16u);
+  v.x += v.y * 1664525u;
+  v.y += v.x * 1664525u;
+  v = v ^ (v >> 16u);
+  return vec2(v) / 4294967296.0;`,
+        `var v: vec2<u32> = vec2<u32>(vec2<i32>(floor(p))) * vec2<u32>(1664525u) + vec2<u32>(1013904223u);
+  v.x += v.y * 1664525u;
+  v.y += v.x * 1664525u;
+  v = v ^ (v >> vec2<u32>(16u));
+  v.x += v.y * 1664525u;
+  v.y += v.x * 1664525u;
+  v = v ^ (v >> vec2<u32>(16u));
+  return vec2f(v) / 4294967296.0;`,
+      )],
+    }
+    functions.push(pcgFn)
 
     // --- Main computation ---
     const stmts: IRStmt[] = []
@@ -1175,23 +1349,20 @@ export const reededGlassNode: NodeDefinition = {
       // control flow; these textures have no mips so level 0 is the only level.
       const wgslSample = (uv: string) =>
         `textureSampleLevel(${samplerName}_tex, ${samplerName}_samp, ${uv}, 0.0)`
+      const frostArgs = {
+        id, isVert, sampler: samplerName, out: `${ctx.outputs.color}`,
+        coords: coordsVar, frost: frostVar, grain: `${ctx.inputs.grain}`,
+        wmCentre: warpedMainScr, ribUVScreen, rate: seam.rate, halfWidth: seam.halfWidth,
+        normal: seam.normal, ribWidth: `${ctx.inputs.ribWidth}`, ior: `${ctx.inputs.ior}`,
+        curvature: `${ctx.inputs.curvature}`, bow: `${ctx.inputs.bow}`,
+        aspScr: `rg_asp_scr_${id}`, radScr: `rg_rad_scr_${id}`,
+        scale: `${ctx.inputs.srt_scale}`, grad,
+      } as const
       const frostStmts: IRStmt[] = [
         raw(
           `vec4 ${ctx.outputs.color};
   if (${frostVar} > 0.001) {
-    vec3 rg_acc_${id} = vec3(0.0);
-    float rg_aacc_${id} = 0.0;
-    vec2 rg_frad_${id} = vec2(${frostVar} * 24.0 * u_dpr) / u_viewport;
-    vec2 rg_gc_${id} = floor(${coordsVar} * (u_ref_size * 0.25));
-    for (int rg_i_${id} = 0; rg_i_${id} < 8; rg_i_${id}++) {
-      vec2 rg_jit_${id} = reedHash(rg_gc_${id} + vec2(float(rg_i_${id}) * 7.31, float(rg_i_${id}) * -11.13)) * rg_frad_${id};
-      vec2 rg_tap_${id} = ${sampleUV} + rg_jit_${id};
-      rg_tap_${id} = 1.0 - abs(fract(rg_tap_${id} * 0.5) * 2.0 - 1.0);
-      vec4 rg_s_${id} = texture(${samplerName}, rg_tap_${id});
-      rg_acc_${id} += rg_s_${id}.rgb * rg_s_${id}.a;
-      rg_aacc_${id} += rg_s_${id}.a;
-    }
-    ${ctx.outputs.color} = vec4(rg_acc_${id} / max(rg_aacc_${id}, 1e-5), rg_aacc_${id} / 8.0);
+    ${emitFrostGather({ ...frostArgs, lang: 'glsl' })}
   } else if (${taps} > 1.0) {
     ${emitMinifSupersample({ ...minifArgs, lang: 'glsl' })}
   } else if (${seam.split}) {
@@ -1206,19 +1377,7 @@ export const reededGlassNode: NodeDefinition = {
   }`,
           `var ${ctx.outputs.color}: vec4f;
   if (${frostVar} > 0.001) {
-    var rg_acc_${id}: vec3f = vec3f(0.0);
-    var rg_aacc_${id}: f32 = 0.0;
-    let rg_frad_${id} = vec2f(${frostVar} * 24.0 * uniforms.u_dpr) / uniforms.u_viewport;
-    let rg_gc_${id} = floor(${coordsVar} * (uniforms.u_ref_size * 0.25));
-    for (var rg_i_${id}: i32 = 0; rg_i_${id} < 8; rg_i_${id}++) {
-      let rg_jit_${id} = reedHash(rg_gc_${id} + vec2f(f32(rg_i_${id}) * 7.31, f32(rg_i_${id}) * -11.13)) * rg_frad_${id};
-      var rg_tap_${id} = ${sampleUV} + rg_jit_${id};
-      rg_tap_${id} = vec2f(1.0) - abs(fract(rg_tap_${id} * 0.5) * vec2f(2.0) - vec2f(1.0));
-      let rg_s_${id} = ${wgslSample(`rg_tap_${id}`)};
-      rg_acc_${id} = rg_acc_${id} + rg_s_${id}.rgb * rg_s_${id}.a;
-      rg_aacc_${id} = rg_aacc_${id} + rg_s_${id}.a;
-    }
-    ${ctx.outputs.color} = vec4f(rg_acc_${id} / vec3f(max(rg_aacc_${id}, 1e-5)), rg_aacc_${id} / 8.0);
+    ${emitFrostGather({ ...frostArgs, lang: 'wgsl' })}
   } else if (${taps} > 1.0) {
     ${emitMinifSupersample({ ...minifArgs, lang: 'wgsl' })}
   } else if (${seam.split}) {
@@ -1233,7 +1392,7 @@ export const reededGlassNode: NodeDefinition = {
   }`,
         ),
       ]
-      stmts.push(...frostStmts)
+            stmts.push(...frostStmts)
     } else {
       // Non-texture fallback: passthrough source input
       stmts.push(

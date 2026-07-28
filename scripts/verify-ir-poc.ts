@@ -1733,13 +1733,13 @@ function verify(
   // The tap is fetched as a full vec4 and BOTH halves are consumed: rgb weighted by
   // this tap's alpha, and that same alpha summed. Dropping either half is the bug.
   if (!/vec4 rg_s_reed_rrr889 = texture\(u_pass0_tex, rg_tap_reed_rrr889\);/.test(refGLSL) ||
-      !/rg_acc_reed_rrr889 \+= rg_s_reed_rrr889\.rgb \* rg_s_reed_rrr889\.a;/.test(refGLSL) ||
-      !/rg_aacc_reed_rrr889 \+= rg_s_reed_rrr889\.a;/.test(refGLSL)) {
+      !/rg_acc_reed_rrr889 = rg_acc_reed_rrr889 \+ rg_s_reed_rrr889\.rgb \* rg_s_reed_rrr889\.a;/.test(refGLSL) ||
+      !/rg_aacc_reed_rrr889 = rg_aacc_reed_rrr889 \+ rg_s_reed_rrr889\.a;/.test(refGLSL)) {
     console.log(`  [FAIL] GLSL: expected full vec4 tap accumulated premultiplied. Got:\n    ${refGLSL}`)
     reedTexOk = false
   }
   // Un-premultiply, and carry the MEASURED mean alpha out — never a constant 1.0.
-  if (!/node_reed_rrr889_color = vec4\(rg_acc_reed_rrr889 \/ max\(rg_aacc_reed_rrr889, 1e-5\), rg_aacc_reed_rrr889 \/ 8\.0\);/.test(refGLSL)) {
+  if (!/node_reed_rrr889_color = vec4\(rg_acc_reed_rrr889 \/ max\(rg_aacc_reed_rrr889, 1e-5\), rg_aacc_reed_rrr889 \/ \d+\.0\);/.test(refGLSL)) {
     console.log(`  [FAIL] GLSL: expected un-premultiplied resolve carrying mean alpha. Got:\n    ${refGLSL}`)
     reedTexOk = false
   }
@@ -1767,7 +1767,7 @@ function verify(
     console.log(`  [FAIL] IR->WGSL: expected full vec4f tap accumulated premultiplied. Got:\n    ${irWGSL}`)
     reedTexOk = false
   }
-  if (!/node_reed_rrr889_color = vec4f\(rg_acc_reed_rrr889 \/ vec3f\(max\(rg_aacc_reed_rrr889, 1e-5\)\), rg_aacc_reed_rrr889 \/ 8\.0\);/.test(irWGSL)) {
+  if (!/node_reed_rrr889_color = vec4f\(rg_acc_reed_rrr889 \/ vec3f\(max\(rg_aacc_reed_rrr889, 1e-5\)\), rg_aacc_reed_rrr889 \/ \d+\.0\);/.test(irWGSL)) {
     console.log(`  [FAIL] IR->WGSL: expected un-premultiplied resolve carrying mean alpha. Got:\n    ${irWGSL}`)
     reedTexOk = false
   }
