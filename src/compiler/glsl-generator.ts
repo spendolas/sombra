@@ -13,6 +13,7 @@ import { nodeRegistry } from '../nodes/registry'
 import { topologicalSort, hasCycles } from './topological-sort'
 import { coerceType } from '../nodes/type-coercion'
 import { expandMultiPassNodes } from './expand-passes'
+import { resolvePassResolution } from './pass-resolution'
 
 export function uniformName(sanitizedNodeId: string, paramId: string): string {
   return `u_${sanitizedNodeId}_${paramId}`
@@ -58,6 +59,13 @@ export interface RenderPass {
   isTimeLive: boolean
   /** Texture filtering hint for this pass's output FBO. */
   textureFilter?: 'linear' | 'nearest'
+  /**
+   * Target size for this pass's render target, as a fraction of canvas size.
+   * Absent means 1.0. Above 1.0 supersamples. Honoured by all four renderers via
+   * `passTargetSize()` in src/renderer/pass-size.ts, which also scales `u_dpr` —
+   * that is what keeps `auto_uv` and anchor pinning invariant.
+   */
+  resolution?: number
 }
 
 /**
@@ -86,6 +94,8 @@ export interface RenderPlan {
       inputTextures: Array<{ passIndex: number; samplerName: string }>
       isTimeLive: boolean
       textureFilter?: 'linear' | 'nearest'
+      /** Mirrors RenderPass.resolution — see there. */
+      resolution?: number
     }>
   }
 }
@@ -757,6 +767,10 @@ function compileMultiPass(
     const passNodeIds = passPartition[passIdx]
     const isLastPass = passIdx === passPartition.length - 1
 
+    // Resolved once per pass: relay passes below share the primary's geometry,
+    // because they render the same fragment into a same-sized target.
+    const passResolution = resolvePassResolution(passNodeIds, nodeMap)
+
     const uniforms = new Set<string>()
     const functions: string[] = []
     const functionRegistry = new Map<string, string>()
@@ -881,6 +895,7 @@ function compileMultiPass(
         inputTextures,
         isTimeLive: uniforms.has('u_time'),
         textureFilter: primaryResolved?.textureFilter,
+        resolution: passResolution,
       })
 
       // --- Relay passes (remaining groups) ---
@@ -902,6 +917,7 @@ function compileMultiPass(
           inputTextures,
           isTimeLive: uniforms.has('u_time'),
           textureFilter: resolved.textureFilter,
+          resolution: passResolution,
         })
       }
     } else {
@@ -917,6 +933,7 @@ function compileMultiPass(
         userUniforms: passUserUniforms,
         inputTextures,
         isTimeLive: uniforms.has('u_time'),
+        resolution: passResolution,
       })
     }
 

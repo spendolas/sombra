@@ -22,6 +22,7 @@ import {
 import type { TextureBoundaryEdge } from './glsl-generator'
 import { assembleWGSL } from './ir/wgsl-assembler'
 import { expandMultiPassNodes } from './expand-passes'
+import { resolvePassResolution } from './pass-resolution'
 
 // ---------------------------------------------------------------------------
 // WGSL type coercion (IR-level, parallel to type-coercion.ts GLSL rules)
@@ -425,6 +426,8 @@ export interface WGSLPassOutput {
   inputTextures: Array<{ passIndex: number; samplerName: string }>
   isTimeLive: boolean
   textureFilter?: 'linear' | 'nearest'
+  /** Mirrors RenderPass.resolution (glsl-generator.ts) — see there. */
+  resolution?: number
 }
 
 export interface WGSLMultiPassOutput {
@@ -565,6 +568,10 @@ function compileMultiPassIR(
     const passNodeIds = passPartition[passIdx]
     const isLastPass = passIdx === passPartition.length - 1
 
+    // Resolved once per pass: relay passes below share the primary's geometry,
+    // because they render the same fragment into a same-sized target.
+    const passResolution = resolvePassResolution(passNodeIds, nodeMap)
+
     const standardUniforms = new Set<string>()
     const passUserUniforms: UniformSpec[] = []
     const allOutputs: IRNodeOutput[] = []
@@ -686,6 +693,7 @@ function compileMultiPassIR(
         shaderCode: assembled.shaderCode, uniformLayout: assembled.uniformLayout,
         textureBindings: assembled.textureBindings, inputTextures,
         isTimeLive: standardUniforms.has('u_time'), textureFilter: primaryResolved?.textureFilter,
+        resolution: passResolution,
       })
 
       // --- Relay passes ---
@@ -704,6 +712,7 @@ function compileMultiPassIR(
           shaderCode: relayAssembled.shaderCode, uniformLayout: relayAssembled.uniformLayout,
           textureBindings: relayAssembled.textureBindings, inputTextures,
           isTimeLive: standardUniforms.has('u_time'), textureFilter: resolved.textureFilter,
+          resolution: passResolution,
         })
       }
     } else {
@@ -717,6 +726,7 @@ function compileMultiPassIR(
         shaderCode: assembled.shaderCode, uniformLayout: assembled.uniformLayout,
         textureBindings: assembled.textureBindings, inputTextures,
         isTimeLive: standardUniforms.has('u_time'),
+        resolution: passResolution,
       })
     }
   }

@@ -330,6 +330,12 @@ export interface NodeDefinition {
     count: (params: Record<string, unknown>) => number
     from: string
     to: string
+    /**
+     * Target scale for sub-pass `passIndex`, as a fraction of canvas size.
+     * Default 1.0; above 1.0 supersamples. A pyramid returns something like
+     * `[1, 0.5, 0.25][passIndex]`. Range is clamped to (0, 4] downstream.
+     */
+    resolution?: (passIndex: number, params: Record<string, unknown>) => number
   }
 
   /**
