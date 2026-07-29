@@ -13,6 +13,16 @@ All three adversarial passes returned **QUALIFIED**, and all three converged on 
 
 ---
 
+> **Correction, 2026-07-29.** The error figures below are scored against a 16x16
+> supersample of the PRE node, which averages in **sRGB**. Since `7f49343` the shipped
+> node averages in **linear light**, so that reference no longer represents truth for
+> it and these absolute numbers understate the improvement. Re-measured against a
+> valid reference (shipped colour pipeline, internal supersample off, 16x16), the same
+> configs read: rot45 30.99/170 -> 2.26/21 (13.7x), wave-sine 28.09/176 -> 2.69/21,
+> rot15 27.05/159 -> 2.65/19, misaligned 24.07/127 -> 3.07/24. See
+> `2026-07-29-minification-residual.md` for the reference construction and why the old
+> one is invalid. The ranking and the reasoning in this document are unaffected.
+
 ## 1. Diagnosis
 
 ### 1.1 What the map does

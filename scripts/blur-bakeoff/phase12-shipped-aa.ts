@@ -510,7 +510,7 @@ const LOCAL_CANDIDATES: Record<string, Candidate> = {
 async function render(
   rig: AaRig, stimuli: Map<StimulusId, Rgba8>, bc: BenchConfig,
   which: Which, candId: string, backend: Backend,
-  mode: 'color' | 'count' | 'count-broken' = 'color',
+  mode: 'color' | 'count' | 'count-broken' | 'no-minif' = 'color',
 ): Promise<Rgba8> {
   const cand = LOCAL_CANDIDATES[candId] ?? CANDIDATE_BY_ID[candId]
   if (!cand) throw new Error(`unknown candidate ${candId}`)
@@ -869,6 +869,9 @@ async function stageRegress(rig: AaRig, stimuli: Map<StimulusId, Rgba8>): Promis
     const pre = await render(rig, stimuli, bc, 'pre', 'A0', 'webgpu')
     const ship = await render(rig, stimuli, bc, 'shipped', 'A0', 'webgpu')
     const gt = await render(rig, stimuli, bc, 'pre', 'A8', 'webgpu')
+    // The VALID reference for tap-count work: shipped colour pipeline, internal
+    // supersample off, 16x16'd. See ShaderMode's 'no-minif' note.
+    const gtTrue = await render(rig, stimuli, bc, 'shipped', 'A8', 'webgpu', 'no-minif')
     const shipGl = await render(rig, stimuli, bc, 'shipped', 'A0', 'webgl2')
     const preGl = await render(rig, stimuli, bc, 'pre', 'A0', 'webgl2')
 
@@ -906,6 +909,7 @@ async function stageRegress(rig: AaRig, stimuli: Map<StimulusId, Rgba8>): Promis
       periodPx: periodPx(bc.cfg, bc.dpr), note: bc.note ?? '',
       bandPx: nb,
       band: { PRE: statOf(pre, gt, band), SHIPPED: statOf(ship, gt, band) },
+      vsTrueGT: { SHIPPED: statOf(ship, gtTrue, band), oneTap: statOf(pre, gtTrue, band) },
       frame: {
         meanPRE: sp / n, meanSHIPPED: ss / n, maxPRE: mp, maxSHIPPED: ms, n,
         maxShippedMinusPre: worseMax, at: { x: worseAt % W, y: Math.floor(worseAt / W) },
@@ -918,7 +922,9 @@ async function stageRegress(rig: AaRig, stimuli: Map<StimulusId, Rgba8>): Promis
     console.log(`${bc.id.padEnd(15)} band ${nb.toString().padStart(7)}px  ` +
       `PRE ${r.band.PRE.mean.toFixed(2)}/${r.band.PRE.max}  SHIPPED ${r.band.SHIPPED.mean.toFixed(2)}/${r.band.SHIPPED.max}  ` +
       `frame ${r.frame.meanPRE.toFixed(3)}->${r.frame.meanSHIPPED.toFixed(3)} max ${r.frame.maxPRE}->${r.frame.maxSHIPPED}  ` +
-      `worstDelta +${r.frame.maxShippedMinusPre}  parity ${(rows[rows.length - 1] as { parity: { SHIPPED: { max: number } } }).parity.SHIPPED.max}  ` +
+      `TRUE-GT ${(r as unknown as { vsTrueGT: { SHIPPED: { mean: number; max: number } } }).vsTrueGT.SHIPPED.mean.toFixed(2)}/` +
+      `${(r as unknown as { vsTrueGT: { SHIPPED: { max: number } } }).vsTrueGT.SHIPPED.max}  ` +
+      `parity ${(rows[rows.length - 1] as { parity: { SHIPPED: { max: number } } }).parity.SHIPPED.max}  ` +
       `fetch ${cnt.mean.toFixed(4)} [${cnt.min},${cnt.max}]`)
   }
   results.regress = { rows }
@@ -981,6 +987,9 @@ async function stageFrostGap(rig: AaRig, stimuli: Map<StimulusId, Rgba8>): Promi
     const pre = await render(rig, stimuli, bc, 'pre', 'A0', 'webgpu')
     const ship = await render(rig, stimuli, bc, 'shipped', 'A0', 'webgpu')
     const gt = await render(rig, stimuli, bc, 'pre', 'A8', 'webgpu')
+    // The VALID reference for tap-count work: shipped colour pipeline, internal
+    // supersample off, 16x16'd. See ShaderMode's 'no-minif' note.
+    const gtTrue = await render(rig, stimuli, bc, 'shipped', 'A8', 'webgpu', 'no-minif')
     const band = new Uint8Array(W * H)
     let nb = 0
     for (let i = 0; i < W * H; i++) {
@@ -1030,6 +1039,7 @@ async function stageFrostGap(rig: AaRig, stimuli: Map<StimulusId, Rgba8>): Promi
       spatial,
       frost, frostRadiusPx: frost * 24 * bc.dpr, bandPx: nb,
       band: { PRE: statOf(pre, gt, band), SHIPPED: statOf(ship, gt, band) },
+      vsTrueGT: { SHIPPED: statOf(ship, gtTrue, band), oneTap: statOf(pre, gtTrue, band) },
       fetches: { mean: cnt.mean, min: cnt.min, max: cnt.max },
       aaActive: cnt.max === 2,
       parity: par,

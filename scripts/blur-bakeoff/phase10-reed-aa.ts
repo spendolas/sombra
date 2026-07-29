@@ -639,7 +639,18 @@ function decodeCount(img: Rgba8, mask?: Uint8Array | null): { mean: number; min:
 // Pass construction for a candidate / for the seam probe
 // ===========================================================================
 
-export type ShaderMode = 'color' | 'count' | 'count-broken'
+/**
+ * 'no-minif' forces the node's internal minification supersample OFF, leaving its
+ * colour pipeline (linear light, dither, premultiply) intact.
+ *
+ * That combination is the only valid reference for tap-count experiments.
+ * ('pre','A8') is wrong because PRE averages in sRGB while the shipped node averages
+ * in linear light, so they disagree by construction. ('shipped','A8') is wrong the
+ * other way: supersampling a shader that already self-filters converges on its OWN
+ * blur, not on the truth. ('shipped','A8','no-minif') converges on the true image in
+ * the shipped colour space, which is what a tap count should be scored against.
+ */
+export type ShaderMode = 'color' | 'count' | 'count-broken' | 'no-minif'
 
 export function candidatePasses(
   g: BuiltGraph, cand: Candidate, w: number, h: number, ctx: CandidateCtx, mode: ShaderMode = 'color',
@@ -656,7 +667,14 @@ export function candidatePasses(
       const split = splitShader(src, kind)
       src = assemble(split, kind, w, h, `${setup}\n  ${L.out(expr)}`)
     }
-    if (mode !== 'color') src = instrumentCount(src, kind, g.texSampler, mode === 'count-broken')
+    if (mode === 'no-minif') {
+      // `} else if (rg_nt_<id> > 1.0) {` -> never taken. Compiles on both backends.
+      const before = src
+      src = src.replace(/rg_nt_\w+ > 1\.0/g, 'false')
+      if (src === before) throw new Error("no-minif: the minification guard was not found — emitted shape changed")
+    } else if (mode !== 'color') {
+      src = instrumentCount(src, kind, g.texSampler, mode === 'count-broken')
+    }
     return src
   }
 

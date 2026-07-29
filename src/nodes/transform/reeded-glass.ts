@@ -550,7 +550,16 @@ function emitFrostGather(o: {
   ].join('\n  ')
 }
 
-/** Fixed loop bound for the minification supersample. GLSL ES needs a
+/** Fixed loop bound for the minification supersample.
+ *
+ * 8 is MEASURED, not a guess, and raising it does not help: cap 16 improves exactly
+ * one config of 26 (curv1p5, 5.20 -> 4.93 codes) for +26% fetches, and cap 32 is
+ * worse than 16. The cap only binds where |L'| > 8, which is 0% of the rib at the
+ * defaults, 0% at ior 2.5 (which tops out at |L'| 4.6), and 6.6-14.7% only above
+ * curvature ~0.9. What remains up there is the PROFILE, not the filter — the slope
+ * is unbounded, so the map produces up to 28 caustics per rib and the ripples survive
+ * 256 samples. See docs/research/2026-07-29-minification-residual.md.
+ * GLSL ES needs a
  *  compile-time constant, so the count is capped here and the loop breaks early
  *  at the per-fragment count (the pattern blur.ts uses). 8 is where a
  *  low-contrast source stops improving: at |L'| 2-4 a 255-code step wants ~64
