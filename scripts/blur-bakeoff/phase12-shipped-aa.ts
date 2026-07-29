@@ -989,16 +989,25 @@ async function stageFrostGap(rig: AaRig, stimuli: Map<StimulusId, Rgba8>): Promi
       if (dmax(pre, gt, i) >= 8) { band[i] = 1; nb++ }
     }
     const cnt = decodeCount(await render(rig, stimuli, bc, 'shipped', 'A0', 'webgpu', 'count'))
+    // Cross-backend parity as a function of gather radius. This is the bisect for
+    // the frost0p3 divergence: below frost ~0.04 the radius is SUB-PIXEL, so all 16
+    // taps collapse onto essentially one texel. If the divergence survives that, it
+    // is in the accumulate/resolve arithmetic; if it vanishes with radius, it is in
+    // the tap POSITIONS — the seed hash or the trig that places them.
+    const shipGl = await render(rig, stimuli, bc, 'shipped', 'A0', 'webgl2')
+    const par = frameMaxDelta(ship, shipGl)
     const r = {
       frost, frostRadiusPx: frost * 24 * bc.dpr, bandPx: nb,
       band: { PRE: statOf(pre, gt, band), SHIPPED: statOf(ship, gt, band) },
       fetches: { mean: cnt.mean, min: cnt.min, max: cnt.max },
       aaActive: cnt.max === 2,
+      parity: par,
     }
     rows.push(r)
     console.log(`frost ${frost.toString().padEnd(6)} radius ${r.frostRadiusPx.toFixed(3).padStart(6)}px  band ${nb.toString().padStart(6)}px  ` +
       `PRE ${r.band.PRE.mean.toFixed(2)}/${r.band.PRE.max}  SHIPPED ${r.band.SHIPPED.mean.toFixed(2)}/${r.band.SHIPPED.max}  ` +
-      `fetch ${cnt.mean.toFixed(4)} [${cnt.min},${cnt.max}]  seamAAactive=${r.aaActive}`)
+      `fetch ${cnt.mean.toFixed(4)} [${cnt.min},${cnt.max}]  aa=${r.aaActive}  ` +
+      `parity ${par.max} codes / ${par.nGt1} px`)
   }
   results.frostgap = { rows }
 }
