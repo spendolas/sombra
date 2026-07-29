@@ -63,7 +63,17 @@ const W = 1200
 const H = 800
 const MARGIN = 12
 /** git ref the PRE (pre-change) node is read from */
-const PRE_REF = 'HEAD'
+// PINNED, deliberately. This was 'HEAD', which was correct exactly once — when the
+// change under test was still uncommitted. HEAD is a moving reference, so as soon as
+// the work landed, PRE silently became SHIPPED and every comparison in this file
+// compared a shader to itself. It still printed a clean table: identical columns
+// read as "no regression" rather than "no measurement". d3923d1 is the last commit
+// before the seam-coverage AA; its blob is 76884ad4, which is what this file's
+// header has always claimed to load.
+const PRE_REF = 'd3923d1'
+/** Markers that exist ONLY in post-PRE code. If any appears in the PRE source, the
+ *  ref has drifted and the comparison is void. */
+const POST_PRE_MARKERS = ['reedPcg', 'rg_ms_', 'rg_swm', 'rg_pat_ref']
 /** Probe encodes signed seam distance over +-SEAM_RANGE_PX (phase-10b value). */
 const SEAM_RANGE_PX = 8
 
@@ -109,6 +119,15 @@ async function loadPreNode(): Promise<{ def: NodeDefinition; file: string; sha: 
   const mod = await import(file) as { reededGlassNode?: NodeDefinition }
   if (!mod.reededGlassNode) throw new Error('loadPreNode: module has no reededGlassNode export')
   if (mod.reededGlassNode.type !== 'reeded_glass') throw new Error('loadPreNode: wrong node type')
+  // The guard that was missing. A drifted PRE_REF is invisible in the results —
+  // it just makes every row read "identical" — so fail here instead.
+  const leaked = POST_PRE_MARKERS.filter((m) => src.includes(m))
+  if (leaked.length) {
+    throw new Error(
+      `loadPreNode: ${PRE_REF} is NOT a pre-change ref — its source contains ` +
+      `${leaked.join(', ')}. PRE would equal SHIPPED and every comparison would be ` +
+      `vacuous. Re-pin PRE_REF to a commit before the change under test.`)
+  }
   return { def: mod.reededGlassNode, file, sha }
 }
 
