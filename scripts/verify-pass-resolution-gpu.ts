@@ -8,7 +8,7 @@
  * `s` — with `u_resolution = u_viewport = s*canvas` AND `u_dpr = s*dpr` — leaves
  * anchor-pinned content exactly where it was.
  *
- * Three gates:
+ * Four gates:
  *   1. PINNING (engine + rig)  a scaled intermediate does not move the content.
  *      Measured as a luminance CENTROID in pixels, not a mean: a mean happily
  *      passes a pattern that has shifted, and that exact mistake once made a
@@ -22,6 +22,12 @@
  *      Both main renderers made their staleness guards per-pass specifically to
  *      prevent this; src/webgpu/renderer.ts:456 records the same bug happening
  *      before from a single-value comparison.
+ *   4. PREVIEW AGREEMENT (preview renderers)  a two-pass thumbnail whose first
+ *      pass declares 0.5 allocates a 40x40 intermediate and still lands its
+ *      content on the same pixel. The preview renderers are a SECOND
+ *      implementation of the contract — own uniform upload, own allocation, a
+ *      4 px floor instead of 1, `u_anchor` pinned to centre — so gates 1–3 say
+ *      nothing about them.
  *
  * No shipped node declares a scale (deliberately — this change is plumbing), so
  * the producer is a synthetic node registered in the page, mirroring what
@@ -31,6 +37,12 @@
  *
  * A run that skips BOTH backends is a FAILURE, not a pass. Silent skips that
  * read as green are the specific failure mode this gate exists to prevent.
+ *
+ * SCOPE. Headless, so `devicePixelRatio` is 1 throughout: no `dpr > 1` capture is
+ * exercised on any half. Both MAIN renderers (`WebGL2ShaderRenderer`,
+ * `WebGPUShaderRenderer`) and both PREVIEW renderers (`WebGL2PreviewRenderer`,
+ * `WebGPUPreviewRenderer`) are covered — previews by gate 4, added when spec gate
+ * 6 was found claimed but unbuilt. Noted so a green pass count is not over-read.
  *
  * Run: npx tsx scripts/verify-pass-resolution-gpu.ts
  */
@@ -72,6 +84,23 @@ const INSET = 88
 const OFFSET = 26
 /** Blob sigma, in reference px. Wide enough to survive a 0.25 downscale. */
 const SIGMA = 18
+/** Thumbnail edge, px. Both preview renderers hard-code this. */
+const PREVIEW_SIZE = 80
+/**
+ * Preview probe geometry, in reference px — deliberately not the main probe's.
+ *
+ * Both preview renderers pin `u_anchor` to (0.5, 0.5), where the `(1 - 2a)·INSET`
+ * term is identically zero, so the centre-weighted OFFSET is the ONLY thing that
+ * displaces the blob — and displacement is what makes a wrong `u_dpr` visible.
+ * The main probe's σ of 18 reference px would also reach past every edge of an
+ * 80 px thumbnail, clipping the blob asymmetrically and biasing the very centroid
+ * being measured. 12 px off centre at σ 7 puts 4σ = 28 px against a 28 px edge
+ * distance: clipped amplitude e^-8 ≈ 0.03 codes, i.e. nothing.
+ */
+const PREVIEW_OFFSET = 12
+const PREVIEW_SIGMA = 7
+/** Scale the preview gate's first pass declares. 0.5 × 80 = 40 px. */
+const PREVIEW_SCALE = 0.5
 /** The 9 Fragment Output anchors, as `anchorToVec2` names them. */
 const ANCHORS = ['tl', 'tc', 'tr', 'cl', 'center', 'cr', 'bl', 'bc', 'br'] as const
 /** Scales the probe pass is asked to render at, besides the 1.0 baseline. */
@@ -169,6 +198,16 @@ function predictedCentre(anchor: readonly [number, number]): { cx: number; cy: n
   return { cx: at(anchor[0]), cy: at(anchor[1]) }
 }
 
+/**
+ * The same prediction for the PREVIEW probe: 80 px target, `u_anchor` pinned to
+ * (0.5, 0.5) by both preview renderers, so the inset term drops out and the
+ * centre-weighted offset is the whole displacement.
+ */
+function predictedPreviewCentre(): { cx: number; cy: number } {
+  const at = PREVIEW_SIZE * 0.5 + PREVIEW_OFFSET - 0.5
+  return { cx: at, cy: at }
+}
+
 function anchorToVec2(anchor: string): [number, number] {
   switch (anchor) {
     case 'tl': return [0, 0]
@@ -261,6 +300,23 @@ interface CaptureRes {
   intermediates: string[]
 }
 
+interface PreviewCaptureRes {
+  ok: boolean
+  error?: string
+  width: number
+  height: number
+  b64: string
+  planResolutions: Array<number | null>
+  passCount: number
+  /**
+   * Sizes of the intermediate targets the PREVIEW renderer allocated. Same
+   * anti-vacuity role as `CaptureRes.intermediates`: a preview that ignored
+   * `resolution` outright would produce a byte-identical thumbnail and pass every
+   * position metric.
+   */
+  intermediates: string[]
+}
+
 interface ThrashRes {
   ok: boolean
   error?: string
@@ -284,6 +340,10 @@ async function installHarness(page: Page, cfg: {
   inset: number
   offset: number
   sigma: number
+  /** Thumbnail edge for the preview half. */
+  previewSize: number
+  previewOffset: number
+  previewSigma: number
   /** Vite's dev base, e.g. '/sombra/' — module URLs hang off it. */
   base: string
 }): Promise<{ webgpu: boolean; webgl2: boolean }> {
@@ -292,18 +352,22 @@ async function installHarness(page: Page, cfg: {
     const w = window as any
     const num = (v: number) => (Number.isInteger(v) ? `${v}.0` : `${v}`)
 
-    const [nodesMod, registryMod, glslMod, irMod, irTypes] = await Promise.all([
+    const [nodesMod, registryMod, glslMod, irMod, irTypes, subMod, irSubMod] = await Promise.all([
       import(/* @vite-ignore */ `${c.base}src/nodes/index.ts`),
       import(/* @vite-ignore */ `${c.base}src/nodes/registry.ts`),
       import(/* @vite-ignore */ `${c.base}src/compiler/glsl-generator.ts`),
       import(/* @vite-ignore */ `${c.base}src/compiler/ir-compiler.ts`),
       import(/* @vite-ignore */ `${c.base}src/compiler/ir/types.ts`),
+      import(/* @vite-ignore */ `${c.base}src/compiler/subgraph-compiler.ts`),
+      import(/* @vite-ignore */ `${c.base}src/compiler/ir-subgraph-compiler.ts`),
     ])
     nodesMod.initializeNodeLibrary()
     const { nodeRegistry } = registryMod
     const { compileGraph } = glslMod
     const { compileGraphIR } = irMod
     const { raw, declare, variable, binary, textureSample } = irTypes
+    const { compileNodePreview } = subMod
+    const { compileNodePreviewIR } = irSubMod
 
     // ---- the synthetic scale-declaring node ------------------------------
     // Two roles in one type, chosen by whether `source` is wired:
@@ -315,7 +379,15 @@ async function installHarness(page: Page, cfg: {
     // `count: () => 1` means expand-passes leaves it alone; the pass boundary
     // comes from the downstream relay's textureInput, and
     // `resolvePassResolution` still reads multiPass.resolution.
-    const makeDef = (type: string, declaresScale: boolean) => ({
+    //
+    // `geo` is the blob's placement, in reference px. It is a parameter because
+    // the main half draws on a 256 px canvas and the preview half on an 80 px
+    // thumbnail, where the main geometry would overflow every edge.
+    const makeDef = (
+      type: string,
+      declaresScale: boolean,
+      geo: { inset: number; offset: number; sigma: number },
+    ) => ({
       type,
       label: type,
       category: 'Effect',
@@ -350,8 +422,8 @@ async function installHarness(page: Page, cfg: {
         ctx.uniforms.add('u_ref_size')
         return [
           `vec2 gpb_${id} = (${ctx.inputs.coords} - u_anchor) * (u_dpr * u_ref_size);`,
-          `vec2 gpc_${id} = (vec2(1.0) - 2.0 * u_anchor) * (u_dpr * ${num(c.inset)}) + (vec2(1.0) - abs(vec2(1.0) - 2.0 * u_anchor)) * (u_dpr * ${num(c.offset)});`,
-          `float gpd_${id} = length(gpb_${id} - gpc_${id}) / (u_dpr * ${num(c.sigma)});`,
+          `vec2 gpc_${id} = (vec2(1.0) - 2.0 * u_anchor) * (u_dpr * ${num(geo.inset)}) + (vec2(1.0) - abs(vec2(1.0) - 2.0 * u_anchor)) * (u_dpr * ${num(geo.offset)});`,
+          `float gpd_${id} = length(gpb_${id} - gpc_${id}) / (u_dpr * ${num(geo.sigma)});`,
           `vec4 ${ctx.outputs.color} = vec4(vec3(exp(-0.5 * gpd_${id} * gpd_${id})), 1.0);`,
         ].join('\n  ')
       },
@@ -375,14 +447,14 @@ async function installHarness(page: Page, cfg: {
             raw(
               [
                 `vec2 gpb_${id} = (${ctx.inputs.coords} - u_anchor) * (u_dpr * u_ref_size);`,
-                `vec2 gpc_${id} = (vec2(1.0) - 2.0 * u_anchor) * (u_dpr * ${num(c.inset)}) + (vec2(1.0) - abs(vec2(1.0) - 2.0 * u_anchor)) * (u_dpr * ${num(c.offset)});`,
-                `float gpd_${id} = length(gpb_${id} - gpc_${id}) / (u_dpr * ${num(c.sigma)});`,
+                `vec2 gpc_${id} = (vec2(1.0) - 2.0 * u_anchor) * (u_dpr * ${num(geo.inset)}) + (vec2(1.0) - abs(vec2(1.0) - 2.0 * u_anchor)) * (u_dpr * ${num(geo.offset)});`,
+                `float gpd_${id} = length(gpb_${id} - gpc_${id}) / (u_dpr * ${num(geo.sigma)});`,
                 `vec4 ${ctx.outputs.color} = vec4(vec3(exp(-0.5 * gpd_${id} * gpd_${id})), 1.0);`,
               ].join('\n  '),
               [
                 `let gpb_${id}: vec2f = (${ctx.inputs.coords} - u_anchor) * (u_dpr * u_ref_size);`,
-                `let gpc_${id}: vec2f = (vec2f(1.0) - 2.0 * u_anchor) * (u_dpr * ${num(c.inset)}) + (vec2f(1.0) - abs(vec2f(1.0) - 2.0 * u_anchor)) * (u_dpr * ${num(c.offset)});`,
-                `let gpd_${id}: f32 = length(gpb_${id} - gpc_${id}) / (u_dpr * ${num(c.sigma)});`,
+                `let gpc_${id}: vec2f = (vec2f(1.0) - 2.0 * u_anchor) * (u_dpr * ${num(geo.inset)}) + (vec2f(1.0) - abs(vec2f(1.0) - 2.0 * u_anchor)) * (u_dpr * ${num(geo.offset)});`,
+                `let gpd_${id}: f32 = length(gpb_${id} - gpc_${id}) / (u_dpr * ${num(geo.sigma)});`,
                 `let ${ctx.outputs.color}: vec4f = vec4f(vec3f(exp(-0.5 * gpd_${id} * gpd_${id})), 1.0);`,
               ].join('\n  '),
             ),
@@ -393,8 +465,15 @@ async function installHarness(page: Page, cfg: {
       },
     })
 
-    nodeRegistry.register(makeDef('gate_scaled', true))
-    nodeRegistry.register(makeDef('gate_plain', false))
+    const MAIN_GEO = { inset: c.inset, offset: c.offset, sigma: c.sigma }
+    // Preview variants. `inset: 0` because the previews pin `u_anchor` to
+    // (0.5, 0.5) and the inset term is multiplied by `(1 - 2·0.5) = 0` — writing
+    // 0 says that rather than leaving a number that does nothing.
+    const PREVIEW_GEO = { inset: 0, offset: c.previewOffset, sigma: c.previewSigma }
+    nodeRegistry.register(makeDef('gate_scaled', true, MAIN_GEO))
+    nodeRegistry.register(makeDef('gate_plain', false, MAIN_GEO))
+    nodeRegistry.register(makeDef('gate_pv_scaled', true, PREVIEW_GEO))
+    nodeRegistry.register(makeDef('gate_pv_plain', false, PREVIEW_GEO))
 
     const anchorToVec2 = (a: string): [number, number] => {
       switch (a) {
@@ -503,15 +582,23 @@ async function installHarness(page: Page, cfg: {
      */
     function grab(canvas: HTMLCanvasElement, r: any) {
       r.render()
+      return drawToShot(canvas, canvas.width, canvas.height)
+    }
+
+    /**
+     * Composite a canvas or ImageBitmap onto an opaque 2D canvas and read it
+     * back as base64 RGBA. Opaque backing because a transparent capture would
+     * otherwise read as black and be indistinguishable from a frame that
+     * rendered nothing.
+     */
+    function drawToShot(src: CanvasImageSource, width: number, height: number) {
       const out = document.createElement('canvas')
-      out.width = canvas.width
-      out.height = canvas.height
+      out.width = width
+      out.height = height
       const ctx = out.getContext('2d', { willReadFrequently: true })!
-      // Opaque backing: a transparent capture would otherwise read as black and
-      // be indistinguishable from a frame that rendered nothing.
       ctx.fillStyle = '#000'
       ctx.fillRect(0, 0, out.width, out.height)
-      ctx.drawImage(canvas, 0, 0)
+      ctx.drawImage(src, 0, 0)
       const px = ctx.getImageData(0, 0, out.width, out.height).data
       let bin = ''
       const CH = 0x8000
@@ -519,6 +606,50 @@ async function installHarness(page: Page, cfg: {
         bin += String.fromCharCode.apply(null, px.subarray(i, i + CH) as unknown as number[])
       }
       return { width: out.width, height: out.height, b64: btoa(bin) }
+    }
+
+    // ---- preview renderers ------------------------------------------------
+    const openPv: Record<string, any> = {}
+
+    /**
+     * A preview renderer, as production wires it.
+     *
+     * WebGPU preview takes the MAIN renderer's `GPUDevice` (that sharing is the
+     * production arrangement — see src/renderer/create-renderer.ts), so this
+     * depends on `renderer(backend)` having been stood up first. WebGL2 preview
+     * owns its own OffscreenCanvas and needs nothing.
+     */
+    async function previewRenderer(backend: string) {
+      if (openPv[backend]) return openPv[backend]
+      let r: any
+      if (backend === 'webgpu') {
+        const mod = await import(/* @vite-ignore */ `${c.base}src/webgpu/preview-renderer.ts`)
+        const main = await renderer('webgpu')
+        r = new mod.WebGPUPreviewRenderer(main.renderer.getDevice())
+      } else {
+        const mod = await import(/* @vite-ignore */ `${c.base}src/webgl/preview-renderer.ts`)
+        r = new mod.WebGL2PreviewRenderer()
+      }
+      await r.init()
+      openPv[backend] = { renderer: r }
+      return openPv[backend]
+    }
+
+    /**
+     * probe → relay, compiled the way the preview scheduler compiles it.
+     *
+     * No `fragment_output` node: `compileNodePreview`/`compileNodePreviewIR`
+     * wrap the TARGET node's own output into fragColor. The pass boundary comes
+     * from the relay's `textureInput` port, exactly as in the main half.
+     */
+    function buildPreviewGraph(scale: number | undefined) {
+      const type = scale === undefined ? 'gate_pv_plain' : 'gate_pv_scaled'
+      const nodes: any[] = [
+        node('p0', type, scale === undefined ? {} : { testScale: scale }),
+        node('p1', 'gate_pv_plain'),
+      ]
+      const edges: any[] = [edge('e1', 'p0', 'color', 'p1', 'source')]
+      return { nodes, edges, target: 'p1' }
     }
 
     w.__gate = {
@@ -537,6 +668,90 @@ async function installHarness(page: Page, cfg: {
           }
         } catch (e: any) {
           return { ok: false, error: String(e?.message ?? e), width: 0, height: 0, b64: '', planResolutions: [], passCount: 0, intermediates: [] }
+        }
+      },
+
+      /**
+       * The same question, asked of the PREVIEW renderers.
+       *
+       * These are a separate implementation of the same contract — separate
+       * uniform upload, separate target allocation, a 4 px floor instead of 1,
+       * and `u_anchor` pinned to centre — so the main half proves nothing about
+       * them. Drives the production entry point for each backend:
+       * `renderMultiPassPreview` (GLSL) and `renderWGSLPreview` (WGSL); the
+       * WebGPU renderer's `renderMultiPassPreview` is a warn-and-return-null
+       * stub for interface compliance and is deliberately NOT used.
+       */
+      async previewCapture(req: { backend: string; scale?: number }) {
+        const fail = (error: string) => ({ ok: false, error, width: 0, height: 0, b64: '', planResolutions: [], passCount: 0, intermediates: [] })
+        try {
+          const { renderer: r } = await previewRenderer(req.backend)
+          const g = buildPreviewGraph(req.scale)
+          let bitmap: ImageBitmap | null = null
+          let planResolutions: Array<number | null> = []
+          let passCount = 0
+          let allocated: string[] = []
+
+          if (req.backend === 'webgpu') {
+            const res = compileNodePreviewIR(g.nodes, g.edges, g.target)
+            if (!res.success) return fail(`preview IR compile: ${JSON.stringify(res.errors)}`)
+            planResolutions = res.wgslPasses.map((p: any) => p.resolution ?? null)
+            passCount = res.wgslPasses.length
+            // Per-pass user uniforms, filtered by the pass's own layout — this is
+            // what deserializeWGSLPasses() in preview-scheduler.ts does.
+            const passes = res.wgslPasses.map((p: any) => ({
+              shaderCode: p.shaderCode,
+              uniformLayout: p.uniformLayout,
+              textureBindings: p.textureBindings,
+              inputTextures: p.inputTextures,
+              userUniforms: res.userUniforms
+                .filter((u: any) => p.uniformLayout.offsets.has(u.name))
+                .map((u: any) => ({ name: u.name, value: u.value })),
+              resolution: p.resolution,
+            }))
+            // The WebGPU preview's intermediates are per-CALL locals, destroyed
+            // before the promise resolves (renderMultiPassWGSL), so unlike
+            // WebGL2's persistent `passFBOs` there is no pool left to read.
+            // Recording createTexture during the call is the only way to see the
+            // size it really allocated — and without that this gate would pass
+            // vacuously on a preview that ignored `resolution` outright.
+            const sizes: string[] = []
+            const origCreate = w.GPUDevice.prototype.createTexture
+            w.GPUDevice.prototype.createTexture = function (desc: any) {
+              const s = desc?.size
+              if (Array.isArray(s)) sizes.push(`${s[0]}x${s[1]}`)
+              else if (s) sizes.push(`${s.width}x${s.height}`)
+              return origCreate.call(this, desc)
+            }
+            try {
+              bitmap = await r.renderWGSLPreview(passes)
+            } finally {
+              w.GPUDevice.prototype.createTexture = origCreate
+            }
+            allocated = sizes
+          } else {
+            const res = compileNodePreview(g.nodes, g.edges, g.target)
+            if (!res.success) return fail(`preview GLSL compile: ${JSON.stringify(res.errors)}`)
+            planResolutions = res.passes.map((p: any) => p.resolution ?? null)
+            passCount = res.passes.length
+            const passes = res.passes.map((p: any) => ({
+              fragmentShader: p.fragmentShader,
+              uniforms: p.userUniforms.map((u: any) => ({ name: u.name, value: u.value })),
+              inputTextures: p.inputTextures,
+              resolution: p.resolution,
+            }))
+            bitmap = await r.renderMultiPassPreview(passes)
+            // Persistent pool, read straight from the renderer's own state — the
+            // same private-field read `intermediates()` does for the main half.
+            allocated = (r.passFBOs ?? []).map((f: any) => `${f.width}x${f.height}`)
+          }
+
+          if (!bitmap) return fail('the preview renderer returned no bitmap')
+          const shot = drawToShot(bitmap, bitmap.width, bitmap.height)
+          bitmap.close?.()
+          return { ok: true, ...shot, planResolutions, passCount, intermediates: allocated }
+        } catch (e: any) {
+          return fail(String(e?.message ?? e))
         }
       },
 
@@ -630,6 +845,22 @@ interface EnginePinRow {
   diffVsBase: number
 }
 
+interface PreviewRow {
+  backend: Backend
+  base: Centroid
+  scaled: Centroid
+  /** Per-pass scales the PREVIEW compile carried. */
+  planResolutions: Array<number | null>
+  passCount: number
+  /** What the preview renderer allocated for its intermediate, e.g. ['40x40']. */
+  intermediates: string[]
+  /** Bytes differing, unscaled thumbnail vs scaled. 0 = compared to itself. */
+  diffVsBase: number
+  /** Thumbnail edge that came back — must be PREVIEW_SIZE on both backends. */
+  width: number
+  height: number
+}
+
 async function main() {
   mkdirSync(OUT_DIR, { recursive: true })
 
@@ -638,6 +869,7 @@ async function main() {
   const engineRows: EnginePinRow[] = []
   const engineIdentity: Array<{ backend: Backend; diff: number; weight: number }> = []
   const engineThrash: Array<{ backend: Backend } & ThrashRes> = []
+  const previewRows: PreviewRow[] = []
   const engineBase = new Map<string, Centroid>()
   const rigRows: Array<{ backend: Backend; anchor: string; scale: number; base: Centroid; scaled: Centroid }> = []
   const rigIdentity: Array<{ backend: Backend; diff: number }> = []
@@ -681,7 +913,11 @@ async function main() {
       route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><meta charset="utf-8"><title>pass-resolution gate</title>' }))
     await page.goto(`${origin}${base}__gate.html`)
 
-    const avail = await installHarness(page, { size: SIZE, inset: INSET, offset: OFFSET, sigma: SIGMA, base })
+    const avail = await installHarness(page, {
+      size: SIZE, inset: INSET, offset: OFFSET, sigma: SIGMA,
+      previewSize: PREVIEW_SIZE, previewOffset: PREVIEW_OFFSET, previewSigma: PREVIEW_SIGMA,
+      base,
+    })
     engineBackends = (['webgpu', 'webgl2'] as const).filter((b) => avail[b])
     console.log(`  engine backends: ${engineBackends.join(', ') || '(none)'}`)
 
@@ -720,6 +956,32 @@ async function main() {
       const a = toFrame(declared)
       const b = toFrame(undeclared)
       engineIdentity.push({ backend, diff: maxByteDiff(a, b), weight: centroid(a).weight })
+
+      // Preview agreement (spec gate 6). Before the thrash probe, which disposes
+      // the main renderer — the WebGPU preview borrows its GPUDevice.
+      const pvCall = (scale?: number) => page.evaluate(
+        (r) => (window as never as { __gate: { previewCapture(r: { backend: string; scale?: number }): Promise<PreviewCaptureRes> } }).__gate.previewCapture(r),
+        { backend, scale } as { backend: string; scale?: number })
+      const pvBase = await pvCall(undefined)
+      if (!pvBase.ok) throw new Error(`preview ${backend} baseline: ${pvBase.error}`)
+      const pvScaled = await pvCall(PREVIEW_SCALE)
+      if (!pvScaled.ok) throw new Error(`preview ${backend} @${PREVIEW_SCALE}: ${pvScaled.error}`)
+      const pvBaseFrame = toFrame(pvBase)
+      const pvScaledFrame = toFrame(pvScaled)
+      savePng(`preview-${backend}-full.png`, pvBaseFrame)
+      savePng(`preview-${backend}-scaled.png`, pvScaledFrame)
+      previewRows.push({
+        backend,
+        base: centroid(pvBaseFrame),
+        scaled: centroid(pvScaledFrame),
+        planResolutions: pvScaled.planResolutions,
+        passCount: pvScaled.passCount,
+        intermediates: pvScaled.intermediates,
+        diffVsBase: countByteDiffs(pvBaseFrame, pvScaledFrame),
+        width: pvScaled.width,
+        height: pvScaled.height,
+      })
+      console.log(`  preview ${backend}: intermediates=${pvScaled.intermediates.join(',') || '(none)'} diff=${countByteDiffs(pvBaseFrame, pvScaledFrame)}`)
 
       // Pool thrash, last: it hooks prototypes and disposes the renderer.
       const th = await page.evaluate((r) => (window as never as { __gate: { thrash(r: { backend: string; frames: number }): Promise<ThrashRes> } }).__gate.thrash(r), { backend, frames: 60 })
@@ -888,6 +1150,49 @@ async function main() {
     })
   }
 
+  // --- Gate 4: preview agreement (spec gate 6) ---------------------------
+  // A run that exercised no preview backend proved nothing about previews, so it
+  // fails rather than reading green — same rule as the engine and rig halves.
+  test('at least one preview backend was exercised', () => {
+    assert(previewRows.length > 0,
+      'no preview backend was driven — the preview half of the resolution contract is UNVERIFIED, so this fails rather than reading green')
+  })
+  for (const row of previewRows) {
+    test(`preview/${row.backend}: a scaled pass does not move the thumbnail's content`, () => {
+      assert(row.base.weight > 0 && row.base.max > 32,
+        `unscaled thumbnail is blank (max ${row.base.max}) — nothing was measured`)
+      assert(row.scaled.weight > 0 && row.scaled.max > 32,
+        `scaled thumbnail is blank (max ${row.scaled.max}) — the scaled pass produced nothing`)
+      assert(row.width === PREVIEW_SIZE && row.height === PREVIEW_SIZE,
+        `thumbnail came back ${row.width}x${row.height}, not ${PREVIEW_SIZE}x${PREVIEW_SIZE} — the FINAL pass must stay pinned to the readback target`)
+      assert(row.passCount >= 2, `expected a multi-pass preview, got ${row.passCount} pass(es)`)
+      assert(row.planResolutions[0] === PREVIEW_SCALE,
+        `preview pass 0 should carry resolution ${PREVIEW_SCALE}, compile says ${JSON.stringify(row.planResolutions)}`)
+      // THE anti-vacuity check. A preview that ignored `resolution` outright
+      // would render both thumbnails identically and sail through every position
+      // metric below; only the allocated size tells the two apart.
+      const want = `${Math.round(PREVIEW_SIZE * PREVIEW_SCALE)}x${Math.round(PREVIEW_SIZE * PREVIEW_SCALE)}`
+      assert(row.intermediates[0] === want,
+        `the preview renderer allocated ${JSON.stringify(row.intermediates)} for a scale of ${PREVIEW_SCALE} — expected ${want}, so the scale was not applied`)
+      assert(row.diffVsBase > 0,
+        'the scaled thumbnail is byte-identical to the unscaled one — this comparison is a shader against itself, not a test')
+      const dx = Math.abs(row.scaled.cx - row.base.cx)
+      const dy = Math.abs(row.scaled.cy - row.base.cy)
+      assert(dx < PIN_TOL_PX && dy < PIN_TOL_PX,
+        `thumbnail centroid moved (${dx.toFixed(3)}, ${dy.toFixed(3)}) px — the preview's anchor must not move when a pass is rescaled`)
+    })
+    // The comparison above would also pass if BOTH thumbnails were wrong in the
+    // same way, so pin the unscaled one to the analytic answer as well — the
+    // same second check the engine half makes.
+    test(`preview/${row.backend}: the blob lands where the preview's centre anchor says`, () => {
+      const p = predictedPreviewCentre()
+      const dx = Math.abs(row.base.cx - p.cx)
+      const dy = Math.abs(row.base.cy - p.cy)
+      assert(dx < PIN_TOL_PX && dy < PIN_TOL_PX,
+        `centroid (${row.base.cx.toFixed(2)}, ${row.base.cy.toFixed(2)}) vs predicted (${p.cx}, ${p.cy}) — off by (${dx.toFixed(3)}, ${dy.toFixed(3)}) px`)
+    })
+  }
+
   // --- Gate 1/2 in the RIG, plus rig↔engine agreement --------------------
   for (const row of rigRows) {
     test(`rig/${row.backend} anchor ${row.anchor} @scale ${row.scale}: scaled pass does not move content`, () => {
@@ -942,6 +1247,9 @@ async function main() {
     const tl = engineBase.get(`${backend}/tl`)!
     console.log(`  engine/${backend}: anchor tl centroid (${tl.cx.toFixed(3)}, ${tl.cy.toFixed(3)}) vs predicted (${predictedCentre([0, 0]).cx}, ${predictedCentre([0, 0]).cy}); worst anchor offset ${off.toFixed(4)} px; smallest scaled-vs-full differing-byte count ${minDiff}`)
   }
+  for (const row of previewRows) {
+    console.log(`  preview/${row.backend}: centroid full (${row.base.cx.toFixed(3)}, ${row.base.cy.toFixed(3)}) vs scaled (${row.scaled.cx.toFixed(3)}, ${row.scaled.cy.toFixed(3)}); intermediate ${row.intermediates.join(',')}; ${row.diffVsBase} differing bytes`)
+  }
   if (rigVsEngine.length) {
     const d = Math.max(...rigVsEngine.map((p) =>
       Math.max(Math.abs(p.rig.cx - p.engine.cx), Math.abs(p.rig.cy - p.engine.cy))))
@@ -951,4 +1259,10 @@ async function main() {
   await run('pass-resolution-gpu')
 }
 
-main()
+// Anything that throws BEFORE main()'s try — mkdirSync on an unwritable
+// reports/ dir, an import failure — would otherwise surface as an unhandled
+// rejection with a zero exit code, i.e. a gate failure that reads as green.
+main().catch((e) => {
+  console.error(`✗ pass-resolution-gpu: ${e instanceof Error ? e.stack ?? e.message : String(e)}`)
+  process.exit(1)
+})
