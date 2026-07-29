@@ -223,9 +223,11 @@ out of scope here.
 
 ## Error handling
 
-- Non-finite, `≤ 0`, or absent `resolution` → `1.0`, with a `console.warn` identifying the
-  invalid value. The sizing helper takes no pass identity in its signature — a caller that
-  wants the pass named in the log has to do that itself.
+- Absent `resolution` → `1.0`, silently. This is the common "no scale declared" case, not an
+  error, so it does not warn.
+- Non-finite or `≤ 0` `resolution` → `1.0`, with a `console.warn` identifying the invalid
+  value. The sizing helper takes no pass identity in its signature — a caller that wants the
+  pass named in the log has to do that itself.
 - Clamp `s` to `(0, 4]`; clamp the resulting pixel size to `[1, maxTex]` in the main
   renderers and `[4, maxTex]` in the preview renderers (see above).
 - A scale that would exceed device limits clamps and warns rather than failing the plan —

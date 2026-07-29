@@ -98,6 +98,15 @@ test('maxTexture clamp must not desync the axes — 5K canvas @ dpr2 vs an 8192 
   assert(s.width === 8192, `X should clamp to maxTexture: got ${s.width}`)
   assert(s.height === 4608, `Y must scale by the SAME effective ratio as X: got ${s.height}`)
   assertClose(ratioX, ratioY, 1e-9, `axis ratios diverged: X=${ratioX} Y=${ratioY}`)
+  // Note on what this pair can and can't prove: 10240 and 5760 both scale to
+  // clean integers at sEff=0.8 (8192 and 4608 exactly), so ratioX and ratioY
+  // come out EXACTLY equal for this input. That makes these two assertions a
+  // solid check that the axes stayed in sync — the desync bug this test
+  // targets — but NOT a check of which axis dpr is actually derived from: a
+  // width/height mixup in the dpr formula would produce the identical number
+  // either way and pass here regardless. The "non-square canvas whose axes
+  // round differently" test below is the one built to catch that mixup,
+  // using inputs where ratioX and ratioY differ.
   assertClose(s.dpr, D * ratioX, 1e-12, 'dpr must match the X ratio (true by definition)')
   assertClose(s.dpr, D * ratioY, 1e-9, 'dpr must ALSO match the Y ratio — this is the actual bug')
 
@@ -133,7 +142,19 @@ test('maxTexture clamp on a non-square canvas whose axes round differently', () 
   assert(s.width === 4000, `X should clamp to maxTexture: got ${s.width}`)
   assert(s.height > 3990 && s.height < 4000, `Y should be unclamped, near but under 4000: got ${s.height}`)
   assertClose(ratioX, ratioY, 1e-4, `axis ratios diverged beyond rounding: X=${ratioX} Y=${ratioY}`)
-  assertClose(s.dpr, D * ratioY, 1e-4, 'dpr (from X) must still track Y within rounding, not within 0.4%')
+  // dpr is DEFINED as baseDpr * (width / canvasWidth) = D * ratioX, so this
+  // must hold to float precision, not just "closely" — a tight tolerance
+  // here is a real check, not a formality.
+  assertClose(s.dpr, D * ratioX, 1e-12, 'dpr must equal D * ratioX exactly — that is its definition')
+  // Fix 2 (2026-07-29 review pass 2): the assertion this replaced compared
+  // dpr to D * ratioY at 1e-4 tolerance, which a height-derived dpr also
+  // satisfies trivially (exact match, diff 0) — it could never fail for the
+  // width/height mixup it was meant to catch. These inputs are deliberately
+  // chosen so the two candidates differ by ~8e-6 (width-derived
+  // 3.996003996003996 vs height-derived 3.995995995995996), which is what
+  // gives this assertion its discriminating power.
+  assert(Math.abs(s.dpr - D * ratioY) > 1e-9,
+    `dpr must NOT equal the height-derived D * ratioY: dpr=${s.dpr}, D*ratioY=${D * ratioY}`)
 })
 
 test('degenerate scales fall back to 1.0', () => {

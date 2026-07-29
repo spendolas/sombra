@@ -58,12 +58,22 @@ export function normalisePassScale(scale: number | undefined): number {
  * to final integer rounding.
  *
  * If the ceiling and floor can't both be satisfied for a given canvas aspect
- * (an extreme aspect ratio against a tight `maxTexture`) — not reachable by
- * any canvas size / texture-limit combination this application actually
- * hits — the ceiling wins: `maxTexture` is a hardware limit that must never
- * be exceeded, while `minPx` is only a soft quality floor. In that fallback
- * the shorter axis may land below `minPx`; this is accepted rather than given
- * its own recovery path.
+ * ratio (`sFloor > sCeiling` — an aspect ratio beyond `maxTexture / minPx`),
+ * the ceiling wins: `sEff = sCeiling`, since `maxTexture` is a hardware limit
+ * that must never be exceeded, while `minPx` is only a soft quality floor.
+ * At that `sEff` the longer axis lands exactly on the ceiling, but the
+ * shorter axis would fall under `minPx` — so the final per-axis `clamp()`
+ * below forces it back UP to `minPx` instead, and the two axes no longer
+ * share one effective scale. Concretely, `passTargetSize(1, 8192, 2, 2, 8192,
+ * 4)` returns `{ width: 8192, height: 4, dpr: 2 }`: ratioX = 8192/8192 = 1
+ * but ratioY = 4/2 = 2, so `dpr` — always derived from width, correct for X
+ * by construction — is silently wrong for Y (should be 4, is 2). This branch
+ * is not reachable by any canvas size / texture-limit combination this
+ * application's callers actually hit: the main renderers call with
+ * `minPx = 1` and `maxTexture >= 4096`, which needs an aspect ratio beyond
+ * 4096:1 to trigger, and the preview renderers always call with a square
+ * 80×80 canvas. Documented here so a future reader recognises this as an
+ * accepted corner, not an oversight.
  */
 export function passTargetSize(
   scale: number | undefined,
@@ -88,7 +98,10 @@ export function passTargetSize(
   const sEff = Math.min(sCeiling, Math.max(s, sFloor))
 
   // Final clamp is a no-op in every reachable case (sEff already respects
-  // both bounds); it only guards float rounding at the boundary.
+  // both bounds); it only guards float rounding at the boundary. The one
+  // case where it does real work — forcing the shorter axis up to `minPx`
+  // when the ceiling/floor conflict — is the unreachable fallback documented
+  // above.
   const clamp = (v: number) => Math.min(hi, Math.max(lo, Math.round(v)))
   const width = clamp(canvasWidth * sEff)
   const height = clamp(canvasHeight * sEff)
