@@ -9,6 +9,7 @@ import { REFERENCE_SIZE as SHARED_REFERENCE_SIZE } from '../renderer/constants'
 import type { RenderPlan } from '../compiler/glsl-generator'
 import type { UniformSpec } from '../nodes/types'
 import type { ShaderRenderer, QualityTier } from '../renderer/types'
+import { passTargetSize, type PassTargetSize } from '../renderer/pass-size'
 
 const VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -49,6 +50,8 @@ interface PassState {
   dirty: boolean
   isTimeLive: boolean
   textureFilter: number  // gl.LINEAR or gl.NEAREST
+  /** Target scale for this pass. Undefined = full canvas resolution. */
+  resolution?: number
 }
 
 interface FBOSlot {
@@ -120,6 +123,7 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
   // [P9] GPU capabilities
   private maxTextureUnits = 16
   private maxIntermediateTextures = 8
+  private maxTextureSize = 4096
 
   // Image textures (uploaded by image nodes)
   private imageTextures = new Map<string, WebGLTexture>()
@@ -180,6 +184,7 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
   private detectGPUCaps() {
     const gl = this.gl
     const maxTexSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) as number
+    this.maxTextureSize = maxTexSize
     this.maxTextureUnits = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS) as number
     const rendererStr = gl.getParameter(gl.RENDERER) as string
 
@@ -333,19 +338,30 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
   // FBO management
   // -----------------------------------------------------------------------
 
-  /** Allocate FBO slots for intermediate passes. */
-  private allocateFBOs(count: number, width: number, height: number) {
+  /**
+   * Target size and matching u_dpr for every pass, honouring
+   * RenderPass.resolution. `w`/`h` are the full render size in device px.
+   */
+  private passTargetSizes(w: number, h: number): PassTargetSize[] {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2) * this.currentDprScale
+    return this.passStates.map((ps) =>
+      passTargetSize(ps.resolution, w, h, dpr, this.maxTextureSize))
+  }
+
+  /** Allocate FBO slots for intermediate passes, one per requested size. */
+  private allocateFBOs(sizes: Array<{ width: number; height: number }>) {
     const gl = this.gl
 
     // Clean up existing
     this.destroyFBOs()
 
-    const cappedCount = Math.min(count, this.maxIntermediateTextures)
-    if (count > cappedCount) {
-      console.warn(`[Sombra] Graph needs ${count} intermediate textures but cap is ${this.maxIntermediateTextures}. Some passes may not render.`)
+    const cappedCount = Math.min(sizes.length, this.maxIntermediateTextures)
+    if (sizes.length > cappedCount) {
+      console.warn(`[Sombra] Graph needs ${sizes.length} intermediate textures but cap is ${this.maxIntermediateTextures}. Some passes may not render.`)
     }
 
     for (let i = 0; i < cappedCount; i++) {
+      const { width, height } = sizes[i]
       const tex = gl.createTexture()!
       gl.bindTexture(gl.TEXTURE_2D, tex)
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
@@ -365,21 +381,25 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
     }
   }
 
-  /** Resize all FBO textures to match current canvas size. */
+  /** Resize FBO textures to each pass's own target size. */
   private resizeFBOs() {
     const gl = this.gl
     const dpr = Math.min(window.devicePixelRatio || 1, 2) * this.currentDprScale
     const w = Math.floor(this.canvas.clientWidth * dpr)
     const h = Math.floor(this.canvas.clientHeight * dpr)
+    const sizes = this.passTargetSizes(w, h)
 
     let resized = false
-    for (const fbo of this.fboPool) {
-      if (fbo.width === w && fbo.height === h) continue
+    for (let i = 0; i < this.fboPool.length; i++) {
+      const fbo = this.fboPool[i]
+      const want = sizes[i]
+      if (!want) continue
+      if (fbo.width === want.width && fbo.height === want.height) continue
       gl.bindTexture(gl.TEXTURE_2D, fbo.texture)
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, want.width, want.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
       gl.bindTexture(gl.TEXTURE_2D, null)
-      fbo.width = w
-      fbo.height = h
+      fbo.width = want.width
+      fbo.height = want.height
       resized = true
     }
 
@@ -508,6 +528,7 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
           dirty: true,
           isTimeLive: pass.isTimeLive,
           textureFilter: glFilter,
+          resolution: pass.resolution,
         })
       }
 
@@ -525,7 +546,8 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
       const dpr = Math.min(window.devicePixelRatio || 1, 2) * this.currentDprScale
       const w = Math.floor(this.canvas.clientWidth * dpr) || 1
       const h = Math.floor(this.canvas.clientHeight * dpr) || 1
-      this.allocateFBOs(intermediateCount, w, h)
+      // passStates is already assigned above, so passTargetSizes sees this plan.
+      this.allocateFBOs(this.passTargetSizes(w, h).slice(0, intermediateCount))
 
       // Clear single-pass program ref (it's in the cache now)
       this.program = null
@@ -842,9 +864,17 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
     // One guarded revalidation covers every path, mirroring WebGPU, where
     // ensureIntermediateTextures() is already the first statement of its
     // equivalent. Guarded because resizeFBOs() is a no-op only when nothing moved.
-    if (this.fboPool.length > 0 && (this.fboPool[0].width !== w || this.fboPool[0].height !== h)) {
-      this.resizeFBOs()
+    //
+    // Compare EVERY pass, not just fboPool[0]. With mixed per-pass scales a
+    // single comparison mis-fires and the pool is destroyed and recreated every
+    // frame — the bug already recorded at src/webgpu/renderer.ts:456.
+    if (this.fboPool.length > 0) {
+      const want = this.passTargetSizes(w, h)
+      const stale = this.fboPool.some((f, i) =>
+        !!want[i] && (f.width !== want[i].width || f.height !== want[i].height))
+      if (stale) this.resizeFBOs()
     }
+    const sizes = this.passTargetSizes(w, h)
 
     // [P3] Mark time-live passes + downstream as dirty (animation)
     if (this.animated) {
@@ -864,20 +894,23 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
       // Last pass always renders (to screen)
       if (!ps.dirty && isLast && !this.animated) continue
 
+      let tw = w, th = h, tdpr = dpr
       if (isLast) {
-        // Render to screen
+        // Render to screen — always full canvas resolution.
         gl.bindFramebuffer(gl.FRAMEBUFFER, null)
-        gl.viewport(0, 0, w, h)
       } else {
-        // Render to FBO
+        // Render to FBO, at this pass's own target size (RenderPass.resolution).
         const fbo = this.fboPool[i]
         if (!fbo) continue
         gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.framebuffer)
-        gl.viewport(0, 0, fbo.width, fbo.height)
+        tw = fbo.width
+        th = fbo.height
+        tdpr = sizes[i]?.dpr ?? dpr
       }
+      gl.viewport(0, 0, tw, th)
 
       gl.useProgram(ps.program)
-      this.uploadBuiltinUniforms(ps.uniforms, w, h, dpr, time)
+      this.uploadBuiltinUniforms(ps.uniforms, tw, th, tdpr, time)
 
       // Bind input textures from earlier passes
       let texUnit = 0
