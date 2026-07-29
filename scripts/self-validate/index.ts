@@ -109,7 +109,7 @@ interface ShaderCase {
 const gpuBundle: ShaderCase[] = []
 
 /** Cartesian product of enum params, capped; beyond cap fall back to one-at-a-time. */
-function enumVariants(def: NodeDefinition, cap = 24): Array<Record<string, unknown>> {
+export function enumVariants(def: NodeDefinition, cap = 24): Array<Record<string, unknown>> {
   const enums = (def.params ?? []).filter((p) => p.type === 'enum' && Array.isArray(p.options) && p.options.length > 0)
   if (enums.length === 0) return [{}]
   const total = enums.reduce((n, p) => n * p.options!.length, 1)
@@ -120,11 +120,21 @@ function enumVariants(def: NodeDefinition, cap = 24): Array<Record<string, unkno
     }
     return combos
   }
-  // one-at-a-time from defaults
+  // One-at-a-time from defaults — but a child enum set alone is often DEAD.
+  // reeded_glass has 4 enums (144 combos, over the cap), so waveShape was being
+  // varied while ribType stayed at its default 'straight' — and the wave branch only
+  // emits when ribType === 'wave'. Every triangle/square/sawtooth/chevron/u_shape and
+  // every noiseType body therefore went ungenerated, and so unvalidated on GPU.
+  // Pairing each variant with a value that satisfies its own `showWhen` fixes that.
   const out: Array<Record<string, unknown>> = [{}]
   for (const p of enums) {
     for (const o of p.options!) {
-      out.push({ [p.id]: typeof o === 'object' ? (o as { value: unknown }).value : o })
+      const v: Record<string, unknown> = { [p.id]: typeof o === 'object' ? (o as { value: unknown }).value : o }
+      const sw = (p as { showWhen?: Record<string, unknown> }).showWhen
+      if (sw) {
+        for (const [dep, want] of Object.entries(sw)) v[dep] = Array.isArray(want) ? want[0] : want
+      }
+      out.push(v)
     }
   }
   return out
