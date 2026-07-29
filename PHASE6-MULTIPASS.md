@@ -365,11 +365,29 @@ Intermediate textures don't always need full canvas resolution. Apply quality ti
 
 This means a 3-pass chain at `low` quality on 1920×1080@2x uses ~4MB per intermediate instead of ~16MB.
 
-Per-node resolution override (`RenderPass.resolution`) is implemented as of
-2026-07-29 — an optional scale factor honoured by both main renderers and both
-preview renderers. See `docs/superpowers/specs/2026-07-29-renderpass-resolution-design.md`.
-No shipped node declares a scale yet, and there is no UI for it. The quality-tier
-scaling in the table above remains unimplemented.
+**Status.** The table above *is* implemented — by `currentDprScale`, not by
+`RenderPass.resolution`. `applyTier()` (`src/webgl/renderer.ts` ~751,
+`src/webgpu/renderer.ts` ~1014) sets `ANIMATED_DPR_SCALE`/`STATIC_DPR_SCALE` to
+exactly these ratios (`low` 0.5/0.5, `medium` 0.75/0.75, `high` 1.0/1.0,
+`adaptive` 0.75 animated / 1.0 static), then folds `currentDprScale` into the
+`dpr` used for the canvas backing store (`render()`) and for every intermediate,
+calling `resizeFBOs()` / `resizeIntermediateTextures()` so the pool follows. The
+scaling is therefore **uniform**: one factor moves the final pass and all
+intermediates together, which is what the table's identical two columns describe.
+
+Per-node resolution override (`RenderPass.resolution`) is implemented separately
+as of 2026-07-29 — an optional per-pass scale factor honoured by both main
+renderers and both preview renderers. See
+`docs/superpowers/specs/2026-07-29-renderpass-resolution-design.md`. No shipped
+node declares a scale yet, and there is no UI for it.
+
+What does **not** exist is **differential** scaling: nothing connects the quality
+tier to `RenderPass.resolution`, so a tier cannot shrink intermediates while
+leaving the final pass full-size, and it cannot scale one pass of a chain more
+than another. The two mechanisms do compose by multiplication, because
+`passTargetSizes()` derives its base `dpr` from `currentDprScale`
+(`src/webgl/renderer.ts:346`, `src/webgpu/renderer.ts:455`): under `low`, a pass
+declaring `resolution: 0.5` gets half of an already-halved canvas backing store.
 
 ### P5: Async Shader Compilation
 

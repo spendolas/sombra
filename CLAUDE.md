@@ -32,6 +32,10 @@ npx tsx scripts/verify-ir-poc.ts              # GLSL vs IR-generated output pari
 npx tsx scripts/validate-wgsl-multipass.ts    # WGSL GPU compilation tests for all nodes/passes
 npx tsx scripts/schema.ts                     # Zod validation of tokens/sombra.ds.json
 
+npm run verify:pass-size          # per-pass sizing maths: the u_dpr rule that keeps auto_uv scale-invariant
+npm run verify:pass-resolution    # a node's declared per-pass scale reaches the RenderPlan on BOTH codegen paths
+npm run verify:pass-resolution:gpu  # real GPUs: pinning, scale-1 identity, pool thrash, preview agreement (needs Chrome)
+
 # Shader embed (see EMBED.md)
 npm run build:embed          # build the standalone UMD player → dist/embed/sombra-player.<version>.umd.js
 npm run verify:embed         # pure offline checks: artifact roundtrip + manifest + snippets

@@ -332,22 +332,40 @@ multiPass: {
 }
 ```
 
-Range is `(0, 4]`; above 1.0 supersamples. The framework scales `u_resolution`,
-`u_viewport` **and `u_dpr`** together, so `auto_uv`, anchor pinning and every
-px-authored param (anything you multiply by `u_dpr`) are unchanged — a scaled pass
-sees the same pattern, sampled more or less finely. Author in reference px and
-multiply by `u_dpr` as usual and scaling is free.
+Supported range is `[1/64, 4]`; above 1.0 supersamples. Values below `1/64` are
+floored to it (`PASS_SCALE_MIN` in `src/renderer/pass-size.ts`) — `0.001` becomes
+`0.015625`, silently, so don't reach for a scale as a way to disable a pass. The
+framework scales `u_resolution`, `u_viewport` **and `u_dpr`** together, so
+`auto_uv`, anchor pinning and every px-authored param (anything you multiply by
+`u_dpr`) are unchanged — a scaled pass sees the same pattern, sampled more or less
+finely. Within a pass, authoring in reference px and multiplying by `u_dpr` needs
+no change at all.
 
-Three caveats:
+Four caveats:
 
-- **The last sub-pass is pinned to canvas size, always.** `fragment_output` has
+- **A sub-pass that lands in the plan's final pass is pinned to canvas size** —
+  which, today, is every `multiPass` node's last sub-pass. `fragment_output` has
   no `textureInput` port, so it never opens a new pass — it joins whatever
   pass already feeds it. When a `multiPass` node's output reaches
   `fragment_output` with nothing else in between (the shape of every
   `multiPass` usage today), its last sub-pass lands in the plan's *final*
   pass, and both main renderers always render the final pass straight to the
   canvas at full resolution — a `resolution` returned for that index is
-  silently ignored. **Put your full-resolution sub-pass last**, not first.
+  silently ignored. Put another texture boundary downstream and the pinning
+  moves to *that* pass instead; until you do, **put your full-resolution
+  sub-pass last**, not first.
+- **`u_viewport` is YOUR target's size, never your source's.** Scaling is free
+  only where a pass and the pass it samples share a scale. At a *transition* —
+  which is what a pyramid is made of — you are doing a resample, and the
+  framework does not do it for you. `src/nodes/effect/blur.ts:122` derives its
+  tap step as `dir / u_viewport`, one texel of its **own** target: a downsample
+  sub-pass reading a full-size source takes taps 2 source texels apart, and an
+  upsample reading a quarter-size source oversamples. There is no source-size
+  uniform — the standard set is `u_time`, `u_resolution`, `u_dpr`, `u_ref_size`,
+  `u_anchor`, `u_viewport`, `u_mouse` (`src/compiler/ir/wgsl-assembler.ts`) — and
+  intermediates are plain `LINEAR` with **no mipmaps**, so one bilinear tap at 2×
+  minification aliases. A pass that changes scale must handle the mismatch
+  itself (e.g. a wider tap set, or a dedicated downsample kernel).
 - A pass is a depth group: if another node shares the pass, the larger scale
   wins and a warning is logged.
 - The `Resolution` node reports the *pass* size inside a scaled pass, not the

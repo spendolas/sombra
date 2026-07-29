@@ -193,7 +193,8 @@ is not a concern for them.
 
 ## Limitations — documented, not fixed
 
-**A `multiPass` node's last sub-pass is pinned to canvas size, always.** Neither
+**A sub-pass that lands in the plan's final pass is pinned to canvas size** —
+which today is every `multiPass` node's last sub-pass. Neither
 `fragment_output` nor its port declares `textureInput`, so it never starts a new
 pass depth — it always joins whatever pass already feeds it
 (`partitionPasses` in `src/compiler/glsl-generator.ts`). That means whenever a
@@ -259,13 +260,20 @@ out of scope here.
 
 - Absent `resolution` → `1.0`, silently. This is the common "no scale declared" case, not an
   error, so it does not warn.
-- Non-finite or `≤ 0` `resolution` → `1.0`, with a `console.warn` identifying the invalid
-  value. The sizing helper takes no pass identity in its signature — a caller that wants the
-  pass named in the log has to do that itself.
+- Non-finite or `≤ 0` `resolution` → `1.0`, **silently**. The warning this bullet
+  originally specified was removed: `normalisePassScale` is reached from `passTargetSizes`,
+  which each main renderer calls 2–3× per frame, once per pass, so a plan carrying
+  `resolution: -1` emitted hundreds of lines per second. The producer validates instead —
+  `resolvePassResolution` (`src/compiler/pass-resolution.ts`) drops non-finite and `≤ 0`
+  scales at compile time and can name the node, which the sizing helper cannot: it takes no
+  pass identity in its signature. A decoded `.ombra` artifact bypasses that check
+  (`resolution` is not validated on decode), so a corrupt plan reaches the helper directly
+  and is clamped without comment.
 - Clamp `s` to `(0, 4]`; clamp the resulting pixel size to `[1, maxTex]` in the main
   renderers and `[4, maxTex]` in the preview renderers (see above).
-- A scale that would exceed device limits clamps and warns rather than failing the plan —
-  consistent with how the existing intermediate-count cap degrades.
+- A scale that would exceed device limits **clamps silently** rather than failing the plan.
+  (The intermediate-*count* cap it was modelled on does warn; the per-pass size clamp does
+  not, for the per-frame reason above.)
 
 ## Verification gates
 
@@ -283,19 +291,32 @@ Ordered; each must pass before the next means anything.
 4. **Pool-thrash gate.** Count `createTexture`/`createFramebuffer` calls across frames with
    mixed scales; must be zero after warmup. Directly targets the `renderer.ts:456` bug.
 5. **Artifact round-trip.** `publishScene` → `decodeArtifact` preserves `resolution`.
-6. **Preview agreement.** A scaled plan's preview matches the main render downsampled.
+6. **Preview agreement.** A two-pass preview whose first pass declares `resolution: 0.5`
+   allocates a 40×40 intermediate and still lands its content on the same pixel of the
+   80×80 thumbnail. Both preview renderers are driven through their production entry
+   points — `renderMultiPassPreview` (WebGL2, GLSL) and `renderWGSLPreview` (WebGPU, WGSL)
+   — fed by `compileNodePreview`/`compileNodePreviewIR`. *Not* stated as "matches the main
+   render downsampled": that comparison is unfalsifiable at 80 px against a 256 px capture
+   through two different filter paths. The falsifiable claims are the allocated size and
+   the centroid, and the size is the load-bearing one — a preview that ignored `resolution`
+   outright produces a byte-identical thumbnail and passes every position metric.
 7. **Existing suites unchanged:** `self-validate` (433 shaders, 0 FAIL), `verify-ir-poc`
    (85), `validate-wgsl-multipass` (159), `verify-wired-texture-branch` (53),
    `verify:embed` (7), `tsc`, `lint`.
 
-Gates 2–4 are new scripts under `scripts/`, reusing the full-resolution capture harness in
-`scripts/blur-bakeoff/lib/`.
+Gates 2–4 and 6 all live in `scripts/verify-pass-resolution-gpu.ts`, reusing the
+full-resolution capture harness in `scripts/blur-bakeoff/lib/`.
 
 **Scope of `scripts/verify-pass-resolution-gpu.ts`.** It runs headless, so
-`devicePixelRatio` is 1 throughout — it does not exercise a `dpr > 1` capture. It also
-drives only the two main renderers (`WebGL2ShaderRenderer`, `WebGPUShaderRenderer`); the
-preview renderers are not covered by this gate. Noted here so its green pass count isn't
-over-read as covering either.
+`devicePixelRatio` is 1 throughout — it does not exercise a `dpr > 1` capture on any half.
+It drives both main renderers (`WebGL2ShaderRenderer`, `WebGPUShaderRenderer`) and, since
+gate 6 landed, both preview renderers (`WebGL2PreviewRenderer`, `WebGPUPreviewRenderer`).
+Noted here so its green pass count isn't over-read.
+
+Both halves of gate 6 were shown to fail on demand before being trusted: forcing the
+preview renderers to ignore `resolution` left the centroid at exactly (51.500, 51.500) with
+**0** differing bytes and was caught only by the 40×40 size assertion; keeping the size but
+pinning the scaled pass's `u_dpr` to 1.0 moved the thumbnail's content 8.699 px.
 
 ## Files
 
@@ -310,5 +331,5 @@ over-read as covering either.
 | `src/webgl/preview-renderer.ts` | per-pass sizes in `ensurePassFBOs`; per-pass uniforms |
 | `src/webgpu/preview-renderer.ts` | same |
 | `PHASE6-MULTIPASS.md` | fix the false "supported in the data structure" claim (line 368) |
-| `scripts/` | gates 2, 3, 4 |
+| `scripts/` | gates 2, 3, 4, 6 |
 | `src/embed/artifact.ts` | none — verified by gate 5 |
