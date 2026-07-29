@@ -13,7 +13,7 @@ import { initializeNodeLibrary } from '../src/nodes'
 import { nodeRegistry } from '../src/nodes/registry'
 import { compileGraph } from '../src/compiler/glsl-generator'
 import { compileGraphIR } from '../src/compiler/ir-compiler'
-import { declare, variable } from '../src/compiler/ir/types'
+import { declare, variable, binary, textureSample } from '../src/compiler/ir/types'
 import { test, run, assert } from './blur-bakeoff/lib/test-util'
 import type { Node, Edge } from '@xyflow/react'
 import type { NodeDefinition } from '../src/nodes/types'
@@ -52,12 +52,38 @@ const testNode: NodeDefinition = {
   inputs: [{ id: 'source', label: 'Source', type: 'color', textureInput: true, default: [0, 0, 0, 1] }],
   outputs: [{ id: 'color', label: 'Color', type: 'color' }],
   params: [],
-  glsl: (ctx) => `vec4 ${ctx.outputs.color} = ${ctx.inputs.source};`,
-  ir: (ctx) => ({
-    statements: [declare(ctx.outputs.color, 'vec4', variable(ctx.inputs.source))],
-    uniforms: [],
-    standardUniforms: new Set<string>(),
-  }),
+  // A `textureInput: true` port is read through `ctx.textureSamplers`, NEVER
+  // `ctx.inputs`: once a port is satisfied by a texture boundary the compiler
+  // records the sampler name and returns before filling `inputs[]`
+  // (src/compiler/glsl-generator.ts, `resolvedInputs.forEach`). Reading
+  // `ctx.inputs.source` here emitted `vec4 … = undefined;` into all three
+  // sub-pass shaders — invalid GLSL that the plan-field assertions below never
+  // looked at. This file is the example a future author copies, so it uses the
+  // real idiom: src/nodes/distort/pixelate.ts:68.
+  glsl: (ctx) => {
+    const sampler = ctx.textureSamplers?.source
+    if (!sampler) return `vec4 ${ctx.outputs.color} = vec4(0.0, 0.0, 0.0, 1.0);`
+    ctx.uniforms.add('u_viewport')
+    return `vec4 ${ctx.outputs.color} = texture(${sampler}, gl_FragCoord.xy / u_viewport);`
+  },
+  ir: (ctx) => {
+    const sampler = ctx.textureSamplers?.source
+    if (!sampler) {
+      return {
+        statements: [declare(ctx.outputs.color, 'vec4', variable('vec4(0.0, 0.0, 0.0, 1.0)'))],
+        uniforms: [],
+        standardUniforms: new Set<string>(),
+      }
+    }
+    return {
+      statements: [
+        declare(ctx.outputs.color, 'vec4', textureSample(sampler,
+          binary('/', variable('gl_FragCoord.xy'), variable('u_viewport'), 'vec2'))),
+      ],
+      uniforms: [],
+      standardUniforms: new Set<string>(['u_viewport']),
+    }
+  },
 }
 
 nodeRegistry.register(testNode)
@@ -77,6 +103,12 @@ test('GLSL plan carries a resolution per pass', () => {
   const last = plan.passes[plan.passes.length - 1]
   assert(last.resolution === undefined || last.resolution === 1,
     `final pass must be full resolution, got ${last.resolution}`)
+  // And the emitted shaders must be real GLSL. The plan-field assertions above
+  // pass whatever the generator writes, so they said nothing while every
+  // sub-pass carried `vec4 … = undefined;`.
+  const bad = plan.passes.filter((p) => p.fragmentShader.includes('undefined'))
+  assert(bad.length === 0,
+    `${bad.length} pass shader(s) contain "undefined" — the generator read a textureInput port through ctx.inputs`)
 })
 
 test('WGSL plan carries the same resolutions', () => {

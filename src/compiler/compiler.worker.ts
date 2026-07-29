@@ -83,6 +83,14 @@ export interface SerializedIRPreviewResult {
     inputTextures: Array<{ passIndex: number; samplerName: string }>
     isTimeLive: boolean
     textureFilter?: 'linear' | 'nearest'
+    /**
+     * Mirrors `RenderPass.resolution` so a thumbnail scales its intermediates
+     * the way the main canvas does. Declared even though `serializeIRResult`
+     * spreads the whole `WGSLPassOutput`: if that ever becomes a field
+     * whitelist, an undeclared field goes missing silently and the preview
+     * quietly loses the scale.
+     */
+    resolution?: number
   }>
   userUniforms: Array<{
     name: string

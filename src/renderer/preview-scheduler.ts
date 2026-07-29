@@ -508,7 +508,7 @@ export class PreviewScheduler {
  * into WGSLPreviewPass[] with proper Map offsets.
  */
 function deserializeWGSLPasses(result: SerializedIRPreviewResult): WGSLPreviewPass[] {
-  return result.wgslPasses.map((pass: SerializedIRPreviewResult['wgslPasses'][number] & { resolution?: number }) => {
+  return result.wgslPasses.map((pass: SerializedIRPreviewResult['wgslPasses'][number]) => {
     // Reconstruct Map from Record
     const offsets = new Map<string, number>(Object.entries(pass.uniformLayout.offsets))
     const uniformLayout: UniformBufferLayout = {
@@ -531,12 +531,6 @@ function deserializeWGSLPasses(result: SerializedIRPreviewResult): WGSLPreviewPa
       textureBindings,
       inputTextures: pass.inputTextures,
       userUniforms: passUserUniforms,
-      // SerializedIRPreviewResult (compiler.worker.ts) doesn't declare `resolution`
-      // on its wgslPasses shape — that file isn't part of this task's edit set —
-      // but serializeIRResult() spreads WGSLPassOutput (which does carry it, see
-      // ir-compiler.ts) straight through untyped, so the value is present at
-      // runtime. Widened the parameter type above to read it without touching
-      // compiler.worker.ts.
       resolution: pass.resolution,
     }
   })

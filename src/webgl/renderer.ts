@@ -868,13 +868,18 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
     // Compare EVERY pass, not just fboPool[0]. With mixed per-pass scales a
     // single comparison mis-fires and the pool is destroyed and recreated every
     // frame — the bug already recorded at src/webgpu/renderer.ts:456.
+    //
+    // Computed ONCE and reused for both the staleness check and the per-pass
+    // uniform upload below: `passTargetSizes` reads only w/h, each pass's
+    // declared scale, `currentDprScale` and `maxTextureSize`, and `resizeFBOs()`
+    // touches none of those — so a second call could only ever return the same
+    // array, at the cost of another `passStates.length` allocations every frame.
+    const sizes = this.passTargetSizes(w, h)
     if (this.fboPool.length > 0) {
-      const want = this.passTargetSizes(w, h)
       const stale = this.fboPool.some((f, i) =>
-        !!want[i] && (f.width !== want[i].width || f.height !== want[i].height))
+        !!sizes[i] && (f.width !== sizes[i].width || f.height !== sizes[i].height))
       if (stale) this.resizeFBOs()
     }
-    const sizes = this.passTargetSizes(w, h)
 
     // [P3] Mark time-live passes + downstream as dirty (animation)
     if (this.animated) {

@@ -158,6 +158,15 @@ test('maxTexture clamp on a non-square canvas whose axes round differently', () 
 })
 
 test('degenerate scales fall back to 1.0', () => {
+  // …and do so SILENTLY. `normalisePassScale` used to `console.warn` on each of
+  // these four inputs, and this loop printed all four lines on every run. It is
+  // reached from `passTargetSizes`, which both main renderers call 2–3× per
+  // frame, once per pass — so a plan carrying `resolution: -1` (a corrupt or
+  // hand-edited `.ombra` artifact; `resolution` is not validated on decode)
+  // emitted hundreds of lines per second. Validation lives in the producer
+  // instead, `resolvePassResolution`, which can name the offending node.
+  // Nothing here ever asserted on the warnings — only on the values below, which
+  // are unchanged.
   for (const bad of [0, -1, NaN, Infinity]) {
     assert(normalisePassScale(bad) === 1, `${bad} should normalise to 1`)
   }

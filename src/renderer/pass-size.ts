@@ -28,13 +28,22 @@ export interface PassTargetSize {
   dpr: number
 }
 
-/** Clamp a declared scale into range, falling back to 1.0 for nonsense. */
+/**
+ * Clamp a declared scale into range, falling back to 1.0 for nonsense.
+ *
+ * SILENT on purpose. This runs inside `passTargetSizes`, which both main
+ * renderers call 2–3× per frame — once per pass — so a warning here on a plan
+ * carrying `resolution: -1` would emit hundreds of lines per second. Validation
+ * belongs to the producer, which has the node identity to name:
+ * `resolvePassResolution` (src/compiler/pass-resolution.ts) already drops
+ * non-finite and `<= 0` scales at compile time and warns with the node type. A
+ * decoded `.ombra` artifact does not go through that check, so a corrupt or
+ * hand-edited plan reaches this helper directly — it is clamped to a safe 1.0
+ * either way, which is the behaviour that matters at 60 fps.
+ */
 export function normalisePassScale(scale: number | undefined): number {
   if (scale === undefined) return 1
-  if (!Number.isFinite(scale) || scale <= 0) {
-    console.warn(`[Sombra] pass resolution ${scale} is not a positive finite number — using 1.0`)
-    return 1
-  }
+  if (!Number.isFinite(scale) || scale <= 0) return 1
   return Math.min(PASS_SCALE_MAX, Math.max(PASS_SCALE_MIN, scale))
 }
 
