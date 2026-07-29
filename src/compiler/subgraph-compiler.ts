@@ -21,6 +21,7 @@ import {
 } from './glsl-generator'
 import type { TextureBoundaryEdge } from './glsl-generator'
 import { expandMultiPassNodes } from './expand-passes'
+import { resolvePassResolution } from './pass-resolution'
 
 /** Maximum passes for preview rendering. Beyond this, show placeholder. [P8] */
 const MAX_PREVIEW_PASSES = 6
@@ -29,6 +30,8 @@ export interface PreviewPass {
   fragmentShader: string
   userUniforms: UniformSpec[]
   inputTextures: Record<string, number>
+  /** Mirrors RenderPass.resolution — see glsl-generator.ts. */
+  resolution?: number
 }
 
 export interface PreviewCompilationResult {
@@ -193,6 +196,10 @@ function compileMultiPassPreview(
     const passNodeIds = passPartition[passIdx]
     const isLastPass = passIdx === passPartition.length - 1
 
+    // Resolved once per pass: relay passes below share the primary's geometry,
+    // because they render the same fragment into a same-sized target.
+    const passResolution = resolvePassResolution(passNodeIds, nodeMap)
+
     const uniforms = new Set<string>()
     const functions: string[] = []
     const functionRegistry = new Map<string, string>()
@@ -295,7 +302,7 @@ function compileMultiPassPreview(
         for (const b of groups[0]) samplerCompiledIndex.set(b.samplerName, primaryIdx)
       }
 
-      passes.push({ fragmentShader, userUniforms: passUserUniforms, inputTextures })
+      passes.push({ fragmentShader, userUniforms: passUserUniforms, inputTextures, resolution: passResolution })
 
       // --- Relay passes (remaining groups) ---
       for (let g = 1; g < groups.length; g++) {
@@ -307,7 +314,7 @@ function compileMultiPassPreview(
         )
         const relayIdx = passes.length
         for (const b of groups[g]) samplerCompiledIndex.set(b.samplerName, relayIdx)
-        passes.push({ fragmentShader: relayShader, userUniforms: passUserUniforms, inputTextures })
+        passes.push({ fragmentShader: relayShader, userUniforms: passUserUniforms, inputTextures, resolution: passResolution })
       }
     } else {
       // Last pass: output target node's value
@@ -321,7 +328,7 @@ function compileMultiPassPreview(
 
       if (uniforms.has('u_time')) globalTimeLive = true
 
-      passes.push({ fragmentShader, userUniforms: passUserUniforms, inputTextures })
+      passes.push({ fragmentShader, userUniforms: passUserUniforms, inputTextures, resolution: passResolution })
     }
 
     allUserUniforms.push(...passUserUniforms)

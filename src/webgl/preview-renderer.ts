@@ -5,6 +5,7 @@
  */
 
 import type { PreviewRenderer as IPreviewRenderer } from '../renderer/types'
+import { passTargetSize } from '../renderer/pass-size'
 
 const VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -305,13 +306,14 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
   }
 
   /**
-   * Render a multi-pass preview chain. One 80×80 FBO per intermediate pass —
-   * relay passes read from non-adjacent passes, so ping-pong (index % 2)
-   * aliases sources and creates GL feedback loops. Mirrors the main renderer
-   * and the WebGPU preview (commit f4aabdf). [P8]
+   * Render a multi-pass preview chain. One FBO per intermediate pass, sized to
+   * that pass's own RenderPass.resolution — relay passes read from
+   * non-adjacent passes, so ping-pong (index % 2) aliases sources and creates
+   * GL feedback loops. Mirrors the main renderer and the WebGPU preview
+   * (commit f4aabdf). [P8]
    */
   async renderMultiPassPreview(
-    passes: Array<{ fragmentShader: string; uniforms: UniformUpload[]; inputTextures: Record<string, number> }>,
+    passes: Array<{ fragmentShader: string; uniforms: UniformUpload[]; inputTextures: Record<string, number>; resolution?: number }>,
   ): Promise<ImageBitmap | null> {
     const gl = this.gl
     if (passes.length === 0) return null
@@ -321,8 +323,14 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
       return this.renderPreview(passes[0].fragmentShader, passes[0].uniforms)
     }
 
-    // One FBO per intermediate pass (lazy, grows and is reused across calls)
-    this.ensurePassFBOs(passes.length - 1)
+    // Preview floors at 4px rather than the main renderer's 1px: a 1x1
+    // intermediate carries no usable signal at thumbnail scale, and previews are
+    // advisory. Deliberate divergence from the main renderers.
+    const sizes = passes.map((p) =>
+      passTargetSize(p.resolution, PREVIEW_SIZE, PREVIEW_SIZE, 1, PREVIEW_SIZE * 4, 4))
+    // One FBO per intermediate pass (lazy, grows and is reused across calls),
+    // each at its own pass's target size.
+    this.ensurePassFBOs(sizes.slice(0, passes.length - 1))
 
     const time = (Date.now() - this.startTime) / 1000
 
@@ -355,26 +363,30 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
       if (this.hasMissingImageTexture(pass.fragmentShader)) return null
 
       // Bind target: last pass → main FBO, intermediate → its own pass FBO
+      let tw = PREVIEW_SIZE, th = PREVIEW_SIZE, tdpr = 1
       if (isLast) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo)
       } else {
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.passFBOs[i].framebuffer)
+        tw = this.passFBOs[i].width
+        th = this.passFBOs[i].height
+        tdpr = sizes[i]?.dpr ?? 1
       }
 
-      gl.viewport(0, 0, PREVIEW_SIZE, PREVIEW_SIZE)
+      gl.viewport(0, 0, tw, th)
       gl.useProgram(program)
 
       // Built-in uniforms
       const uTime = gl.getUniformLocation(program, 'u_time')
       if (uTime) gl.uniform1f(uTime, time)
       const uRes = gl.getUniformLocation(program, 'u_resolution')
-      if (uRes) gl.uniform2f(uRes, PREVIEW_SIZE, PREVIEW_SIZE)
+      if (uRes) gl.uniform2f(uRes, tw, th)
       const uRefSize = gl.getUniformLocation(program, 'u_ref_size')
       if (uRefSize) gl.uniform1f(uRefSize, REFERENCE_SIZE)
       const uDpr = gl.getUniformLocation(program, 'u_dpr')
-      if (uDpr) gl.uniform1f(uDpr, 1.0)
+      if (uDpr) gl.uniform1f(uDpr, tdpr)
       const uVp = gl.getUniformLocation(program, 'u_viewport')
-      if (uVp) gl.uniform2f(uVp, PREVIEW_SIZE, PREVIEW_SIZE)
+      if (uVp) gl.uniform2f(uVp, tw, th)
       const uAnchor = gl.getUniformLocation(program, 'u_anchor')
       if (uAnchor) gl.uniform2f(uAnchor, 0.5, 0.5)
 
@@ -427,11 +439,18 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
   }
 
   // Per-pass FBOs for multi-pass preview (shared, grown on demand) [P8]
-  private passFBOs: Array<{ framebuffer: WebGLFramebuffer; texture: WebGLTexture }> = []
+  private passFBOs: Array<{ framebuffer: WebGLFramebuffer; texture: WebGLTexture; width: number; height: number }> = []
 
-  private ensurePassFBOs(count: number) {
+  /**
+   * One FBO per intermediate pass, at that pass's own size.
+   *
+   * Grows on demand AND resizes in place: a pass whose declared scale changed
+   * needs a new texture, and the previous grow-only version would have kept
+   * rendering into the old one.
+   */
+  private ensurePassFBOs(sizes: Array<{ width: number; height: number }>) {
     const gl = this.gl
-    while (this.passFBOs.length < count) {
+    while (this.passFBOs.length < sizes.length) {
       const tex = gl.createTexture()!
       gl.bindTexture(gl.TEXTURE_2D, tex)
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, PREVIEW_SIZE, PREVIEW_SIZE, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
@@ -444,9 +463,20 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
       const fb = gl.createFramebuffer()!
       gl.bindFramebuffer(gl.FRAMEBUFFER, fb)
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0)
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
-      this.passFBOs.push({ framebuffer: fb, texture: tex })
+      this.passFBOs.push({ framebuffer: fb, texture: tex, width: PREVIEW_SIZE, height: PREVIEW_SIZE })
     }
+
+    for (let i = 0; i < sizes.length; i++) {
+      const slot = this.passFBOs[i]
+      const want = sizes[i]
+      if (slot.width === want.width && slot.height === want.height) continue
+      gl.bindTexture(gl.TEXTURE_2D, slot.texture)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, want.width, want.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+      gl.bindTexture(gl.TEXTURE_2D, null)
+      slot.width = want.width
+      slot.height = want.height
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
   }
 
   dispose() {

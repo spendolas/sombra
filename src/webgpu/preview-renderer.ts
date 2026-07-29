@@ -9,6 +9,7 @@
 
 import type { PreviewRenderer as IPreviewRenderer, UniformUpload } from '../renderer/types'
 import type { UniformBufferLayout, TextureBinding } from '../compiler/ir/wgsl-assembler'
+import { passTargetSize, type PassTargetSize } from '../renderer/pass-size'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -33,6 +34,11 @@ export interface WGSLPreviewPass {
   textureBindings: TextureBinding[]
   inputTextures: Array<{ passIndex: number; samplerName: string }>
   userUniforms: UniformUpload[]
+  /**
+   * Target scale for this pass, relative to PREVIEW_SIZE. Mirrors
+   * RenderPass.resolution so a thumbnail matches what the main canvas shows.
+   */
+  resolution?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -285,13 +291,22 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
   // -----------------------------------------------------------------------
 
   private async renderMultiPassWGSL(passes: WGSLPreviewPass[]): Promise<ImageBitmap | null> {
+    // Preview floors at 4px rather than the main renderer's 1px: a 1x1
+    // intermediate carries no usable signal at thumbnail scale, and previews are
+    // advisory. Deliberate divergence from the main renderers. The last pass's
+    // entry here is computed but never used — it always keeps the full
+    // PREVIEW_SIZE readback target below.
+    const sizes = passes.map((p) =>
+      passTargetSize(p.resolution, PREVIEW_SIZE, PREVIEW_SIZE, 1, PREVIEW_SIZE * 4, 4))
+
     // Allocate one intermediate texture per non-final pass (no ping-pong —
-    // relay passes can read from non-adjacent passes, causing read-write conflicts)
+    // relay passes can read from non-adjacent passes, causing read-write
+    // conflicts), each at that pass's own target size.
     const numIntermediate = passes.length - 1
     const intermediateTextures: GPUTexture[] = []
     for (let i = 0; i < numIntermediate; i++) {
       intermediateTextures.push(this.device.createTexture({
-        size: [PREVIEW_SIZE, PREVIEW_SIZE],
+        size: [sizes[i].width, sizes[i].height],
         format: 'rgba8unorm',
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
       }))
@@ -307,6 +322,7 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
     // Build pass states
     for (let i = 0; i < passes.length; i++) {
       const pass = passes[i]
+      const isLastPass = i === passes.length - 1
       const pipeline = await this.getOrCreatePipeline(pass.shaderCode)
       if (!pipeline) {
         // Cleanup already-created buffers
@@ -317,7 +333,11 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
       const uniformBuffer = this.createPassUniformBuffer(pass.uniformLayout)
       const uniformData = new ArrayBuffer(pass.uniformLayout.totalSize)
       const uniformFloat32 = new Float32Array(uniformData)
-      this.writeBuiltinUniforms(uniformFloat32, pass.uniformLayout, time)
+      // Last pass is pinned to the full PREVIEW_SIZE readback target (dpr 1) —
+      // it's the texture that gets read back, and a multiPass node's last
+      // sub-pass can share this RenderPass, so its own declared scale must
+      // not be allowed to shrink it.
+      this.writeBuiltinUniforms(uniformFloat32, pass.uniformLayout, time, isLastPass ? undefined : sizes[i])
       this.writeUserUniforms(uniformFloat32, pass.uniformLayout, pass.userUniforms)
       this.device.queue.writeBuffer(uniformBuffer, 0, uniformData)
 
@@ -446,8 +466,12 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
     float32: Float32Array,
     layout: UniformBufferLayout,
     time?: number,
+    target?: PassTargetSize,
   ): void {
     const t = time ?? (Date.now() - this.startTime) / 1000
+    const tw = target?.width ?? PREVIEW_SIZE
+    const th = target?.height ?? PREVIEW_SIZE
+    const tdpr = target?.dpr ?? 1.0
 
     const set = (name: string, ...values: number[]) => {
       const offset = layout.offsets.get(name)
@@ -459,10 +483,10 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
     }
 
     set('u_time', t)
-    set('u_resolution', PREVIEW_SIZE, PREVIEW_SIZE)
+    set('u_resolution', tw, th)
     set('u_ref_size', REFERENCE_SIZE)
-    set('u_dpr', 1.0)
-    set('u_viewport', PREVIEW_SIZE, PREVIEW_SIZE)
+    set('u_dpr', tdpr)
+    set('u_viewport', tw, th)
     set('u_mouse', 0, 0)
     set('u_anchor', 0.5, 0.5)
   }

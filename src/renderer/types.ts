@@ -95,6 +95,11 @@ export interface PreviewPassSource {
   fragmentShader: string
   uniforms: UniformUpload[]
   inputTextures: Record<string, number>
+  /**
+   * Target scale for this pass, relative to PREVIEW_SIZE. Mirrors
+   * RenderPass.resolution so a thumbnail matches what the main canvas shows.
+   */
+  resolution?: number
 }
 
 export interface PreviewRenderer {

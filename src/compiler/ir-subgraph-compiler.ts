@@ -26,6 +26,7 @@ import { assembleWGSL } from './ir/wgsl-assembler'
 import type { WGSLPassOutput } from './ir-compiler'
 import { generateNodeIR } from './ir-compiler'
 import { expandMultiPassNodes } from './expand-passes'
+import { resolvePassResolution } from './pass-resolution'
 
 /** Maximum passes for preview rendering. Beyond this, show placeholder. */
 const MAX_PREVIEW_PASSES = 6
@@ -214,6 +215,10 @@ function compileMultiPass(
     const passNodeIds = passPartition[passIdx]
     const isLastPass = passIdx === passPartition.length - 1
 
+    // Resolved once per pass: relay passes below share the primary's geometry,
+    // because they render the same fragment into a same-sized target.
+    const passResolution = resolvePassResolution(passNodeIds, nodeMap)
+
     const standardUniforms = new Set<string>()
     const passUserUniforms: UniformSpec[] = []
     const allOutputs: IRNodeOutput[] = []
@@ -347,6 +352,7 @@ function compileMultiPass(
         inputTextures,
         isTimeLive: standardUniforms.has('u_time'),
         textureFilter: primaryResolved?.textureFilter,
+        resolution: passResolution,
       })
 
       // --- Relay passes (remaining groups) ---
@@ -368,6 +374,7 @@ function compileMultiPass(
           inputTextures,
           isTimeLive: standardUniforms.has('u_time'),
           textureFilter: resolved.textureFilter,
+          resolution: passResolution,
         })
       }
     } else {
@@ -395,6 +402,7 @@ function compileMultiPass(
         textureBindings: assembled.textureBindings,
         inputTextures,
         isTimeLive: standardUniforms.has('u_time'),
+        resolution: passResolution,
       })
     }
 
