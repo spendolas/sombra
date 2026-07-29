@@ -996,7 +996,38 @@ async function stageFrostGap(rig: AaRig, stimuli: Map<StimulusId, Rgba8>): Promi
     // the tap POSITIONS — the seed hash or the trig that places them.
     const shipGl = await render(rig, stimuli, bc, 'shipped', 'A0', 'webgl2')
     const par = frameMaxDelta(ship, shipGl)
+    // Where do the differing pixels LIVE? The mirror fold only fires where a tap
+    // leaves [0,1], i.e. within (radius + max lens delta) of the frame border, so
+    // a fold-driven divergence must hug the edges. Arithmetic divergence is spread.
+    // Measured rather than eyeballed: a PNG is easy to misread, a histogram is not.
+    const rad = frost * 24 * bc.dpr
+    const reach = Math.ceil(rad + 0.34 * 73 * bc.dpr)   // radius + max |disp| in px
+    let nBorder = 0, nInterior = 0
+    const map: Rgba8 = { width: W, height: H, data: new Uint8ClampedArray(W * H * 4) }
+    for (let i = 0; i < W * H; i++) {
+      const x = i % W, y = Math.floor(i / W)
+      const d = dmax(ship, shipGl, i)
+      const edge = Math.min(x, y, W - 1 - x, H - 1 - y)
+      if (d > 1) { if (edge <= reach) nBorder++; else nInterior++ }
+      const v = Math.min(255, d * 24)
+      map.data[i * 4] = v
+      map.data[i * 4 + 1] = edge <= reach ? 0 : v
+      map.data[i * 4 + 2] = edge <= reach ? v : 0
+      map.data[i * 4 + 3] = 255
+    }
+    const bandArea = W * H - Math.max(0, W - 2 * reach) * Math.max(0, H - 2 * reach)
+    if (frost >= 0.3) {
+      fs.mkdirSync(path.join(OUT, "parity"), { recursive: true })
+      fs.writeFileSync(path.join(OUT, "parity", `diffmap-frost${frost}.png`), encodePng(map))
+    }
+    const spatial = {
+      reachPx: reach,
+      borderBandFracOfFrame: +(bandArea / (W * H)).toFixed(4),
+      nBorder, nInterior,
+      interiorShareOfDiffs: nBorder + nInterior ? +(nInterior / (nBorder + nInterior)).toFixed(4) : 0,
+    }
     const r = {
+      spatial,
       frost, frostRadiusPx: frost * 24 * bc.dpr, bandPx: nb,
       band: { PRE: statOf(pre, gt, band), SHIPPED: statOf(ship, gt, band) },
       fetches: { mean: cnt.mean, min: cnt.min, max: cnt.max },
@@ -1007,7 +1038,9 @@ async function stageFrostGap(rig: AaRig, stimuli: Map<StimulusId, Rgba8>): Promi
     console.log(`frost ${frost.toString().padEnd(6)} radius ${r.frostRadiusPx.toFixed(3).padStart(6)}px  band ${nb.toString().padStart(6)}px  ` +
       `PRE ${r.band.PRE.mean.toFixed(2)}/${r.band.PRE.max}  SHIPPED ${r.band.SHIPPED.mean.toFixed(2)}/${r.band.SHIPPED.max}  ` +
       `fetch ${cnt.mean.toFixed(4)} [${cnt.min},${cnt.max}]  aa=${r.aaActive}  ` +
-      `parity ${par.max} codes / ${par.nGt1} px`)
+      `parity ${par.max} codes / ${par.nGt1} px  ` +
+      `[border-band ${(spatial.borderBandFracOfFrame * 100).toFixed(1)}% of frame, ` +
+      `but ${(spatial.interiorShareOfDiffs * 100).toFixed(1)}% of diffs are INTERIOR]`)
   }
   results.frostgap = { rows }
 }

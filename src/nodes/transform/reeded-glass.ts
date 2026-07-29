@@ -436,6 +436,15 @@ const GOLDEN_ANGLE = '2.39996323'
  * (2.93 vs 2.95 codes) while leaving the hash's second component free for the
  * coverage stratification below, which is what closes the seam-AA gap.
  *
+ * KNOWN, ACCEPTED: this gather renders differently on WebGPU and WebGL2 — up to 51
+ * codes on a photo at frost 0.3. The cause is hardware BILINEAR FILTERING, not
+ * anything in this shader: a single sub-texel fetch differs by up to 109/255 between
+ * the two drivers, while reedPcg, the golden-angle trig, pow, and the 16-tap sum are
+ * all backend-identical, and the mirror fold is ruled out spatially. Fixed-function
+ * silicon reached through ANGLE vs Tint; unfixable in-shader. The only real remedy is
+ * nearest-sampling plus manual interpolation at 4x the fetches. See
+ * docs/research/2026-07-29-frost-backend-divergence.md.
+ *
  * Each tap's BASE is also stratified across the pixel footprint along the seam
  * normal. That is what makes the gather subsume the seam discontinuity and the
  * minification supersample instead of disabling them: this branch runs whenever
