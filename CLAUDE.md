@@ -151,6 +151,29 @@ Each node is one file in `src/nodes/<category>/`, registered in `src/nodes/index
 - Imperative WebGL2/WebGPU — no Three.js or abstraction libraries.
 - PascalCase React components, camelCase utilities; one node type per file grouped by category.
 
+## Guardrails
+
+Each of these exists because it was violated and cost real time. Evidence in `docs/research/`.
+
+### Scope
+
+- **One concern per change.** Hoisting, sharing, renaming, and "while I'm here" cleanups are their own commits — never side effects of a feature. Sharing three colour helpers as a convenience during frost work left two registration shapes for the same functions (`sombra_color_helpers` as one key on the GLSL path, three `IRFunction` keys on the IR path), which silently became a duplicate-definition compile failure blocking an unrelated migration hours later.
+- **Don't broaden a task because you're already in the file.** If you spot something worth fixing, note it and move on. A campaign that lands six justified changes at once is how a file drifts without anyone noticing.
+
+### Codegen — both backends, always
+
+- **Extend the IR rather than reaching for `raw()`.** `src/compiler/ir/types.ts` is 292 lines of this project's own code with no external contract; adding a statement kind is ~50 lines across `types.ts` + both backends (copy the `case 'for'` lowering). Falling back to `raw()` is one line, which is why `reeded-glass.ts` reached 38 `raw()` against 10 structured builders and now cannot be verified.
+- **`raw()` budget.** Two-arg `raw(glsl, wgsl)` is hand-written per backend and drifts by construction — it stands at **34**; freeze there and ratchet down. One-arg `raw()` is for whole shared helper-function bodies (`noise-functions.ts`) only, never node body logic.
+- **`raw(glsl, wgsl)` skips mechanical translation.** It has caused three silent WebGPU-only bugs. The worst (`b56c19c`) reported compile SUCCESS and then dropped every frame.
+- Library-wide ratio for calibration: 88 `raw()` against 1026 structured builders. The IR is real for most nodes — `gradient.ts` is 0 `raw()` / 290 builders.
+
+### Verification
+
+- **Every gate needs a mechanism-engaged assertion.** A centroid, mean, SSIM, or pixel diff passes *perfectly* when the feature under test is skipped entirely, because the output then equals the baseline. Pair the outcome check with proof the code path ran (an allocated texture size, a fetch count, an instrumented counter), then perturb the implementation and confirm the gate actually fails. This was caught three separate times in one day.
+- **Read what a coverage number counts before trusting it.** `verify-ir-poc`'s "85 passed" is 37 real comparisons, 24 that assert only "lowering didn't throw", and 24 regexes — with `blur` not imported at all.
+- **Defaults prove least.** Exercise non-default parameters and the whole enum space, and pair a child enum with whatever its `showWhen` requires — an unpaired child leaves the parent at its default and the branch is never generated. Seven Reeded Glass code paths shipped unvalidated that way.
+- **Verify identifiers and factual claims against the source before writing them into a plan, doc, or commit message.** Plan code looks authoritative and has never run; it was wrong three times on one plan. `PHASE6-MULTIPASS.md` claimed a field "is supported in the data structure" that did not exist.
+
 ## Design System
 
 **Golden Rule: Figma is the source of truth.** All visual additions (color, spacing, size, radius, text style, component) start as a Figma variable/component, flow into the DB, then into generated code:
