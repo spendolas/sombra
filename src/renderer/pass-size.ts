@@ -44,6 +44,26 @@ export function normalisePassScale(scale: number | undefined): number {
  * `canvasWidth`/`canvasHeight` are the FULL render size in device px (i.e.
  * already dpr-multiplied), and `baseDpr` is the `u_dpr` a full-resolution pass
  * would receive.
+ *
+ * A single scalar `dpr` is only correct if both axes land at the SAME
+ * effective scale, so `width` and `height` are never clamped independently:
+ * one axis hitting `maxTexture` while the other doesn't would decouple the
+ * axes, leaving the returned `dpr` (derived from width) correct for X and
+ * silently wrong for Y. Concretely, a 5K canvas at dpr 2 (10240×5760) against
+ * an 8192 `maxTexture` clamps X to 8192/10240 = 0.8 of its size while leaving
+ * Y unclamped at 1.0 — a 25% error on Y, not a rounding footnote. Instead, one
+ * effective scale is derived from BOTH axes — capped by the tighter of the two
+ * `maxTexture` ceilings, floored by the looser of the two `minPx` floors — and
+ * applied to both, so `width/canvasWidth` and `height/canvasHeight` agree up
+ * to final integer rounding.
+ *
+ * If the ceiling and floor can't both be satisfied for a given canvas aspect
+ * (an extreme aspect ratio against a tight `maxTexture`) — not reachable by
+ * any canvas size / texture-limit combination this application actually
+ * hits — the ceiling wins: `maxTexture` is a hardware limit that must never
+ * be exceeded, while `minPx` is only a soft quality floor. In that fallback
+ * the shorter axis may land below `minPx`; this is accepted rather than given
+ * its own recovery path.
  */
 export function passTargetSize(
   scale: number | undefined,
@@ -56,8 +76,21 @@ export function passTargetSize(
   const s = normalisePassScale(scale)
   const lo = Math.max(1, Math.floor(minPx))
   const hi = Math.max(lo, Math.floor(maxTexture))
+  // Guard against a degenerate 0-sized canvas dimension the same way the dpr
+  // divisor below always has — never as a divisor without it.
+  const safeWidth = Math.max(1, canvasWidth)
+  const safeHeight = Math.max(1, canvasHeight)
+
+  // One scale, chosen so NEITHER axis can exceed `hi` and (bounds permitting)
+  // NEITHER axis can drop below `lo`, then applied to both axes alike.
+  const sCeiling = hi / Math.max(safeWidth, safeHeight)
+  const sFloor = lo / Math.min(safeWidth, safeHeight)
+  const sEff = Math.min(sCeiling, Math.max(s, sFloor))
+
+  // Final clamp is a no-op in every reachable case (sEff already respects
+  // both bounds); it only guards float rounding at the boundary.
   const clamp = (v: number) => Math.min(hi, Math.max(lo, Math.round(v)))
-  const width = clamp(canvasWidth * s)
-  const height = clamp(canvasHeight * s)
-  return { width, height, dpr: baseDpr * (width / Math.max(1, canvasWidth)) }
+  const width = clamp(canvasWidth * sEff)
+  const height = clamp(canvasHeight * sEff)
+  return { width, height, dpr: baseDpr * (width / safeWidth) }
 }

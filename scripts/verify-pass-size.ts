@@ -85,6 +85,57 @@ test('dpr comes from the integer width, not the requested float', () => {
   assert(s.dpr !== 0.5, 'dpr must not be the requested float')
 })
 
+test('maxTexture clamp must not desync the axes — 5K canvas @ dpr2 vs an 8192 texture limit', () => {
+  // 5K display at dpr 2 is 10240x5760; WebGPU's default maxTextureDimension2D
+  // is 8192. Only X needs clamping (10240 > 8192); Y (5760) does not. If width
+  // and height were clamped independently, dpr — derived from X — would be
+  // silently wrong for Y: a 25% error, not the sub-percent rounding footnote
+  // the design doc originally anticipated. (Finding 1, 2026-07-29 review.)
+  const W = 10240, H = 5760, D = 2
+  const s = passTargetSize(1, W, H, D, MAXTEX)
+  const ratioX = s.width / W
+  const ratioY = s.height / H
+  assert(s.width === 8192, `X should clamp to maxTexture: got ${s.width}`)
+  assert(s.height === 4608, `Y must scale by the SAME effective ratio as X: got ${s.height}`)
+  assertClose(ratioX, ratioY, 1e-9, `axis ratios diverged: X=${ratioX} Y=${ratioY}`)
+  assertClose(s.dpr, D * ratioX, 1e-12, 'dpr must match the X ratio (true by definition)')
+  assertClose(s.dpr, D * ratioY, 1e-9, 'dpr must ALSO match the Y ratio — this is the actual bug')
+
+  // The failure mode in concrete terms: Y-axis auto_uv must stay invariant
+  // too, not just X (existing suite only ever checked X for a clamped pass).
+  for (const a of [0, 0.5, 1]) {
+    for (const p of [0, 0.37, 1]) {
+      const full = autoUvY(p * H, H, D, a)
+      const scaled = autoUvY(p * s.height, s.height, s.dpr, a)
+      assertClose(scaled, full, 1e-9, `anchor ${a} at p=${p}`)
+    }
+  }
+})
+
+test('maxTexture clamp on a non-square canvas whose axes round differently', () => {
+  // 1001x999 is deliberately not square: canvasWidth*scale and
+  // canvasHeight*scale land on different sides of a .5 boundary, so even the
+  // FIXED implementation's two axis ratios only agree up to integer rounding,
+  // not exactly — unlike the clean 4/5 case above. maxTexture=4000 sits
+  // between the axes' natural scaled sizes (4004 and 3996), so only X clamps.
+  // Every non-square case in the original suite picked numbers where both
+  // axes rounded to the SAME ratio, so neither an independent per-axis clamp
+  // nor a width/height mixup in the dpr formula was ever exercised for a
+  // canvas that rounds unevenly. (Finding 2, 2026-07-29 review. Note: the
+  // review's own illustrative call — passTargetSize(0.5, 1001, 999, 1, 8192)
+  // — never reaches either clamp bound at that scale/maxTexture, so it cannot
+  // distinguish pre-fix from post-fix; scale and maxTexture are changed here
+  // so the clamp actually engages asymmetrically. Verified empirically below.)
+  const W = 1001, H = 999, D = 1, TIGHT_MAXTEX = 4000
+  const s = passTargetSize(4, W, H, D, TIGHT_MAXTEX)
+  const ratioX = s.width / W
+  const ratioY = s.height / H
+  assert(s.width === 4000, `X should clamp to maxTexture: got ${s.width}`)
+  assert(s.height > 3990 && s.height < 4000, `Y should be unclamped, near but under 4000: got ${s.height}`)
+  assertClose(ratioX, ratioY, 1e-4, `axis ratios diverged beyond rounding: X=${ratioX} Y=${ratioY}`)
+  assertClose(s.dpr, D * ratioY, 1e-4, 'dpr (from X) must still track Y within rounding, not within 0.4%')
+})
+
 test('degenerate scales fall back to 1.0', () => {
   for (const bad of [0, -1, NaN, Infinity]) {
     assert(normalisePassScale(bad) === 1, `${bad} should normalise to 1`)

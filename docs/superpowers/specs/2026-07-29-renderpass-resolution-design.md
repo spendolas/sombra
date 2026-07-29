@@ -35,13 +35,21 @@ Three uniforms are resolution-coupled:
 
 ## The uniform contract
 
-For a pass at requested scale `s`:
+For a pass at requested scale `s`, canvas size `W×H`, device texture limit `maxTex`, and
+floor `minPx` (1 for the main renderers, 4 for the preview renderers):
 
 ```
-tw = clamp(round(s·W), 1, maxTex)      th = clamp(round(s·H), 1, maxTex)
+s_eff = clamp(s, minPx / min(W, H), maxTex / max(W, H))   // ONE scale, both axes
+tw = clamp(round(s_eff·W), minPx, maxTex)      th = clamp(round(s_eff·H), minPx, maxTex)
 u_resolution = u_viewport = (tw, th)
 u_dpr        = dpr · (tw / W)
 ```
+
+`tw` and `th` are never clamped to `[minPx, maxTex]` independently. `s_eff` is derived
+once from *both* axes — capped so neither axis's scaled size can cross `maxTex`, floored
+so neither can drop below `minPx` — and then applied to both. Clamping `tw`/`th`
+separately lets one axis hit `maxTex` while the other doesn't, decoupling the axes so the
+scalar `u_dpr` (derived from `tw`) is correct for X and silently wrong for Y.
 
 Everything else is untouched. `u_ref_size` stays frozen at `REFERENCE_SIZE = 512`;
 `u_anchor` is unitless.
@@ -106,7 +114,9 @@ composes with the quality tier by multiplication, and a radius-adaptive pyramid 
 arbitrary values, ruling out a `'half' | 'quarter'` enum.
 
 **Range `(0, 4]`.** Above 1.0 is supersampling, which is half the motivation. Additionally
-capped by `maxTextureDimension2D` (WebGPU) / `MAX_TEXTURE_SIZE` (WebGL2).
+capped by `maxTextureDimension2D` (WebGPU) / `MAX_TEXTURE_SIZE` (WebGL2). The
+implementation also floors `s` at `PASS_SCALE_MIN = 1/64` — below that a pass carries no
+usable signal — so the true supported range is `[1/64, 4]`.
 
 **One texture per pass at its own size.** Not one max-size texture with a sub-rect
 viewport: that needs a uv-rescale uniform per sampler, and bilinear at the sub-rect edge
@@ -190,8 +200,13 @@ uniform, which costs both codegen paths plus four renderers — deferred until s
 needs it.
 
 **Sub-texel anisotropy.** `tw/W` and `th/H` can differ by up to 1 part in `min(W, H)`
-(~0.1% at 1080p) after independent rounding, and `u_dpr` is scalar. Below anything
-observable; a second uniform is not worth it.
+(~0.1% at 1080p), and `u_dpr` is scalar. That bound holds only because `tw` and `th` are
+rounded off the *same* shared `s_eff` (see "The uniform contract") — with a shared scale,
+the residual really is pure integer-rounding noise, below anything observable, and a
+second uniform is not worth it. The bound does **not** hold if `tw`/`th` are clamped to
+`maxTex`/`minPx` independently instead of sharing one `s_eff`: an earlier draft did that,
+and it decouples the axes by as much as `maxTex`'s shortfall against the larger axis — a
+5K canvas at dpr 2 against an 8192 `maxTex` diverges by 25%, not 0.1%.
 
 **Integer quantisation in `floor(… + 0.5)`.** `floor(pixelSize·s·dpr + 0.5)` is not exactly
 `s·floor(pixelSize·dpr + 0.5)`, so a pixelate or pixel-grid *inside* a scaled pass shifts
@@ -208,7 +223,9 @@ out of scope here.
 
 ## Error handling
 
-- Non-finite, `≤ 0`, or absent `resolution` → `1.0`, with a `console.warn` naming the pass.
+- Non-finite, `≤ 0`, or absent `resolution` → `1.0`, with a `console.warn` identifying the
+  invalid value. The sizing helper takes no pass identity in its signature — a caller that
+  wants the pass named in the log has to do that itself.
 - Clamp `s` to `(0, 4]`; clamp the resulting pixel size to `[1, maxTex]` in the main
   renderers and `[4, maxTex]` in the preview renderers (see above).
 - A scale that would exceed device limits clamps and warns rather than failing the plan —
