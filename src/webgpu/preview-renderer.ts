@@ -4,7 +4,9 @@
  * Uses the shared GPUDevice from the main renderer. Renders to an 80×80
  * GPUTexture, copies to a staging buffer, and reads back as ImageBitmap.
  *
- * Supports single-pass and multi-pass previews via ping-pong textures.
+ * Supports single-pass and multi-pass previews — one intermediate texture per
+ * non-final pass, never ping-pong: relay passes can read non-adjacent passes,
+ * which ping-pong (index % 2) would alias into GL/GPU feedback loops.
  */
 
 import type { PreviewRenderer as IPreviewRenderer, UniformUpload } from '../renderer/types'

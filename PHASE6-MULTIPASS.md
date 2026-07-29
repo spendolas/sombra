@@ -365,7 +365,11 @@ Intermediate textures don't always need full canvas resolution. Apply quality ti
 
 This means a 3-pass chain at `low` quality on 1920×1080@2x uses ~4MB per intermediate instead of ~16MB.
 
-Per-node resolution override (`RenderPass.resolution`) is supported in the data structure but not exposed in UI until Phase 2.
+Per-node resolution override (`RenderPass.resolution`) is implemented as of
+2026-07-29 — an optional scale factor honoured by both main renderers and both
+preview renderers. See `docs/superpowers/specs/2026-07-29-renderpass-resolution-design.md`.
+No shipped node declares a scale yet, and there is no UI for it. The quality-tier
+scaling in the table above remains unimplemented.
 
 ### P5: Async Shader Compilation
 

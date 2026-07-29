@@ -64,6 +64,23 @@ const offsets = decoded.plan.wgsl?.passes[0].uniformLayout.offsets
 check('wgsl uniformLayout.offsets survives as a Map', offsets instanceof Map)
 check('wgsl offsets Map keeps its entries', offsets instanceof Map && offsets.get('u_a_scale') === 0)
 
+// 3. RenderPass.resolution round-trips through the codec. artifact.ts needs no
+// change for this — stripPlan spreads pass fields via
+// `passes.map(({ vertexShader: _pv, ...p }) => p)`, so a new field should
+// survive automatically. Proven here rather than trusted.
+const scaledArtifact: SceneArtifact = {
+  ...artifact,
+  plan: {
+    ...artifact.plan,
+    passes: [{ ...artifact.plan.passes[0], resolution: 0.25 }],
+  },
+}
+const decodedScaled = decodeArtifact(encodeArtifact(scaledArtifact))
+check(
+  'RenderPass.resolution survives the artifact round-trip',
+  decodedScaled.plan.passes[0].resolution === 0.25,
+)
+
 console.log('='.repeat(60))
 console.log(`  SUMMARY: ${passed} passed, ${failed} failed`)
 console.log('='.repeat(60))

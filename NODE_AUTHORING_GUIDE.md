@@ -297,6 +297,65 @@ The compiler calls `dynamicInputs(params)` when present, otherwise falls back to
 
 **See:** `src/nodes/math/arithmetic.ts` for full example.
 
+### Multi-pass nodes (`multiPass`)
+
+An effect that cannot be expressed in a single generator call — e.g. a separable
+blur that must filter horizontally, store the result, then filter vertically —
+declares `multiPass` on `NodeDefinition`:
+
+```ts
+multiPass: {
+  count: () => 2,     // number of sequential sub-passes
+  from: 'color',      // output port feeding the next sub-pass
+  to: 'source',       // textureInput port receiving it
+}
+```
+
+The compiler expands the node into a chain of virtual nodes before partitioning
+(`src/compiler/expand-passes.ts`) — `glsl()`/`ir()` runs once per sub-pass,
+reading its index from `params.__subPass`. The first sub-pass keeps the
+authored node id so incoming edges and error reporting line up; outgoing edges
+move to the last sub-pass. Expansion is skipped when `to` is unwired.
+
+**See:** `src/nodes/effect/blur.ts` — the one shipped example.
+
+### Per-pass resolution
+
+A `multiPass` node can render a sub-pass at a fraction (or multiple) of canvas size:
+
+```ts
+multiPass: {
+  count: () => 3,
+  from: 'color',
+  to: 'source',
+  resolution: (passIndex) => [1, 0.5, 0.25][passIndex] ?? 1,
+}
+```
+
+Range is `(0, 4]`; above 1.0 supersamples. The framework scales `u_resolution`,
+`u_viewport` **and `u_dpr`** together, so `auto_uv`, anchor pinning and every
+px-authored param (anything you multiply by `u_dpr`) are unchanged — a scaled pass
+sees the same pattern, sampled more or less finely. Author in reference px and
+multiply by `u_dpr` as usual and scaling is free.
+
+Three caveats:
+
+- **The last sub-pass is pinned to canvas size, always.** `fragment_output` has
+  no `textureInput` port, so it never opens a new pass — it joins whatever
+  pass already feeds it. When a `multiPass` node's output reaches
+  `fragment_output` with nothing else in between (the shape of every
+  `multiPass` usage today), its last sub-pass lands in the plan's *final*
+  pass, and both main renderers always render the final pass straight to the
+  canvas at full resolution — a `resolution` returned for that index is
+  silently ignored. **Put your full-resolution sub-pass last**, not first.
+- A pass is a depth group: if another node shares the pass, the larger scale
+  wins and a warning is logged.
+- The `Resolution` node reports the *pass* size inside a scaled pass, not the
+  canvas size.
+
+**See:** `docs/superpowers/specs/2026-07-29-renderpass-resolution-design.md` for
+the full uniform contract and why it holds exactly, not just approximately.
+
 ---
 
 ## 4. GLSL Generation Patterns

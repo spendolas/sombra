@@ -1,6 +1,6 @@
 # `RenderPass.resolution` — per-pass render-target resolution
 
-**Date:** 2026-07-29 · **Status:** design, approved for implementation · **Scope:** plumbing only
+**Date:** 2026-07-29 · **Status:** IMPLEMENTED · **Scope:** plumbing only
 
 Let a render pass rasterise at a fraction (or multiple) of the canvas size. Unblocks the
 blur bake-off's radius-adaptive pyramid — the only affordable route to a wide radius, at
@@ -193,6 +193,40 @@ is not a concern for them.
 
 ## Limitations — documented, not fixed
 
+**A `multiPass` node's last sub-pass is pinned to canvas size, always.** Neither
+`fragment_output` nor its port declares `textureInput`, so it never starts a new
+pass depth — it always joins whatever pass already feeds it
+(`partitionPasses` in `src/compiler/glsl-generator.ts`). That means whenever a
+`multiPass` node's output reaches `fragment_output` with no other texture
+boundary in between — the shape of every `multiPass` usage today — its last
+sub-pass lands in the plan's *final* pass. Both main renderers render the final
+pass straight to the canvas/swap-chain at full canvas resolution, independent
+of `RenderPass.resolution`: `src/webgl/renderer.ts` (`renderMultiPass`)
+computes `tw = w, th = h, tdpr = dpr` for the last pass with the comment
+"Render to screen — always full canvas resolution", and
+`src/webgpu/renderer.ts:785` says the same ("The LAST pass draws to the
+swap-chain texture, which is always full canvas size regardless of what it
+declared"). A `resolution` returned for a node's last sub-pass index is
+therefore silently ignored — a pyramid must put its full-resolution sub-pass
+last. Documented for authors in `NODE_AUTHORING_GUIDE.md`.
+
+**`passTargetSize`'s device-texture-limit clamp changes behaviour for
+undeclared passes too, on hardware where the canvas exceeds it.** Before this
+change, an intermediate pass was allocated at the raw canvas size with no clamp
+against the device limit: the old `resizeFBOs`/`allocateFBOs` (WebGL2) used
+`Math.floor(canvas.clientWidth * dpr)` directly against `gl.texImage2D`, and the
+old `ensureIntermediateTextures` (WebGPU) passed canvas size straight to
+`device.createTexture` — neither consulted `MAX_TEXTURE_SIZE` /
+`maxTextureDimension2D` for the allocation itself (WebGL2 only used the limit to
+pick `maxIntermediateTextures`, a pass *count*, not a per-pass size). On a
+canvas that exceeds the device's texture limit, that is an oversized
+`texImage2D`/`createTexture` call — a GL error or a WebGPU validation failure.
+`passTargetSize` now clamps every intermediate pass into `[minPx, maxTexture]`
+regardless of whether it declares a `resolution`, so gate 1 ("absent field ⇒
+byte-identical") holds only *below* the device's texture limit. Above it,
+behaviour changes from an erroring allocation to a correctly dpr-scaled smaller
+target — an improvement, and the one exception to the no-visual-change claim.
+
 **The `Resolution` node** (`src/nodes/input/resolution.ts`) returns `u_resolution` raw, so
 inside a scaled pass it reports pass size rather than canvas size. Unreachable when this
 lands: no shipped node declares a scale. The fix is a separate `u_canvas_size` standard
@@ -256,6 +290,12 @@ Ordered; each must pass before the next means anything.
 
 Gates 2–4 are new scripts under `scripts/`, reusing the full-resolution capture harness in
 `scripts/blur-bakeoff/lib/`.
+
+**Scope of `scripts/verify-pass-resolution-gpu.ts`.** It runs headless, so
+`devicePixelRatio` is 1 throughout — it does not exercise a `dpr > 1` capture. It also
+drives only the two main renderers (`WebGL2ShaderRenderer`, `WebGPUShaderRenderer`); the
+preview renderers are not covered by this gate. Noted here so its green pass count isn't
+over-read as covering either.
 
 ## Files
 

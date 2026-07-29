@@ -84,7 +84,7 @@ graph (nodes+edges) → topological sort → codegen → RenderPlan → renderer
 - **Two codegen paths, kept in parity:**
   - `glsl-generator.ts` — legacy string-based GLSL codegen (each node's `glsl(ctx)`)
   - `ir-compiler.ts` + `src/compiler/ir/` — IR-based path (each node's `ir(ctx)`) with `wgsl-backend.ts`/`glsl-backend.ts` and `wgsl-assembler.ts`. This feeds the WebGPU renderer. Worker takes a `useIR` flag and returns both.
-- **Multi-pass:** the compiler outputs a `RenderPlan` (ordered `RenderPass[]`), not a single shader. Ports marked `textureInput: true` trigger pass boundaries — upstream renders to a texture, the effect node samples it. Spatial nodes declare `spatial: SpatialConfig` for framework-managed SRT transforms. Single-pass graphs are just a one-pass plan.
+- **Multi-pass:** the compiler outputs a `RenderPlan` (ordered `RenderPass[]`), not a single shader. Ports marked `textureInput: true` trigger pass boundaries — upstream renders to a texture, the effect node samples it. Spatial nodes declare `spatial: SpatialConfig` for framework-managed SRT transforms. Single-pass graphs are just a one-pass plan. Passes may declare `RenderPass.resolution` (a scale factor) to rasterise at a fraction or multiple of canvas size; the framework scales `u_dpr` with it so `auto_uv` stays invariant.
 - `subgraph-compiler.ts` / `ir-subgraph-compiler.ts` — compile the subgraph up to a target node for per-node preview thumbnails.
 
 ### Live update tiers (`use-live-compiler.ts`)

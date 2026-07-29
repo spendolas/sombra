@@ -35,7 +35,6 @@ If `window.__sombra` is `undefined`, the page hasn't finished loading or the bri
 | Share URL for current graph | `sombra.shareGraph()` |
 | Compile IR→WGSL directly | `sombra.compileGraphIR(nodes, edges)` |
 | GPU-validate WGSL | `sombra.validateWGSL(code)` / `validateAllWGSL()` / `validateAllSubgraphWGSL()` |
-| Renderer instance | `sombra.renderer` (`.backend`, full ShaderRenderer API) |
 | Raw store access | `sombra.stores.graph/compiler/settings` (zustand: `.getState()`) |
 
 ---
@@ -126,7 +125,9 @@ Returns an array of `{ type, label, category }` for every registered node.
 
 ### `sombra.compile()`
 
-Manually triggers shader compilation and pushes the result to the renderer. Returns `{ success, fragmentShader, vertexShader, errors }`.
+Manually triggers shader compilation and pushes the result into the compiler
+store (`cs.setShaders()` / `cs.markCompileSuccess()`) — it does **not** hand the
+plan to a renderer; see `sombra.renderer` below. Returns `{ success, fragmentShader, vertexShader, errors }`.
 
 ### `sombra.getFragmentShader()`
 
@@ -164,9 +165,16 @@ Import is undoable — the previous graph is pushed to the undo stack. Validates
 
 Returns a compact share URL (`viewer.html#g=<base64url(deflate)>`) for the current graph. Image nodes embed their `imageData` (chunked base64 — large but functional).
 
-### `sombra.renderer`
+### `sombra.renderer` — no such property
 
-The live `ShaderRenderer` instance (WebGPU or WebGL2). `sombra.renderer.backend` reports which. Full interface (`src/renderer/types.ts`): `render()`, `updateUniforms()`, `setAnchor()`, `uploadImageTexture()`, etc. Useful for automation that must force a frame (`render()`) since rAF does not fire in hidden tabs.
+`window.__sombra` has no `renderer` field — see the `api` object built in
+`installDevBridge()` (`src/dev-bridge.ts`); there is no dev-bridge handle to the
+live `ShaderRenderer`. `sombra.compile()` does not hand its plan to a renderer
+either (see above), so there is currently no path from the bridge to forcing a
+frame or reading renderer state — this section previously claimed one existed.
+Automation that needs `render()`, `updateUniforms()`, `setAnchor()`,
+`uploadImageTexture()` etc. (the `ShaderRenderer` interface, `src/renderer/types.ts`)
+has no bridge accessor for them today.
 
 ### Store actions worth knowing (`sombra.stores.graph.getState()`)
 
