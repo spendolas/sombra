@@ -29,6 +29,7 @@
     "verify:wired-branch": "tsx scripts/verify-wired-texture-branch.ts",
     "verify:pass-size": "tsx scripts/verify-pass-size.ts",
     "verify:pass-resolution": "tsx scripts/verify-pass-resolution.ts",
+    "verify:pass-resolution:gpu": "tsx scripts/verify-pass-resolution-gpu.ts",
     "build:embed": "vite build --config vite.embed.config.ts",
     "verify:embed:artifact": "tsx scripts/verify-artifact-roundtrip.ts",
     "verify:embed:manifest": "tsx scripts/verify-manifest.ts",
