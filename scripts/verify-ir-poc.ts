@@ -1711,8 +1711,9 @@ function verify(
   // carry alpha (both branches are emitted unconditionally; frost is a runtime uniform,
   // not a compile-time branch) — alpha rides with the pixel (see rgba-node-audit.md).
   //
-  // The frost loop accumulates PREMULTIPLIED: colour weighted by each tap's own alpha
-  // into a vec3, alpha summed separately, un-premultiplied at the end. Averaging
+  // The frost loop accumulates PREMULTIPLIED and in LINEAR LIGHT: each tap is
+  // sRGB-decoded, weighted by its own alpha into a vec3, alpha summed separately,
+  // un-premultiplied and re-encoded at the end (plus one LSB of dither). Averaging
   // straight-alpha texels would drag opaque colour into transparent taps and fringe the
   // edge. This is not "inventing alpha" — with every tap at a = 1 it reduces exactly to
   // sum(rgb)/8 with alpha 1, i.e. the plain average. What the assertions below guard is
@@ -1733,13 +1734,13 @@ function verify(
   // The tap is fetched as a full vec4 and BOTH halves are consumed: rgb weighted by
   // this tap's alpha, and that same alpha summed. Dropping either half is the bug.
   if (!/vec4 rg_s_reed_rrr889 = texture\(u_pass0_tex, rg_tap_reed_rrr889\);/.test(refGLSL) ||
-      !/rg_acc_reed_rrr889 = rg_acc_reed_rrr889 \+ rg_s_reed_rrr889\.rgb \* rg_s_reed_rrr889\.a;/.test(refGLSL) ||
+      !/rg_acc_reed_rrr889 = rg_acc_reed_rrr889 \+ sombra_toLin\(rg_s_reed_rrr889\.rgb\) \* rg_s_reed_rrr889\.a;/.test(refGLSL) ||
       !/rg_aacc_reed_rrr889 = rg_aacc_reed_rrr889 \+ rg_s_reed_rrr889\.a;/.test(refGLSL)) {
     console.log(`  [FAIL] GLSL: expected full vec4 tap accumulated premultiplied. Got:\n    ${refGLSL}`)
     reedTexOk = false
   }
   // Un-premultiply, and carry the MEASURED mean alpha out — never a constant 1.0.
-  if (!/node_reed_rrr889_color = vec4\(rg_acc_reed_rrr889 \/ max\(rg_aacc_reed_rrr889, 1e-5\), rg_aacc_reed_rrr889 \/ \d+\.0\);/.test(refGLSL)) {
+  if (!/node_reed_rrr889_color = vec4\(sombra_toSrgb\(rg_acc_reed_rrr889 \/ max\(rg_aacc_reed_rrr889, 1e-5\)\) \+ vec3\(\(sombra_dither\([^)]*\) - 0\.5\) \/ 255\.0\), rg_aacc_reed_rrr889 \/ \d+\.0\);/.test(refGLSL)) {
     console.log(`  [FAIL] GLSL: expected un-premultiplied resolve carrying mean alpha. Got:\n    ${refGLSL}`)
     reedTexOk = false
   }
@@ -1762,12 +1763,12 @@ function verify(
   // non-uniform and WGSL forbids implicit-derivative sampling there. Either name returns
   // vec4f, which is what this assertion actually guards.
   if (!/let rg_s_reed_rrr889 = textureSampleLevel\(u_pass0_tex_tex, u_pass0_tex_samp, rg_tap_reed_rrr889, 0\.0\);/.test(irWGSL) ||
-      !/rg_acc_reed_rrr889 = rg_acc_reed_rrr889 \+ rg_s_reed_rrr889\.rgb \* rg_s_reed_rrr889\.a;/.test(irWGSL) ||
+      !/rg_acc_reed_rrr889 = rg_acc_reed_rrr889 \+ sombra_toLin\(rg_s_reed_rrr889\.rgb\) \* rg_s_reed_rrr889\.a;/.test(irWGSL) ||
       !/rg_aacc_reed_rrr889 = rg_aacc_reed_rrr889 \+ rg_s_reed_rrr889\.a;/.test(irWGSL)) {
     console.log(`  [FAIL] IR->WGSL: expected full vec4f tap accumulated premultiplied. Got:\n    ${irWGSL}`)
     reedTexOk = false
   }
-  if (!/node_reed_rrr889_color = vec4f\(rg_acc_reed_rrr889 \/ vec3f\(max\(rg_aacc_reed_rrr889, 1e-5\)\), rg_aacc_reed_rrr889 \/ \d+\.0\);/.test(irWGSL)) {
+  if (!/node_reed_rrr889_color = vec4f\(sombra_toSrgb\(rg_acc_reed_rrr889 \/ vec3f\(max\(rg_aacc_reed_rrr889, 1e-5\)\)\) \+ vec3f\(\(sombra_dither\([^)]*\) - 0\.5\) \/ 255\.0\), rg_aacc_reed_rrr889 \/ \d+\.0\);/.test(irWGSL)) {
     console.log(`  [FAIL] IR->WGSL: expected un-premultiplied resolve carrying mean alpha. Got:\n    ${irWGSL}`)
     reedTexOk = false
   }

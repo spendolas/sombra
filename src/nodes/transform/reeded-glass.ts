@@ -17,6 +17,7 @@
 import type { NodeDefinition, GLSLContext } from '../types'
 import { addFunction, getSpatialParams } from '../types'
 import { registerNoiseType, resolveNoiseFn, getIRNoiseFunctions } from '../noise/noise-functions'
+import { COLOR_GLSL_HELPERS, COLOR_IR_HELPERS } from '../shared/color-space'
 import type { IRContext, IRFunction, IRNodeOutput, IRStmt } from '../../compiler/ir/types'
 import { variable, declare, binary, raw } from '../../compiler/ir/types'
 
@@ -526,12 +527,17 @@ function emitFrostGather(o: {
     // Mirror into range rather than clamping, so the border does not smear.
     `  rg_tap_${id} = ${v2}(1.0) - abs(fract(rg_tap_${id} * 0.5) * 2.0 - ${v2}(1.0));`,
     `  ${dcl('vec4')}rg_s_${id} = ${fetch(`rg_tap_${id}`)};`,
-    // Premultiplied: averaging straight-alpha texels drags opaque colour into
-    // transparent taps. Reduces exactly to sum(rgb)/N with alpha 1 when opaque.
-    `  ${A} = ${A} + rg_s_${id}.rgb * rg_s_${id}.a;`,
+    // Premultiplied AND in linear light. Premultiplied because averaging
+    // straight-alpha texels drags opaque colour into transparent taps; linear
+    // because the texels are sRGB-encoded and averaging encoded values loses ~12%
+    // of the energy and darkens edges. This is the widest gather in the node, so
+    // it is where the gamma error is largest.
+    `  ${A} = ${A} + sombra_toLin(rg_s_${id}.rgb) * rg_s_${id}.a;`,
     `  ${AA} = ${AA} + rg_s_${id}.a;`,
     `}`,
-    `${out} = ${v4}(${A} / ${w ? `${v3}(max(${AA}, 1e-5))` : `max(${AA}, 1e-5)`}, ${AA} / ${N}.0);`,
+    // Re-encode, plus one LSB of dither: a 16-tap average is smooth and
+    // low-frequency, which is exactly what bands when quantised back to 8 bits.
+    `${out} = ${v4}(sombra_toSrgb(${A} / ${w ? `${v3}(max(${AA}, 1e-5))` : `max(${AA}, 1e-5)`}) + ${v3}((sombra_dither(${base}) - 0.5) / 255.0), ${AA} / ${N}.0);`,
   ].join('\n  ')
 }
 
@@ -631,10 +637,13 @@ function emitMinifSupersample(o: {
     `  ${D} *= ${v2}(${o.scale});`,
     `  ${dcl('vec2')}${UV} = (${base} + ${nrm} * ${T}) / ${vp} + ${dlt(D)};`,
     `  ${dcl('vec4')}${S} = ${fetch(UV)};`,
-    `  ${A} = ${A} + ${S}.rgb * ${S}.a;`,
+    // Linear light, same reason as the frost gather. It matters MORE here, not
+    // less: at |L'| = 176 the sub-samples span 176 source px, so they can be
+    // wildly different colours, and the gamma error scales with that contrast.
+    `  ${A} = ${A} + sombra_toLin(${S}.rgb) * ${S}.a;`,
     `  ${AA} = ${AA} + ${S}.a;`,
     `}`,
-    `${out} = ${v4}(${A} / ${w ? `${v3}(max(${AA}, 1e-5))` : `max(${AA}, 1e-5)`}, ${AA} / ${taps});`,
+    `${out} = ${v4}(sombra_toSrgb(${A} / ${w ? `${v3}(max(${AA}, 1e-5))` : `max(${AA}, 1e-5)`}) + ${v3}((sombra_dither(${base}) - 0.5) / 255.0), ${AA} / ${taps});`,
   ].join('\n  ')
 }
 
@@ -803,6 +812,7 @@ export const reededGlassNode: NodeDefinition = {
     const id = ctx.nodeId.replace(/-/g, '_')
 
     registerLensFn(ctx)
+    ctx.functionRegistry.set('sombra_color_helpers', COLOR_GLSL_HELPERS)
 
     // Integer-based hash for frost jitter — no sin artifacts/scanlines
     addFunction(ctx, 'reedHash', `vec2 reedHash(vec2 p) {
@@ -1038,7 +1048,9 @@ export const reededGlassNode: NodeDefinition = {
       lines.push(`  float rg_pa_${id} = rg_A_${id}.a * ${seam.weightA};`)
       lines.push(`  float rg_pb_${id} = rg_B_${id}.a * (1.0 - ${seam.weightA});`)
       lines.push(`  float rg_ao_${id} = rg_pa_${id} + rg_pb_${id};`)
-      lines.push(`  ${outputs.color} = vec4((rg_A_${id}.rgb * rg_pa_${id} + rg_B_${id}.rgb * rg_pb_${id}) / max(rg_ao_${id}, 1e-5), rg_ao_${id});`)
+      // Linear light: the two sides of a seam are up to 107 device px apart in the
+      // source, so this is the HIGHEST-contrast average in the node.
+      lines.push(`  ${outputs.color} = vec4(sombra_toSrgb((sombra_toLin(rg_A_${id}.rgb) * rg_pa_${id} + sombra_toLin(rg_B_${id}.rgb) * rg_pb_${id}) / max(rg_ao_${id}, 1e-5)), rg_ao_${id});`)
       lines.push(`} else {`)
       lines.push(`  ${outputs.color} = texture(${samplerName}, ${sampleUV});`)
       lines.push(`}`)
@@ -1126,6 +1138,7 @@ export const reededGlassNode: NodeDefinition = {
       )],
     }
     functions.push(pcgFn)
+    functions.push(...COLOR_IR_HELPERS)
 
     // --- Main computation ---
     const stmts: IRStmt[] = []
@@ -1377,7 +1390,7 @@ export const reededGlassNode: NodeDefinition = {
     float rg_pa_${id} = rg_A_${id}.a * ${seam.weightA};
     float rg_pb_${id} = rg_B_${id}.a * (1.0 - ${seam.weightA});
     float rg_ao_${id} = rg_pa_${id} + rg_pb_${id};
-    ${ctx.outputs.color} = vec4((rg_A_${id}.rgb * rg_pa_${id} + rg_B_${id}.rgb * rg_pb_${id}) / max(rg_ao_${id}, 1e-5), rg_ao_${id});
+    ${ctx.outputs.color} = vec4(sombra_toSrgb((sombra_toLin(rg_A_${id}.rgb) * rg_pa_${id} + sombra_toLin(rg_B_${id}.rgb) * rg_pb_${id}) / max(rg_ao_${id}, 1e-5)), rg_ao_${id});
   } else {
     ${ctx.outputs.color} = texture(${samplerName}, ${sampleUV});
   }`,
@@ -1392,7 +1405,7 @@ export const reededGlassNode: NodeDefinition = {
     let rg_pa_${id} = rg_A_${id}.a * ${seam.weightA};
     let rg_pb_${id} = rg_B_${id}.a * (1.0 - ${seam.weightA});
     let rg_ao_${id} = rg_pa_${id} + rg_pb_${id};
-    ${ctx.outputs.color} = vec4f((rg_A_${id}.rgb * rg_pa_${id} + rg_B_${id}.rgb * rg_pb_${id}) / vec3f(max(rg_ao_${id}, 1e-5)), rg_ao_${id});
+    ${ctx.outputs.color} = vec4f(sombra_toSrgb((sombra_toLin(rg_A_${id}.rgb) * rg_pa_${id} + sombra_toLin(rg_B_${id}.rgb) * rg_pb_${id}) / vec3f(max(rg_ao_${id}, 1e-5))), rg_ao_${id});
   } else {
     ${ctx.outputs.color} = ${wgslSample(sampleUV)};
   }`,

@@ -26,7 +26,8 @@
  */
 
 import type { NodeDefinition } from '../types'
-import type { IRContext, IRFunction, IRNodeOutput, IRStmt } from '../../compiler/ir/types'
+import type { IRContext, IRNodeOutput, IRStmt } from '../../compiler/ir/types'
+import { COLOR_GLSL_HELPERS, COLOR_IR_HELPERS } from '../shared/color-space'
 import { raw } from '../../compiler/ir/types'
 
 /** Kernel extent is 3 sigma, so the Radius slider reads as the visible reach. */
@@ -73,56 +74,6 @@ const BAKED_HALF_WIDTH = Math.max(1, Math.ceil(RADIUS_MAX * SIGMA_PER_RADIUS * 4
  * light; should the engine gain float/linear intermediates, it can come back.
  */
 
-const GLSL_HELPERS = `vec3 sombra_blur_toLin(vec3 c) {
-  return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
-}
-vec3 sombra_blur_toSrgb(vec3 c) {
-  vec3 v = max(c, vec3(0.0));
-  return mix(v * 12.92, 1.055 * pow(v, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), v));
-}
-float sombra_blur_dither(vec2 p) {
-  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
-}`
-
-/** Same three helpers as IR functions, so the WGSL backend emits real signatures. */
-const IR_HELPERS: IRFunction[] = [
-  {
-    key: 'sombra_blur_toLin',
-    name: 'sombra_blur_toLin',
-    params: [{ name: 'c', type: 'vec3' }],
-    returnType: 'vec3',
-    body: [
-      raw(
-        '  return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));',
-        '  return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3f(2.4)), step(vec3f(0.04045), c));',
-      ),
-    ],
-  },
-  {
-    key: 'sombra_blur_toSrgb',
-    name: 'sombra_blur_toSrgb',
-    params: [{ name: 'c', type: 'vec3' }],
-    returnType: 'vec3',
-    body: [
-      raw(
-        '  vec3 v = max(c, vec3(0.0));\n  return mix(v * 12.92, 1.055 * pow(v, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), v));',
-        '  let v = max(c, vec3f(0.0));\n  return mix(v * 12.92, 1.055 * pow(v, vec3f(1.0 / 2.4)) - 0.055, step(vec3f(0.0031308), v));',
-      ),
-    ],
-  },
-  {
-    key: 'sombra_blur_dither',
-    name: 'sombra_blur_dither',
-    params: [{ name: 'p', type: 'vec2' }],
-    returnType: 'float',
-    body: [
-      raw(
-        '  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);',
-        '  return fract(sin(dot(p, vec2f(12.9898, 78.233))) * 43758.5453);',
-      ),
-    ],
-  },
-]
 
 interface EmitOpts {
   id: string
@@ -204,7 +155,7 @@ function emit(o: EmitOpts): string {
     const cond = [mirrored ? `blr_i_${id} > 0` : null, inBounds].filter(Boolean).join(' && ')
     body.push(`    if (${cond || 'true'}) {`)
     body.push(`      blr_t_${id} = ${sample(`blr_uv_${id} ${sign} blr_step_${id} * blr_fi_${id}`)};`)
-    body.push(`      blr_acc_${id} = blr_acc_${id} + sombra_blur_toLin(blr_t_${id}.rgb) * (blr_t_${id}.a * blr_w_${id});`)
+    body.push(`      blr_acc_${id} = blr_acc_${id} + sombra_toLin(blr_t_${id}.rgb) * (blr_t_${id}.a * blr_w_${id});`)
     body.push(`      blr_alpha_${id} = blr_alpha_${id} + blr_t_${id}.a * blr_w_${id};`)
     body.push(`      blr_wsum_${id} = blr_wsum_${id} + blr_w_${id};`)
     body.push(`    }`)
@@ -224,7 +175,7 @@ function emit(o: EmitOpts): string {
     decl(
       v3,
       `blr_enc_${id}`,
-      `sombra_blur_toSrgb(blr_lin_${id}) + ${v3}((sombra_blur_dither(${frag}) - 0.5) / 255.0)`,
+      `sombra_toSrgb(blr_lin_${id}) + ${v3}((sombra_dither(${frag}) - 0.5) / 255.0)`,
     ),
   )
   // Alpha is the same weighted average as the colour — the blur filters alpha,
@@ -298,7 +249,7 @@ export const blurNode: NodeDefinition = {
     const id = ctx.nodeId.replace(/-/g, '_')
     const sampler = ctx.textureSamplers?.source
     if (sampler) {
-      ctx.functionRegistry.set('sombra_blur_helpers', GLSL_HELPERS)
+      ctx.functionRegistry.set('sombra_color_helpers', COLOR_GLSL_HELPERS)
     }
     return emit({
       id,
@@ -343,7 +294,7 @@ export const blurNode: NodeDefinition = {
       statements: stmts,
       uniforms: [],
       standardUniforms,
-      ...(sampler ? { functions: IR_HELPERS } : {}),
+      ...(sampler ? { functions: COLOR_IR_HELPERS } : {}),
     }
   },
 }
