@@ -15,6 +15,7 @@ import { REFERENCE_SIZE as SHARED_REFERENCE_SIZE } from '../renderer/constants'
 import type { RenderPlan } from '../compiler/glsl-generator'
 import type { ShaderRenderer, QualityTier } from '../renderer/types'
 import type { UniformBufferLayout, TextureBinding } from '../compiler/ir/wgsl-assembler'
+import { passTargetSize, type PassTargetSize } from '../renderer/pass-size'
 
 // ---------------------------------------------------------------------------
 // Internal types
@@ -43,6 +44,8 @@ interface PassState {
   inputTextures: Array<{ passIndex: number; samplerName: string }>
   isTimeLive: boolean
   textureFilter: 'linear' | 'nearest'
+  /** Target scale for this pass. Undefined = full canvas resolution. */
+  resolution?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -95,9 +98,8 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
    * loudly in updateMultiPass; the WebGL backend's FBO pool is uncapped.
    */
   private static readonly MAX_INTERMEDIATE_TEXTURES = 32
-  /** Last rendered intermediate texture dimensions. */
-  private lastIntermediateWidth = 0
-  private lastIntermediateHeight = 0
+  /** Last allocated intermediate sizes, as a comparable key. */
+  private lastIntermediateKey = ''
 
   // Pipeline cache — keyed by WGSL source hash
   private pipelineCache = new Map<string, PipelineCacheEntry>()
@@ -418,6 +420,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
         inputTextures: wp.inputTextures,
         isTimeLive: wp.isTimeLive,
         textureFilter: wp.textureFilter ?? 'linear',
+        resolution: wp.resolution,
       })
     }
 
@@ -441,11 +444,25 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     this.intermediateTextures = []
     this.intermediateSamplers = []
     this.uniformPassMap.clear()
-    this.lastIntermediateWidth = 0
-    this.lastIntermediateHeight = 0
+    this.lastIntermediateKey = ''
   }
 
-  /** Ensure intermediate textures exist and match the current render size. */
+  /**
+   * Target size and matching u_dpr for every pass, honouring
+   * RenderPass.resolution. `w`/`h` are the full render size in device px.
+   */
+  private passTargetSizes(w: number, h: number): PassTargetSize[] {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2) * this.currentDprScale
+    const maxTex = this.device.limits.maxTextureDimension2D
+    return this.passStates.map((ps) => passTargetSize(ps.resolution, w, h, dpr, maxTex))
+  }
+
+  /** Pool identity: sizes, not one width/height pair. */
+  private passSizeKey(sizes: PassTargetSize[]): string {
+    return sizes.map((s) => `${s.width}x${s.height}`).join(',')
+  }
+
+  /** Ensure intermediate textures exist and match each pass's target size. */
   private ensureIntermediateTextures(width: number, height: number): void {
     const numIntermediate = this.passStates.length - 1
     if (numIntermediate <= 0) return
@@ -454,9 +471,9 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     // pass count made this mismatch permanently for over-cap graphs — the
     // pool was destroyed and recreated every single frame.
     const cap = Math.min(numIntermediate, WebGPUShaderRenderer.MAX_INTERMEDIATE_TEXTURES)
-    if (this.intermediateTextures.length === cap &&
-        this.lastIntermediateWidth === width &&
-        this.lastIntermediateHeight === height) {
+    const sizes = this.passTargetSizes(width, height).slice(0, cap)
+    const key = this.passSizeKey(sizes)
+    if (this.intermediateTextures.length === cap && this.lastIntermediateKey === key) {
       return
     }
 
@@ -467,7 +484,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
 
     for (let i = 0; i < cap; i++) {
       const texture = this.device.createTexture({
-        size: [width, height],
+        size: [sizes[i].width, sizes[i].height],
         format: 'rgba8unorm',
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
       })
@@ -484,8 +501,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
       this.intermediateSamplers.push(sampler)
     }
 
-    this.lastIntermediateWidth = width
-    this.lastIntermediateHeight = height
+    this.lastIntermediateKey = key
 
     // Rebuild bind groups since texture views changed
     this.rebuildMultiPassBindGroups()
@@ -754,21 +770,30 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
   }
 
   private writeMultiPassBuiltinUniforms(w: number, h: number, dpr: number, time: number): void {
-    for (const ps of this.passStates) {
+    const sizes = this.passTargetSizes(w, h)
+    for (let i = 0; i < this.passStates.length; i++) {
+      const ps = this.passStates[i]
       const set = (name: string, ...values: number[]) => {
         const offset = ps.uniformLayout.offsets.get(name)
         if (offset === undefined) return
         const base = offset / 4
-        for (let i = 0; i < values.length; i++) {
-          ps.uniformFloat32[base + i] = values[i]
+        for (let j = 0; j < values.length; j++) {
+          ps.uniformFloat32[base + j] = values[j]
         }
       }
 
+      // The LAST pass draws to the swap-chain texture, which is always full
+      // canvas size regardless of what it declared.
+      const isLast = i === this.passStates.length - 1
+      const tw = isLast ? w : (sizes[i]?.width ?? w)
+      const th = isLast ? h : (sizes[i]?.height ?? h)
+      const tdpr = isLast ? dpr : (sizes[i]?.dpr ?? dpr)
+
       set('u_time', time)
-      set('u_resolution', w, h)
-      set('u_dpr', dpr)
+      set('u_resolution', tw, th)
+      set('u_dpr', tdpr)
       set('u_ref_size', WebGPUShaderRenderer.REFERENCE_SIZE)
-      set('u_viewport', w, h)
+      set('u_viewport', tw, th)
       set('u_anchor', this.anchor[0], this.anchor[1])
 
       this.device.queue.writeBuffer(ps.uniformBuffer, 0, ps.uniformData)
