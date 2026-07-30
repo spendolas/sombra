@@ -23,11 +23,11 @@ import { initializeNodeLibrary } from '../src/nodes'
 import { nodeRegistry } from '../src/nodes/registry'
 import type { GLSLContext } from '../src/nodes/types'
 import type { IRContext, IRRawCode } from '../src/compiler/ir/types'
-import { pyramidPlan } from '../src/nodes/effect/blur'
+import { pyramidPlan } from '../src/nodes/effect/pyramid-blur'
 import { test, run, assert } from './blur-bakeoff/lib/test-util'
 
 initializeNodeLibrary()
-const blur = nodeRegistry.get('blur')
+const blur = nodeRegistry.get('pyramid_blur')
 if (!blur || !blur.ir) throw new Error('blur node or its ir() missing')
 
 /** All numeric literals in shader text: floats (with a decimal, incl. sci-notation), NOT the

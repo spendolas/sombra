@@ -62,7 +62,7 @@ function stepEdge(): Rgba8 {
  *  we feed our OWN step image to the blur's first pass instead. */
 function blurPasses(radius: number): RawGlslPass[] {
   const plan = compileGraph(
-    [n('src', 'checkerboard'), n('fx', 'blur', { radius }), n('out', 'fragment_output')],
+    [n('src', 'checkerboard'), n('fx', 'pyramid_blur', { radius }), n('out', 'fragment_output')],
     [e('e1', 'src', 'color', 'fx', 'source'), e('e2', 'fx', 'color', 'out', 'color')],
   )
   if (!plan.success) throw new Error('compile failed: ' + JSON.stringify(plan.errors))

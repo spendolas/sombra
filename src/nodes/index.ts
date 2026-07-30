@@ -38,6 +38,7 @@ import { fbmNode } from './noise/fbm'
 // Effect nodes
 import { pixelateNode } from './distort/pixelate'
 import { blurNode } from './effect/blur'
+import { pyramidBlurNode } from './effect/pyramid-blur'
 import { reededGlassNode } from './transform/reeded-glass'
 
 // Color nodes
@@ -105,6 +106,7 @@ export const ALL_NODES = [
   // Effect
   pixelateNode,
   blurNode,
+  pyramidBlurNode,
   reededGlassNode,
 
   // Color
