@@ -326,12 +326,11 @@ function glslTypeToWgsl(glslType: string): string {
  * Map to store WGSL-disambiguated function names for overloaded GLSL functions.
  * Key: original GLSL name, Value: map of dedup key → WGSL name.
  */
-const WGSL_OVERLOAD_NAMES: Record<string, Record<string, string>> = {
-  mod289: {
-    mod289_vec3: 'mod289_v3',
-    mod289_vec4: 'mod289_v4',
-  },
-}
+// GLSL-name -> { dedupKey -> WGSL-name } for functions that must be renamed because WGSL
+// has no overloading. Empty since mod289 was given distinct names in both backends (its
+// call sites could not be renamed textually — see noise-functions.ts). Kept as the seam for
+// the next genuinely-overloaded helper.
+const WGSL_OVERLOAD_NAMES: Record<string, Record<string, string>> = {}
 
 // ---------------------------------------------------------------------------
 // Expression lowering

@@ -163,7 +163,7 @@ Each of these exists because it was violated and cost real time. Evidence in `do
 ### Codegen — both backends, always
 
 - **Extend the IR rather than reaching for `raw()`.** `src/compiler/ir/types.ts` is 292 lines of this project's own code with no external contract; adding a statement or expression kind is ~50 lines across `types.ts` + both backends (copy the `case 'for'` lowering). Falling back to `raw()` is one line, which is why `reeded-glass.ts` reached 38 `raw()` against 10 structured builders and now cannot be verified.
-- **`raw()` budget.** Two-arg `raw(glsl, wgsl)` is hand-written per backend and drifts by construction — it stands at **4**; freeze there and ratchet down. One-arg `raw()` is for whole shared helper-function bodies (`noise-functions.ts`) only, never node body logic.
+- **`raw()` budget.** Two-arg `raw(glsl, wgsl)` is hand-written per backend and drifts by construction — it stands at **2**; freeze there and ratchet down. One-arg `raw()` is for whole shared helper-function bodies (`noise-functions.ts`) only, never node body logic.
 - **`raw(glsl, wgsl)` skips mechanical translation.** It has caused three silent WebGPU-only bugs. The worst (`b56c19c`) reported compile SUCCESS and then dropped every frame.
 - Library-wide ratio for calibration: 91 `raw()` against 1033 structured builders. The IR is real for most nodes — `gradient.ts` is 0 `raw()` / 290 builders.
 
