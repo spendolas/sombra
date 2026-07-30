@@ -395,6 +395,17 @@ export function lowerExprToWGSL(expr: IRExpr): string {
     case 'textureSample':
       // WGSL separates texture and sampler objects
       return `textureSample(${expr.sampler}_tex, ${expr.sampler}_samp, ${lowerExprToWGSL(expr.coords)})`
+
+    case 'fragCoord':
+      // in.position is ALREADY y-down (top-left origin), so both spaces are the same text
+      // here. The asymmetry lives entirely on the GLSL side — see glsl-backend.ts.
+      return 'in.position.xy'
+
+    case 'framebufferY': {
+      // WGSL's framebuffer Y runs DOWN, so only a y-up input needs negating.
+      const e = lowerExprToWGSL(expr.expr)
+      return expr.from === 'yUp' ? `vec2f((${e}).x, -(${e}).y)` : e
+    }
   }
 }
 

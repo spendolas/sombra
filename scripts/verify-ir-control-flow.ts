@@ -20,7 +20,7 @@
 import { test, run, assert } from './blur-bakeoff/lib/test-util'
 import { createRig } from './blur-bakeoff/lib/gpu-rig'
 import {
-  ifStmt, forLoop, declare, assign, binary, variable, literal, call,
+  ifStmt, forLoop, declare, assign, binary, variable, literal, call, fragCoord, framebufferY,
 } from '../src/compiler/ir/types'
 import type { IRStmt } from '../src/compiler/ir/types'
 import { lowerStmtToGLSL } from '../src/compiler/ir/glsl-backend'
@@ -84,6 +84,42 @@ test('forLoop is reachable as a structured builder at all', () => {
   const s = forLoop('k', literal('int', 0), literal('int', 3), [assign('acc', variable('acc'))])
   assert(glsl(s).startsWith('for (int k = 0'), `GLSL: ${glsl(s)}`)
   assert(wgsl(s).startsWith('for (var k: i32 = 0'), `WGSL: ${wgsl(s)}`)
+})
+
+// ---------------------------------------------------------------------------
+// 1b. Y-orientation constructs
+//
+// GLSL's gl_FragCoord is y-UP; WGSL's in.position is y-DOWN. The assembler rewrites the
+// NAME but cannot fix the orientation, which is why every node needing fragment coordinates
+// used to hand-write both arms. Getting the direction backwards mirrors the effect
+// vertically on ONE backend only and compiles cleanly on both, so these assert the direction
+// explicitly rather than just that something was emitted.
+// ---------------------------------------------------------------------------
+
+test("fragCoord('yDown') flips on GLSL and is bare on WGSL", () => {
+  const s = declare('a', 'vec2', fragCoord('yDown'))
+  assert(glsl(s).includes('u_resolution.y - gl_FragCoord.y'),
+    `GLSL must flip Y against u_resolution: ${glsl(s)}`)
+  assert(wgsl(s).includes('in.position.xy') && !wgsl(s).includes('-'),
+    `WGSL is already y-down and must NOT flip: ${wgsl(s)}`)
+})
+
+test("fragCoord('native') flips on neither backend", () => {
+  const s = declare('a', 'vec2', fragCoord('native'))
+  assert(glsl(s).includes('gl_FragCoord.xy') && !glsl(s).includes('u_resolution'),
+    `GLSL native must be the raw builtin: ${glsl(s)}`)
+  assert(wgsl(s).includes('in.position.xy'), `WGSL: ${wgsl(s)}`)
+})
+
+test('framebufferY negates on exactly ONE backend, and which one depends on the source basis', () => {
+  const up = declare('c', 'vec2', framebufferY(variable('d'), 'yUp'))
+  const down = declare('e', 'vec2', framebufferY(variable('d'), 'yDown'))
+  // GLSL's framebuffer is y-up: only a y-DOWN input needs negating.
+  assert(!glsl(up).includes('-'), `GLSL + yUp must be identity: ${glsl(up)}`)
+  assert(glsl(down).includes('-'), `GLSL + yDown must negate: ${glsl(down)}`)
+  // WGSL's framebuffer is y-down: the mirror image.
+  assert(wgsl(up).includes('-'), `WGSL + yUp must negate: ${wgsl(up)}`)
+  assert(!wgsl(down).includes('-'), `WGSL + yDown must be identity: ${wgsl(down)}`)
 })
 
 // ---------------------------------------------------------------------------

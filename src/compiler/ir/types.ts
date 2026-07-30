@@ -83,7 +83,7 @@ export type IRExpr =
   | IRSwizzle
   | IRConstruct
   | IRTernary
-  | IRTextureSample
+  | IRTextureSample | IRFragCoord | IRFramebufferY
 
 // ---------------------------------------------------------------------------
 // Statements
@@ -110,6 +110,48 @@ export interface IRForLoop {
   readonly to: IRExpr        // may be a literal (baked octave count) or variable
   readonly body: IRStmt[]
   readonly earlyBreak?: IRExpr  // condition for `if (cond) break;`
+}
+
+/**
+ * The fragment's pixel coordinate.
+ *
+ * The two languages disagree on the Y origin: GLSL's `gl_FragCoord` is y-UP (origin
+ * bottom-left) while WGSL's `in.position` is y-DOWN (origin top-left). The WGSL assembler
+ * rewrites the NAME textually but cannot fix the orientation, so every node needing this had
+ * to hand-write both arms — and getting it wrong is silent. The audit records a vertically
+ * mirrored distortion field that shipped on WebGPU only.
+ *
+ * `space: 'yDown'` gives top-left-origin pixels on BOTH backends — the orientation Sombra's
+ * pattern space and `auto_uv` use. `space: 'native'` gives each backend's own framebuffer
+ * orientation, which is what you want when the result indexes a texture that was itself
+ * rendered in that orientation (sampling your own fragment must be the identity).
+ *
+ * `'yDown'` needs `u_resolution` on the GLSL side — declare it as a standard uniform.
+ */
+export interface IRFragCoord {
+  readonly kind: 'fragCoord'
+  readonly space: 'yDown' | 'native'
+}
+
+/**
+ * Reorient a vector onto the backend's framebuffer Y axis.
+ *
+ * A displacement computed in some pattern basis cannot be added to a native framebuffer
+ * coordinate directly, because GLSL's framebuffer Y runs up and WGSL's runs down. `from`
+ * states which basis the input is already in, and the lowering negates Y only on the backend
+ * whose framebuffer disagrees with it.
+ *
+ * Both directions are real and both occur in this codebase: `auto_uv` works in a y-DOWN
+ * pattern space, while reeded-glass's seam normals and sub-sample deltas are y-UP. Getting the
+ * direction backwards is silent and mirrors the effect vertically on one backend only — the
+ * audit records exactly that shipping in `warp`. Passing `from` explicitly is what makes the
+ * choice reviewable instead of implied.
+ */
+export interface IRFramebufferY {
+  readonly kind: 'framebufferY'
+  readonly expr: IRExpr
+  /** The Y orientation the input vector is already expressed in. */
+  readonly from: 'yUp' | 'yDown'
 }
 
 /** One arm of an if / else-if chain. */
@@ -327,6 +369,14 @@ export function forLoop(
 export function ifStmt(branches: IRIfBranch[], fallback?: IRStmt[]): IRIfStmt {
   if (branches.length === 0) throw new Error('ifStmt() needs at least one branch')
   return { kind: 'if', branches, fallback }
+}
+
+export function fragCoord(space: 'yDown' | 'native' = 'yDown'): IRFragCoord {
+  return { kind: 'fragCoord', space }
+}
+
+export function framebufferY(expr: IRExpr, from: 'yUp' | 'yDown'): IRFramebufferY {
+  return { kind: 'framebufferY', expr, from }
 }
 
 export function textureSample(sampler: string, coords: IRExpr, type: IRType = 'vec4'): IRTextureSample {

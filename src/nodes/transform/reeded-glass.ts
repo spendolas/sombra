@@ -19,7 +19,7 @@ import { addFunction, getSpatialParams } from '../types'
 import { registerNoiseType, resolveNoiseFn, getIRNoiseFunctions } from '../noise/noise-functions'
 import { COLOR_GLSL_HELPERS, COLOR_IR_HELPERS } from '../shared/color-space'
 import type { IRContext, IRFunction, IRNodeOutput, IRStmt } from '../../compiler/ir/types'
-import { variable, declare, binary, raw } from '../../compiler/ir/types'
+import { variable, declare, binary, raw, fragCoord, framebufferY } from '../../compiler/ir/types'
 
 const RIB_TYPE_OPTIONS = [
   { value: 'straight', label: 'Straight' },
@@ -1162,14 +1162,18 @@ export const reededGlassNode: NodeDefinition = {
     const stmts: IRStmt[] = []
 
     // Canonical auto_uv, kept BEFORE the SRT — see the glsl() comment. Two-argument
-    // raw() because the base differs per backend: gl_FragCoord is y-up here and the
-    // assembler rewrites it to in.position, which is y-down.
+    // `fragCoord('yDown')` is the construct that used to force two hand-written arms here:
+    // gl_FragCoord is y-up and in.position is y-down, and the assembler rewrites only the
+    // NAME. Asking for the y-down space makes both backends agree.
     const autoUv = `rg_auv_${id}`
     const coordsVar = `rg_coords_${id}`
-    stmts.push(raw(
-      `vec2 ${autoUv} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * u_anchor) / (u_dpr * u_ref_size) + u_anchor;`,
-      `let ${autoUv} = (in.position.xy - uniforms.u_resolution * uniforms.u_anchor) / (uniforms.u_dpr * uniforms.u_ref_size) + uniforms.u_anchor;`,
-    ))
+    stmts.push(declare(autoUv, 'vec2',
+      binary('+',
+        binary('/',
+          binary('-', fragCoord('yDown'),
+            binary('*', variable('u_resolution'), variable('u_anchor'), 'vec2'), 'vec2'),
+          binary('*', variable('u_dpr'), variable('u_ref_size'), 'float'), 'vec2'),
+        variable('u_anchor'), 'vec2')))
     const radRef = `rg_rad_ref_${id}`
     // No aspect conjugation: ref space is isotropic, so conjugating would make the
     // rotate non-rigid and skew the rib angle on a non-square canvas.
@@ -1340,16 +1344,25 @@ export const reededGlassNode: NodeDefinition = {
       // the benefit, and reads exactly 0.000 at the defaults, where the perp
       // component is never consumed — i.e. invisible in the first thing anyone
       // would eyeball.
+      //
+      // Structured via `fragCoord('native')` and `framebufferY(_, 'yUp')`. NATIVE, not
+      // y-down: this uv indexes a texture that was itself rendered in the backend's own
+      // orientation, so sampling your own fragment has to be the identity. The deltas and
+      // the seam normal are y-UP (pattern basis), which is why they are the operands that
+      // get reoriented — and stating the basis in the call is what makes the two negations
+      // above reviewable rather than folklore.
       const sampleUV = `rg_sampleUV_${id}`
-      stmts.push(raw(
-        `vec2 ${sampleUV} = gl_FragCoord.xy / u_viewport + ${mid.delta};`,
-        `let ${sampleUV} = in.position.xy / uniforms.u_viewport + vec2f(${mid.delta}.x, -${mid.delta}.y);`,
-      ))
-      for (const [s, c, dv] of [['_a', seam.centroidA, subA.delta], ['_b', seam.centroidB, subB.delta]] as const) {
-        stmts.push(raw(
-          `vec2 ${sampleUV}${s} = (gl_FragCoord.xy + ${seam.normal} * (${c})) / u_viewport + ${dv};`,
-          `let ${sampleUV}${s} = (in.position.xy + vec2f(${seam.normal}.x, -${seam.normal}.y) * (${c})) / uniforms.u_viewport + vec2f(${dv}.x, -${dv}.y);`,
-        ))
+      const selfUV = () => binary('/', fragCoord('native'), variable('u_viewport'), 'vec2')
+      stmts.push(declare(sampleUV, 'vec2',
+        binary('+', selfUV(), framebufferY(variable(mid.delta), 'yUp'), 'vec2')))
+      for (const [sfx, c, dv] of [['_a', seam.centroidA, subA.delta], ['_b', seam.centroidB, subB.delta]] as const) {
+        stmts.push(declare(`${sampleUV}${sfx}`, 'vec2',
+          binary('+',
+            binary('/',
+              binary('+', fragCoord('native'),
+                binary('*', framebufferY(variable(seam.normal), 'yUp'), variable(`(${c})`), 'vec2'), 'vec2'),
+              variable('u_viewport'), 'vec2'),
+            framebufferY(variable(dv), 'yUp'), 'vec2')))
       }
 
       // Frosted glass: hash-based jitter blur (8 taps).
