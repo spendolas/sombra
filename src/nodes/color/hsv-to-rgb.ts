@@ -97,7 +97,6 @@ export const hsvToRgbNode: NodeDefinition = {
         ),
         raw(
           `vec4 ${ctx.outputs.rgb} = vec4(${rgbVar}, 1.0);`,
-          `var ${ctx.outputs.rgb}: vec4f = vec4f(${rgbVar}, 1.0);`,
         ),
       ],
       uniforms: [],

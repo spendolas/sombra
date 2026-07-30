@@ -46,7 +46,6 @@ export const COLOR_IR_HELPERS: IRFunction[] = [
     body: [
       raw(
         '  return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));',
-        '  return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3f(2.4)), step(vec3f(0.04045), c));',
       ),
     ],
   },
@@ -58,7 +57,6 @@ export const COLOR_IR_HELPERS: IRFunction[] = [
     body: [
       raw(
         '  vec3 v = max(c, vec3(0.0));\n  return mix(v * 12.92, 1.055 * pow(v, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), v));',
-        '  let v = max(c, vec3f(0.0));\n  return mix(v * 12.92, 1.055 * pow(v, vec3f(1.0 / 2.4)) - 0.055, step(vec3f(0.0031308), v));',
       ),
     ],
   },
@@ -70,7 +68,6 @@ export const COLOR_IR_HELPERS: IRFunction[] = [
     body: [
       raw(
         '  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);',
-        '  return fract(sin(dot(p, vec2f(12.9898, 78.233))) * 43758.5453);',
       ),
     ],
   },

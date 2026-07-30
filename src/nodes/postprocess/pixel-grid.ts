@@ -306,7 +306,6 @@ export const ditherNode: NodeDefinition = {
       // cell grid, the in-cell fract and the cell-centre resample.
       raw(
         `float ${size} = max(1.0, floor(${ctx.inputs.pixelSize} * u_dpr + 0.5));`,
-        `let ${size} = max(1.0, floor(${ctx.inputs.pixelSize} * u_dpr + 0.5));`,
       ),
       // Cell index (which big pixel)
       declare(cell, 'vec2',

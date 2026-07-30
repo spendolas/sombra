@@ -137,15 +137,12 @@ export const fragmentOutputNode: NodeDefinition = {
       statements: [
         raw(
           `vec4 ${col} = ${ctx.inputs.color};`,
-          `var ${col}: vec4f = ${ctx.inputs.color};`,
         ),
         raw(
           `float ${af} = clamp(${combine}, 0.0, 1.0);`,
-          `let ${af}: f32 = clamp(${combine}, 0.0, 1.0);`,
         ),
         raw(
           `fragColor = vec4(${col}.rgb * ${af}, ${af});`,
-          `fragColor = vec4f(${col}.rgb * ${af}, ${af});`,
         ),
       ],
       uniforms: [],

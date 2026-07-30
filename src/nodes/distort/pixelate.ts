@@ -92,7 +92,6 @@ export const pixelateNode: NodeDefinition = {
       // cell grid and the cell centre.
       raw(
         `float pxl_size_${id} = max(1.0, floor(${ctx.inputs.pixelSize} * u_dpr + 0.5));`,
-        `let pxl_size_${id} = max(1.0, floor(${ctx.inputs.pixelSize} * u_dpr + 0.5));`,
       ),
       declare(`pxl_cell_${id}`, 'vec2',
         call('floor', [

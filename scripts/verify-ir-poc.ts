@@ -1902,11 +1902,15 @@ function verify(
   }
   const irOut = imageNode.ir!(i)
   const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
-  if (!new RegExp(`let node_img_uuu111_color: vec4f = vec4f\\(${sampleVar}\\.rgb, ${sampleVar}\\.a\\);`).test(irWGSL)) {
+  // `let` vs `var` is not semantic here — the variable is declared once and never
+  // reassigned, and the mechanical GLSL->WGSL path emits `var`. The assertion's job is
+  // that colour combines sampled rgb+alpha, so it accepts either keyword. Its sibling
+  // for the no-data case already expected `var`.
+  if (!new RegExp(`(let|var) node_img_uuu111_color: vec4f = vec4f\\(${sampleVar}\\.rgb, ${sampleVar}\\.a\\);`).test(irWGSL)) {
     console.log(`  [FAIL] IR->WGSL: expected color output to combine sampled rgb+alpha. Got:\n    ${irWGSL}`)
     imgLoadedOk = false
   }
-  if (!new RegExp(`let node_img_uuu111_alpha: f32 = ${sampleVar}\\.a;`).test(irWGSL)) {
+  if (!new RegExp(`(let|var) node_img_uuu111_alpha: f32 = ${sampleVar}\\.a;`).test(irWGSL)) {
     console.log(`  [FAIL] IR->WGSL: alpha output port regressed. Got:\n    ${irWGSL}`)
     imgLoadedOk = false
   }
