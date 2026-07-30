@@ -61,14 +61,14 @@ export function registerNoiseType(ctx: GLSLContext, noiseType: string): void {
 
 // --- Simplex ---
 function registerSimplex(ctx: GLSLContext) {
-  addFunction(ctx, 'mod289_vec3', `vec3 mod289(vec3 x) {
+  addFunction(ctx, 'mod289_vec3', `vec3 mod289_v3(vec3 x) {
   return x - floor(x * (1.0 / 289.0)) * 289.0;
 }`)
-  addFunction(ctx, 'mod289_vec4', `vec4 mod289(vec4 x) {
+  addFunction(ctx, 'mod289_vec4', `vec4 mod289_v4(vec4 x) {
   return x - floor(x * (1.0 / 289.0)) * 289.0;
 }`)
   addFunction(ctx, 'permute_vec4', `vec4 permute(vec4 x) {
-  return mod289(((x*34.0)+1.0)*x);
+  return mod289_v4(((x*34.0)+1.0)*x);
 }`)
   addFunction(ctx, 'taylorInvSqrt', `vec4 taylorInvSqrt(vec4 r) {
   return 1.79284291400159 - 0.85373472095314 * r;
@@ -85,7 +85,7 @@ function registerSimplex(ctx: GLSLContext) {
   vec3 x1 = x0 - i1 + C.xxx;
   vec3 x2 = x0 - i2 + C.yyy;
   vec3 x3 = x0 - D.yyy;
-  i = mod289(i);
+  i = mod289_v3(i);
   vec4 p = permute(permute(permute(
     i.z + vec4(0.0, i1.z, i2.z, 1.0))
   + i.y + vec4(0.0, i1.y, i2.y, 1.0))
@@ -111,7 +111,7 @@ function registerSimplex(ctx: GLSLContext) {
   vec3 p3 = vec3(a1.zw, h.w);
   vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
   p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
-  vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+  vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), vec4(0.0));
   m = m * m;
   return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
 }`)
@@ -234,19 +234,19 @@ function registerBoxNoise(ctx: GLSLContext) {
 function irSimplexFunctions(): IRFunction[] {
   return [
     {
-      key: 'mod289_vec3', name: 'mod289',
+      key: 'mod289_vec3', name: 'mod289_v3',
       params: [{ name: 'x', type: 'vec3' }], returnType: 'vec3',
       body: [raw('return x - floor(x * (1.0 / 289.0)) * 289.0;')],
     },
     {
-      key: 'mod289_vec4', name: 'mod289',
+      key: 'mod289_vec4', name: 'mod289_v4',
       params: [{ name: 'x', type: 'vec4' }], returnType: 'vec4',
       body: [raw('return x - floor(x * (1.0 / 289.0)) * 289.0;')],
     },
     {
       key: 'permute_vec4', name: 'permute',
       params: [{ name: 'x', type: 'vec4' }], returnType: 'vec4',
-      body: [raw('return mod289(((x*34.0)+1.0)*x);', 'return mod289_v4(((x*34.0)+1.0)*x);')],
+      body: [raw('return mod289_v4(((x*34.0)+1.0)*x);')],
     },
     {
       key: 'taylorInvSqrt', name: 'taylorInvSqrt',
@@ -269,7 +269,7 @@ vec3 i2 = max(g.xyz, l.zxy);
 vec3 x1 = x0 - i1 + C.xxx;
 vec3 x2 = x0 - i2 + C.yyy;
 vec3 x3 = x0 - D.yyy;
-i = mod289(i);
+i = mod289_v3(i);
 vec4 p = permute(permute(permute(
   i.z + vec4(0.0, i1.z, i2.z, 1.0))
 + i.y + vec4(0.0, i1.y, i2.y, 1.0))
@@ -295,50 +295,9 @@ vec3 p2 = vec3(a1.xy, h.z);
 vec3 p3 = vec3(a1.zw, h.w);
 vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
 p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
-vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), vec4(0.0));
 m = m * m;
-return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));`,
-        // Explicit WGSL override — fixes: const syntax, var declarations, mod289→mod289_v3
-        `const C: vec2f = vec2f(1.0/6.0, 1.0/3.0);
-const D: vec4f = vec4f(0.0, 0.5, 1.0, 2.0);
-var i: vec3f = floor(v + dot(v, C.yyy));
-var x0: vec3f = v - i + dot(i, C.xxx);
-var g: vec3f = step(x0.yzx, x0.xyz);
-var l: vec3f = 1.0 - g;
-var i1: vec3f = min(g.xyz, l.zxy);
-var i2: vec3f = max(g.xyz, l.zxy);
-var x1: vec3f = x0 - i1 + C.xxx;
-var x2: vec3f = x0 - i2 + C.yyy;
-var x3: vec3f = x0 - D.yyy;
-i = mod289_v3(i);
-var p: vec4f = permute(permute(permute(
-  i.z + vec4f(0.0, i1.z, i2.z, 1.0))
-+ i.y + vec4f(0.0, i1.y, i2.y, 1.0))
-+ i.x + vec4f(0.0, i1.x, i2.x, 1.0));
-var n_: f32 = 0.142857142857;
-var ns: vec3f = n_ * D.wyz - D.xzx;
-var j: vec4f = p - 49.0 * floor(p * ns.z * ns.z);
-var x_: vec4f = floor(j * ns.z);
-var y_: vec4f = floor(j - 7.0 * x_);
-var x: vec4f = x_ * ns.x + ns.yyyy;
-var y: vec4f = y_ * ns.x + ns.yyyy;
-var h: vec4f = 1.0 - abs(x) - abs(y);
-var b0: vec4f = vec4f(x.xy, y.xy);
-var b1: vec4f = vec4f(x.zw, y.zw);
-var s0: vec4f = floor(b0) * 2.0 + 1.0;
-var s1: vec4f = floor(b1) * 2.0 + 1.0;
-var sh: vec4f = -step(h, vec4f(0.0));
-var a0: vec4f = b0.xzyw + s0.xzyw * sh.xxyy;
-var a1: vec4f = b1.xzyw + s1.xzyw * sh.zzww;
-var p0: vec3f = vec3f(a0.xy, h.x);
-var p1: vec3f = vec3f(a0.zw, h.y);
-var p2: vec3f = vec3f(a1.xy, h.z);
-var p3: vec3f = vec3f(a1.zw, h.w);
-var norm: vec4f = taylorInvSqrt(vec4f(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
-p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
-var m: vec4f = max(0.6 - vec4f(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), vec4f(0.0));
-m = m * m;
-return 42.0 * dot(m*m, vec4f(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));`,
+return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));`
       )],
     },
     {
