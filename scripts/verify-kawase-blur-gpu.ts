@@ -150,15 +150,15 @@ test('smooth sweep: edge width rises monotonically with radius (no pop, uniform-
 })
 
 // (3) SHAPE: width tracks σ = radius/3, and matches the CPU Gaussian reference.
-for (const r of [24, 48, 96]) {
+// With the intrinsic-tent subtraction the whole r≥8 range holds within 12% of a true
+// Gaussian (r<3.2 snaps to sharp — sub-pixel blur is unrepresentable past the tent floor,
+// so it is deliberately excluded here; the sweep test still covers continuity from r=8).
+for (const r of [8, 16, 24, 48, 96, 128, 192]) {
   test(`r${r}: edge width ≈ Gaussian σ=radius/3 (Kawase approximation)`, () => {
     const sigma = r * SIGMA_PER_RADIUS
     const expected = RISE_PER_SIGMA * sigma
     const got = riseWidth(capByRadius.get(r)!)
-    // 20% tol: a 5-pass Kawase is a Gaussian APPROXIMATION; k is solved so σ tracks
-    // radius/3 to first order, but the sparse taps add a few % and the low end carries
-    // bilinear-tent variance.
-    assert(Number.isFinite(got) && Math.abs(got - expected) / expected < 0.2,
+    assert(Number.isFinite(got) && Math.abs(got - expected) / expected < 0.12,
       `r${r}: rise width ${got.toFixed(1)}px, expected ~${expected.toFixed(1)}px (σ ${sigma.toFixed(1)})`)
   })
   test(`r${r}: matches a CPU Gaussian reference, and is no passthrough`, () => {

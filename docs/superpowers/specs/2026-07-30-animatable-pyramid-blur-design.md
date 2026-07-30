@@ -61,9 +61,38 @@ monotonically over a radius sweep → no pop; (3) width within 20% of σ=radius/
 the CPU reference. 9/9 GPU. Live-verified in-app: radius 6→60→120 blurs progressively on one
 byte-identical shader, no console errors.
 
+## Low-end correction (done)
+
+Added an intrinsic-tent subtraction (`INTRINSIC_TEXELS = 1.07`): the kernel targets
+√(σ² − floor²) so the tent floor lands the output back on σ. Result: r=4 went 1.28→0.96,
+and the whole r≥8 range holds within ~4% of a true Gaussian (gate tightened to 12%, 17/17).
+Side effect: radius < 3.2 snaps to sharp (sub-pixel blur is below the tent floor and can't
+be represented) — monotonic, no pop.
+
+## Extreme-radius ceiling (measured — the look DOES demand more)
+
+Grating-leakage test (`scripts/`, exploratory): how much of a high-freq grating survives the
+blur, vs a true Gaussian (which crushes all of them → 0). Worst-case leakage over a period
+sweep, by radius:
+
+| radius | 32 | 48 | 64 | 96 | 128 | 192 | 256 |
+|---|---|---|---|---|---|---|---|
+| worst leak (codes) | 13 | 13 | 70 | 28 | 118 | 126 | 131 |
+
+**Kawase's clean ceiling is ~radius 48.** Above it the 5-pass kernel (a product of cosines)
+develops passband recurrences — coherent grid leakage up to ~130–230 codes that crawls in
+motion. This is the classic Kawase tell, and it means plain 5-pass Kawase is NOT a clean
+unbounded animatable blur. Options to resolve, cheapest first:
+
+- **A — cap `kawase_blur` at ~r48–64:** clean animatable blur for small/medium radius; large
+  static blur is already served by `pyramid_blur`, large wired by separable `blur`.
+- **C — stochastic/jittered Kawase:** hash-jitter the taps to smear the passband grid into
+  (static) noise; shader-only, stays animatable/fixed-count; needs its own verification.
+- **B — framework cross-fade / mip pyramid:** real downsampling low-passes before aliasing,
+  giving a genuinely clean unbounded animatable blur; ~1 day of compiler + renderer work.
+
 ## Open / next
 
-- **Consolidation:** three blur nodes now (separable `blur`, `pyramid_blur`, `kawase_blur`).
-  Decide whether Kawase becomes the default animatable blur, or all three coexist.
-- **Low-end correction:** optional intrinsic-tent subtraction to tighten r<8.
-- **Extreme-radius look:** if grid/shimmer is visible in motion, escalate to option B.
+- Pick A / B / C above for the extreme-radius look.
+- **Consolidation:** three blur nodes now (`blur`, `pyramid_blur`, `kawase_blur`). Decide the
+  final palette story once the range question is settled.
