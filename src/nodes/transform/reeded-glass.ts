@@ -19,7 +19,7 @@ import { addFunction, getSpatialParams } from '../types'
 import { registerNoiseType, resolveNoiseFn, getIRNoiseFunctions } from '../noise/noise-functions'
 import { COLOR_GLSL_HELPERS, COLOR_IR_HELPERS } from '../shared/color-space'
 import type { IRContext, IRFunction, IRNodeOutput, IRStmt } from '../../compiler/ir/types'
-import { variable, declare, binary, raw, fragCoord, framebufferY } from '../../compiler/ir/types'
+import { variable, declare, assign, binary, call, construct, literal, raw, ifStmt, textureSample, fragCoord, framebufferY } from '../../compiler/ir/types'
 
 const RIB_TYPE_OPTIONS = [
   { value: 'straight', label: 'Straight' },
@@ -1371,11 +1371,10 @@ export const reededGlassNode: NodeDefinition = {
       // an already-invalid module, so the renderer reports compile SUCCESS, then at
       // draw time the invalid pipeline invalidates the whole command buffer and the
       // entire frame is dropped — including the pass's loadOp:'clear'. The graph
-      // still works on the WebGL2 fallback, which has no uniformity rule.
-      // textureSampleLevel takes an explicit LOD and is allowed under non-uniform
-      // control flow; these textures have no mips so level 0 is the only level.
-      const wgslSample = (uv: string) =>
-        `textureSampleLevel(${samplerName}_tex, ${samplerName}_samp, ${uv}, 0.0)`
+      // still works on the WebGL2 fallback, which has no uniformity rule. The structured
+      // arms below use textureSample(..., lod0), which lowers to textureSampleLevel and is
+      // allowed under non-uniform control flow; these textures have no mips so level 0 is
+      // the only level.
       const frostArgs = {
         id, isVert, sampler: samplerName, out: `${ctx.outputs.color}`,
         coords: coordsVar, frost: frostVar, grain: `${ctx.inputs.grain}`,
@@ -1385,38 +1384,52 @@ export const reededGlassNode: NodeDefinition = {
         aspScr: `rg_asp_scr_${id}`, radScr: `rg_rad_scr_${id}`,
         scale: `${ctx.inputs.srt_scale}`, grad,
       } as const
+      // The four-way chain is structured via ifStmt — the site the construct was added for.
+      // The frost and minification BODIES stay as raw(emitX('glsl'), emitX('wgsl')): each is
+      // ONE emitter parameterised by backend, i.e. single-source, not hand-written twice
+      // (the raw-budget classifier counts them as single-emitter, not drift-prone). The seam
+      // split and single-tap arms are structured. Explicit LOD (level 0) on every sample:
+      // these arms sit under a per-fragment condition, where WGSL forbids implicit-derivative
+      // textureSample — that is the b56c19c hazard, now impossible by construction.
+      const lod0 = literal('float', 0.0)
+      const lin = (v: string) => call('sombra_toLin', [variable(v)], 'vec3')
+      const A = `rg_A_${id}`, B = `rg_B_${id}`, pa = `rg_pa_${id}`, pb = `rg_pb_${id}`, ao = `rg_ao_${id}`
+      const seamSplitArm: IRStmt[] = [
+        declare(A, 'vec4', textureSample(samplerName, variable(`${sampleUV}_a`), 'vec4', lod0)),
+        declare(B, 'vec4', textureSample(samplerName, variable(`${sampleUV}_b`), 'vec4', lod0)),
+        declare(pa, 'float', binary('*', variable(`${A}.a`), variable(seam.weightA), 'float')),
+        declare(pb, 'float', binary('*', variable(`${B}.a`),
+          binary('-', literal('float', 1.0), variable(seam.weightA), 'float'), 'float')),
+        declare(ao, 'float', binary('+', variable(pa), variable(pb), 'float')),
+        assign(ctx.outputs.color, construct('vec4', [
+          call('sombra_toSrgb', [
+            binary('/',
+              binary('+', binary('*', lin(`${A}.rgb`), variable(pa), 'vec3'),
+                          binary('*', lin(`${B}.rgb`), variable(pb), 'vec3'), 'vec3'),
+              // vec3/vec3: GLSL accepts vec3/float too, WGSL does not — use the vector form.
+              construct('vec3', [call('max', [variable(ao), literal('float', 1e-5)], 'float')]), 'vec3'),
+          ], 'vec3'),
+          variable(ao),
+        ])),
+      ]
       const frostStmts: IRStmt[] = [
-        raw(
-          `vec4 ${ctx.outputs.color};
-  if (${frostVar} > 0.001) {
-    ${emitFrostGather({ ...frostArgs, lang: 'glsl' })}
-  } else if (${taps} > 1.0) {
-    ${emitMinifSupersample({ ...minifArgs, lang: 'glsl' })}
-  } else if (${seam.split}) {
-    vec4 rg_A_${id} = texture(${samplerName}, ${sampleUV}_a);
-    vec4 rg_B_${id} = texture(${samplerName}, ${sampleUV}_b);
-    float rg_pa_${id} = rg_A_${id}.a * ${seam.weightA};
-    float rg_pb_${id} = rg_B_${id}.a * (1.0 - ${seam.weightA});
-    float rg_ao_${id} = rg_pa_${id} + rg_pb_${id};
-    ${ctx.outputs.color} = vec4(sombra_toSrgb((sombra_toLin(rg_A_${id}.rgb) * rg_pa_${id} + sombra_toLin(rg_B_${id}.rgb) * rg_pb_${id}) / max(rg_ao_${id}, 1e-5)), rg_ao_${id});
-  } else {
-    ${ctx.outputs.color} = texture(${samplerName}, ${sampleUV});
-  }`,
-          `var ${ctx.outputs.color}: vec4f;
-  if (${frostVar} > 0.001) {
-    ${emitFrostGather({ ...frostArgs, lang: 'wgsl' })}
-  } else if (${taps} > 1.0) {
-    ${emitMinifSupersample({ ...minifArgs, lang: 'wgsl' })}
-  } else if (${seam.split}) {
-    let rg_A_${id} = ${wgslSample(`${sampleUV}_a`)};
-    let rg_B_${id} = ${wgslSample(`${sampleUV}_b`)};
-    let rg_pa_${id} = rg_A_${id}.a * ${seam.weightA};
-    let rg_pb_${id} = rg_B_${id}.a * (1.0 - ${seam.weightA});
-    let rg_ao_${id} = rg_pa_${id} + rg_pb_${id};
-    ${ctx.outputs.color} = vec4f(sombra_toSrgb((sombra_toLin(rg_A_${id}.rgb) * rg_pa_${id} + sombra_toLin(rg_B_${id}.rgb) * rg_pb_${id}) / vec3f(max(rg_ao_${id}, 1e-5))), rg_ao_${id});
-  } else {
-    ${ctx.outputs.color} = ${wgslSample(sampleUV)};
-  }`,
+        // Uninitialised declare; mechanical translation makes the WGSL `var ...: vec4f;`.
+        raw(`vec4 ${ctx.outputs.color};`),
+        ifStmt(
+          [
+            {
+              cond: binary('>', variable(frostVar), literal('float', 0.001), 'bool'),
+              body: [raw(emitFrostGather({ ...frostArgs, lang: 'glsl' }),
+                         emitFrostGather({ ...frostArgs, lang: 'wgsl' }))],
+            },
+            {
+              cond: binary('>', variable(taps), literal('float', 1.0), 'bool'),
+              body: [raw(emitMinifSupersample({ ...minifArgs, lang: 'glsl' }),
+                         emitMinifSupersample({ ...minifArgs, lang: 'wgsl' }))],
+            },
+            { cond: variable(seam.split), body: seamSplitArm },
+          ],
+          [assign(ctx.outputs.color, textureSample(samplerName, variable(sampleUV), 'vec4', lod0))],
         ),
       ]
             stmts.push(...frostStmts)
