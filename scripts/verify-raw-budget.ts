@@ -19,7 +19,7 @@
  * stays a review question.
  *
  * Method: a lexical scan with a bracket-depth counter, not a real parse. It agrees with an
- * independently-derived count (60 one-arg / 31 two-arg as of 2026-07-30), and it only has to
+ * independently-derived count (62 one-arg / 29 two-arg as of 2026-07-30), and it only has to
  * be deterministic to work as a ratchet.
  *
  * Run: npx tsx scripts/verify-raw-budget.ts
@@ -29,7 +29,7 @@ import path from 'node:path'
 import { test, run, assert } from './blur-bakeoff/lib/test-util'
 
 /** Lower this when a node converts to structured IR. Never raise it. */
-const TWO_ARG_CEILING = 31
+const TWO_ARG_CEILING = 29
 
 /** Files where a one-arg raw() carrying a whole function body is the intended tool. */
 const HELPER_BODY_FILES = ['noise/noise-functions.ts']
