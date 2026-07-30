@@ -1181,13 +1181,6 @@ export const reededGlassNode: NodeDefinition = {
       `  ${coordsVar} = vec2(${coordsVar}.x * cos(${radRef}) - ${coordsVar}.y * sin(${radRef}), ${coordsVar}.x * sin(${radRef}) + ${coordsVar}.y * cos(${radRef}));\n` +
       `  ${coordsVar} -= vec2(${ctx.inputs.srt_translateX}, -(${ctx.inputs.srt_translateY})) / (u_dpr * u_ref_size);\n` +
       `  ${coordsVar} += u_anchor;`,
-      `var ${coordsVar}: vec2f = ${autoUv};\n` +
-      `  ${coordsVar} -= uniforms.u_anchor;\n` +
-      `  ${coordsVar} /= vec2f(${ctx.inputs.srt_scale});\n` +
-      `  let ${radRef} = ${ctx.inputs.srt_rotate} * 0.01745329;\n` +
-      `  ${coordsVar} = vec2f(${coordsVar}.x * cos(${radRef}) - ${coordsVar}.y * sin(${radRef}), ${coordsVar}.x * sin(${radRef}) + ${coordsVar}.y * cos(${radRef}));\n` +
-      `  ${coordsVar} -= vec2f(${ctx.inputs.srt_translateX}, -(${ctx.inputs.srt_translateY})) / (uniforms.u_dpr * uniforms.u_ref_size);\n` +
-      `  ${coordsVar} += uniforms.u_anchor;`,
     ))
 
     const ampRef = `rg_amp_ref_${id}`
@@ -1205,10 +1198,6 @@ export const reededGlassNode: NodeDefinition = {
       `  ${patRef} /= vec2(${ctx.inputs.srt_scale});\n` +
       `  ${patRef} = vec2(${patRef}.x * cos(${radRef}) - ${patRef}.y * sin(${radRef}), ${patRef}.x * sin(${radRef}) + ${patRef}.y * cos(${radRef}));\n` +
       `  ${patRef} -= vec2(${ctx.inputs.srt_translateX}, -(${ctx.inputs.srt_translateY})) / (u_dpr * u_ref_size);`,
-      `var ${patRef}: vec2f = vec2f(${autoUv}.x - uniforms.u_anchor.x, -(${autoUv}.y - uniforms.u_anchor.y));\n` +
-      `  ${patRef} /= vec2f(${ctx.inputs.srt_scale});\n` +
-      `  ${patRef} = vec2f(${patRef}.x * cos(${radRef}) - ${patRef}.y * sin(${radRef}), ${patRef}.x * sin(${radRef}) + ${patRef}.y * cos(${radRef}));\n` +
-      `  ${patRef} -= vec2f(${ctx.inputs.srt_translateX}, -(${ctx.inputs.srt_translateY})) / (uniforms.u_dpr * uniforms.u_ref_size);`,
     ))
 
     const refBasis: Basis = {
