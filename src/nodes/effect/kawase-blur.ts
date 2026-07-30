@@ -50,6 +50,18 @@ const PASS_COUNT = OFFSETS.length
 /** √(Σ Aₚ²) — the constant relating the offset scale k to the output sigma. */
 const OFFSET_RMS = Math.sqrt(OFFSETS.reduce((s, a) => s + a * a, 0))
 
+/**
+ * The blur has a variance FLOOR: every bilinear fetch at a fractional offset adds a
+ * ~tent (triangle) filter, so five passes contribute a near-constant intrinsic sigma in
+ * DEVICE texels independent of radius. Left unaccounted it over-blurs the small end
+ * (measured σ 1.71 vs target 1.33 at radius 4 → floor ≈ √(1.71²−1.33²) ≈ 1.07 texels).
+ * We subtract it in quadrature — target the Kawase kernel at √(σ² − floor²) so the floor
+ * brings the OUTPUT back to σ — mirroring the pyramid's intrinsic-sigma subtraction. It
+ * is a device-texel constant, NOT ×u_dpr (the fetch grid is device-resolution; σ already
+ * carries u_dpr), so the correction fades as radius grows and vanishes by mid-range.
+ */
+const INTRINSIC_TEXELS = 1.07
+
 interface EmitOpts {
   id: string
   out: string
@@ -95,7 +107,9 @@ function emit(o: EmitOpts): string {
   // it. u_dpr enters here (kernel WIDTH must be dpr-independent in reference px), the
   // same place Gaussian Blur puts it. One texel in UV is 1/u_viewport.
   L.push(decl(f, `kw_sig_${id}`, `clamp((${radiusExpr}) * ${SIGMA_PER_RADIUS.toPrecision(9)}, 0.0, ${(RADIUS_MAX * SIGMA_PER_RADIUS).toPrecision(9)}) * u_dpr`))
-  L.push(decl(f, `kw_k_${id}`, `kw_sig_${id} / ${OFFSET_RMS.toPrecision(9)}`))
+  // Aim the kernel at √(σ² − floor²): the intrinsic tent floor then lands it back on σ.
+  L.push(decl(f, `kw_kern_${id}`, `sqrt(max(0.0, kw_sig_${id} * kw_sig_${id} - ${(INTRINSIC_TEXELS * INTRINSIC_TEXELS).toPrecision(9)}))`))
+  L.push(decl(f, `kw_k_${id}`, `kw_kern_${id} / ${OFFSET_RMS.toPrecision(9)}`))
   // This pass's corner offset, in UV.
   L.push(decl(v2, `kw_o_${id}`, `${v2}(${offset.toPrecision(9)} * kw_k_${id}) / u_viewport`))
 
