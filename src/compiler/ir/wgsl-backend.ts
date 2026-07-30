@@ -341,6 +341,9 @@ export function lowerExprToWGSL(expr: IRExpr): string {
   switch (expr.kind) {
     case 'literal': {
       if (typeof expr.value === 'number') {
+        // Mirrors the GLSL backend: an `int` literal must not gain a `.0`, or `forLoop`
+        // lowers to `for (var i: i32 = 0.0; ...)` which Tint rejects. See glsl-backend.ts.
+        if (expr.type === 'int') return `${Math.trunc(expr.value)}`
         return formatFloat(expr.value)
       }
       // Vector literal: vec3f(1.0, 0.0, 0.0)
@@ -413,6 +416,27 @@ export function lowerStmtToWGSL(stmt: IRStmt, indent = ''): string {
       // Use explicit WGSL if provided, otherwise do mechanical type replacement
       if (stmt.wgsl) return stmt.wgsl.split('\n').map(l => `${indent}${l}`).join('\n')
       return mechanicalGlslToWgsl(stmt.glsl).split('\n').map(l => `${indent}${l}`).join('\n')
+
+    case 'if': {
+      // Flat chain, matching the GLSL backend. WGSL has native `else if`, so nesting an if
+      // inside each else would only produce a staircase.
+      const lines: string[] = []
+      stmt.branches.forEach((br, i) => {
+        const head = i === 0 ? 'if' : '} else if'
+        lines.push(`${indent}${head} (${lowerExprToWGSL(br.cond)}) {`)
+        for (const bodyStmt of br.body) {
+          lines.push(lowerStmtToWGSL(bodyStmt, `${indent}    `))
+        }
+      })
+      if (stmt.fallback) {
+        lines.push(`${indent}} else {`)
+        for (const bodyStmt of stmt.fallback) {
+          lines.push(lowerStmtToWGSL(bodyStmt, `${indent}    `))
+        }
+      }
+      lines.push(`${indent}}`)
+      return lines.join('\n')
+    }
 
     case 'for': {
       const lines: string[] = []

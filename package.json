@@ -28,6 +28,7 @@
     "blur:test": "tsx scripts/blur-bakeoff/test.ts",
     "verify:wired-branch": "tsx scripts/verify-wired-texture-branch.ts",
     "verify:raw-budget": "tsx scripts/verify-raw-budget.ts",
+    "verify:ir-control-flow": "tsx scripts/verify-ir-control-flow.ts",
     "verify:pass-size": "tsx scripts/verify-pass-size.ts",
     "verify:pass-resolution": "tsx scripts/verify-pass-resolution.ts",
     "verify:pass-resolution:gpu": "tsx scripts/verify-pass-resolution-gpu.ts",

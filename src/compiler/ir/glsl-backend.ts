@@ -57,6 +57,13 @@ export function lowerExprToGLSL(expr: IRExpr, parentPrec = 0, isRightOfParent = 
   switch (expr.kind) {
     case 'literal': {
       if (typeof expr.value === 'number') {
+        // An `int` literal must NOT go through formatFloat, which appends `.0` to every
+        // integer. That is why `forLoop` was unusable: its bounds lowered to
+        // `for (int i = 0.0; i < 4.0; i++)`, which GLSL ES 3.0 rejects — no implicit
+        // float→int init and no int/float comparison. Zero nodes had ever constructed one.
+        // (Scalar `bool` literals are still unhandled here and unused; a `literal('bool', 1)`
+        // would emit `1.0`. Left alone deliberately rather than broadening this change.)
+        if (expr.type === 'int') return `${Math.trunc(expr.value)}`
         return formatFloat(expr.value)
       }
       const args = (expr.value as number[]).map(formatFloat).join(', ')
@@ -114,6 +121,27 @@ export function lowerStmtToGLSL(stmt: IRStmt, indent = ''): string {
 
     case 'raw':
       return stmt.glsl.split('\n').map(l => `${indent}${l}`).join('\n')
+
+    case 'if': {
+      // Flat chain: `if (a) {} else if (b) {} else {}`. Emitting a nested else-block per
+      // branch would build a staircase of increasing indentation for no benefit.
+      const lines: string[] = []
+      stmt.branches.forEach((br, i) => {
+        const head = i === 0 ? 'if' : '} else if'
+        lines.push(`${indent}${head} (${lowerExprToGLSL(br.cond)}) {`)
+        for (const bodyStmt of br.body) {
+          lines.push(lowerStmtToGLSL(bodyStmt, `${indent}    `))
+        }
+      })
+      if (stmt.fallback) {
+        lines.push(`${indent}} else {`)
+        for (const bodyStmt of stmt.fallback) {
+          lines.push(lowerStmtToGLSL(bodyStmt, `${indent}    `))
+        }
+      }
+      lines.push(`${indent}}`)
+      return lines.join('\n')
+    }
 
     case 'for': {
       const lines: string[] = []

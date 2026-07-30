@@ -112,10 +112,47 @@ export interface IRForLoop {
   readonly earlyBreak?: IRExpr  // condition for `if (cond) break;`
 }
 
+/** One arm of an if / else-if chain. */
+export interface IRIfBranch {
+  readonly cond: IRExpr        // must evaluate to bool in both languages
+  readonly body: IRStmt[]
+}
+
+/**
+ * Conditional STATEMENT — an if / else-if chain with an optional else.
+ *
+ * `ternary` only covers conditional expressions, so before this existed a node with a
+ * multi-statement branch had no choice but `raw()` text written once per backend. That is
+ * the direct cause of `reeded-glass.ts` carrying 38 `raw()` calls against 10 structured
+ * builders: its core is a four-way chain (frost / minification / seam-split / single-tap)
+ * the IR could not represent.
+ *
+ * Branches are held as a flat list rather than nesting an if inside the previous `else`,
+ * because both backends have native `else if` and a nested representation would force each
+ * lowering to special-case "an else containing exactly one if" to avoid emitting a staircase.
+ * One branch and no `fallback` is a plain `if`.
+ *
+ * WGSL caveat: a texture fetch inside a branch whose condition is NOT uniform across the
+ * quad is illegal — `textureSample` must be called from uniform control flow. Use
+ * `textureSampleLevel` (explicit LOD) inside a branch driven by a connectable/varying value.
+ * Getting this wrong does not fail loudly: the pipeline is created without error and then
+ * drops every frame at draw time. See `docs/research/` and commit b56c19c.
+ */
+export interface IRIfStmt {
+  readonly kind: 'if'
+  readonly branches: readonly IRIfBranch[]   // at least one
+  readonly fallback?: IRStmt[]               // the trailing `else` block
+}
+
 /**
  * Raw code escape hatch — for complex helper function bodies (noise, HSV, bayer)
  * where decomposing every line into IR nodes adds no value.
  * The GLSL backend emits `glsl` as-is; the WGSL backend emits `wgsl` (or transforms `glsl`).
+ *
+ * The two-argument form hands a different literal to each backend and skips mechanical
+ * translation entirely, so the two arms drift by construction. It is budgeted and ratcheted
+ * — see `npm run verify:raw-budget` and the Guardrails section of CLAUDE.md. Prefer adding
+ * an IR construct over reaching for it.
  */
 export interface IRRawCode {
   readonly kind: 'raw'
@@ -123,7 +160,7 @@ export interface IRRawCode {
   readonly wgsl?: string  // explicit WGSL override; if absent, backend does mechanical translation
 }
 
-export type IRStmt = IRDeclare | IRAssign | IRForLoop | IRRawCode
+export type IRStmt = IRDeclare | IRAssign | IRForLoop | IRIfStmt | IRRawCode
 
 // ---------------------------------------------------------------------------
 // Uniform declarations
@@ -281,6 +318,15 @@ export function forLoop(
   earlyBreak?: IRExpr,
 ): IRForLoop {
   return { kind: 'for', iterVar, from, to, body, earlyBreak }
+}
+
+/**
+ * if / else-if / else statement. `branches` must hold at least one arm; pass `fallback` for
+ * the trailing `else`. Both backends emit a flat chain — see IRIfStmt.
+ */
+export function ifStmt(branches: IRIfBranch[], fallback?: IRStmt[]): IRIfStmt {
+  if (branches.length === 0) throw new Error('ifStmt() needs at least one branch')
+  return { kind: 'if', branches, fallback }
 }
 
 export function textureSample(sampler: string, coords: IRExpr, type: IRType = 'vec4'): IRTextureSample {
