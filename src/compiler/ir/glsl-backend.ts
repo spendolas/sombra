@@ -104,6 +104,19 @@ export function lowerExprToGLSL(expr: IRExpr, parentPrec = 0, isRightOfParent = 
 
     case 'textureSample':
       return `texture(${expr.sampler}, ${lowerExprToGLSL(expr.coords)})`
+
+    case 'fragCoord':
+      // gl_FragCoord is y-UP. 'yDown' flips it so both backends agree on a top-left origin,
+      // which is the orientation Sombra's pattern space uses. Requires u_resolution.
+      return expr.space === 'yDown'
+        ? 'vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y)'
+        : 'gl_FragCoord.xy'
+
+    case 'framebufferY': {
+      // GLSL's framebuffer Y runs UP, so only a y-down input needs negating.
+      const e = lowerExprToGLSL(expr.expr)
+      return expr.from === 'yDown' ? `vec2((${e}).x, -(${e}).y)` : e
+    }
   }
 }
 
