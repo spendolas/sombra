@@ -5,8 +5,8 @@
 import type { NodeDefinition, SpatialConfig } from '../types'
 import { addFunction, getSpatialParams } from '../types'
 import { NOISE_TYPE_OPTIONS, resolveNoiseFn, registerNoiseType, getIRNoiseFunctions } from './noise-functions'
-import { variable, call, declare, construct, raw } from '../../compiler/ir/types'
-import type { IRFunction } from '../../compiler/ir/types'
+import { variable, call, declare, assign, binary, construct, forLoop, literal, raw } from '../../compiler/ir/types'
+import type { IRFunction, IRStmt } from '../../compiler/ir/types'
 
 export const fbmNode: NodeDefinition = {
   type: 'fbm',
@@ -100,17 +100,34 @@ ${loopBody}
     // Collect noise dependency functions + the FBM function itself
     const functions: IRFunction[] = getIRNoiseFunctions(noiseType)
 
-    // Build fractal loop body
-    let loopBody: string
+    // `noiseFn(p) * 2.0 - 1.0`, the signed sample the two non-standard modes fold.
+    const f = (n: number) => literal('float', n)
+    const signedSample = binary('-', binary('*', call(noiseFn, [variable('p')], 'float'), f(2.0), 'float'), f(1.0), 'float')
+
+    // The per-octave accumulation, one statement list per fractal mode.
+    let accumulate: IRStmt[]
     if (fractalMode === 'turbulence') {
-      loopBody = `      total += abs(${noiseFn}(p) * 2.0 - 1.0) * amp;`
+      accumulate = [assign('total', binary('+', variable('total'),
+        binary('*', call('abs', [signedSample], 'float'), variable('amp'), 'float'), 'float'))]
     } else if (fractalMode === 'ridged') {
-      loopBody = `      float n = 1.0 - abs(${noiseFn}(p) * 2.0 - 1.0);\n      total += n * n * amp;`
+      accumulate = [
+        declare('n', 'float', binary('-', f(1.0), call('abs', [signedSample], 'float'), 'float')),
+        assign('total', binary('+', variable('total'),
+          binary('*', binary('*', variable('n'), variable('n'), 'float'), variable('amp'), 'float'), 'float')),
+      ]
     } else {
-      loopBody = `      total += ${noiseFn}(p) * amp;`
+      accumulate = [assign('total', binary('+', variable('total'),
+        binary('*', call(noiseFn, [variable('p')], 'float'), variable('amp'), 'float'), 'float'))]
     }
 
-    // FBM function as IRFunction with raw body
+    // The octave loop is now structured rather than hand-written text. This is the first
+    // caller of `forLoop` — it shipped with the comment "used by FBM octave loops" and had
+    // never been constructed, because `int` literals lowered through formatFloat as `0.0`
+    // and the loop header was invalid on both backends until that was fixed.
+    //
+    // `return total / maxAmp;` stays raw: the IR has no return statement, so every
+    // IRFunction in the codebase ends this way. That is the next construct worth adding,
+    // deliberately not folded in here.
     const fbmFn: IRFunction = {
       key: fbmKey,
       name: fbmKey,
@@ -121,19 +138,18 @@ ${loopBody}
         { name: 'g', type: 'float' },
       ],
       returnType: 'float',
-      body: [raw(
-        `float total = 0.0;\n` +
-        `float amp = 0.5;\n` +
-        `float maxAmp = 0.0;\n` +
-        `for (int i = 0; i < 8; i++) {\n` +
-        `    if (float(i) >= oct) break;\n` +
-        `${loopBody}\n` +
-        `    maxAmp += amp;\n` +
-        `    p *= lac;\n` +
-        `    amp *= g;\n` +
-        `}\n` +
-        `return total / maxAmp;`,
-      )],
+      body: [
+        declare('total', 'float', f(0.0)),
+        declare('amp', 'float', f(0.5)),
+        declare('maxAmp', 'float', f(0.0)),
+        forLoop('i', literal('int', 0), literal('int', 8), [
+          ...accumulate,
+          assign('maxAmp', binary('+', variable('maxAmp'), variable('amp'), 'float')),
+          assign('p', binary('*', variable('p'), variable('lac'), 'vec3')),
+          assign('amp', binary('*', variable('amp'), variable('g'), 'float')),
+        ], variable('oct')),
+        raw('return total / maxAmp;'),
+      ],
     }
     functions.push(fbmFn)
 
