@@ -64,6 +64,10 @@ export interface RawGlslPass {
   vertexShader: string
   /** Sampler uniform through which this pass reads the previous one. */
   sampler: string
+  /** Render-target scale for this pass (RenderPass.resolution). 1 = full. Lets a raw
+   *  capture reproduce a downscaling pyramid faithfully; u_viewport/u_resolution and the
+   *  GL viewport are set to the scaled target size, mirroring the real renderer. */
+  scale?: number
   /**
    * The pass's own user uniforms with their compile-time values. These MUST be
    * bound: an unbound uniform reads as 0, and Fragment Output multiplies by
@@ -618,7 +622,10 @@ void main() { fragColor = sombraMain(v_uv); }
 
     for (let i = 0; i < spec.passes.length; i++) {
       const pass = spec.passes[i];
-      const target = makeTex(gl, W, H, false, null);
+      const scale = pass.scale != null ? pass.scale : 1;
+      const tw = Math.max(1, Math.round(W * scale));
+      const th = Math.max(1, Math.round(H * scale));
+      const target = makeTex(gl, tw, th, false, null);
       created.push(target);
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, target, 0);
@@ -642,8 +649,8 @@ void main() { fragColor = sombraMain(v_uv); }
       setF('u_time', 0);
       setF('u_dpr', spec.dpr || 1);
       setF('u_ref_size', 512);
-      set2('u_resolution', W, H);
-      set2('u_viewport', W, H);
+      set2('u_resolution', tw, th);
+      set2('u_viewport', tw, th);
       set2('u_mouse', 0, 0);
       set2('u_anchor', 0.5, 0.5);
 
@@ -672,7 +679,7 @@ void main() { fragColor = sombraMain(v_uv); }
       gl.enableVertexAttribArray(loc);
       gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
 
-      gl.viewport(0, 0, W, H);
+      gl.viewport(0, 0, tw, th); // scaled target size, mirroring RenderPass.resolution
       gl.disable(gl.BLEND);
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT);
