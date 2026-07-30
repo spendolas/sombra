@@ -139,21 +139,14 @@ export const imageNode: NodeDefinition = {
       stmts.push(
         raw(
           `float ${ratio} = ${aspect} / (u_resolution.x / u_resolution.y);`,
-          `let ${ratio}: f32 = ${aspect} / (u_resolution.x / u_resolution.y);`,
         ),
         raw(
           `vec2 ${fitUV} = ${coords};`,
-          `var ${fitUV}: vec2f = ${coords};`,
         ),
       )
 
       if (fitMode === 'contain') {
         stmts.push(raw(
-          `if (${ratio} > 1.0) {
-    ${fitUV}.y = (${coords}.y - 0.5) * ${ratio} + 0.5;
-  } else {
-    ${fitUV}.x = (${coords}.x - 0.5) / ${ratio} + 0.5;
-  }`,
           `if (${ratio} > 1.0) {
     ${fitUV}.y = (${coords}.y - 0.5) * ${ratio} + 0.5;
   } else {
@@ -180,11 +173,6 @@ export const imageNode: NodeDefinition = {
   } else {
     ${fitUV}.y = (${coords}.y - 0.5) * ${ratio} + 0.5;
   }`,
-          `if (${ratio} > 1.0) {
-    ${fitUV}.x = (${coords}.x - 0.5) / ${ratio} + 0.5;
-  } else {
-    ${fitUV}.y = (${coords}.y - 0.5) * ${ratio} + 0.5;
-  }`,
         ))
 
         stmts.push(raw(
@@ -196,11 +184,9 @@ export const imageNode: NodeDefinition = {
       stmts.push(
         raw(
           `vec4 ${ctx.outputs.color} = vec4(${sampleVar}.rgb, ${sampleVar}.a);`,
-          `let ${ctx.outputs.color}: vec4f = vec4f(${sampleVar}.rgb, ${sampleVar}.a);`,
         ),
         raw(
           `float ${ctx.outputs.alpha} = ${sampleVar}.a;`,
-          `let ${ctx.outputs.alpha}: f32 = ${sampleVar}.a;`,
         ),
       )
     } else {
