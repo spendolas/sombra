@@ -74,12 +74,10 @@ export const hsvToRgbNode: NodeDefinition = {
         `vec3 c = vec3(h, s, v);\n` +
         `vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);\n` +
         `vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);\n` +
-        `return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);`,
-        // WGSL: clamp(vec3, f32, f32) is invalid — promote to vec3f
-        `var c: vec3f = vec3f(h, s, v);\n` +
-        `var K: vec4f = vec4f(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);\n` +
-        `var p: vec3f = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);\n` +
-        `return c.z * mix(K.xxx, clamp(p - K.xxx, vec3f(0.0), vec3f(1.0)), c.y);`,
+        // clamp's vector form is valid in BOTH languages. GLSL's scalar-bound overload is a
+        // convenience WGSL lacks, and relying on it was the only reason this needed a
+        // hand-written WGSL arm at all.
+        `return c.z * mix(K.xxx, clamp(p - K.xxx, vec3(0.0), vec3(1.0)), c.y);`,
       )],
     }
 

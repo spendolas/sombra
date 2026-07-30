@@ -19,10 +19,6 @@ const HUE_SHIFT_GLSL = `vec3 hueShift(vec3 col, float a) {
   return col * c + cross(k, col) * s + k * dot(k, col) * (1.0 - c);
 }`
 
-const HUE_SHIFT_WGSL = `let k = vec3f(0.57735026919);
-  let c = cos(a);
-  let s = sin(a);
-  return col * c + cross(k, col) * s + k * dot(k, col) * (1.0 - c);`
 
 export const hueShiftNode: NodeDefinition = {
   type: 'hue_shift',
@@ -72,10 +68,10 @@ export const hueShiftNode: NodeDefinition = {
         { name: 'a', type: 'float' },
       ],
       returnType: 'vec3',
-      // GLSL uses `const vec3 k`; WGSL requires function-scope `let`.
+      // `const vec3 k` translates mechanically to `const k: vec3f` — WGSL allows const
+      // at function scope for a const-expression, so no hand-written WGSL arm is needed.
       body: [raw(
         `const vec3 k = vec3(0.57735026919);\n  float c = cos(a);\n  float s = sin(a);\n  return col * c + cross(k, col) * s + k * dot(k, col) * (1.0 - c);`,
-        HUE_SHIFT_WGSL,
       )],
     }
 
