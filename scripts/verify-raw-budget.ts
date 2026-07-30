@@ -19,7 +19,7 @@
  * stays a review question.
  *
  * Method: a lexical scan with a bracket-depth counter, not a real parse. It agrees with an
- * independently-derived count (83 one-arg / 2 two-arg as of 2026-07-30), and it only has to
+ * independently-derived count (83 one-arg / 1 hand-written + 1 single-emitter two-arg as of 2026-07-30), and it only has to
  * be deterministic to work as a ratchet.
  *
  * Run: npx tsx scripts/verify-raw-budget.ts
@@ -29,12 +29,21 @@ import path from 'node:path'
 import { test, run, assert } from './blur-bakeoff/lib/test-util'
 
 /** Lower this when a node converts to structured IR. Never raise it. */
-const TWO_ARG_CEILING = 2
+const TWO_ARG_CEILING = 1
 
 /** Files where a one-arg raw() carrying a whole function body is the intended tool. */
 const HELPER_BODY_FILES = ['noise/noise-functions.ts']
 
-interface Counts { one: number; two: number }
+interface Counts {
+  one: number
+  /** Two-arg where the two arms are HAND-WRITTEN text (template literals, string concat).
+   *  These drift by construction — the hazard the budget targets. */
+  twoHand: number
+  /** Two-arg where both arms are calls to the SAME emitter with a backend flag —
+   *  `raw(emit('glsl'), emit('wgsl'))`. One source of truth, cannot drift. Reported, not
+   *  budgeted: the failure mode is two texts maintained separately, and this is one text. */
+  twoEmitter: number
+}
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -61,7 +70,7 @@ function walk(dir: string, out: string[] = []): string[] {
  * failure this file exists to prevent, committed inside the file preventing it.
  */
 function countRaw(src: string): Counts {
-  const counts: Counts = { one: 0, two: 0 }
+  const counts: Counts = { one: 0, twoHand: 0, twoEmitter: 0 }
   const re = /\braw\(/g
   let m: RegExpExecArray | null
   while ((m = re.exec(src)) !== null) {
@@ -102,47 +111,58 @@ function countRaw(src: string): Counts {
       }
     }
     segments.push(src.slice(segStart, end))
-    const realArgs = segments.filter((s) => s.trim().length > 0).length
-    if (realArgs >= 2) counts.two++
-    else counts.one++
+    const real = segments.map((s) => s.trim()).filter((s) => s.length > 0)
+    if (real.length < 2) { counts.one++; continue }
+    // Single-emitter split: every arm is a call to the SAME identifier, i.e.
+    // `raw(emit('glsl'), emit('wgsl'))`. One source, cannot drift.
+    const callee = (s: string) => s.match(/^([A-Za-z_$][\w$]*)\s*\(/)?.[1]
+    const first = callee(real[0])
+    if (first && real.every((s) => callee(s) === first)) counts.twoEmitter++
+    else counts.twoHand++
   }
   return counts
 }
 
 const NODES = path.join(process.cwd(), 'src', 'nodes')
 const perFile = new Map<string, Counts>()
-let total: Counts = { one: 0, two: 0 }
+let total: Counts = { one: 0, twoHand: 0, twoEmitter: 0 }
 
 for (const file of walk(NODES)) {
   const c = countRaw(fs.readFileSync(file, 'utf8'))
-  if (c.one === 0 && c.two === 0) continue
+  if (c.one === 0 && c.twoHand === 0 && c.twoEmitter === 0) continue
   const rel = path.relative(NODES, file)
   perFile.set(rel, c)
-  total = { one: total.one + c.one, two: total.two + c.two }
+  total = {
+    one: total.one + c.one,
+    twoHand: total.twoHand + c.twoHand,
+    twoEmitter: total.twoEmitter + c.twoEmitter,
+  }
 }
 
-console.log(`\n  raw() by file (one-arg / two-arg):`)
-for (const [rel, c] of [...perFile.entries()].sort((a, b) => (b[1].one + b[1].two) - (a[1].one + a[1].two))) {
+console.log(`\n  raw() by file (one-arg / two-arg hand / two-arg emitter):`)
+for (const [rel, c] of [...perFile.entries()].sort(
+  (a, b) => (b[1].one + b[1].twoHand + b[1].twoEmitter) - (a[1].one + a[1].twoHand + a[1].twoEmitter))) {
   const flag = HELPER_BODY_FILES.includes(rel) ? '  (helper bodies — expected)' : ''
-  console.log(`    ${String(c.one).padStart(3)} / ${String(c.two).padStart(2)}  ${rel}${flag}`)
+  console.log(`    ${String(c.one).padStart(3)} / ${String(c.twoHand).padStart(2)} / ${String(c.twoEmitter).padStart(2)}  ${rel}${flag}`)
 }
-console.log(`\n  TOTAL  one-arg ${total.one}   two-arg ${total.two}  (ceiling ${TWO_ARG_CEILING})\n`)
+console.log(`\n  TOTAL  one-arg ${total.one}   two-arg hand-written ${total.twoHand} (ceiling ${TWO_ARG_CEILING})   two-arg single-emitter ${total.twoEmitter}\n`)
 
-test(`two-arg raw() stays at or below ${TWO_ARG_CEILING}`, () => {
+test(`hand-written two-arg raw() stays at or below ${TWO_ARG_CEILING}`, () => {
   assert(
-    total.two <= TWO_ARG_CEILING,
-    `two-arg raw() rose to ${total.two}, ceiling is ${TWO_ARG_CEILING}. Each one is a shader ` +
-    `body hand-written separately per backend, which drifts by construction. Add the missing ` +
-    `IR construct instead — see the Guardrails section of CLAUDE.md. If a conversion genuinely ` +
-    `requires a new two-arg site, say so explicitly and move the ceiling in the same commit.`,
+    total.twoHand <= TWO_ARG_CEILING,
+    `hand-written two-arg raw() rose to ${total.twoHand}, ceiling is ${TWO_ARG_CEILING}. Each one ` +
+    `is a shader body written separately per backend, which drifts by construction. Add the ` +
+    `missing IR construct instead — see the Guardrails section of CLAUDE.md. A single emitter ` +
+    `called twice, raw(emit('glsl'), emit('wgsl')), is NOT this and is not counted here; if the ` +
+    `new site is genuinely that, the classifier should already have exempted it.`,
   )
 })
 
-test('the ceiling is not stale — lower it when it can be lowered', () => {
+test('the ceiling is not stale — lower it when hand-written two-arg drops', () => {
   assert(
-    total.two >= TWO_ARG_CEILING - 4,
-    `two-arg raw() is down to ${total.two} but the ceiling is still ${TWO_ARG_CEILING}. ` +
-    `Lower TWO_ARG_CEILING to ${total.two} so the ratchet keeps its teeth.`,
+    total.twoHand >= TWO_ARG_CEILING - 2,
+    `hand-written two-arg raw() is down to ${total.twoHand} but the ceiling is still ` +
+    `${TWO_ARG_CEILING}. Lower TWO_ARG_CEILING to ${total.twoHand} so the ratchet keeps its teeth.`,
   )
 })
 
