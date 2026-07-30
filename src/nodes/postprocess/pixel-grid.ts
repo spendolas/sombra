@@ -225,27 +225,23 @@ export const ditherNode: NodeDefinition = {
       name: 'bayer8x8',
       params: [{ name: 'coord', type: 'vec2' }],
       returnType: 'float',
+      // One-arg. Two GLSL choices make the single arm valid in both languages, so
+      // mechanical translation produces the WGSL:
+      //   - mod() inlined as `coord - 8*floor(coord/8)`. The mechanical mod->sombra_mod
+      //     rewrite would need the vec2 helper variant, which the assembler only injects
+      //     for `sombra_mod(vec2f(...))`-shaped calls, not `sombra_mod(coord, ...)`.
+      //   - shift counts written `uint(...)`. GLSL accepts `int >> uint`, and WGSL REQUIRES
+      //     a u32 RHS — so `uint(bit)` translates to the `u32(bit)` WGSL demands.
       body: [raw(
-        // GLSL
-        `ivec2 p = ivec2(mod(coord, 8.0));
+        `ivec2 p = ivec2(coord - vec2(8.0) * floor(coord / vec2(8.0)));
   int b = 0;
   for (int i = 0; i < 3; i++) {
     int bit = 2 - i;
-    int qx = (p.x >> bit) & 1;
-    int qy = (p.y >> bit) & 1;
-    b += (2 * qx + 3 * qy - 4 * qx * qy) * (1 << (2 * i));
+    int qx = (p.x >> uint(bit)) & 1;
+    int qy = (p.y >> uint(bit)) & 1;
+    b += (2 * qx + 3 * qy - 4 * qx * qy) * (1 << uint(2 * i));
   }
   return float(b) / 63.0;`,
-        // WGSL: shift operators require u32 RHS; mod→inline formula for vec2
-        `var p: vec2i = vec2i(coord - vec2f(8.0) * floor(coord / vec2f(8.0)));
-  var b: i32 = 0;
-  for (var i: i32 = 0; i < 3; i++) {
-    var bit: i32 = 2 - i;
-    var qx: i32 = (p.x >> u32(bit)) & 1;
-    var qy: i32 = (p.y >> u32(bit)) & 1;
-    b += (2 * qx + 3 * qy - 4 * qx * qy) * (1 << u32(2 * i));
-  }
-  return f32(b) / 63.0;`,
       )],
     }
     functions.push(bayerFn)
