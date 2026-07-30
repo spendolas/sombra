@@ -1110,49 +1110,37 @@ export const reededGlassNode: NodeDefinition = {
       name: 'reedHash',
       params: [{ name: 'p', type: 'vec2' }],
       returnType: 'vec2',
+      // One-arg: mechanical translation handles floatBitsToUint->bitcast, uvec2->vec2<u32>,
+      // float->f32 and vec2()->vec2f(). The one thing it cannot do is splat a scalar shift
+      // RHS to a vector, and WGSL requires `vec2<u32> >> vec2<u32>` — so the GLSL is written
+      // with the explicit `uvec2(16u)` form, which is valid GLSL too and translates cleanly.
       body: [raw(
-        // GLSL
         `uvec2 q = uvec2(floatBitsToUint(p.x), floatBitsToUint(p.y));
   q = q * 1103515245u + 12345u;
   q.x += q.y * 1664525u;
   q.y += q.x * 1013904223u;
-  q = q ^ (q >> 16u);
+  q = q ^ (q >> uvec2(16u));
   return vec2(q) / float(0xFFFFFFFFu) * 2.0 - 1.0;`,
-        // WGSL: vec2<u32> >> requires vec2<u32> RHS (not scalar u32)
-        `var q: vec2<u32> = vec2<u32>(bitcast<u32>(p.x), bitcast<u32>(p.y));
-  q = q * vec2<u32>(1103515245u) + vec2<u32>(12345u);
-  q.x += q.y * 1664525u;
-  q.y += q.x * 1013904223u;
-  q = q ^ (q >> vec2<u32>(16u));
-  return vec2f(q) / f32(0xFFFFFFFFu) * 2.0 - 1.0;`,
       )],
     }
     functions.push(hashFn)
 
-    // Two-round pcg2d for the frost rotation — see the glsl() comment. WGSL needs
     // a vec2<u32> shift RHS, hence the explicit second argument.
     const pcgFn: IRFunction = {
       key: 'reedPcg',
       name: 'reedPcg',
       params: [{ name: 'p', type: 'vec2' }],
       returnType: 'vec2',
+      // One-arg, same reasoning as reedHash — only the shift RHS needs the vector form.
       body: [raw(
         `uvec2 v = uvec2(ivec2(floor(p))) * 1664525u + 1013904223u;
   v.x += v.y * 1664525u;
   v.y += v.x * 1664525u;
-  v = v ^ (v >> 16u);
+  v = v ^ (v >> uvec2(16u));
   v.x += v.y * 1664525u;
   v.y += v.x * 1664525u;
-  v = v ^ (v >> 16u);
+  v = v ^ (v >> uvec2(16u));
   return vec2(v) / 4294967296.0;`,
-        `var v: vec2<u32> = vec2<u32>(vec2<i32>(floor(p))) * vec2<u32>(1664525u) + vec2<u32>(1013904223u);
-  v.x += v.y * 1664525u;
-  v.y += v.x * 1664525u;
-  v = v ^ (v >> vec2<u32>(16u));
-  v.x += v.y * 1664525u;
-  v.y += v.x * 1664525u;
-  v = v ^ (v >> vec2<u32>(16u));
-  return vec2f(v) / 4294967296.0;`,
       )],
     }
     functions.push(pcgFn)
