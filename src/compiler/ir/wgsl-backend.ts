@@ -393,8 +393,11 @@ export function lowerExprToWGSL(expr: IRExpr): string {
       return `select(${lowerExprToWGSL(expr.ifFalse)}, ${lowerExprToWGSL(expr.ifTrue)}, ${lowerExprToWGSL(expr.cond)})`
 
     case 'textureSample':
-      // WGSL separates texture and sampler objects
-      return `textureSample(${expr.sampler}_tex, ${expr.sampler}_samp, ${lowerExprToWGSL(expr.coords)})`
+      // WGSL separates texture and sampler objects. An explicit level selects
+      // textureSampleLevel, which is the only form legal under non-uniform control flow.
+      return expr.level
+        ? `textureSampleLevel(${expr.sampler}_tex, ${expr.sampler}_samp, ${lowerExprToWGSL(expr.coords)}, ${lowerExprToWGSL(expr.level)})`
+        : `textureSample(${expr.sampler}_tex, ${expr.sampler}_samp, ${lowerExprToWGSL(expr.coords)})`
 
     case 'fragCoord':
       // in.position is ALREADY y-down (top-left origin), so both spaces are the same text
