@@ -1,28 +1,40 @@
 /**
- * Gaussian Blur — a separable Gaussian in linear light with premultiplied alpha.
+ * Gaussian Blur — a RADIUS-ADAPTIVE PYRAMID Gaussian in linear light with
+ * premultiplied alpha and a dithered write.
  *
- * ONE node, two render passes. A separable blur must filter horizontally, store
- * the result, then filter vertically, but the compiler assigns one pass depth per
- * node; the node declares `multiPass` and is expanded into a chain before
- * partitioning (src/compiler/expand-passes.ts), reading its pass index from
- * `params.__subPass` to pick the axis.
+ * The bake-off (docs/research/2026-07-27-blur-algorithm-bakeoff.md) chose this over
+ * a plain separable Gaussian: shape indistinguishable from a full-resolution
+ * Gaussian, for 71× less sampling work at σ64, because its cost FALLS as the radius
+ * grows. The structure is
  *
- * The second pass is not optional: a single-pass 2D gather was measured against
- * an ideal Gaussian and even 192 sparse taps sit ~4 codes off at sigma 12+,
- * against 0.26 for the separable form.
- * See docs/research/2026-07-27-blur-algorithm-bakeoff.md.
+ *     ingest    sRGB straight       -> linear premultiplied   (folded into the first op)
+ *     N x       progressive halving  (5-tap dual-filter box, each at 0.5^depth)
+ *     2 x       linear-sampled Gaussian at the coarse level (σ~4px, H then V)
+ *     N x       progressive upsampling (8-tap dual-filter)
+ *     egress    linear premultiplied -> sRGB straight + dither (folded into the last op)
  *
- * Three things this node does that a naive blur does not, each measured:
- *  - averages in LINEAR light. Averaging gamma-encoded values loses ~12% of a
- *    scene's light and puts a blurred black/white edge midpoint at sRGB 132
- *    instead of 190.
- *  - convolves PREMULTIPLIED. Straight-alpha averaging drags colour out of fully
- *    transparent texels, which shows as a halo around anything with soft edges.
- *  - DITHERS the 8-bit write. Banding in a wide blur comes from the final
- *    quantization, not from intermediate precision; one LSB of noise removes it.
+ * `N = clamp(floor(log2(σ / 4)), 0, 5)`, σ = radius/3, so the coarse-level σ stays
+ * near 4px at every radius — the rule that keeps it clean at both ends. The coarse
+ * σ is set by SUBTRACTING the pyramid's own intrinsic blur, not by dividing, or the
+ * width runs ~4% wide and steps at each N boundary.
  *
- * Radius is wireable and rides as a uniform: weights are evaluated per tap at
- * runtime, so changing or animating it neither recompiles nor pops.
+ * Per-pass resolution comes from `multiPass.resolution` (RenderPass.resolution): each
+ * pass rasterises at `0.5^depth`, and the framework scales u_dpr so screen-UV sampling
+ * stays correct. Tap offsets are in SOURCE texels — down reads a 2× larger source
+ * (0.5 target-texel/offset), up reads a 2× smaller one (2 target-texels), coarse reads
+ * a same-size source (1 target-texel). See `srcFactor` below.
+ *
+ * The ingest/egress colour conversion is FOLDED into the first and last passes rather
+ * than run as separate passes: separate ones would add 2 to the pass count, and at N=3
+ * that is 9 intermediates — over the WebGL2 cap of 8. Folded, the deepest pyramid
+ * (radius 128 → N=3) is 8 passes / 7 intermediates, which fits both backends.
+ *
+ * TRADE-OFF, deliberate: radius is `recompile` and NOT connectable. N (and therefore the
+ * pass count and per-pass resolution) is a compile-time decision, so a wired or animated
+ * radius is impossible by construction — a dragged slider recompiles (debounced). Code
+ * needing a wireable/animatable radius wants the linear-sampled separable Gaussian, which
+ * the bake-off names as the fallback and which is what this node used to be
+ * (git history before feat/pyramid-blur).
  */
 
 import type { NodeDefinition } from '../types'
@@ -33,177 +45,224 @@ import { raw } from '../../compiler/ir/types'
 /** Kernel extent is 3 sigma, so the Radius slider reads as the visible reach. */
 const SIGMA_PER_RADIUS = 1 / 3
 
-/** Largest radius the slider offers, and the ceiling a wired value is clamped to. */
+/** Largest radius the slider offers. Do NOT raise past 128 without bake-off engine
+ *  change #2 (WebGL2 ping-pong reuse): 128 → N=3 → 7 intermediates == the cap with a
+ *  folded bracket, and a deeper pyramid overflows WebGL2. */
 const RADIUS_MAX = 128
 
-/**
- * Highest device pixel ratio the renderer will hand us — both cap at
- * Math.min(devicePixelRatio, 2). Taps step ONE texel and sigma is measured in
- * texels (sigma_reference * u_dpr), so the loop bound must cover the worst case.
- */
-const MAX_DPR = 2
+/** Coarse level targets ~4px sigma. */
+const TARGET_SMALL = 4
+
+/** Deepest pyramid. N=5 would be 12 passes; the radius cap keeps us at N≤3 anyway. */
+const N_MAX = 5
 
 /**
- * Loop half-width in texels: 4 sigma at the largest radius and the highest dpr.
- * Truncating at 4 sigma matches the reference kernel this was verified against.
- *
- * There is deliberately no user-facing "max radius" knob. The bound is a loop
- * limit, not a tap list: the body breaks at 4 sigma of the LIVE radius, so runtime
- * cost follows the actual radius and a generous bound costs nothing — not even
- * shader length, since only this literal changes. (That was not true of the
- * earlier unrolled form, where the bound really did set the cost.)
+ * Measured intrinsic sigma of the down+up chain, per N (bake-off phase5b-fix.ts).
+ * The chain is itself a blur; the coarse Gaussian must be narrowed to leave room for
+ * it, or the total runs wide and steps at each N boundary.
  */
+const INTRINSIC_SIGMA = [0.31, 2.07, 4.68, 9.70, 19.21, 38.99]
 
-const BAKED_HALF_WIDTH = Math.max(1, Math.ceil(RADIUS_MAX * SIGMA_PER_RADIUS * 4 * MAX_DPR))
+type Role = 'down' | 'coarseH' | 'coarseV' | 'up'
+
+interface PassInfo {
+  role: Role
+  /** Render-target scale for this pass, relative to canvas (RenderPass.resolution). */
+  scale: number
+  /** Source texel size in units of THIS pass's target texels: down 0.5, coarse 1, up 2. */
+  srcFactor: number
+  isFirst: boolean
+  isLast: boolean
+}
+
+interface PyramidPlan {
+  N: number
+  /** Coarse-level Gaussian sigma, in coarse-level texels. Baked at compile time. */
+  coarseSigma: number
+  passes: PassInfo[]
+}
+
+/** The whole pyramid structure for a given radius. Single source of truth for
+ *  multiPass.count, multiPass.resolution, and per-sub-pass role dispatch. */
+export function pyramidPlan(radiusPx: number): PyramidPlan {
+  const sigma = Math.max(0, radiusPx) * SIGMA_PER_RADIUS
+  const N = sigma <= TARGET_SMALL ? 0 : Math.max(0, Math.min(N_MAX, Math.floor(Math.log2(sigma / TARGET_SMALL))))
+  // Subtract the down/up chain's own blur, then express at the coarse level's scale.
+  const intrinsic = INTRINSIC_SIGMA[N]
+  const coarseSigma = Math.sqrt(Math.max(0, sigma * sigma - intrinsic * intrinsic)) / 2 ** N
+
+  const passes: PassInfo[] = []
+  for (let d = 1; d <= N; d++) passes.push({ role: 'down', scale: 2 ** -d, srcFactor: 0.5, isFirst: false, isLast: false })
+  passes.push({ role: 'coarseH', scale: 2 ** -N, srcFactor: 1, isFirst: false, isLast: false })
+  passes.push({ role: 'coarseV', scale: 2 ** -N, srcFactor: 1, isFirst: false, isLast: false })
+  for (let d = N - 1; d >= 0; d--) passes.push({ role: 'up', scale: 2 ** -d, srcFactor: 2, isFirst: false, isLast: false })
+
+  passes[0].isFirst = true
+  passes[passes.length - 1].isLast = true
+  return { N, coarseSigma, passes }
+}
+
+/** Radius from params, clamped. Not connectable — see the node header. */
+function radiusOf(params: Record<string, unknown>): number {
+  const r = Number(params.radius ?? 12)
+  return Math.max(0, Math.min(RADIUS_MAX, Number.isFinite(r) ? r : 12))
+}
 
 /**
- * Taps are one fetch per texel with weights evaluated AT RUNTIME from the radius,
- * inside a loop with a constant bound that breaks early once past 4 sigma of the
- * live radius. That is the repo's documented shape for a connectable param
- * (NODE_AUTHORING_GUIDE "Connectable params with loop bounds"), and it is what
- * lets Radius be wired at all: a wired value only exists at runtime, so a kernel
- * baked from it is impossible.
- *
- * Deliberately NOT using the linear-sampling trick (folding adjacent tap pairs
- * into one bilinear fetch at their weighted midpoint). That optimization halves
- * the reads, but the hardware's bilinear blend happens in the texture's storage
- * space, and these passes store sRGB-encoded 8-bit. Blending gamma-encoded values
- * is the same error as blurring in sRGB — measured here as ~11 codes too dark on
- * high-frequency content, while smooth content hid it because neighbouring texels
- * are nearly equal. Folding is only valid when the sampled texture holds linear
- * light; should the engine gain float/linear intermediates, it can come back.
+ * A 1-D Gaussian kernel out to 4 sigma, normalised — the same shape the bake-off's
+ * CPU reference and GPU candidates used, so a GPU-vs-reference comparison is meaningful.
  */
+function gaussianKernel1D(sigma: number): number[] {
+  const s = Math.max(sigma, 1e-4)
+  const radius = Math.max(1, Math.ceil(s * 4))
+  const w: number[] = []
+  let sum = 0
+  for (let i = -radius; i <= radius; i++) {
+    const v = Math.exp(-(i * i) / (2 * s * s))
+    w.push(v)
+    sum += v
+  }
+  return w.map((v) => v / sum)
+}
 
+/** Linear-sampled taps: centre alone, then fold adjacent pairs into one bilinear
+ *  fetch at their weighted midpoint (RasterGrid), halving reads. Valid because the
+ *  intermediates hold LINEAR light — the whole reason for the premultiplied bracket. */
+function foldedGaussTaps(sigma: number): Array<{ off: number; w: number }> {
+  const k = gaussianKernel1D(sigma)
+  const r = (k.length - 1) / 2
+  const taps: Array<{ off: number; w: number }> = [{ off: 0, w: k[r] }]
+  for (let i = 1; i <= r; i += 2) {
+    const w1 = k[r + i]
+    const w2 = i + 1 <= r ? k[r + i + 1] : 0
+    const w = w1 + w2
+    if (w <= 0) continue
+    const off = (i * w1 + (i + 1) * w2) / w
+    taps.push({ off, w })
+    taps.push({ off: -off, w })
+  }
+  return taps
+}
 
 interface EmitOpts {
   id: string
   out: string
   sampler: string | undefined
   fallback: string
-  /** GLSL/WGSL expression for the live radius — may be a wired value. */
-  radiusExpr: string
-  axis: string
-  /** 'fit' skips out-of-bounds taps and renormalises; 'repeat' clamps (AE parity). */
-  edgeMode: string
+  pass: PassInfo
+  coarseSigma: number
   wgsl: boolean
 }
 
 function emit(o: EmitOpts): string {
-  const { id, out, sampler, fallback, radiusExpr, axis, edgeMode, wgsl } = o
+  const { id, out, sampler, fallback, pass, coarseSigma, wgsl } = o
   const v4 = wgsl ? 'vec4f' : 'vec4'
   const v3 = wgsl ? 'vec3f' : 'vec3'
   const v2 = wgsl ? 'vec2f' : 'vec2'
-  const f = wgsl ? 'f32' : 'float'
   const decl = (t: string, n: string, init: string) => (wgsl ? `var ${n}: ${t} = ${init};` : `${t} ${n} = ${init};`)
   const frag = wgsl ? 'in.position.xy' : 'gl_FragCoord.xy'
-  // Explicit LOD. A wired radius makes the loop's break condition vary per pixel,
-  // and WGSL forbids implicit-derivative textureSample under non-uniform control
-  // flow. These textures have no mips, so level 0 is the only level anyway.
+  // Explicit LOD — these render targets have no mips and level 0 is the only level;
+  // it is also the form legal under any control flow in WGSL.
   const sample = (uv: string) =>
-    wgsl
-      ? `textureSampleLevel(${sampler}_tex, ${sampler}_samp, ${uv}, 0.0)`
-      : `textureLod(${sampler}, ${uv}, 0.0)`
+    wgsl ? `textureSampleLevel(${sampler}_tex, ${sampler}_samp, ${uv}, 0.0)` : `textureLod(${sampler}, ${uv}, 0.0)`
 
-  // No upstream texture: nothing to blur, pass the input through untouched.
   if (!sampler) return `${decl(v4, out, fallback)}`
 
-  const dir = axis === 'vertical' ? [0, 1] : [1, 0]
-  const R = BAKED_HALF_WIDTH
   const L: string[] = []
+  L.push(decl(v2, `b_uv_${id}`, `${frag} / u_viewport`))
+  // One SOURCE texel in UV. srcFactor converts target texels -> source texels:
+  // down reads a 2× larger source (0.5), up a 2× smaller one (2.0), coarse same (1.0).
+  L.push(decl(v2, `b_t_${id}`, `${v2}(${pass.srcFactor.toPrecision(9)}) / u_viewport`))
 
-  const axisComp = axis === 'vertical' ? 'y' : 'x'
-  L.push(decl(v2, `blr_uv_${id}`, `${frag} / u_viewport`))
-  // ONE TEXEL per tap. It is tempting to step one *reference* pixel
-  // (u_dpr / u_viewport) so the kernel is dpr-independent, but that makes each tap
-  // skip u_dpr texels: at dpr 2 an output pixel then reads only its own parity and
-  // half the source is never sampled — a measured 2-px staircase with 26-40 code
-  // risers, and a 34.8-code jump when the quality tier flips dpr mid-session.
-  // Kernel WIDTH still has to be dpr-independent, so dpr goes into sigma instead.
-  L.push(decl(v2, `blr_step_${id}`, `${v2}(${dir[0].toFixed(1)}, ${dir[1].toFixed(1)}) / u_viewport`))
-  // Sigma in TEXELS: clamp in reference units, then scale. Both bounds must scale —
-  // scaling only the upper one would shrink the smallest possible blur by u_dpr.
-  L.push(decl(f, `blr_sig_${id}`, `clamp((${radiusExpr}) * ${SIGMA_PER_RADIUS.toPrecision(9)}, 0.35, ${(RADIUS_MAX * SIGMA_PER_RADIUS).toPrecision(9)}) * u_dpr`))
-  L.push(decl(f, `blr_inv_${id}`, `1.0 / (2.0 * blr_sig_${id} * blr_sig_${id})`))
-  L.push(decl(f, `blr_cut_${id}`, `blr_sig_${id} * 4.0`))
-  L.push(decl(v3, `blr_acc_${id}`, `${v3}(0.0)`))
-  L.push(decl(f, `blr_alpha_${id}`, `0.0`))
-  L.push(decl(f, `blr_wsum_${id}`, `0.0`))
-  L.push(decl(v4, `blr_t_${id}`, `${v4}(0.0)`))
-  L.push(decl(f, `blr_w_${id}`, `0.0`))
-  L.push(decl(f, `blr_p_${id}`, `0.0`))
-
-  // Bound is baked; the break makes a small radius cheap.
-  const body: string[] = []
-  body.push(`  ${decl(f, `blr_fi_${id}`, wgsl ? `f32(blr_i_${id})` : `float(blr_i_${id})`)}`)
-  body.push(wgsl
-    ? `    if (blr_fi_${id} > blr_cut_${id}) { break; }`
-    : `    if (blr_fi_${id} > blr_cut_${id}) break;`)
-  body.push(`    blr_w_${id} = exp(-blr_fi_${id} * blr_fi_${id} * blr_inv_${id});`)
-  // centre tap once, every other offset mirrored
-  for (const sign of ['+', '-']) {
-    const mirrored = sign === '-'
-    body.push(`    blr_p_${id} = blr_uv_${id}.${axisComp} ${sign} blr_step_${id}.${axisComp} * blr_fi_${id};`)
-    // Gate on the tap being inside the source. Counting a clamped tap at full
-    // Gaussian weight is what lets ONE border texel drive up to ~49% of the output
-    // across a 4-sigma band, which is the smear that tracks the canvas border on
-    // resize. Skipping it and normalising over the weight actually gathered drops
-    // that sensitivity to ~2%. `repeat` keeps the clamped behaviour, matching After
-    // Effects' Repeat Edge Pixels.
-    const inBounds = edgeMode === 'repeat'
-      ? null
-      : `blr_p_${id} >= 0.0 && blr_p_${id} <= 1.0`
-    const cond = [mirrored ? `blr_i_${id} > 0` : null, inBounds].filter(Boolean).join(' && ')
-    body.push(`    if (${cond || 'true'}) {`)
-    body.push(`      blr_t_${id} = ${sample(`blr_uv_${id} ${sign} blr_step_${id} * blr_fi_${id}`)};`)
-    body.push(`      blr_acc_${id} = blr_acc_${id} + sombra_toLin(blr_t_${id}.rgb) * (blr_t_${id}.a * blr_w_${id});`)
-    body.push(`      blr_alpha_${id} = blr_alpha_${id} + blr_t_${id}.a * blr_w_${id};`)
-    body.push(`      blr_wsum_${id} = blr_wsum_${id} + blr_w_${id};`)
-    body.push(`    }`)
+  // A tap, returned already in linear-PREMULTIPLIED space. The first pass ingests
+  // sRGB-straight and converts; every later pass reads values already converted.
+  const tap = (uvExpr: string): string => {
+    const s = sample(uvExpr)
+    if (pass.isFirst) return `${v4}(sombra_toLin((${s}).rgb) * (${s}).a, (${s}).a)`
+    return s
   }
-  L.push(wgsl
-    ? `for (var blr_i_${id}: i32 = 0; blr_i_${id} <= ${R}; blr_i_${id}++) {\n${body.join('\n')}\n  }`
-    : `for (int blr_i_${id} = 0; blr_i_${id} <= ${R}; blr_i_${id}++) {\n${body.join('\n')}\n  }`)
 
-  // Weights are evaluated at runtime, so normalize by what was actually summed.
-  const safeDiv = (num: string, den: string, cond: string) =>
-    wgsl ? `select(${v3}(0.0), ${num} / ${den}, ${cond})` : `${cond} ? ${num} / ${den} : ${v3}(0.0)`
-  L.push(decl(v3, `blr_lin_${id}`, safeDiv(`blr_acc_${id}`, `blr_alpha_${id}`, `blr_alpha_${id} > 0.0`)))
-  L.push(decl(f, `blr_a_${id}`, wgsl
-    ? `select(0.0, blr_alpha_${id} / blr_wsum_${id}, blr_wsum_${id} > 0.0)`
-    : `blr_wsum_${id} > 0.0 ? blr_alpha_${id} / blr_wsum_${id} : 0.0`))
-  L.push(
-    decl(
-      v3,
-      `blr_enc_${id}`,
-      `sombra_toSrgb(blr_lin_${id}) + ${v3}((sombra_dither(${frag}) - 0.5) / 255.0)`,
-    ),
-  )
-  // Alpha is the same weighted average as the colour — the blur filters alpha,
-  // it does not invent it.
-  L.push(decl(v4, out, `${v4}(blr_enc_${id}, blr_a_${id})`))
+  if (pass.role === 'down') {
+    // Bjorge dual-filter downsample: centre*4 + 4 corners at ±1 source-texel, /8.
+    L.push(decl(v4, `b_s_${id}`, `${tap(`b_uv_${id}`)} * 4.0`))
+    for (const [sx, sy] of [[-1, -1], [1, 1], [1, -1], [-1, 1]]) {
+      L.push(`b_s_${id} = b_s_${id} + ${tap(`b_uv_${id} + ${v2}(${sx.toFixed(1)}, ${sy.toFixed(1)}) * b_t_${id}`)};`)
+    }
+    L.push(decl(v4, `b_o_${id}`, `b_s_${id} / 8.0`))
+  } else if (pass.role === 'up') {
+    // Bjorge dual-filter upsample: edge midpoints *2, corners *1, /12, at ±1 source-texel.
+    L.push(decl(v4, `b_s_${id}`, `${v4}(0.0)`))
+    for (const [sx, sy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      L.push(`b_s_${id} = b_s_${id} + ${tap(`b_uv_${id} + ${v2}(${sx.toFixed(1)}, ${sy.toFixed(1)}) * b_t_${id}`)} * 2.0;`)
+    }
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      L.push(`b_s_${id} = b_s_${id} + ${tap(`b_uv_${id} + ${v2}(${sx.toFixed(1)}, ${sy.toFixed(1)}) * b_t_${id}`)};`)
+    }
+    L.push(decl(v4, `b_o_${id}`, `b_s_${id} / 12.0`))
+  } else {
+    // Coarse: one axis of a linear-sampled separable Gaussian at coarseSigma (in
+    // coarse-level texels). H then V across the two coarse passes.
+    //
+    // Radius is authored in REFERENCE px, so the blur must widen by u_dpr to reach the
+    // same visible extent on a hi-DPI display. N is picked dpr-independently (compile
+    // time), but the coarse blur is where width is set: scaling every tap offset by u_dpr
+    // and keeping the baked weights turns a Gaussian of coarseSigma into one of
+    // coarseSigma*u_dpr — a Gaussian is self-similar under offset scaling. The down/up
+    // passes are fixed structural resamples and take no dpr. (At dpr 2 the coarse sigma
+    // lands near 8px rather than 4px — still well within the method's clean range.)
+    const axis = pass.role === 'coarseH' ? [1, 0] : [0, 1]
+    const taps = foldedGaussTaps(coarseSigma)
+    L.push(decl(v2, `b_ct_${id}`, `b_t_${id} * u_dpr`))
+    L.push(decl(v4, `b_s_${id}`, `${v4}(0.0)`))
+    for (const t of taps) {
+      const uv = `b_uv_${id} + ${v2}(${(axis[0] * t.off).toPrecision(9)}, ${(axis[1] * t.off).toPrecision(9)}) * b_ct_${id}`
+      L.push(`b_s_${id} = b_s_${id} + ${tap(uv)} * ${t.w.toPrecision(9)};`)
+    }
+    L.push(decl(v4, `b_o_${id}`, `b_s_${id}`))
+  }
+
+  if (pass.isLast) {
+    // Egress: un-premultiply, encode to sRGB, dither one LSB. Alpha passes through —
+    // the blur filters alpha, it does not invent it.
+    const unpre = wgsl
+      ? `select(${v3}(0.0), b_o_${id}.rgb / b_o_${id}.a, b_o_${id}.a > 0.0)`
+      : `b_o_${id}.a > 0.0 ? b_o_${id}.rgb / b_o_${id}.a : ${v3}(0.0)`
+    L.push(decl(v3, `b_lin_${id}`, unpre))
+    L.push(decl(v3, `b_enc_${id}`, `sombra_toSrgb(b_lin_${id}) + ${v3}((sombra_dither(${frag}) - 0.5) / 255.0)`))
+    L.push(decl(v4, out, `${v4}(b_enc_${id}, b_o_${id}.a)`))
+  } else {
+    // Intermediate: keep linear-premultiplied, no colour conversion.
+    L.push(decl(v4, out, `b_o_${id}`))
+  }
 
   return L.join('\n  ')
 }
 
-/** Sub-pass 0 filters horizontally, sub-pass 1 vertically. */
-function axisFor(params: Record<string, unknown>): 'horizontal' | 'vertical' {
-  return Number(params.__subPass ?? 0) === 0 ? 'horizontal' : 'vertical'
+/** The sub-pass index selects which pyramid pass this invocation emits. */
+function passFor(params: Record<string, unknown>): PassInfo {
+  const plan = pyramidPlan(radiusOf(params))
+  const i = Math.max(0, Math.min(plan.passes.length - 1, Number(params.__subPass ?? 0)))
+  return plan.passes[i]
 }
 
 export const blurNode: NodeDefinition = {
   type: 'blur',
   label: 'Gaussian Blur',
   category: 'Effect',
-  description: 'Separable Gaussian blur in linear light with premultiplied alpha',
+  description: 'Radius-adaptive pyramid Gaussian blur in linear light with premultiplied alpha',
   textureFilter: 'linear',
 
-  // A blur of nothing conveys nothing, so keep the thumbnail hidden until a
-  // source is wired. Without this the node shows a preview area the moment it is
-  // added, which reads as stale content rather than as "no input yet".
   conditionalPreview: true,
 
-  // Two passes: horizontal, then vertical.
-  multiPass: { count: () => 2, from: 'color', to: 'source' },
+  multiPass: {
+    count: (p) => pyramidPlan(radiusOf(p)).passes.length,
+    from: 'color',
+    to: 'source',
+    resolution: (i, p) => {
+      const passes = pyramidPlan(radiusOf(p)).passes
+      return passes[Math.max(0, Math.min(passes.length - 1, i))].scale
+    },
+  },
 
   inputs: [
     { id: 'source', label: 'Source', type: 'color', textureInput: true, default: [0, 0, 0, 1] },
@@ -220,25 +279,11 @@ export const blurNode: NodeDefinition = {
       min: 0,
       max: 128,
       step: 0.5,
-      // Wireable, and a uniform: weights are evaluated per-tap at runtime, so
-      // changing or animating the radius neither recompiles nor pops. Values above
-      // Max Radius are clamped in-shader.
-      connectable: true,
-      updateMode: 'uniform',
-      // A big radius is genuinely expensive (~343 fetches per pass at the max),
-      // so warn even though it no longer recompiles.
-      warnAbove: 96,
-    },
-    {
-      id: 'edgeMode',
-      label: 'Edges',
-      type: 'enum',
-      default: 'fit',
-      options: [
-        { value: 'fit', label: 'Fit to Canvas' },
-        { value: 'repeat', label: 'Repeat Edge Pixels' },
-      ],
+      // NOT connectable: N (pass count + per-pass resolution) is decided at compile
+      // time from the radius, so a wired runtime value cannot drive the pyramid.
+      // Recompile on change; the debounced worker recompile handles a dragged slider.
       updateMode: 'recompile',
+      warnAbove: 96,
     },
   ],
 
@@ -248,19 +293,14 @@ export const blurNode: NodeDefinition = {
     uniforms.add('u_dpr')
     const id = ctx.nodeId.replace(/-/g, '_')
     const sampler = ctx.textureSamplers?.source
-    if (sampler) {
-      ctx.functionRegistry.set('sombra_color_helpers', COLOR_GLSL_HELPERS)
-    }
+    if (sampler) ctx.functionRegistry.set('sombra_color_helpers', COLOR_GLSL_HELPERS)
     return emit({
       id,
       out: outputs.color,
       sampler,
       fallback: inputs.source,
-      // Connectable, so it MUST be read through inputs (the compiler resolves it to
-      // either a uniform or an upstream expression); params would miss a wire.
-      radiusExpr: inputs.radius,
-      axis: axisFor(params),
-      edgeMode: String(params.edgeMode ?? 'fit'),
+      pass: passFor(params),
+      coarseSigma: pyramidPlan(radiusOf(params)).coarseSigma,
       wgsl: false,
     })
   },
@@ -268,32 +308,21 @@ export const blurNode: NodeDefinition = {
   ir: (ctx: IRContext): IRNodeOutput => {
     const id = ctx.nodeId.replace(/-/g, '_')
     const sampler = ctx.textureSamplers?.source
-    const standardUniforms = new Set<string>(['u_viewport', 'u_dpr'])
-    const axis = axisFor(ctx.params)
-
     const common = {
       id,
       out: ctx.outputs.color,
       sampler,
       fallback: ctx.inputs.source,
-      radiusExpr: ctx.inputs.radius,
-      axis,
-      edgeMode: String(ctx.params.edgeMode ?? 'fit'),
+      pass: passFor(ctx.params),
+      coarseSigma: pyramidPlan(radiusOf(ctx.params)).coarseSigma,
     }
-
-    // With no upstream texture the body is just the passthrough of the port
-    // default, and that default arrives in GLSL syntax (`vec4(...)`). Supplying an
-    // explicit WGSL override here would SKIP the backend's mechanical translation
-    // and emit invalid WGSL, so the shader would fail to compile and the node's
-    // preview would silently render nothing. Let the backend translate instead.
     const stmts: IRStmt[] = sampler
       ? [raw(emit({ ...common, wgsl: false }), emit({ ...common, wgsl: true }))]
       : [raw(emit({ ...common, wgsl: false }))]
-
     return {
       statements: stmts,
       uniforms: [],
-      standardUniforms,
+      standardUniforms: new Set<string>(['u_viewport', 'u_dpr']),
       ...(sampler ? { functions: COLOR_IR_HELPERS } : {}),
     }
   },
