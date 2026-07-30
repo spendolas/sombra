@@ -8,7 +8,7 @@
 import type { NodeDefinition, GLSLContext, SpatialConfig } from '../types'
 import { getSpatialParams } from '../types'
 import type { IRContext, IRNodeOutput, IRStmt } from '../../compiler/ir/types'
-import { declare, construct, literal, raw } from '../../compiler/ir/types'
+import { declare, assign, construct, literal, raw, call, variable, binary, ternary, textureSample } from '../../compiler/ir/types'
 
 /** Compute the sampler uniform name for an image node. */
 export function imageSamplerName(nodeId: string): string {
@@ -19,6 +19,17 @@ const FIT_MODE_OPTIONS = [
   { value: 'contain', label: 'Fit' },
   { value: 'cover', label: 'Fill' },
 ]
+
+/**
+ * `clamp(uv, vec2(0), vec2(1))` as IR. The VECTOR form is valid in both GLSL and WGSL;
+ * GLSL's `clamp(vec2, float, float)` overload does not exist in WGSL, and relying on it is
+ * what forced these sites to carry a hand-written WGSL arm.
+ */
+const clampUV = (uv: string) => call('clamp', [
+  variable(uv),
+  construct('vec2', [literal('float', 0.0)]),
+  construct('vec2', [literal('float', 1.0)]),
+], 'vec2')
 
 export const imageNode: NodeDefinition = {
   type: 'image',
@@ -124,11 +135,10 @@ export const imageNode: NodeDefinition = {
     const stmts: IRStmt[] = []
 
     if (hasImage) {
-      // Fit mode UV adjustment + texture sampling.
-      // Explicit WGSL variants throughout: the mechanical translation would emit
-      // `clamp(vec2, 0.0, 0.0)` (no scalar-splat overload in WGSL) and
-      // `textureSample` inside non-uniform control flow (derivative_uniformity
-      // error) — so WGSL samples unconditionally and masks with select().
+      // Fit mode UV adjustment + texture sampling. The sampling is structured IR: the
+      // `textureSample` expression kind already lowers to `texture(s, uv)` on GLSL and
+      // `textureSample(s_tex, s_samp, uv)` on WGSL, and `ternary` already lowers to
+      // `select()` on WGSL — which is what the removed hand-written arms spelled out.
       const fitUV = `img_uv_${sanitizedId}`
       const ratio = `img_ratio_${sanitizedId}`
       const sampleVar = `node_${sanitizedId}_sample`
@@ -155,16 +165,28 @@ export const imageNode: NodeDefinition = {
         ))
 
         // Clamp to image bounds — black outside.
-        // WGSL: sample unconditionally (uniform control flow), then mask.
-        stmts.push(raw(
-          `vec4 ${sampleVar} = vec4(0.0);
-  if (${fitUV}.x >= 0.0 && ${fitUV}.x <= 1.0 && ${fitUV}.y >= 0.0 && ${fitUV}.y <= 1.0) {
-    ${sampleVar} = texture(${samplerName}, ${fitUV});
-  }`,
-          `var ${sampleVar}: vec4f = textureSample(${samplerName}_tex, ${samplerName}_samp, clamp(${fitUV}, vec2f(0.0), vec2f(1.0)));
-  let ${insideVar}: bool = ${fitUV}.x >= 0.0 && ${fitUV}.x <= 1.0 && ${fitUV}.y >= 0.0 && ${fitUV}.y <= 1.0;
-  ${sampleVar} = select(vec4f(0.0), ${sampleVar}, ${insideVar});`,
-        ))
+        //
+        // Structured, and deliberately in the sample-then-select shape for BOTH backends
+        // rather than GLSL's branch-then-sample. WGSL forbids `textureSample` under
+        // non-uniform control flow, so it has to sample unconditionally; and in GLSL the
+        // two forms are identical, because `clamp` is a no-op whenever the fragment is
+        // inside and the select discards the sample whenever it is not.
+        //
+        // `ternary` lowers to `(c ? a : b)` on GLSL and `select(b, a, c)` on WGSL, which is
+        // exactly what the old hand-written WGSL arm spelled out by hand.
+        const inBounds = (comp: 'x' | 'y') => binary('&&',
+          binary('>=', variable(`${fitUV}.${comp}`), literal('float', 0.0), 'bool'),
+          binary('<=', variable(`${fitUV}.${comp}`), literal('float', 1.0), 'bool'), 'bool')
+        stmts.push(
+          declare(sampleVar, 'vec4', textureSample(samplerName, clampUV(fitUV), 'vec4')),
+          declare(insideVar, 'bool', binary('&&', inBounds('x'), inBounds('y'), 'bool')),
+          assign(sampleVar, ternary(
+            variable(insideVar),
+            variable(sampleVar),
+            construct('vec4', [literal('float', 0.0)]),
+            'vec4',
+          )),
+        )
       } else {
         // Cover
         stmts.push(raw(
@@ -175,10 +197,7 @@ export const imageNode: NodeDefinition = {
   }`,
         ))
 
-        stmts.push(raw(
-          `vec4 ${sampleVar} = texture(${samplerName}, clamp(${fitUV}, 0.0, 1.0));`,
-          `let ${sampleVar}: vec4f = textureSample(${samplerName}_tex, ${samplerName}_samp, clamp(${fitUV}, vec2f(0.0), vec2f(1.0)));`,
-        ))
+        stmts.push(declare(sampleVar, 'vec4', textureSample(samplerName, clampUV(fitUV), 'vec4')))
       }
 
       stmts.push(
