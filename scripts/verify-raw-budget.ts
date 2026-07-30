@@ -19,7 +19,7 @@
  * stays a review question.
  *
  * Method: a lexical scan with a bracket-depth counter, not a real parse. It agrees with an
- * independently-derived count (77 one-arg / 14 two-arg as of 2026-07-30), and it only has to
+ * independently-derived count (79 one-arg / 12 two-arg as of 2026-07-30), and it only has to
  * be deterministic to work as a ratchet.
  *
  * Run: npx tsx scripts/verify-raw-budget.ts
@@ -29,7 +29,7 @@ import path from 'node:path'
 import { test, run, assert } from './blur-bakeoff/lib/test-util'
 
 /** Lower this when a node converts to structured IR. Never raise it. */
-const TWO_ARG_CEILING = 14
+const TWO_ARG_CEILING = 12
 
 /** Files where a one-arg raw() carrying a whole function body is the intended tool. */
 const HELPER_BODY_FILES = ['noise/noise-functions.ts']
@@ -76,6 +76,19 @@ function countRaw(src: string): Counts {
       const prev = src[i - 1]
       if (inStr) {
         if (c === inStr && prev !== '\\') inStr = null
+        continue
+      }
+      // Skip comments. A prose comma inside a `//` comment is not an argument separator,
+      // and reading one as such reported a one-arg call as two-arg — caught when adding a
+      // comment to a call made its own count go up.
+      if (c === '/' && src[i + 1] === '/') {
+        const nl = src.indexOf('\n', i)
+        i = nl === -1 ? src.length : nl
+        continue
+      }
+      if (c === '/' && src[i + 1] === '*') {
+        const close = src.indexOf('*/', i + 2)
+        i = close === -1 ? src.length : close + 1
         continue
       }
       if (c === '"' || c === "'" || c === '`') { inStr = c; continue }

@@ -20,7 +20,7 @@
 import { test, run, assert } from './blur-bakeoff/lib/test-util'
 import { createRig } from './blur-bakeoff/lib/gpu-rig'
 import {
-  ifStmt, forLoop, declare, assign, binary, variable, literal, call, construct,
+  ifStmt, forLoop, declare, assign, binary, variable, literal, call,
 } from '../src/compiler/ir/types'
 import type { IRStmt } from '../src/compiler/ir/types'
 import { lowerStmtToGLSL } from '../src/compiler/ir/glsl-backend'
