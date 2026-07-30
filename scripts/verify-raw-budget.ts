@@ -14,12 +14,12 @@
  * 50 lines across it plus both backends (copy the `case 'for'` lowering).
  *
  * One-arg `raw()` is counted and reported but not capped: it is the right tool for whole
- * shared helper-function bodies (`noise-functions.ts` is 15/0 and legitimately so). It is
+ * shared helper-function bodies (`noise-functions.ts` is 13/2 and mostly legitimately so). It is
  * NOT the right tool for node body logic, which no lexical scan can distinguish — that one
  * stays a review question.
  *
  * Method: a lexical scan with a bracket-depth counter, not a real parse. It agrees with an
- * independently-derived count (57 one-arg / 34 two-arg as of 2026-07-30), and it only has to
+ * independently-derived count (60 one-arg / 31 two-arg as of 2026-07-30), and it only has to
  * be deterministic to work as a ratchet.
  *
  * Run: npx tsx scripts/verify-raw-budget.ts
@@ -29,7 +29,7 @@ import path from 'node:path'
 import { test, run, assert } from './blur-bakeoff/lib/test-util'
 
 /** Lower this when a node converts to structured IR. Never raise it. */
-const TWO_ARG_CEILING = 34
+const TWO_ARG_CEILING = 31
 
 /** Files where a one-arg raw() carrying a whole function body is the intended tool. */
 const HELPER_BODY_FILES = ['noise/noise-functions.ts']
@@ -45,16 +45,33 @@ function walk(dir: string, out: string[] = []): string[] {
   return out
 }
 
-/** Count raw() call sites by arity, using top-level comma detection. */
+/**
+ * Count raw() call sites by arity.
+ *
+ * Splits the argument list at top-level commas and counts NON-BLANK segments. Counting
+ * commas instead was wrong: this codebase writes multi-line calls with a trailing comma,
+ *
+ *     raw(
+ *       `...` +
+ *       `return total / maxAmp;`,     // <- trailing, not a second argument
+ *     )
+ *
+ * so every such one-arg call scored as two-arg. That inflated the reported two-arg total and
+ * therefore the budget itself — the exact "read what a number counts before trusting it"
+ * failure this file exists to prevent, committed inside the file preventing it.
+ */
 function countRaw(src: string): Counts {
   const counts: Counts = { one: 0, two: 0 }
   const re = /\braw\(/g
   let m: RegExpExecArray | null
   while ((m = re.exec(src)) !== null) {
+    const start = m.index + m[0].length
+    const segments: string[] = []
+    let segStart = start
     let depth = 0
-    let args = 1
     let inStr: string | null = null
-    for (let i = m.index + m[0].length; i < src.length; i++) {
+    let end = start
+    for (let i = start; i < src.length; i++) {
       const c = src[i]
       const prev = src[i - 1]
       if (inStr) {
@@ -64,11 +81,16 @@ function countRaw(src: string): Counts {
       if (c === '"' || c === "'" || c === '`') { inStr = c; continue }
       if (c === '(' || c === '[' || c === '{') depth++
       else if (c === ')' || c === ']' || c === '}') {
-        if (depth === 0) break
+        if (depth === 0) { end = i; break }
         depth--
-      } else if (c === ',' && depth === 0) args++
+      } else if (c === ',' && depth === 0) {
+        segments.push(src.slice(segStart, i))
+        segStart = i + 1
+      }
     }
-    if (args >= 2) counts.two++
+    segments.push(src.slice(segStart, end))
+    const realArgs = segments.filter((s) => s.trim().length > 0).length
+    if (realArgs >= 2) counts.two++
     else counts.one++
   }
   return counts
