@@ -103,7 +103,9 @@ export function lowerExprToGLSL(expr: IRExpr, parentPrec = 0, isRightOfParent = 
       return `(${lowerExprToGLSL(expr.cond)} ? ${lowerExprToGLSL(expr.ifTrue)} : ${lowerExprToGLSL(expr.ifFalse)})`
 
     case 'textureSample':
-      return `texture(${expr.sampler}, ${lowerExprToGLSL(expr.coords)})`
+      return expr.level
+        ? `textureLod(${expr.sampler}, ${lowerExprToGLSL(expr.coords)}, ${lowerExprToGLSL(expr.level)})`
+        : `texture(${expr.sampler}, ${lowerExprToGLSL(expr.coords)})`
 
     case 'fragCoord':
       // gl_FragCoord is y-UP. 'yDown' flips it so both backends agree on a top-left origin,

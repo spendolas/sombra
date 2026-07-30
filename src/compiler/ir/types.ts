@@ -67,12 +67,26 @@ export interface IRTernary {
   readonly type: IRType
 }
 
-/** Texture sampling — GLSL: texture(sampler, coords), WGSL: textureSample(tex, sampler, coords) */
+/**
+ * Texture sampling — GLSL `texture(sampler, coords)`, WGSL `textureSample(tex, samp, coords)`.
+ *
+ * Set `level` to sample at an explicit LOD: GLSL `textureLod`, WGSL `textureSampleLevel`.
+ * That is REQUIRED inside any branch whose condition varies per fragment, because WGSL
+ * forbids implicit-derivative sampling under non-uniform control flow. Violating it is
+ * silent and total — `createRenderPipeline` does not throw on an already-invalid module, so
+ * the renderer reports compile SUCCESS and then the invalid pipeline invalidates the whole
+ * command buffer at draw time, dropping every frame including the pass's `loadOp: 'clear'`.
+ * The graph keeps working on WebGL2, which has no uniformity rule, so it looks
+ * backend-specific rather than like a shader error. See commit b56c19c.
+ *
+ * These render targets have no mips, so level 0 is the only level.
+ */
 export interface IRTextureSample {
   readonly kind: 'textureSample'
   readonly sampler: string   // sampler uniform name (e.g. "u_pass0_tex", "u_image_abc")
   readonly coords: IRExpr    // UV coordinates
   readonly type: IRType      // return type (typically 'vec4')
+  readonly level?: IRExpr    // explicit LOD — mandatory under non-uniform control flow
 }
 
 export type IRExpr =
@@ -379,8 +393,10 @@ export function framebufferY(expr: IRExpr, from: 'yUp' | 'yDown'): IRFramebuffer
   return { kind: 'framebufferY', expr, from }
 }
 
-export function textureSample(sampler: string, coords: IRExpr, type: IRType = 'vec4'): IRTextureSample {
-  return { kind: 'textureSample', sampler, coords, type }
+export function textureSample(
+  sampler: string, coords: IRExpr, type: IRType = 'vec4', level?: IRExpr,
+): IRTextureSample {
+  return { kind: 'textureSample', sampler, coords, type, level }
 }
 
 export function raw(glsl: string, wgsl?: string): IRRawCode {
