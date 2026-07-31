@@ -110,13 +110,26 @@ function emit(o: EmitOpts): string {
   // Aim the kernel at √(σ² − floor²): the intrinsic tent floor then lands it back on σ.
   L.push(decl(f, `kw_kern_${id}`, `sqrt(max(0.0, kw_sig_${id} * kw_sig_${id} - ${(INTRINSIC_TEXELS * INTRINSIC_TEXELS).toPrecision(9)}))`))
   L.push(decl(f, `kw_k_${id}`, `kw_kern_${id} / ${OFFSET_RMS.toPrecision(9)}`))
-  // This pass's corner offset, in UV.
-  L.push(decl(v2, `kw_o_${id}`, `${v2}(${offset.toPrecision(9)} * kw_k_${id}) / u_viewport`))
+  // This pass's corner offset, in TEXELS (isotropic — rotated below, then converted to UV
+  // per-axis). Plain Kawase samples a fixed axis-aligned 4-corner pattern; at large radius
+  // the sparse taps leave kernel gaps → a coherent passband GRID that crawls in motion.
+  L.push(decl(f, `kw_off_${id}`, `${offset.toPrecision(9)} * kw_k_${id}`))
+  // STOCHASTIC: rotate the 4-corner pattern by a per-pixel, per-pass hashed angle. The jitter
+  // both fills the gaps (each pixel samples a different orientation → the neighbourhood-average
+  // kernel is smooth) and decorrelates whatever leaks into STATIC noise (hash of position, not
+  // time → no temporal crawl). The seed differs per pass so the passes decorrelate.
+  L.push(decl(f, `kw_h_${id}`, `fract(sin(dot(${frag}, ${v2}(12.9898, 78.233)) + ${offset.toPrecision(9)}) * 43758.5453)`))
+  L.push(decl(f, `kw_th_${id}`, `6.28318531 * kw_h_${id}`))
+  L.push(decl(f, `kw_ct_${id}`, `cos(kw_th_${id})`))
+  L.push(decl(f, `kw_st_${id}`, `sin(kw_th_${id})`))
 
-  // 4 diagonal corners, weight 0.25 each (already premultiplied → plain average).
+  // 4 rotated corners, weight 0.25 each (already premultiplied → plain average).
   L.push(decl(v4, `kw_s_${id}`, `${v4}(0.0)`))
   for (const [sx, sy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
-    const uv = `kw_uv_${id} + ${v2}(${sx.toFixed(1)} * kw_o_${id}.x, ${sy.toFixed(1)} * kw_o_${id}.y)`
+    // Rotate the unit corner (sx,sy) by the hashed angle, scale by offset (texels), to UV.
+    const rx = `(${sx.toFixed(1)} * kw_ct_${id} - ${sy.toFixed(1)} * kw_st_${id})`
+    const ry = `(${sx.toFixed(1)} * kw_st_${id} + ${sy.toFixed(1)} * kw_ct_${id})`
+    const uv = `kw_uv_${id} + ${v2}(${rx} * kw_off_${id}, ${ry} * kw_off_${id}) / u_viewport`
     L.push(`kw_s_${id} = kw_s_${id} + ${tap(uv)};`)
   }
   L.push(decl(v4, `kw_o4_${id}`, `kw_s_${id} * 0.25`))
