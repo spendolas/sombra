@@ -79,20 +79,35 @@ sweep, by radius:
 |---|---|---|---|---|---|---|---|
 | worst leak (codes) | 13 | 13 | 70 | 28 | 118 | 126 | 131 |
 
-**Kawase's clean ceiling is ~radius 48.** Above it the 5-pass kernel (a product of cosines)
-develops passband recurrences — coherent grid leakage up to ~130–230 codes that crawls in
-motion. This is the classic Kawase tell, and it means plain 5-pass Kawase is NOT a clean
-unbounded animatable blur. Options to resolve, cheapest first:
+Plain 5-pass Kawase's clean ceiling was ~radius 48. Above it the fixed 5-tap kernel (a product
+of cosines) developed passband recurrences — coherent grid leakage up to ~130–230 codes that
+crawled in motion.
 
-- **A — cap `kawase_blur` at ~r48–64:** clean animatable blur for small/medium radius; large
-  static blur is already served by `pyramid_blur`, large wired by separable `blur`.
-- **C — stochastic/jittered Kawase:** hash-jitter the taps to smear the passband grid into
-  (static) noise; shader-only, stays animatable/fixed-count; needs its own verification.
-- **B — framework cross-fade / mip pyramid:** real downsampling low-passes before aliasing,
-  giving a genuinely clean unbounded animatable blur; ~1 day of compiler + renderer work.
+## Resolution: stochastic jitter (option C) — solves it, no framework surgery
+
+Rotating the 4-corner tap pattern by a **per-pixel, per-pass hashed angle** both fills the
+kernel gaps (each pixel samples a different orientation → the neighbourhood-average kernel is
+smooth) and decorrelates the residual into **static, screen-fixed** grain (hash of position,
+not time → no temporal crawl). Measured at radius 256:
+
+| metric | plain Kawase | stochastic | ideal Gaussian |
+|---|---|---|---|
+| worst grating leakage (codes) | 131 | **9** | 0 |
+| fixed-pixel flicker as content pans (codes) | tens (crawling grid) | **1–7** | 0 |
+| static grain (codes) | — | **~1.8** (below the dither) | — |
+
+This makes `kawase_blur` a clean, **large-radius, animatable** blur — the full ask — with a
+**shader-only** change: no compiler or renderer surgery, no entanglement. Options A and B are
+therefore not needed. Gate `scripts/verify-kawase-shimmer.ts` (5/5) asserts leakage < 20,
+flicker < 12, grain < 4 at r=256 — all far below the un-jittered 131, so a future edit that
+drops the jitter fails the gate. Shape/animatability gate still 17/17. Live-verified in-app: a
+fine (cell-12) checkerboard at radius 150 washes to smooth grey, no grid/moiré.
 
 ## Open / next
 
-- Pick A / B / C above for the extreme-radius look.
-- **Consolidation:** three blur nodes now (`blur`, `pyramid_blur`, `kawase_blur`). Decide the
-  final palette story once the range question is settled.
+- **Consolidation:** three blur nodes now (`blur`, `pyramid_blur`, `kawase_blur`). With Kawase
+  now clean at large radius AND animatable, it is a candidate to become the DEFAULT blur (it
+  spans small→large, animatable, fixed cost), with `pyramid_blur`/separable `blur` retired or
+  kept as specialised. Decide the final palette story.
+- **Grain vs a real photo:** confirm the ~1.8-code static grain is invisible on smooth
+  gradients / photographic content (measured on gratings; expected fine).
