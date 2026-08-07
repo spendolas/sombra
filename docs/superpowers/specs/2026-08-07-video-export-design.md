@@ -137,8 +137,8 @@ video formats. `fflate` for the sequence zip. PNG via the browser's native canva
   straight-alpha. Stays GPU-side (no readback) for the WebCodecs path.
 - Honor the repo's **"don't invent alpha"** rule: export passes the graph's alpha through; it
   does not synthesize opacity.
-- **Opaque formats** (H.264): no alpha channel → composite over a user-chosen **matte color**
-  (default black) so semi-transparent content flattens predictably.
+- **Opaque formats** (H.264): no alpha channel → composite over a user-chosen matte (surfaced
+  in the UI as **"Background"**, default black) so semi-transparent content flattens predictably.
 
 ## 7. UI
 
@@ -164,13 +164,30 @@ Copy-share-URL / Embed). Add a **5th `IconButton`** (film/export icon) that open
 
 ### 7.2 ExportModal contents
 
-- **Format** picker — only feature-detected + entitled sinks; each shows alpha/where-it-goes.
-- **Resolution** — presets (720p/1080p/4K) + custom; **live preview at the chosen aspect**,
-  because `auto_uv` is anchor-relative — a different aspect *reveals/hides* edges rather than
-  zooming, so the user must see the framing before exporting.
-- **FPS** (24/30/60) and **duration** (seconds) → `totalFrames`.
-- **Matte color** (opaque formats only).
-- **Progress** bar (frames encoded / total) + cancel; **download** on finish.
+Two-column layout — **live preview** (left) + **controls** (right); the right column swaps to
+a **progress → done** panel during/after encode. Reference mockup:
+`scratchpad/export-modal-mockup.html` (interactive).
+
+- **Live preview (left):** the current frame rendered at the chosen resolution/aspect. Backed
+  by a **checkerboard** for alpha formats and by the **Background color** for opaque formats —
+  so the Background control *demonstrates itself*. Shows the aspect badge (`W × H · ratio`) and
+  the framing note: `auto_uv` is anchor-relative, so a different aspect *reveals/hides* edges
+  rather than zooming — the user must see the framing before exporting.
+- **Format** picker (radio cards) — only feature-detected + entitled sinks; each shows an alpha
+  badge and a `web`/`editor` tag. Selecting a format drives which controls below are shown.
+- **Quality** — slider `Draft / Good / High / Max` for the lossy video formats (maps to the
+  WebCodecs bitrate/quantizer); replaced by a static **"Lossless"** note for `png-sequence`.
+- **Resolution** — presets (720p / 1080p / 1440p / 4K / Square / Vertical) **+ Custom…** which
+  reveals W×H fields with a live aspect readout.
+- **Frame rate** — `24 / 30 / 60` **+ Custom**; **Duration** in seconds → `totalFrames`.
+- **Background** (opaque formats only) — swatches (black default / white / grey / chroma-green /
+  custom picker). Labelled with the *why*: "MP4 / H.264 has no transparency — transparent pixels
+  are flattened onto this color." (This is the "matte" from §6, named for what the user sees.)
+- **Estimate** — frames, approx output size, approx encode time (updates live; formulas TBD in
+  implementation — see §11).
+- **Footer:** Cancel / Export. **Progress** state: bar (frames encoded / total) + % + Cancel.
+  **Done** state: `✓ Exported <file> · <size>` with Download / Close.
+- Disabled when there's no valid compile (§7.1).
 
 ## 8. Error handling & edge cases
 
