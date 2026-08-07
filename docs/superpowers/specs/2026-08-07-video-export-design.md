@@ -140,7 +140,29 @@ video formats. `fflate` for the sequence zip. PNG via the browser's native canva
 - **Opaque formats** (H.264): no alpha channel → composite over a user-chosen **matte color**
   (default black) so semi-transparent content flattens predictably.
 
-## 7. UI (ExportModal)
+## 7. UI
+
+### 7.1 Entry point (where it lives)
+
+Export is another "get your work out" action, so it joins the existing ones in
+**`GraphToolbar`** (the floating top-left pill that already holds Save `.sombra` / Open /
+Copy-share-URL / Embed). Add a **5th `IconButton`** (film/export icon) that opens an
+**`ExportModal`**, mirroring the existing `code` → `EmbedModal` pattern exactly
+(`open`/`onClose` state in `GraphToolbar`):
+
+```tsx
+<IconButton icon="film" onClick={() => setExportOpen(true)} title="Export video / image sequence" />
+<ExportModal open={exportOpen} onClose={() => setExportOpen(false)} />
+```
+
+- **Disabled when there's no valid compile** (no `RenderPlan` to render) — export operates on
+  the current compiled plan.
+- **Secondary entry:** a `Cmd+K` command ("Export video…") via the existing command palette.
+- `ExportModal` is **separate** from `EmbedModal` (single responsibility: embed = the live
+  player; export = files, with its own resolution/fps/duration/progress UI). A unified
+  "Export ▾" grouping is a fair alternative if toolbar space becomes a concern — not needed now.
+
+### 7.2 ExportModal contents
 
 - **Format** picker — only feature-detected + entitled sinks; each shows alpha/where-it-goes.
 - **Resolution** — presets (720p/1080p/4K) + custom; **live preview at the chosen aspect**,
