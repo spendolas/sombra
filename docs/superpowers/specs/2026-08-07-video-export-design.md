@@ -168,11 +168,21 @@ Two-column layout — **live preview** (left) + **controls** (right); the right 
 a **progress → done** panel during/after encode. Reference mockup:
 `scratchpad/export-modal-mockup.html` (interactive).
 
-- **Live preview (left):** the current frame rendered at the chosen resolution/aspect. Backed
-  by a **checkerboard** for alpha formats and by the **Background color** for opaque formats —
-  so the Background control *demonstrates itself*. Shows the aspect badge (`W × H · ratio`) and
-  the framing note: `auto_uv` is anchor-relative, so a different aspect *reveals/hides* edges
-  rather than zooming — the user must see the framing before exporting.
+- **Live preview (left) — WYSIWYG by construction.** The preview renders **one frame through
+  the export engine's own single-frame path** (§4.2), at the **exact export pixel resolution**
+  (same `RenderPlan`, same un-premultiply, same matte composite), then displays it **downscaled**
+  to the pane. It is not a separate preview shader — it *is* an export frame, so what you see is
+  what the file will contain.
+  - **Why the real resolution, not just aspect:** `auto_uv` depends on `u_resolution` (device
+    pixels), not aspect alone — a 4K frame spans more reference units than a 720p frame of the
+    same aspect and therefore **reveals more edge content**. Rendering the preview at pane size
+    would misrepresent a high-res export; rendering at the true export resolution (then scaling
+    down for display) makes the framing faithful.
+  - Backed by a **checkerboard** for alpha formats and by the **Background color** for opaque
+    formats — so the Background control *demonstrates itself*. Shows the aspect badge
+    (`W × H · ratio`) and the framing note (anchor-relative reveal/hide, not zoom).
+  - Updates on any setting change and steps with a scrubber/current time (implementation: debounce
+    the full-res render; it is one frame, not the whole clip).
 - **Format** picker (radio cards) — only feature-detected + entitled sinks; each shows an alpha
   badge and a `web`/`editor` tag. Selecting a format drives which controls below are shown.
 - **Quality** — slider `Draft / Good / High / Max` for the lossy video formats (maps to the
