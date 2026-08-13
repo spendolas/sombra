@@ -58,7 +58,13 @@ export function makeWebmAlphaSink(): FrameSink {
     },
 
     async addFrame(vf, ts) {
-      const s = new VideoSample(vf, { timestamp: ts / 1e6, duration: 1 / o.fps })
+      // `new VideoSample(vf, ...)` is a zero-cost wrapper around the SAME
+      // VideoFrame (no clone) — `s.close()` below would close the caller's
+      // `vf` directly. The export engine owns `vf` and closes it itself right
+      // after `addFrame` returns, so we clone here and let `s.close()` close
+      // only the clone, leaving the caller-owned frame open.
+      const clone = vf.clone()
+      const s = new VideoSample(clone, { timestamp: ts / 1e6, duration: 1 / o.fps })
       await src.add(s)
       s.close()
     },
