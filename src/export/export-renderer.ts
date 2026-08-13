@@ -128,6 +128,16 @@ class ExportRenderTargetImpl implements ExportRenderTarget {
 
   /** Last straight-alpha readback, reused by `toVideoFrame`. */
   private lastPixels: Uint8ClampedArray | null = null
+  /**
+   * Monotonic tag for the current offscreen-texture contents, bumped once per
+   * `renderFrame`. `toVideoFrame` compares it against the generation the last
+   * `readback` actually copied — so reusing stale pixels (a `renderFrame` with
+   * no matching `readback`) throws loudly instead of silently emitting the
+   * previous frame's bytes.
+   */
+  private renderGeneration = 0
+  /** Generation whose pixels `lastPixels` holds. -1 = no readback yet. */
+  private lastReadbackGeneration = -1
   /** Reused canvas for `toVideoFrame` → VideoFrame. */
   private videoCanvas: OffscreenCanvas | null = null
   private videoCtx: OffscreenCanvasRenderingContext2D | null = null
@@ -310,6 +320,9 @@ class ExportRenderTargetImpl implements ExportRenderTarget {
     }
 
     this.device.queue.submit([encoder.finish()])
+    // Tag the new offscreen-texture contents so a `toVideoFrame` without a
+    // matching `readback` is caught rather than silently reusing stale pixels.
+    this.renderGeneration++
   }
 
   // -----------------------------------------------------------------------
@@ -332,6 +345,9 @@ class ExportRenderTargetImpl implements ExportRenderTarget {
         { buffer: this.stagingBuffer, bytesPerRow: this.bytesPerRow },
         [this.width, this.height],
       )
+      // Capture the generation these bytes belong to NOW, at copy-encode time —
+      // a `renderFrame` racing during the await below must not mislabel them.
+      const gen = this.renderGeneration
       this.device.queue.submit([encoder.finish()])
 
       await this.stagingBuffer.mapAsync(GPUMapMode.READ)
@@ -361,6 +377,7 @@ class ExportRenderTargetImpl implements ExportRenderTarget {
       }
 
       this.lastPixels = out
+      this.lastReadbackGeneration = gen
       return out
     } finally {
       release()
@@ -373,8 +390,14 @@ class ExportRenderTargetImpl implements ExportRenderTarget {
 
   toVideoFrame(timestampUs: number): VideoFrame {
     if (this.disposed) throw new Error('[export] toVideoFrame after dispose()')
-    if (!this.lastPixels) {
-      throw new Error('[export] toVideoFrame() needs a prior readback() for the same frame')
+    // Guard against silently emitting a previous frame's pixels: the last
+    // readback must belong to the CURRENT rendered frame. Covers both "no
+    // readback ever" (-1 !== gen) and "stale readback" (an intervening
+    // renderFrame bumped the generation past the last readback).
+    if (this.renderGeneration !== this.lastReadbackGeneration || !this.lastPixels) {
+      throw new Error(
+        '[export] toVideoFrame() needs a readback() of the current frame first (last readback is stale)',
+      )
     }
 
     if (!this.videoCanvas || !this.videoCtx) {
