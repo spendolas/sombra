@@ -164,40 +164,49 @@ Copy-share-URL / Embed). Add a **5th `IconButton`** (film/export icon) that open
 
 ### 7.2 ExportModal contents
 
-Two-column layout — **live preview** (left) + **controls** (right); the right column swaps to
-a **progress → done** panel during/after encode. Reference mockup:
-`scratchpad/export-modal-mockup.html` (interactive).
+Two-column layout — **clean live preview** (left) + **controls** (right); the right column swaps
+to a **progress → done** panel during/after encode; the **estimate is pinned into the footer**
+(left of Cancel/Export). **Approved reference mockup (pinned):**
+`docs/superpowers/specs/2026-08-07-export-modal-mockup.html` (interactive).
 
-- **Live preview (left) — WYSIWYG by construction.** The preview renders **one frame through
-  the export engine's own single-frame path** (§4.2), at the **exact export pixel resolution**
-  (same `RenderPlan`, same un-premultiply, same matte composite), then displays it **downscaled**
-  to the pane. It is not a separate preview shader — it *is* an export frame, so what you see is
-  what the file will contain.
-  - **Why the real resolution, not just aspect:** `auto_uv` depends on `u_resolution` (device
-    pixels), not aspect alone — a 4K frame spans more reference units than a 720p frame of the
-    same aspect and therefore **reveals more edge content**. Rendering the preview at pane size
-    would misrepresent a high-res export; rendering at the true export resolution (then scaling
-    down for display) makes the framing faithful.
-  - Backed by a **checkerboard** for alpha formats and by the **Background color** for opaque
-    formats — so the Background control *demonstrates itself*. Shows the aspect badge
-    (`W × H · ratio`) and the framing note (anchor-relative reveal/hide, not zoom).
-  - Updates on any setting change and steps with a scrubber/current time (implementation: debounce
-    the full-res render; it is one frame, not the whole clip).
-- **Format** picker (radio cards) — only feature-detected + entitled sinks; each shows an alpha
-  badge and a `web`/`editor` tag. Selecting a format drives which controls below are shown.
-- **Quality** — slider `Draft / Good / High / Max` for the lossy video formats (maps to the
-  WebCodecs bitrate/quantizer); replaced by a static **"Lossless"** note for `png-sequence`.
-- **Resolution** — presets (720p / 1080p / 1440p / 4K / Square / Vertical) **+ Custom…** which
-  reveals W×H fields with a live aspect readout.
-- **Frame rate** — `24 / 30 / 60` **+ Custom**; **Duration** in seconds → `totalFrames`.
+- **Live preview (left) — WYSIWYG by construction.** Renders **one frame through the export
+  engine's own single-frame path** (§4.2) at the export's **logical framing** (see Framing
+  below), displayed downscaled. It *is* an export frame — no badge, no caption, just the frame.
+- **Format** picker (radio cards) — feature-detected + entitled sinks only; alpha badge +
+  `web`/`editor` tag. Drives which controls show.
+- **Quality** — segmented `Draft / Good / High / Max` for lossy video (WebCodecs bitrate/quantizer);
+  a static **"Lossless"** note for `png-sequence`.
+- **Size** — output pixels, expressed **relative to the current preview view**:
+  `Match` (1:1 with the view) · `2×` · `4×` · `Preset` (720p/1080p/1440p/4K/Vertical/Square) ·
+  `Custom` (W×H). The current view size is shown for context.
+- **Framing** — how the scene maps when the target differs from the view. Three bar-free modes;
+  **the whole control is hidden when target == view** (nothing to decide):
+  - **Reveal / Crop** (dynamic label — "Reveal" when the target is larger, "Crop" when smaller):
+    anchor-relative, keeps content scale; a bigger frame reveals more scene, a smaller one crops
+    in; a new aspect reveals one axis and crops the other. → renderer: `u_dpr` held at 1, per-axis
+    logical size = target pixels.
+  - **Fill** — scale the composition to **cover** the target aspect, crop the overflow.
+  - **Fit** — keep the **whole** composition; fill the leftover with **revealed scene, not bars**.
+  - Fill/Fit → renderer: `u_dpr` scaled so the view's framing is preserved (Fill = cover ratio,
+    Fit = contain ratio). Never letterboxed. (Fill == Fit at the view's own aspect.)
+- **Frame rate** `24 / 30 / 60` **+ Custom**; **Duration** (s) → `totalFrames`.
 - **Background** (opaque formats only) — swatches (black default / white / grey / chroma-green /
-  custom picker). Labelled with the *why*: "MP4 / H.264 has no transparency — transparent pixels
-  are flattened onto this color." (This is the "matte" from §6, named for what the user sees.)
-- **Estimate** — frames, approx output size, approx encode time (updates live; formulas TBD in
-  implementation — see §11).
-- **Footer:** Cancel / Export. **Progress** state: bar (frames encoded / total) + % + Cancel.
-  **Done** state: `✓ Exported <file> · <size>` with Download / Close.
+  custom). The "matte" of §6, named for what the user sees; the preview shows a **checkerboard**
+  for alpha formats and this color for opaque, so it demonstrates itself.
+- **"You'll get"** readout — the output `W × H · ratio` plus a plain-English description of the
+  chosen Size+Framing result (e.g. "Fit — your whole composition kept; the top & bottom fill
+  with revealed scene, not bars").
+- **Footer:** estimate (`N frames · ~size · ~time`, pinned left) + Cancel / Export. **Progress**
+  state: bar (frames encoded / total) + % + Cancel. **Done:** `✓ Exported <file> · <size>` +
+  Download / Close.
 - Disabled when there's no valid compile (§7.1).
+
+**Framing → renderer parameter.** All four framing outcomes reduce to **one scalar the export
+layer computes** — effectively `u_dpr` (Reveal = 1; Fill = cover ratio; Fit = contain ratio) —
+plus the target pixel size. ⚠ **Open (see §11): `u_dpr` is currently overloaded** — `auto_uv`
+uses it, but so does blur-radius scaling (Kawase/pyramid). Repurposing it for export framing
+would shift blur radii, so the build may need a **separate framing-scale uniform** rather than
+hijacking `u_dpr`. Verify against the renderer during the render-test spike.
 
 ## 8. Error handling & edge cases
 
@@ -236,6 +245,10 @@ Headless Chrome (reuse `scripts/self-validate` Playwright harness):
 
 ## 11. Open questions
 
+- **`u_dpr` overload (framing scale vs blur):** the Framing param maps to `u_dpr`, but `u_dpr`
+  also scales blur radii (Kawase/pyramid). Resolve during the render-test spike: reuse `u_dpr`
+  (accepting blur shifts with framing) or add a **separate framing-scale uniform**. Likely the
+  latter.
 - Default duration/fps caps for the memory guardrail (pick sane limits during implementation).
 - Whether v1 ships one background-matte color or a full picker for opaque export.
 - `fflate` vs an alternative for streaming zip (confirm size/streaming during build).
