@@ -124,11 +124,24 @@ blob = await sink.finish() → trigger download
 | id | container | codec | alpha | output | tier | notes |
 |---|---|---|---|---|---|---|
 | `mp4-h264` | MP4 | H.264 (WebCodecs) | no (matte) | file | free | universal, hardware ~everywhere |
-| `webm-vp9-alpha` | WebM | VP9 + alpha (WebCodecs) | **yes** | file | free | transparent; great in Resolve, weak in Adobe; VP9 encode often software (still fine offline) |
+| `webm-vp9-alpha` | WebM | VP9 + alpha (**MediaBunny**) | **yes** | file | free | genuine transparent WebM; plays transparent in a plain `<video>` (Chrome/FF) |
 | `png-sequence` | ZIP | PNG RGBA | **yes** | zip | free | lossless, straight alpha, universal editor import |
 
-Encoder/mux layer: **MediaBunny** (MPL-2.0, zero deps, ~5 kB gzip, WebCodecs-based) for the two
-video formats. `fflate` for the sequence zip. PNG via the browser's native canvas encoder.
+Encoder/mux layer: **MediaBunny** (MPL-2.0, zero deps, WebCodecs-based) for both video formats.
+`fflate` for the sequence zip. PNG via the browser's native canvas encoder.
+
+**Render-test spike — VALIDATED (2026-08-07, Chrome 151).** All proven live in-browser:
+- **Opaque MP4/H.264** via WebCodecs + MediaBunny → real playable file. ✅
+- **Transparent `webm-vp9-alpha`** via MediaBunny **`alpha:'keep'`** → a genuine VP9-alpha WebM.
+  Round-trip verified: `canBeTransparent()===true`, decoded `I420A`, edge α=0 / centre α=255, and it
+  plays transparent in a bare `<video>` (no shader). ✅ **Key point:** raw WebCodecs cannot encode
+  alpha (`isConfigSupported` false for vp9/vp8/av1 + `configure` throws) — **MediaBunny does the
+  two-stream/`BlockAdditional` orchestration internally.** So the transparent path depends on
+  MediaBunny, not raw WebCodecs. (This retires stacked-alpha, custom muxer, and ffmpeg.wasm.)
+- **Renderer:** the live WebGPU canvas **cannot** be hijacked (out-of-band capture returns blank;
+  `updateUniforms` takes an iterable, not a time). Export **must** render to a **dedicated
+  offscreen texture + readback** (extend the preview-renderer's `copyTextureToBuffer` path from
+  80×80 to target res) with a **render-at-time** entry point. This is the main engineering task.
 
 ## 6. Alpha handling
 
