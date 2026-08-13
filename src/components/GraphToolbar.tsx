@@ -15,11 +15,13 @@ import {
 } from '@/utils/sombra-file'
 import { ds } from '@/generated/ds'
 import { EmbedModal } from '@/components/EmbedModal'
+import { ExportModal } from '@/export/ExportModal'
 
 export function GraphToolbar() {
   const { fitView } = useReactFlow()
   const [copied, setCopied] = useState(false)
   const [embedOpen, setEmbedOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
 
   const handleSave = useCallback(() => {
     const { nodes, edges } = useGraphStore.getState()
@@ -79,8 +81,14 @@ export function GraphToolbar() {
           onClick={() => setEmbedOpen(true)}
           title="Embed on a website"
         />
+        <IconButton
+          icon="film"
+          onClick={() => setExportOpen(true)}
+          title="Export video / image sequence"
+        />
       </Panel>
       <EmbedModal open={embedOpen} onClose={() => setEmbedOpen(false)} />
+      <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} />
     </>
   )
 }
