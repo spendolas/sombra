@@ -492,6 +492,10 @@ snippet + a JS toolkit. Full spec/plan in `docs/superpowers/`; runtime docs in `
 These happen when specific conditions are met, not on a timeline:
 
 - Backend + shareable URLs (trigger: user demand) — Vercel + Supabase
+- Server-side video encoding (trigger: need for transparent MP4/MOV — ProRes for editors,
+  HEVC for Safari — which the browser can't encode) — findings + options parked in
+  `docs/superpowers/specs/2026-08-07-video-export-server-side-roadmap.md`. Client-side ceiling
+  today is WebM/MKV alpha (VP8/VP9/AV1) via MediaBunny.
 - Public gallery (trigger: enough users creating materials)
 - Texture/image uploads as sampler2D inputs
 - 3D mesh preview (apply shader to a sphere/cube)
