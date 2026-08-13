@@ -487,7 +487,7 @@ snippet + a JS toolkit. Full spec/plan in `docs/superpowers/`; runtime docs in `
 
 ---
 
-## Phase 6 — Future (Trigger-Based, Not Scheduled)
+## Future work
 
 These happen when specific conditions are met, not on a timeline:
 
