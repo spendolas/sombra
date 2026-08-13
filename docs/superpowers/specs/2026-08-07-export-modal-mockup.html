@@ -1,0 +1,526 @@
+<title>Sombra — Export (mockup)</title>
+<style>
+  :root {
+    --surface:#0f0f1a; --surface-alt:#1a1a2e; --raised:#252538; --elevated:#2d2d44;
+    --fg:#e8e8f0; --fg-dim:#b8b8c8; --fg-subtle:#88889a; --fg-muted:#5a5a6e;
+    --edge:#3a3a52; --edge-subtle:#2a2a3e; --edge-card:rgba(255,255,255,0.10);
+    --indigo:#6366f1; --indigo-hover:#818cf8; --indigo-active:#4f46e5;
+    --good:#4ade80; --warn:#fbbf24;
+    --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --r: 8px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin:0; min-height:100vh; font-family:var(--font-ui); color:var(--fg);
+    background:var(--surface);
+    background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,.04) 1px, transparent 0);
+    background-size: 22px 22px;
+    display:flex; align-items:center; justify-content:center; padding:28px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .backdrop-note{ position:fixed; top:14px; left:50%; transform:translateX(-50%);
+    font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--fg-muted); }
+  .app{ width:100%; display:flex; align-items:center; justify-content:center; }
+
+  .modal{
+    width:min(800px, 100%); height:auto; max-height:92vh;
+    display:flex; flex-direction:column;
+    background:var(--surface-alt); border:1px solid var(--edge); border-radius:14px;
+    box-shadow: 0 24px 60px -12px rgba(0,0,0,.7), 0 0 0 1px rgba(0,0,0,.4); overflow:hidden;
+  }
+  .modal__head{ display:flex; align-items:center; justify-content:space-between;
+    padding:14px 18px; border-bottom:1px solid var(--edge-subtle); flex:none; }
+  .modal__title{ display:flex; align-items:center; gap:9px; font-size:15px; font-weight:600; }
+  .modal__title .dot{ width:8px;height:8px;border-radius:50%;background:var(--indigo); box-shadow:0 0 10px var(--indigo); }
+  .x{ appearance:none;border:0;background:transparent;color:var(--fg-subtle); cursor:pointer;
+      font-size:20px; line-height:1; padding:4px 8px; border-radius:6px; }
+  .x:hover{ background:var(--elevated); color:var(--fg); }
+
+  .body{ flex:1; min-height:0; display:grid; grid-template-columns:330px minmax(0,1fr); }
+  @media (max-width:680px){ .body{ grid-template-columns:minmax(0,1fr); } }
+
+  .preview{ padding:18px; border-right:1px solid var(--edge-subtle);
+    display:flex; flex-direction:column; gap:10px; background:var(--surface); min-height:0; min-width:0; }
+  @media (max-width:680px){ .preview{ border-right:0; border-bottom:1px solid var(--edge-subtle);} }
+  .frame-wrap{ position:relative; flex:1; min-height:0; display:flex; align-items:center; justify-content:center; }
+  .frame{ position:relative; max-width:100%; max-height:100%;
+    border:1px solid var(--edge-card); border-radius:6px; overflow:hidden; background-color:#20202c;
+    background-image:
+      linear-gradient(45deg,#2a2a38 25%,transparent 25%,transparent 75%,#2a2a38 75%),
+      linear-gradient(45deg,#2a2a38 25%,transparent 25%,transparent 75%,#2a2a38 75%);
+    background-size:16px 16px; background-position:0 0,8px 8px; }
+  .frame.opaque{ background-image:none; }
+  .frame canvas{ position:absolute; display:block; }
+  .frame .matte{ position:absolute; inset:0; z-index:0; }
+  .badge-aspect{ position:absolute; left:8px; bottom:8px; z-index:3; font-family:var(--font-mono);
+    font-size:11px; color:var(--fg-dim); background:rgba(15,15,26,.72); padding:2px 7px;
+    border-radius:5px; backdrop-filter:blur(4px); font-variant-numeric:tabular-nums; cursor:help; }
+  .frame-note{ flex:none; font-size:11.5px; color:var(--fg-subtle); line-height:1.5; }
+  .frame-note b{ color:var(--fg-dim); font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+  .frame-note i{ color:var(--fg-muted); }
+
+  .right{ min-height:0; min-width:0; display:flex; }
+  .controls{ flex:1; min-height:0; min-width:0; overflow-y:auto; overflow-x:hidden; scrollbar-gutter:stable;
+    padding:18px; display:flex; flex-direction:column; gap:15px; }
+  .field{ display:flex; flex-direction:column; gap:7px; }
+  .label{ font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--fg-subtle); font-weight:600; }
+  .label-row{ display:flex; align-items:center; justify-content:space-between; }
+  .hint{ font-size:11px; color:var(--fg-muted); line-height:1.45; }
+
+  .formats{ display:flex; flex-direction:column; gap:6px; }
+  .fmt{ display:flex; align-items:center; gap:10px; padding:9px 11px; cursor:pointer;
+    background:var(--raised); border:1px solid var(--edge-subtle); border-radius:var(--r);
+    transition:border-color .12s, background .12s; }
+  .fmt:hover{ background:var(--elevated); }
+  .fmt[data-on="1"]{ border-color:var(--indigo); background:color-mix(in srgb, var(--indigo) 12%, var(--raised)); }
+  .fmt .radio{ width:15px;height:15px;border-radius:50%;border:2px solid var(--fg-muted); flex:none; position:relative; }
+  .fmt[data-on="1"] .radio{ border-color:var(--indigo); }
+  .fmt[data-on="1"] .radio::after{ content:""; position:absolute; inset:3px; border-radius:50%; background:var(--indigo); }
+  .fmt .txt{ flex:1; min-width:0; }
+  .fmt .name{ font-size:13px; font-weight:500; }
+  .fmt .sub{ font-size:11px; color:var(--fg-muted); font-family:var(--font-mono); }
+  .tag{ font-size:10px; padding:2px 6px; border-radius:5px; font-weight:600; letter-spacing:.03em; }
+  .tag.web{ background:rgba(99,102,241,.18); color:#a5b4fc; }
+  .tag.editor{ background:rgba(74,222,128,.15); color:#86efac; }
+  .tag.alpha{ background:rgba(236,72,153,.15); color:#f0abfc; font-family:var(--font-mono); }
+
+  .seg{ display:flex; gap:5px; }
+  .seg button{ flex:1; appearance:none; cursor:pointer; font:inherit; font-size:12px;
+    padding:7px 2px; border-radius:6px; border:1px solid var(--edge-subtle);
+    background:var(--raised); color:var(--fg-dim); font-variant-numeric:tabular-nums; }
+  .seg button:hover{ background:var(--elevated); }
+  .seg button[data-on="1"]{ background:var(--indigo); border-color:var(--indigo); color:#fff; }
+  .seg button:disabled{ opacity:.4; cursor:not-allowed; }
+  select, input[type="number"]{ font:inherit; font-size:12.5px; color:var(--fg); background:var(--raised);
+    border:1px solid var(--edge-subtle); border-radius:6px; padding:7px 9px; font-variant-numeric:tabular-nums; }
+  select{ cursor:pointer; width:100%; }
+  .row{ display:flex; gap:8px; align-items:center; } .row > *{ min-width:0; }
+  .dims{ display:flex; gap:6px; align-items:center; }
+  .dims input{ width:74px; } .dims .by{ color:var(--fg-muted); }
+  .val{ font-family:var(--font-mono); font-size:11.5px; color:var(--fg-dim); font-variant-numeric:tabular-nums; }
+  .val.strong{ color:var(--fg); font-size:12.5px; }
+
+  .result{ font-size:11.5px; line-height:1.5; color:var(--fg-dim);
+    background:color-mix(in srgb, var(--indigo) 8%, var(--raised)); border:1px solid var(--edge-subtle);
+    border-radius:6px; padding:9px 11px; }
+  .result .flag{ display:flex; gap:6px; margin-top:6px; color:var(--warn); font-size:11px; align-items:flex-start; }
+  .result .flag::before{ content:"▲"; }
+  .noop{ font-size:10px; color:var(--fg-muted); border:1px solid var(--edge-subtle); padding:1px 6px;
+    border-radius:4px; text-transform:none; letter-spacing:0; font-weight:400; }
+
+  .swatches{ display:flex; gap:6px; align-items:center; }
+  .sw{ width:26px;height:26px;border-radius:6px;border:1px solid var(--edge-card); cursor:pointer; position:relative; }
+  .sw[data-on="1"]{ outline:2px solid var(--indigo); outline-offset:1px; }
+  .sw.chroma{ background:#00b140; } .sw.k{ background:#000; } .sw.w{ background:#fff; } .sw.g{ background:#808080; }
+  .sw.custom{ background:conic-gradient(from 0deg, #f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00); }
+  .sw.custom input{ position:absolute; inset:0; opacity:0; cursor:pointer; }
+
+  .foot{ flex:none; display:flex; justify-content:space-between; align-items:center; gap:14px; padding:12px 18px;
+    border-top:1px solid var(--edge-subtle); background:var(--surface-alt); }
+  .foot .est{ display:flex; align-items:baseline; gap:9px; min-width:0;
+    font-family:var(--font-mono); font-size:12px; color:var(--fg-subtle); font-variant-numeric:tabular-nums; }
+  .foot .est b{ color:var(--fg-dim); font-weight:600; }
+  .foot .est .sep{ color:var(--fg-muted); }
+  .foot-actions{ display:flex; gap:10px; flex:none; }
+  .btn{ appearance:none; cursor:pointer; font:inherit; font-size:13px; font-weight:500;
+    padding:9px 18px; border-radius:8px; border:1px solid transparent; }
+  .btn.ghost{ background:transparent; border-color:var(--edge); color:var(--fg-dim); }
+  .btn.ghost:hover{ background:var(--elevated); color:var(--fg); }
+  .btn.primary{ background:var(--indigo); color:#fff; } .btn.primary:hover{ background:var(--indigo-hover); }
+  .btn:focus-visible, .fmt:focus-visible, .seg button:focus-visible, .sw:focus-visible, select:focus-visible{ outline:2px solid var(--indigo-hover); outline-offset:2px; }
+
+  .progress{ flex:1; min-height:0; min-width:0; overflow-y:auto; overflow-x:hidden; scrollbar-gutter:stable; padding:18px; display:none; flex-direction:column; gap:16px; justify-content:center; }
+  .prog-title{ font-size:13px; color:var(--fg-dim); } .prog-title b{ color:var(--fg); font-weight:600; }
+  .bar{ height:8px; border-radius:5px; background:var(--edge); overflow:hidden; }
+  .bar > i{ display:block; height:100%; width:0%; background:linear-gradient(90deg,var(--indigo),var(--indigo-hover)); transition:width .12s linear; }
+  .prog-meta{ display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:12px; color:var(--fg-subtle); font-variant-numeric:tabular-nums; }
+  .done{ display:none; flex-direction:column; gap:6px; }
+  .done .ok{ display:flex; align-items:center; gap:9px; font-size:14px; } .done .ok .chk{ color:var(--good); font-size:18px; }
+  .done .file{ font-family:var(--font-mono); font-size:12.5px; color:var(--fg-dim); font-variant-numeric:tabular-nums; }
+
+  .app[data-mode="run"] .controls{ display:none; }
+  .app[data-mode="run"] .progress{ display:flex; }
+  .app[data-mode="run"] .foot{ display:none; }
+  .hidden{ display:none !important; }
+</style>
+
+<div class="backdrop-note">Sombra · Export modal — interactive mockup</div>
+
+<div class="app" id="app" data-mode="config">
+  <div class="modal">
+    <div class="modal__head">
+      <div class="modal__title"><span class="dot"></span> Export</div>
+      <button class="x" title="Close" aria-label="Close">×</button>
+    </div>
+
+    <div class="body">
+      <div class="preview">
+        <div class="frame-wrap">
+          <div class="frame" id="frame">
+            <div class="matte hidden" id="matte"></div>
+            <canvas id="gl"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="right">
+        <div class="controls" id="controls">
+          <div class="field">
+            <span class="label">Format</span>
+            <div class="formats" id="formats">
+              <label class="fmt" data-fmt="mp4" data-on="1" data-alpha="0" data-lossy="1" tabindex="0">
+                <span class="radio"></span>
+                <span class="txt"><div class="name">MP4 · H.264</div><div class="sub">scene.mp4</div></span>
+                <span class="tag web">web</span>
+              </label>
+              <label class="fmt" data-fmt="webm" data-on="0" data-alpha="1" data-lossy="1" tabindex="0">
+                <span class="radio"></span>
+                <span class="txt"><div class="name">WebM · VP9 + alpha</div><div class="sub">scene.webm</div></span>
+                <span class="tag alpha">⍺</span><span class="tag web">web</span>
+              </label>
+              <label class="fmt" data-fmt="png" data-on="0" data-alpha="1" data-lossy="0" tabindex="0">
+                <span class="radio"></span>
+                <span class="txt"><div class="name">PNG sequence</div><div class="sub">scene_####.png · .zip</div></span>
+                <span class="tag alpha">⍺</span><span class="tag editor">editor</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="field" id="qualityField">
+            <span class="label">Quality</span>
+            <div class="seg" id="quality">
+              <button data-q="0">Draft</button><button data-q="1">Good</button>
+              <button data-q="2" data-on="1">High</button><button data-q="3">Max</button>
+            </div>
+          </div>
+          <div class="field hidden" id="losslessField">
+            <span class="label">Quality</span>
+            <span class="hint">Lossless — every frame is a full PNG.</span>
+          </div>
+
+          <!-- SIZE (relative to the current preview window) -->
+          <div class="field">
+            <div class="label-row"><span class="label">Size</span><span class="val" id="viewCtx">current view 1280 × 720</span></div>
+            <div class="seg" id="size">
+              <button data-src="match" data-on="1">Match</button>
+              <button data-src="2x">2×</button>
+              <button data-src="4x">4×</button>
+              <button data-src="preset">Preset</button>
+              <button data-src="custom">Custom</button>
+            </div>
+            <select id="resPreset" class="hidden" aria-label="Preset resolution">
+              <option value="1280x720">720p — 1280 × 720</option>
+              <option value="1920x1080" selected>1080p — 1920 × 1080</option>
+              <option value="3840x2160">4K — 3840 × 2160</option>
+              <option value="1080x1920">Vertical — 1080 × 1920</option>
+              <option value="1080x1080">Square — 1080 × 1080</option>
+            </select>
+            <div class="dims hidden" id="customDims">
+              <input type="number" id="cw" value="1600" min="16" max="7680" aria-label="Width">
+              <span class="by">×</span>
+              <input type="number" id="ch" value="900" min="16" max="7680" aria-label="Height">
+            </div>
+          </div>
+
+          <!-- FRAMING (hidden when target == view) -->
+          <div class="field" id="framingField">
+            <span class="label">Framing</span>
+            <div class="seg" id="framing">
+              <button data-fr="reveal" id="revealBtn" data-on="1" title="Anchor-relative — keeps content scale; a bigger frame reveals more, a smaller one crops in; a new aspect reveals one axis and crops the other. No bars.">Reveal</button>
+              <button data-fr="fill" title="Scale your composition to COVER the target aspect; crop the overflow. No bars.">Fill</button>
+              <button data-fr="fit" title="Keep your WHOLE composition; fill the leftover with revealed scene instead of letterbox bars.">Fit</button>
+            </div>
+          </div>
+
+          <!-- OUTPUT + RESULT -->
+          <div class="field">
+            <div class="label-row"><span class="label">You'll get</span><span class="val strong" id="outSize">1280 × 720 · 16:9</span></div>
+            <div class="result" id="resultNote"></div>
+          </div>
+
+          <!-- FPS + DURATION -->
+          <div class="row" style="gap:16px; align-items:flex-start">
+            <div class="field" style="flex:1">
+              <span class="label">Frame rate</span>
+              <div class="seg" id="fps">
+                <button data-fps="24">24</button><button data-fps="30" data-on="1">30</button>
+                <button data-fps="60">60</button><button data-fps="custom">Custom</button>
+              </div>
+              <input type="number" id="fpsCustom" class="hidden" value="48" min="1" max="120" aria-label="Custom fps">
+            </div>
+            <div class="field" style="width:120px">
+              <span class="label">Duration</span>
+              <div class="row"><input type="number" id="dur" value="5" min="0.1" step="0.5" style="width:100%" aria-label="Duration seconds"><span class="val">s</span></div>
+            </div>
+          </div>
+
+          <div class="field" id="bgField">
+            <span class="label">Background</span>
+            <span class="hint">MP4 / H.264 has no transparency — transparent pixels flatten onto this color.</span>
+            <div class="swatches" id="swatches">
+              <div class="sw k" data-color="#000000" data-on="1" tabindex="0" title="Black"></div>
+              <div class="sw w" data-color="#ffffff" tabindex="0" title="White"></div>
+              <div class="sw g" data-color="#808080" tabindex="0" title="Grey"></div>
+              <div class="sw chroma" data-color="#00b140" tabindex="0" title="Chroma green"></div>
+              <div class="sw custom" tabindex="0" title="Custom"><input type="color" id="bgCustom" value="#1b1030"></div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="progress" id="progress">
+          <div id="running">
+            <div class="prog-title">Encoding · <b id="runFmt">MP4 · H.264</b></div>
+            <div class="bar" style="margin:14px 0 8px"><i id="barFill"></i></div>
+            <div class="prog-meta"><span id="runFrames">0 / 150 frames</span><span id="runPct">0%</span></div>
+            <div style="margin-top:18px; text-align:right"><button class="btn ghost" id="cancelRun">Cancel</button></div>
+          </div>
+          <div class="done" id="doneBox">
+            <div class="ok"><span class="chk">✓</span> <span>Exported</span></div>
+            <div class="file" id="doneFile">scene.mp4 · 13.8 MB</div>
+            <div style="display:flex; gap:10px; margin-top:14px; justify-content:flex-end">
+              <button class="btn ghost" id="doneClose">Close</button>
+              <button class="btn primary" id="doneDownload">Download</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="foot" id="foot">
+      <div class="est">
+        <span><b id="estFrames">150</b> frames</span><span class="sep">·</span>
+        <span id="estSize">~14 MB</span><span class="sep">·</span>
+        <span id="estTime">~6 s</span>
+      </div>
+      <div class="foot-actions">
+        <button class="btn ghost" id="cancelBtn">Cancel</button>
+        <button class="btn primary" id="exportBtn">Export</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (s, r=document) => r.querySelector(s);
+  const $$ = (s, r=document) => [...r.querySelectorAll(s)];
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const VIEW = { w:1280, h:720 };                  // "current preview window"
+  const st = { fmt:'mp4', alpha:0, lossy:1, quality:2, source:'match', preset:'1920x1080',
+               cw:1600, ch:900, framing:'reveal', w:1280, h:720, fps:30, dur:5, bg:'#000000' };
+  let spanX = VIEW.w/512, spanY = VIEW.h/512;      // shader visible extent per axis
+
+  // ---- WebGL stand-in shader ----
+  const cv = $('#gl');
+  const gl = cv.getContext('webgl2', { premultipliedAlpha:true, alpha:true, antialias:true });
+  let uTime, uSpan, t0 = 0;
+  if (gl) {
+    const vs = `#version 300 es
+      in vec2 pos; void main(){ gl_Position = vec4(pos,0.,1.); }`;
+    const fs = `#version 300 es
+      precision highp float; uniform float u_time; uniform vec2 u_span; uniform vec2 u_res; out vec4 o;
+      void main(){
+        vec2 uv = gl_FragCoord.xy / u_res;
+        vec2 p = (uv - 0.5) * u_span;
+        float t = u_time*0.35;
+        float v = sin(p.x*3.2+t) + sin(p.y*3.4 - t*1.2) + sin((p.x+p.y)*2.6 + t*0.8);
+        v += 0.6*sin(length(p)*7.0 - t*1.6);
+        vec3 col = 0.55 + 0.45*cos(vec3(0.0,2.1,4.2) + v*1.25 + t*0.2);
+        col = mix(col, vec3(0.55,0.35,0.95), 0.25);
+        float a = smoothstep(1.25, 0.4, length(p));
+        o = vec4(col*a, a);
+      }`;
+    const mk = (ty, src) => { const s=gl.createShader(ty); gl.shaderSource(s,src); gl.compileShader(s); return s; };
+    const prog = gl.createProgram();
+    gl.attachShader(prog, mk(gl.VERTEX_SHADER, vs));
+    gl.attachShader(prog, mk(gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(prog); gl.useProgram(prog);
+    const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(prog,'pos'); gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+    uTime = gl.getUniformLocation(prog,'u_time'); uSpan = gl.getUniformLocation(prog,'u_span');
+    const uRes = gl.getUniformLocation(prog,'u_res');
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    const draw = (ts) => {
+      if (!t0) t0 = ts; const time = (ts - t0)/1000;
+      gl.uniform1f(uTime, time); gl.uniform2f(uSpan, spanX, spanY);
+      gl.uniform2f(uRes, cv.width, cv.height);
+      gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.drawArrays(gl.TRIANGLES,0,3);
+      if (!reduce) requestAnimationFrame(draw);
+    };
+    requestAnimationFrame(draw);
+  }
+
+  const gcd = (a,b)=> b? gcd(b,a%b): a;
+  const aspect = (w,h)=>{ const g=gcd(Math.round(w),Math.round(h))||1; return `${Math.round(w/g)}:${Math.round(h/g)}`; };
+
+  // Letterbox the frame to the TARGET aspect inside the wrap.
+  let frameW=1, frameH=1;
+  function fitFrame(){
+    const wrap = $('.frame-wrap').getBoundingClientRect();
+    if (!wrap.width || !wrap.height) return;
+    const ar = st.w/st.h, frame = $('#frame');
+    if (wrap.width/wrap.height > ar){ frameH = wrap.height; frameW = frameH*ar; }
+    else { frameW = wrap.width; frameH = frameW/ar; }
+    frameW=Math.floor(frameW); frameH=Math.floor(frameH);
+    frame.style.width = frameW+'px'; frame.style.height = frameH+'px';
+  }
+
+  // Position/size the canvas within the frame per framing mode, and set the shader span.
+  function applyFraming(){
+    if (!gl) return;
+    const dpr = Math.min(devicePixelRatio||1, 2);
+    // Canvas ALWAYS fills the frame (target aspect) — no letterbox ever. Framing changes the
+    // shader's visible SPAN only: reveal = anchor per-axis; fill = cover-crop the view;
+    // fit = contain the whole view and reveal scene in the leftover.
+    cv.style.left='0px'; cv.style.top='0px'; cv.style.width=frameW+'px'; cv.style.height=frameH+'px';
+    cv.width=Math.max(2,Math.round(frameW*dpr)); cv.height=Math.max(2,Math.round(frameH*dpr));
+    gl.viewport(0,0,cv.width,cv.height);
+    const targetAR = st.w/st.h;
+    if (st.framing === 'reveal'){
+      spanX = st.w/512; spanY = st.h/512;
+    } else {
+      const needX = (VIEW.w/512)/targetAR, needY = VIEW.h/512;         // s so the frame contains the view per axis
+      const s = st.framing === 'fill' ? Math.min(needX, needY)          // cover (crop overflow)
+                                      : Math.max(needX, needY);         // contain (reveal leftover)
+      spanX = s*targetAR; spanY = s;
+    }
+  }
+  addEventListener('resize', ()=>{ fitFrame(); applyFraming(); });
+
+  function targetSize(){
+    switch(st.source){
+      case 'match': return [VIEW.w, VIEW.h];
+      case '2x': return [VIEW.w*2, VIEW.h*2];
+      case '4x': return [VIEW.w*4, VIEW.h*4];
+      case 'preset': { const [w,h]=st.preset.split('x').map(Number); return [w,h]; }
+      case 'custom': return [Math.max(16,st.cw), Math.max(16,st.ch)];
+    }
+  }
+
+  function describe(){
+    const sizeDiff = st.w!==VIEW.w || st.h!==VIEW.h;
+    const arT = st.w/st.h, arV = VIEW.w/VIEW.h, aspDiff = Math.abs(arT-arV) > 0.01;
+    if (!sizeDiff && !aspDiff) return { hide:true };
+    const bigger = st.w*st.h >= VIEW.w*VIEW.h;
+    const ar = aspect(st.w,st.h);
+    let text;
+    if (st.framing==='reveal'){
+      if (aspDiff) text = `Anchor-relative at ${ar} — keeps content scale: reveals the ${arT>arV?'wider':'taller'} axis, crops the other. No bars.`;
+      else if (bigger) text = `Bigger frame — reveals more scene around the anchor. No bars.`;
+      else text = `Smaller frame — crops in to a tighter view around the anchor.`;
+    } else if (st.framing==='fill'){
+      if (aspDiff) text = `Fill — composition scaled to cover ${ar}; the ${arT>arV?'top & bottom':'sides'} of your view are cropped. No bars.`;
+      else text = bigger ? `Same composition, supersampled — sharper.` : `Same composition, downscaled.`;
+    } else { // fit
+      if (aspDiff) text = `Fit — your whole composition kept; the ${arT>arV?'sides':'top & bottom'} fill with revealed scene, not bars.`;
+      else text = bigger ? `Same composition, supersampled — sharper.` : `Same composition, downscaled.`;
+    }
+    return { text, bigger };
+  }
+
+  function applyFormat(){
+    $('#qualityField').classList.toggle('hidden', !st.lossy);
+    $('#losslessField').classList.toggle('hidden', st.lossy);
+    $('#bgField').classList.toggle('hidden', st.alpha === 1);
+    const frame = $('#frame'), matte = $('#matte');
+    frame.classList.toggle('opaque', st.alpha===0);
+    matte.classList.toggle('hidden', st.alpha===1);
+    if (st.alpha===0) matte.style.background = st.bg;
+  }
+
+  function recalc(){
+    const [w,h] = targetSize(); st.w=w; st.h=h;
+    const frames = Math.max(1, Math.round(st.dur * st.fps));
+    $('#estFrames').textContent = frames;
+    const areaK = (w*h)/1000;
+    let sizeMB, timeS;
+    if (st.fmt === 'png'){ sizeMB = frames*areaK*0.0016; timeS = frames*(areaK/900); }
+    else { const mbps=[3.5,8,16,34][st.quality]*(areaK/2073); sizeMB=mbps*st.dur/8; timeS=frames/(st.fmt==='webm'?70:240); }
+    $('#estSize').textContent = '~' + (sizeMB<1? (sizeMB*1000).toFixed(0)+' KB' : sizeMB.toFixed(1)+' MB');
+    $('#estTime').textContent = '~' + (timeS<1? '1 s' : Math.ceil(timeS)+' s');
+    $('#outSize').textContent = `${w} × ${h} · ${aspect(w,h)}`;
+    const d = describe();
+    const bigger = st.w*st.h >= VIEW.w*VIEW.h;
+    if (d.hide){
+      $('#framingField').classList.add('hidden');
+      $('#resultNote').textContent = 'Exporting your current view exactly, 1:1.';
+    } else {
+      $('#framingField').classList.remove('hidden');
+      $('#revealBtn').textContent = bigger ? 'Reveal' : 'Crop';
+      $('#revealBtn').title = bigger
+        ? 'The export size sets the shot — a bigger frame reveals more scene. Anchor-relative, never letterboxed.'
+        : 'The export size sets the shot — a smaller frame crops in to a tighter view. Anchor-relative.';
+      $('#resultNote').textContent = d.text;
+    }
+    fitFrame(); applyFraming();
+    requestAnimationFrame(()=>{ fitFrame(); applyFraming(); });
+  }
+
+  function reserveHeight(){
+    const c = $('#controls'); c.style.minHeight='';
+    const savedFmt=st.fmt, savedSrc=st.source; let max=0;
+    // Measure the tallest combos (framing visible + a size row) so switching never scrolls/jumps.
+    ['2x','preset','custom'].forEach(s=>{
+      $(`#size button[data-src="${s}"]`).click();
+      ['mp4','webm','png'].forEach(f=>{ $(`.fmt[data-fmt="${f}"]`).click(); max=Math.max(max,c.scrollHeight); });
+    });
+    $(`.fmt[data-fmt="${savedFmt}"]`).click();
+    $(`#size button[data-src="${savedSrc}"]`).click();
+    c.style.minHeight = max+'px';
+  }
+
+  // format
+  $$('.fmt').forEach(el => {
+    const pick=()=>{ $$('.fmt').forEach(f=>f.dataset.on='0'); el.dataset.on='1';
+      st.fmt=el.dataset.fmt; st.alpha=+el.dataset.alpha; st.lossy=+el.dataset.lossy; applyFormat(); recalc(); };
+    el.addEventListener('click', pick);
+    el.addEventListener('keydown', e=>{ if(e.key===' '||e.key==='Enter'){ e.preventDefault(); pick(); }});
+  });
+  // quality
+  $$('#quality button').forEach(b=> b.addEventListener('click', ()=>{ $$('#quality button').forEach(x=>x.dataset.on='0'); b.dataset.on='1'; st.quality=+b.dataset.q; recalc(); }));
+  // size source
+  $$('#size button').forEach(b=> b.addEventListener('click', ()=>{
+    $$('#size button').forEach(x=>x.dataset.on='0'); b.dataset.on='1'; st.source=b.dataset.src;
+    $('#resPreset').classList.toggle('hidden', st.source!=='preset');
+    $('#customDims').classList.toggle('hidden', st.source!=='custom');
+    recalc();
+  }));
+  $('#resPreset').addEventListener('change', e=>{ st.preset=e.target.value; recalc(); });
+  const syncCustom=()=>{ st.cw=Math.max(16,+$('#cw').value||16); st.ch=Math.max(16,+$('#ch').value||16); recalc(); };
+  $('#cw').addEventListener('input', syncCustom); $('#ch').addEventListener('input', syncCustom);
+  // framing
+  $$('#framing button').forEach(b=> b.addEventListener('click', ()=>{ $$('#framing button').forEach(x=>x.dataset.on='0'); b.dataset.on='1'; st.framing=b.dataset.fr; recalc(); }));
+  // fps + duration
+  $$('#fps button').forEach(b=> b.addEventListener('click', ()=>{ $$('#fps button').forEach(x=>x.dataset.on='0'); b.dataset.on='1';
+    if(b.dataset.fps==='custom'){ $('#fpsCustom').classList.remove('hidden'); st.fps=+$('#fpsCustom').value; } else { $('#fpsCustom').classList.add('hidden'); st.fps=+b.dataset.fps; } recalc(); }));
+  $('#fpsCustom').addEventListener('input', e=>{ st.fps=Math.max(1,+e.target.value||1); recalc(); });
+  $('#dur').addEventListener('input', e=>{ st.dur=Math.max(.1,+e.target.value||.1); recalc(); });
+  // background
+  $$('#swatches .sw').forEach(sw=>{ const on=()=>{ $$('#swatches .sw').forEach(s=>s.dataset.on='0'); sw.dataset.on='1'; st.bg=sw.dataset.color||$('#bgCustom').value; if(st.alpha===0)$('#matte').style.background=st.bg; };
+    sw.addEventListener('click', on); sw.addEventListener('keydown', e=>{ if(e.key===' '||e.key==='Enter'){e.preventDefault(); on();}}); });
+  $('#bgCustom').addEventListener('input', e=>{ st.bg=e.target.value; $('.sw.custom').dataset.color=e.target.value; $$('#swatches .sw').forEach(s=>s.dataset.on='0'); $('.sw.custom').dataset.on='1'; if(st.alpha===0)$('#matte').style.background=st.bg; });
+
+  // export flow (mock)
+  const app=$('#app'); let runTimer=0;
+  const extOf=()=> st.fmt==='mp4'?'mp4':st.fmt==='webm'?'webm':'zip';
+  const fmtLabel=()=> st.fmt==='mp4'?'MP4 · H.264':st.fmt==='webm'?'WebM · VP9 + alpha':'PNG sequence';
+  function startExport(){ const frames=Math.max(1,Math.round(st.dur*st.fps)); app.dataset.mode='run';
+    $('#running').style.display='block'; $('#doneBox').style.display='none'; $('#runFmt').textContent=fmtLabel();
+    let i=0; const step=()=>{ i++; const pct=Math.round(i/frames*100); $('#barFill').style.width=pct+'%'; $('#runPct').textContent=pct+'%'; $('#runFrames').textContent=`${i} / ${frames} frames`; if(i>=frames){ clearInterval(runTimer); finish(); } };
+    runTimer=setInterval(step, reduce?4:Math.max(8,1600/frames)); }
+  function finish(){ $('#running').style.display='none'; $('#doneBox').style.display='flex'; $('#doneFile').textContent=`scene.${extOf()} · ${$('#estSize').textContent.replace('~','')}`; }
+  function reset(){ app.dataset.mode='config'; clearInterval(runTimer); }
+  $('#exportBtn').addEventListener('click', startExport);
+  $('#cancelRun').addEventListener('click', reset); $('#doneClose').addEventListener('click', reset); $('#doneDownload').addEventListener('click', reset);
+  $('#cancelBtn').addEventListener('click', ()=>{}); $('.x').addEventListener('click', ()=>{});
+
+  applyFormat(); reserveHeight(); recalc();
+  requestAnimationFrame(()=>{ fitFrame(); applyFraming(); });
+})();
+</script>
