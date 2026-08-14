@@ -19,6 +19,7 @@ import { compileGraph } from '../compiler/glsl-generator'
 import { compileGraphIR } from '../compiler/ir-compiler'
 import { useGraphStore } from '../stores/graphStore'
 import { createExportRenderTarget, type ExportRenderTarget } from './export-renderer'
+import { decodeGraphImages } from './export-images'
 import type { FrameSink, QualityLevel } from './frame-sink'
 import type { FramingChoice } from './framing'
 
@@ -63,11 +64,14 @@ export async function runExport(
   }
   const device = await adapter.requestDevice()
 
+  // Decode the graph's images so image samplers export the real texture.
+  const images = await decodeGraphImages(nodes)
+
   const total = Math.max(1, Math.round(job.durationSec * job.fps))
   let target: ExportRenderTarget | undefined
 
   try {
-    target = createExportRenderTarget(device, plan, job.width, job.height)
+    target = createExportRenderTarget(device, plan, job.width, job.height, images)
 
     await job.sink.begin({
       width: job.width,

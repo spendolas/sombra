@@ -305,6 +305,18 @@ html, body, #root {
 }
   /* === GENERATED:END utilities === */
 
+@layer base {
+  /* Native <button> uses the default arrow cursor. Give interactive buttons the
+     pointer hand app-wide (hand-rolled buttons that don't use the DS `ds.button`
+     classes were missing it — e.g. the export & embed modals). Utility cursors
+     still win (they live in the utilities layer): `cursor-default` on active DS
+     buttons, `cursor-not-allowed` on disabled ones. Disabled buttons are
+     excluded here so they keep their own cursor. */
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
 @keyframes cmd-palette-shake {
   0%, 100% { margin-left: 0; }
   12%, 52%, 92% { margin-left: -5px; }
