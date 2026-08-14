@@ -383,15 +383,12 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                 }}
               >
                 <canvas ref={previewCanvasRef} className="absolute inset-0 h-full w-full" />
-                <span className="absolute bottom-2 left-2 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-fg-dim backdrop-blur-sm">
-                  {outW} × {outH} · {aspectStr(outW, outH)}
-                </span>
               </div>
             </div>
             <div className="flex-none text-[11.5px] leading-relaxed text-fg-subtle">
               Output frame at{' '}
               <b className="font-mono tabular-nums text-fg-dim">
-                {outW} × {outH}
+                {outW} × {outH} · {aspectStr(outW, outH)}
               </b>
               . {selectedSink && !selectedSink.supportsAlpha ? 'Opaque — flattened onto the matte.' : 'Transparent background preserved.'}
             </div>
