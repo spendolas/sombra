@@ -32,8 +32,6 @@ import { passTargetSize } from '../renderer/pass-size'
 export interface ExportFrameUniforms {
   /** Deterministic frame time in seconds (e.g. `i / fps`). Drives `u_time`. */
   timeSec: number
-  /** = [width, height]. The final-pass render resolution in device px. */
-  uResolution: [number, number]
   /** Framing scale (Task 6). Drives `u_dpr` on the final pass. */
   uDpr: number
   /** Fragment Output anchor, default [0.5, 0.5]. Drives `u_anchor`. */

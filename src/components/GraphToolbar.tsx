@@ -2,7 +2,7 @@
  * GraphToolbar — floating save/load pill at the top-left of the canvas.
  */
 
-import { useCallback, useState } from 'react'
+import { useCallback, useState, lazy, Suspense } from 'react'
 import { Panel, useReactFlow } from '@xyflow/react'
 import { IconButton } from '@/components/IconButton'
 import { useGraphStore } from '@/stores/graphStore'
@@ -15,7 +15,10 @@ import {
 } from '@/utils/sombra-file'
 import { ds } from '@/generated/ds'
 import { EmbedModal } from '@/components/EmbedModal'
-import { ExportModal } from '@/export/ExportModal'
+
+const ExportModal = lazy(() =>
+  import('@/export/ExportModal').then((m) => ({ default: m.ExportModal })),
+)
 
 export function GraphToolbar() {
   const { fitView } = useReactFlow()
@@ -88,7 +91,11 @@ export function GraphToolbar() {
         />
       </Panel>
       <EmbedModal open={embedOpen} onClose={() => setEmbedOpen(false)} />
-      <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} />
+      {exportOpen && (
+        <Suspense fallback={null}>
+          <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} />
+        </Suspense>
+      )}
     </>
   )
 }
