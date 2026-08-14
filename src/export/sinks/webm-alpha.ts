@@ -15,7 +15,7 @@
 
 import { Output, WebMOutputFormat, BufferTarget, VideoSampleSource, VideoSample } from 'mediabunny'
 import type { FrameSink, SinkOpts } from '../frame-sink'
-import { QMAP } from './quality-map'
+import { qualityFor } from './quality-map'
 
 export function makeWebmAlphaSink(): FrameSink {
   let out!: Output<WebMOutputFormat, BufferTarget>
@@ -65,7 +65,7 @@ export function makeWebmAlphaSink(): FrameSink {
     async begin(opts) {
       o = opts
       out = new Output({ format: new WebMOutputFormat(), target: new BufferTarget() })
-      src = new VideoSampleSource({ codec, quality: QMAP[o.quality], alpha: 'keep' })
+      src = new VideoSampleSource({ codec, quality: qualityFor(o.quality, o.width, o.height), alpha: 'keep' })
       out.addVideoTrack(src)
       await out.start()
     },
