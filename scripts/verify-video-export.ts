@@ -134,6 +134,7 @@ async function runAssertions(cfg: Cfg): Promise<EvalResult> {
     readonly displayWidth: number
     readonly displayHeight: number
     canBeTransparent(): Promise<boolean>
+    getCodec(): Promise<string | null>
   }
   interface MbInput {
     getPrimaryVideoTrack(): Promise<MbTrack | null>
@@ -334,12 +335,18 @@ async function runAssertions(cfg: Cfg): Promise<EvalResult> {
       })
       const track = await openTrack(blob)
       const transparent = await track.canBeTransparent()
+      const codec = await track.getCodec()
       const left = await readTexel(blob, 0, 4, cfg.H / 2) // left band → transparent
       const right = await readTexel(blob, 0, cfg.W - 5, cfg.H / 2) // right band → opaque
-      if (transparent && left[3] < 40 && right[3] > 200) {
-        pass('alpha-present', `canBeTransparent=true, left α=${left[3]}, right α=${right[3]}`)
+      // The alpha must ALSO be browser-compositable: browsers composite VP9 alpha
+      // in a bare <video>, but NOT AV1 alpha (Matroska BlockAdditional — only
+      // alpha-aware decoders like MediaBunny read it). MediaBunny's canBeTransparent
+      // is true for BOTH, so it alone can't catch an AV1 regression — pin the codec.
+      const compositable = codec === 'vp9'
+      if (transparent && left[3] < 40 && right[3] > 200 && compositable) {
+        pass('alpha-present', `codec=${codec}, canBeTransparent=true, left α=${left[3]}, right α=${right[3]}`)
       } else {
-        fail('alpha-present', `canBeTransparent=${transparent}, left α=${left[3]} (want <40), right α=${right[3]} (want >200)`)
+        fail('alpha-present', `codec=${codec} (want vp9 — AV1 alpha isn't composited by <video>), canBeTransparent=${transparent}, left α=${left[3]} (want <40), right α=${right[3]} (want >200)`)
       }
     } catch (e) {
       fail('alpha-present', `threw: ${String(e)}`)
