@@ -25,7 +25,7 @@ export function makeWebmAlphaSink(): FrameSink {
 
   return {
     id: 'webm-alpha',
-    label: 'WebM · alpha',
+    label: 'WebM',
     supportsAlpha: true,
     output: 'file',
     tier: 'free',

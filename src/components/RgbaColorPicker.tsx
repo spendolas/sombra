@@ -423,6 +423,7 @@ export function RgbaColorPicker({ value, onChange, label, className, mode = 'pop
         createPortal(
           <div
             ref={popoverRef}
+            data-color-popover=""
             className={cn(PANEL_BASE, 'fixed z-[1000] w-[180px] shadow-lg')}
             style={{ top: pos.top, left: pos.left }}
             onPointerDown={(e) => e.stopPropagation()}
