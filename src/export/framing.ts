@@ -130,22 +130,22 @@ export function describeResult(
 
   if (mode === 'reveal') {
     if (aspDiff) {
-      text = `Anchor-relative at ${ar} — keeps content scale: reveals the ${targetAR > viewAR ? 'wider' : 'taller'} axis, crops the other. No bars.`
+      text = `Anchor-relative at ${ar} — keeps content scale: reveals the ${targetAR > viewAR ? 'wider' : 'taller'} axis, crops the other.`
     } else if (bigger) {
-      text = `Bigger frame — reveals more scene around the anchor. No bars.`
+      text = `Bigger frame — reveals more scene around the anchor.`
     } else {
       text = `Smaller frame — crops in to a tighter view around the anchor.`
     }
   } else if (mode === 'fill') {
     if (aspDiff) {
-      text = `Fill — composition scaled to cover ${ar}; the ${targetAR > viewAR ? 'top & bottom' : 'sides'} of your view are cropped. No bars.`
+      text = `Fill — composition scaled to cover ${ar}; the ${targetAR > viewAR ? 'top & bottom' : 'sides'} of your view are cropped.`
     } else {
       text = bigger ? `Same composition, supersampled — sharper.` : `Same composition, downscaled.`
     }
   } else {
     // fit
     if (aspDiff) {
-      text = `Fit — your whole composition kept; the ${targetAR > viewAR ? 'sides' : 'top & bottom'} fill with revealed scene, not bars.`
+      text = `Fit — your whole composition kept; the ${targetAR > viewAR ? 'sides' : 'top & bottom'} fill with revealed scene.`
     } else {
       text = bigger ? `Same composition, supersampled — sharper.` : `Same composition, downscaled.`
     }
