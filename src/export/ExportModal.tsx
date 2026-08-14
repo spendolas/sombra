@@ -237,12 +237,21 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
   const raw = targetSize(src, view)
   const outW = evenDim(raw.width)
   const outH = evenDim(raw.height)
-  const { text: resultText, framingHidden } = describeResult(src, framing, view)
+  const { framingHidden } = describeResult(src, framing, view)
   // Compare export size against the view's LOGICAL area (matches targetSize's
   // Match = logical). Using device px here made a 1080p preset read as "smaller"
   // than a retina view → the Reveal button mislabeled itself "Crop".
   const viewArea = cssW * cssH
   const bigger = outW * outH >= viewArea
+
+  // Per-mode framing card copy (title + short body; the mode-name prefix is
+  // stripped so the card title doesn't repeat it).
+  const framingModes = (['reveal', 'fill', 'fit'] as const).map((m) => {
+    const label = m === 'reveal' ? (bigger ? 'Reveal' : 'Crop') : m === 'fill' ? 'Fill' : 'Fit'
+    const raw = describeResult(src, m, view).text
+    const prefix = `${label} — `
+    return { v: m, label, body: raw.startsWith(prefix) ? raw.slice(prefix.length) : raw }
+  })
 
   const frames = Math.max(1, Math.round(dur * fps))
   const areaK = (outW * outH) / 1000
@@ -405,81 +414,6 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                   </div>
                 )}
 
-                {/* Format */}
-                <div className="flex flex-col gap-1.5">
-                  <span className={LABEL}>Format</span>
-                  <div className="flex flex-col gap-1.5">
-                    {sinks.length === 0 && (
-                      <div className={HINT}>No export formats available in this browser.</div>
-                    )}
-                    {sinks.map((s) => {
-                      const on = s.id === sinkId
-                      const zip = s.output === 'zip'
-                      return (
-                        <button
-                          key={s.id}
-                          type="button"
-                          disabled={!webgpuOk}
-                          onClick={() => setSinkId(s.id)}
-                          className={cn(
-                            'flex items-center gap-2.5 rounded-md border px-2.5 py-2 text-left transition-colors',
-                            on
-                              ? 'border-indigo bg-indigo/10'
-                              : 'border-edge-subtle bg-surface-raised hover:bg-surface-elevated',
-                            !webgpuOk && 'cursor-not-allowed opacity-50',
-                          )}
-                        >
-                          <span
-                            className={cn(
-                              'relative size-[15px] flex-none rounded-full border-2',
-                              on ? 'border-indigo' : 'border-fg-muted',
-                            )}
-                          >
-                            {on && <span className="absolute inset-[3px] rounded-full bg-indigo" />}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block text-[13px] font-medium text-fg">{s.label}</span>
-                            <span className="block font-mono text-[11px] text-fg-muted">
-                              {zip ? 'scene_####.png · .zip' : `scene.${s.fileExt}`}
-                            </span>
-                          </span>
-                          {s.supportsAlpha && (
-                            <span className="rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold text-fuchsia-300 bg-fuchsia-500/15">
-                              ⍺
-                            </span>
-                          )}
-                          <span
-                            className={cn(
-                              'rounded px-1.5 py-0.5 text-[10px] font-semibold',
-                              zip ? 'bg-green-500/15 text-green-300' : 'bg-indigo/20 text-indigo-300',
-                            )}
-                          >
-                            {zip ? 'editor' : 'web'}
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                  {gateNote && <span className="text-[11px] leading-snug text-amber-400">{gateNote}</span>}
-                </div>
-
-                {/* Quality / lossless */}
-                {lossless ? (
-                  <div className="flex flex-col gap-1.5">
-                    <span className={LABEL}>Quality</span>
-                    <span className={HINT}>Lossless — every frame is a full PNG.</span>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-1.5">
-                    <span className={LABEL}>Quality</span>
-                    <Seg
-                      options={QUALITY_LABELS.map((label, i) => ({ v: String(i), label }))}
-                      value={String(quality)}
-                      onChange={(v) => setQuality(Number(v))}
-                    />
-                  </div>
-                )}
-
                 {/* Size */}
                 <div className="flex flex-col gap-1.5">
                   <div className="flex items-center justify-between">
@@ -499,87 +433,80 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                     value={sizeSrc}
                     onChange={(v) => setSizeSrc(v as SizeSrc)}
                   />
-                  {sizeSrc === 'preset' && (
-                    <select
-                      aria-label="Preset resolution"
-                      value={preset}
-                      onChange={(e) => setPreset(e.target.value)}
-                      className="w-full cursor-pointer rounded-md border border-edge-subtle bg-surface-raised px-2.5 py-2 text-[12.5px] tabular-nums text-fg"
-                    >
-                      {PRESETS.map((p) => (
-                        <option key={p.value} value={p.value}>
-                          {p.label}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  {sizeSrc === 'custom' && (
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="number"
-                        aria-label="Width"
-                        min={16}
-                        max={7680}
-                        value={customW}
-                        onChange={(e) => setCustomW(Math.max(16, Number(e.target.value) || 16))}
-                        className="w-[74px] rounded-md border border-edge-subtle bg-surface-raised px-2.5 py-2 text-[12.5px] tabular-nums text-fg"
-                      />
-                      <span className="text-fg-muted">×</span>
-                      <input
-                        type="number"
-                        aria-label="Height"
-                        min={16}
-                        max={7680}
-                        value={customH}
-                        onChange={(e) => setCustomH(Math.max(16, Number(e.target.value) || 16))}
-                        className="w-[74px] rounded-md border border-edge-subtle bg-surface-raised px-2.5 py-2 text-[12.5px] tabular-nums text-fg"
-                      />
-                    </div>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    {sizeSrc === 'preset' && (
+                      <select
+                        aria-label="Preset resolution"
+                        value={preset}
+                        onChange={(e) => setPreset(e.target.value)}
+                        className="min-w-0 flex-1 cursor-pointer rounded-md border border-edge-subtle bg-surface-raised px-2.5 py-2 text-[12.5px] tabular-nums text-fg"
+                      >
+                        {PRESETS.map((p) => (
+                          <option key={p.value} value={p.value}>
+                            {p.label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <input
+                      type="number"
+                      aria-label="Width"
+                      min={16}
+                      max={7680}
+                      value={sizeSrc === 'custom' ? customW : outW}
+                      onChange={(e) => {
+                        setCustomW(Math.max(16, Number(e.target.value) || 16))
+                        setSizeSrc('custom')
+                      }}
+                      className="w-[74px] flex-none rounded-md border border-edge-subtle bg-surface-raised px-2.5 py-2 text-[12.5px] tabular-nums text-fg"
+                    />
+                    <span className="text-fg-muted">×</span>
+                    <input
+                      type="number"
+                      aria-label="Height"
+                      min={16}
+                      max={7680}
+                      value={sizeSrc === 'custom' ? customH : outH}
+                      onChange={(e) => {
+                        setCustomH(Math.max(16, Number(e.target.value) || 16))
+                        setSizeSrc('custom')
+                      }}
+                      className="w-[74px] flex-none rounded-md border border-edge-subtle bg-surface-raised px-2.5 py-2 text-[12.5px] tabular-nums text-fg"
+                    />
+                  </div>
                 </div>
 
-                {/* Framing (hidden when target == view) */}
+                {/* Framing (cards; hidden when target == view) */}
                 {!framingHidden && (
                   <div className="flex flex-col gap-1.5">
                     <span className={LABEL}>Framing</span>
-                    <Seg
-                      options={[
-                        {
-                          v: 'reveal',
-                          label: bigger ? 'Reveal' : 'Crop',
-                          title: bigger
-                            ? 'The export size sets the shot — a bigger frame reveals more scene. Anchor-relative.'
-                            : 'The export size sets the shot — a smaller frame crops in to a tighter view. Anchor-relative.',
-                        },
-                        {
-                          v: 'fill',
-                          label: 'Fill',
-                          title: 'Scale your composition to COVER the target aspect; crop the overflow.',
-                        },
-                        {
-                          v: 'fit',
-                          label: 'Fit',
-                          title: 'Keep your WHOLE composition; fill the leftover with revealed scene.',
-                        },
-                      ]}
-                      value={framing}
-                      onChange={(v) => setFraming(v as FramingMode)}
-                    />
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {framingModes.map((m) => {
+                        const on = framing === m.v
+                        return (
+                          <button
+                            key={m.v}
+                            type="button"
+                            onClick={() => setFraming(m.v)}
+                            className={cn(
+                              'flex flex-col gap-1 rounded-md border p-2.5 text-left transition-colors',
+                              on
+                                ? 'border-indigo bg-indigo/15'
+                                : 'border-edge-subtle bg-surface-raised hover:bg-surface-elevated',
+                            )}
+                          >
+                            <span className={cn('text-[12.5px] font-medium', on ? 'text-white' : 'text-fg')}>
+                              {m.label}
+                            </span>
+                            <span className={cn('text-[11px] leading-snug', on ? 'text-white/80' : 'text-fg-muted')}>
+                              {m.body}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
                 )}
-
-                {/* You'll get */}
-                <div className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className={LABEL}>You'll get</span>
-                    <span className="font-mono text-[12.5px] tabular-nums text-fg">
-                      {outW} × {outH} · {aspectStr(outW, outH)}
-                    </span>
-                  </div>
-                  <div className="rounded-md border border-edge-subtle bg-indigo/[0.08] px-3 py-2.5 text-[11.5px] leading-relaxed text-fg-dim">
-                    {framingHidden ? 'Exporting your current view exactly, 1:1.' : resultText}
-                  </div>
-                </div>
 
                 {/* FPS + Duration */}
                 <div className="flex items-start gap-4">
@@ -624,43 +551,102 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                   </div>
                 </div>
 
+                {/* Format (cards) */}
+                <div className="flex flex-col gap-1.5">
+                  <span className={LABEL}>Format</span>
+                  {sinks.length === 0 && (
+                    <div className={HINT}>No export formats available in this browser.</div>
+                  )}
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {sinks.map((s) => {
+                      const on = s.id === sinkId
+                      const zip = s.output === 'zip'
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          disabled={!webgpuOk}
+                          onClick={() => setSinkId(s.id)}
+                          className={cn(
+                            'relative flex flex-col gap-0.5 rounded-md border px-2.5 py-2 text-left transition-colors',
+                            on
+                              ? 'border-indigo bg-indigo/10'
+                              : 'border-edge-subtle bg-surface-raised hover:bg-surface-elevated',
+                            !webgpuOk && 'cursor-not-allowed opacity-50',
+                          )}
+                        >
+                          <span className="pr-4 text-[12.5px] font-medium text-fg">{s.label}</span>
+                          <span className="block font-mono text-[10.5px] text-fg-muted">
+                            {zip ? 'scene_####.png' : `scene.${s.fileExt}`}
+                          </span>
+                          {s.supportsAlpha && (
+                            <span className="absolute right-1.5 top-1.5 rounded px-1 py-0.5 font-mono text-[10px] font-semibold text-fuchsia-300 bg-fuchsia-500/15">
+                              ⍺
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {gateNote && <span className="text-[11px] leading-snug text-amber-400">{gateNote}</span>}
+                </div>
+
+                {/* Quality / lossless */}
+                {lossless ? (
+                  <div className="flex flex-col gap-1.5">
+                    <span className={LABEL}>Quality</span>
+                    <span className={HINT}>Lossless — every frame is a full PNG.</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    <span className={LABEL}>Quality</span>
+                    <Seg
+                      options={QUALITY_LABELS.map((label, i) => ({ v: String(i), label }))}
+                      value={String(quality)}
+                      onChange={(v) => setQuality(Number(v))}
+                    />
+                  </div>
+                )}
+
                 {/* Background / matte — only when the format has no alpha */}
                 {selectedSink && !selectedSink.supportsAlpha && (
                   <div className="flex flex-col gap-1.5">
                     <span className={LABEL}>Background</span>
-                    <span className={HINT}>
-                      MP4 / H.264 has no transparency — transparent pixels flatten onto this color.
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      {MATTES.map((m) => (
-                        <button
-                          key={m.key}
-                          type="button"
-                          title={m.label}
-                          aria-label={m.label}
-                          onClick={() => setMatte(m.color)}
-                          className={cn(
-                            'size-[26px] rounded-md border border-edge-card',
-                            matte === m.color && 'outline outline-2 outline-offset-1 outline-indigo',
-                          )}
-                          style={{ background: m.color }}
-                        />
-                      ))}
-                      <label
-                        className="relative size-[26px] cursor-pointer overflow-hidden rounded-md border border-edge-card"
-                        title="Custom"
-                        style={{
-                          background:
-                            'conic-gradient(from 0deg, rgb(255,0,0), rgb(255,255,0), rgb(0,255,0), rgb(0,255,255), rgb(0,0,255), rgb(255,0,255), rgb(255,0,0))',
-                        }}
-                      >
-                        <input
-                          type="color"
-                          aria-label="Custom background color"
-                          className="absolute inset-0 cursor-pointer opacity-0"
-                          onChange={(e) => setMatte(e.target.value)}
-                        />
-                      </label>
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex flex-none items-center gap-1.5">
+                        {MATTES.map((m) => (
+                          <button
+                            key={m.key}
+                            type="button"
+                            title={m.label}
+                            aria-label={m.label}
+                            onClick={() => setMatte(m.color)}
+                            className={cn(
+                              'size-[26px] rounded-md border border-edge-card',
+                              matte === m.color && 'outline outline-2 outline-offset-1 outline-indigo',
+                            )}
+                            style={{ background: m.color }}
+                          />
+                        ))}
+                        <label
+                          className="relative size-[26px] cursor-pointer overflow-hidden rounded-md border border-edge-card"
+                          title="Custom"
+                          style={{
+                            background:
+                              'conic-gradient(from 0deg, rgb(255,0,0), rgb(255,255,0), rgb(0,255,0), rgb(0,255,255), rgb(0,0,255), rgb(255,0,255), rgb(255,0,0))',
+                          }}
+                        >
+                          <input
+                            type="color"
+                            aria-label="Custom background color"
+                            className="absolute inset-0 cursor-pointer opacity-0"
+                            onChange={(e) => setMatte(e.target.value)}
+                          />
+                        </label>
+                      </div>
+                      <span className={cn(HINT, 'flex-1 leading-snug')}>
+                        MP4 / H.264 has no transparency — transparent pixels flatten onto this color.
+                      </span>
                     </div>
                   </div>
                 )}
