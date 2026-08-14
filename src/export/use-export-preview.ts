@@ -18,6 +18,7 @@ import { useGraphStore } from '@/stores/graphStore'
 import { compileGraph } from '@/compiler/glsl-generator'
 import { compileGraphIR } from '@/compiler/ir-compiler'
 import { createExportRenderTarget, type ExportRenderTarget } from './export-renderer'
+import { decodeGraphImages } from './export-images'
 import type { FramingChoice } from './framing'
 
 /** Longest edge of the preview's backing buffer (px). Small — it's a thumbnail. */
@@ -40,6 +41,15 @@ function previewDims(outW: number, outH: number): { pw: number; ph: number } {
 export function useExportPreview(
   canvas: RefObject<HTMLCanvasElement | null>,
   state: RefObject<ExportPreviewState>,
+  /**
+   * Called (on change) with whether the shader's output is ever translucent —
+   * read straight off the frame pixels we already read back, so no extra render
+   * or device. A colour-typed source (hsv_to_rgb, blur…) can't be told apart
+   * from a transparent one by graph type alone; only the pixels can. Sticky
+   * toward `true`: any translucent frame latches it, catching a shader that only
+   * goes translucent partway through its animation.
+   */
+  onHasAlpha?: (hasAlpha: boolean) => void,
 ): void {
   useEffect(() => {
     if (typeof navigator === 'undefined' || !navigator.gpu) return
@@ -49,6 +59,8 @@ export function useExportPreview(
     let target: ExportRenderTarget | undefined
     let targetW = 0
     let targetH = 0
+    let reportedAlpha: boolean | null = null
+    let loggedError = false
     const start = performance.now()
 
     void (async () => {
@@ -64,6 +76,11 @@ export function useExportPreview(
       device = await adapter.requestDevice()
       if (disposed) { device.destroy(); return }
 
+      // Decode the graph's images once (async), so image samplers render the
+      // real texture rather than a transparent dummy.
+      const images = await decodeGraphImages(nodes)
+      if (disposed) { device.destroy(); return }
+
       const cv = canvas.current
       const ctx = cv?.getContext('2d', { alpha: true }) ?? null
 
@@ -72,27 +89,47 @@ export function useExportPreview(
         const s = state.current
         if (s && s.active && ctx && device) {
           const { pw, ph } = previewDims(s.outW, s.outH)
-          if (!target || pw !== targetW || ph !== targetH) {
-            target?.dispose()
-            target = createExportRenderTarget(device, plan, pw, ph)
-            targetW = pw
-            targetH = ph
-            if (cv) { cv.width = pw; cv.height = ph }
-          }
-          // Same visible framing as the export at fewer pixels: uDpr scales with
-          // the resolution ratio (correct for Reveal, where export uDpr = 1).
-          const uDpr = s.framing.uDpr * (pw / Math.max(1, s.exportW))
-          target.renderFrame({
-            timeSec: (performance.now() - start) / 1000, // live wall-clock (preview only)
-            uDpr,
-            anchor: s.framing.anchor,
-          })
           try {
+            if (!target || pw !== targetW || ph !== targetH) {
+              target?.dispose()
+              target = createExportRenderTarget(device, plan, pw, ph, images)
+              targetW = pw
+              targetH = ph
+              if (cv) { cv.width = pw; cv.height = ph }
+            }
+            // Same visible framing as the export at fewer pixels: uDpr scales with
+            // the resolution ratio (correct for Reveal, where export uDpr = 1).
+            const uDpr = s.framing.uDpr * (pw / Math.max(1, s.exportW))
+            target.renderFrame({
+              timeSec: (performance.now() - start) / 1000, // live wall-clock (preview only)
+              uDpr,
+              anchor: s.framing.anchor,
+            })
             const px = await target.readback()
             if (disposed) return
             ctx.putImageData(new ImageData(px, pw, ph), 0, 0)
-          } catch {
-            return // device lost / disposed mid-readback
+            // Detect translucency from the readback (alpha = every 4th byte).
+            // Only scan until we've latched `true` (sticky).
+            if (onHasAlpha && reportedAlpha !== true) {
+              let translucent = false
+              for (let i = 3; i < px.length; i += 4) {
+                if (px[i] < 250) {
+                  translucent = true
+                  break
+                }
+              }
+              if (translucent !== reportedAlpha) {
+                reportedAlpha = translucent
+                onHasAlpha(translucent)
+              }
+            }
+          } catch (e) {
+            // Don't let a render/readback failure kill the loop silently (a
+            // swallowed throw here left the preview blank with no clue why).
+            if (!loggedError) {
+              loggedError = true
+              console.warn('[export-preview] render failed:', e instanceof Error ? e.message : e)
+            }
           }
         }
         if (!disposed) raf = requestAnimationFrame(() => void loop())
@@ -106,5 +143,5 @@ export function useExportPreview(
       target?.dispose()
       device?.destroy()
     }
-  }, [canvas, state])
+  }, [canvas, state, onHasAlpha])
 }

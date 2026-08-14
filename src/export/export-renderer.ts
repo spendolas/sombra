@@ -24,6 +24,7 @@ import type { RenderPlan } from '../compiler/glsl-generator'
 import type { UniformBufferLayout, TextureBinding } from '../compiler/ir/wgsl-assembler'
 import { REFERENCE_SIZE } from '../renderer/constants'
 import { passTargetSize } from '../renderer/pass-size'
+import { generateMipmaps, mipLevelCount } from '../webgpu/mipmaps'
 
 // ---------------------------------------------------------------------------
 // Public interface (consumed verbatim by Task 4)
@@ -66,8 +67,10 @@ export function createExportRenderTarget(
   plan: RenderPlan,
   width: number,
   height: number,
+  /** samplerName → decoded image (via `decodeGraphImages`). Absent → dummy fallback. */
+  images?: Map<string, ImageBitmap>,
 ): ExportRenderTarget {
-  return new ExportRenderTargetImpl(device, plan, width, height)
+  return new ExportRenderTargetImpl(device, plan, width, height, images)
 }
 
 // ---------------------------------------------------------------------------
@@ -120,7 +123,10 @@ class ExportRenderTargetImpl implements ExportRenderTarget {
   private readonly intermediateTextures: GPUTexture[] = []
   private readonly intermediateSamplers: GPUSampler[] = []
 
-  /** 1×1 fallback bound for image samplers (image textures aren't wired in v1). */
+  /** samplerName → uploaded image texture (decoded on this device from the graph). */
+  private readonly imageTextures = new Map<string, { texture: GPUTexture; sampler: GPUSampler }>()
+
+  /** 1×1 transparent fallback for image samplers whose image is missing/undecodable. */
   private dummyTexture: GPUTexture | null = null
   private dummySampler: GPUSampler | null = null
 
@@ -145,7 +151,13 @@ class ExportRenderTargetImpl implements ExportRenderTarget {
 
   private disposed = false
 
-  constructor(device: GPUDevice, plan: RenderPlan, width: number, height: number) {
+  constructor(
+    device: GPUDevice,
+    plan: RenderPlan,
+    width: number,
+    height: number,
+    images?: Map<string, ImageBitmap>,
+  ) {
     const wgslPasses = plan.wgsl?.passes
     if (!wgslPasses || wgslPasses.length === 0) {
       throw new Error('[export] RenderPlan has no WGSL passes (IR path unavailable)')
@@ -221,6 +233,37 @@ class ExportRenderTargetImpl implements ExportRenderTarget {
           addressModeV: 'clamp-to-edge',
         }),
       )
+    }
+
+    // Upload the graph's images to this device (same flip/format/sampler as the
+    // main renderer's uploadImageTexture) so image samplers bind real textures.
+    if (images) {
+      for (const [samplerName, bitmap] of images) {
+        const levels = mipLevelCount(bitmap.width, bitmap.height)
+        const texture = device.createTexture({
+          size: [bitmap.width, bitmap.height],
+          mipLevelCount: levels,
+          format: 'rgba8unorm',
+          usage:
+            GPUTextureUsage.TEXTURE_BINDING |
+            GPUTextureUsage.COPY_DST |
+            GPUTextureUsage.RENDER_ATTACHMENT,
+        })
+        device.queue.copyExternalImageToTexture({ source: bitmap }, { texture }, [
+          bitmap.width,
+          bitmap.height,
+        ])
+        // Mip chain so minification through the pass chain stays clean.
+        generateMipmaps(device, texture, levels)
+        const sampler = device.createSampler({
+          magFilter: 'linear',
+          minFilter: 'linear',
+          mipmapFilter: 'linear',
+          addressModeU: 'clamp-to-edge',
+          addressModeV: 'clamp-to-edge',
+        })
+        this.imageTextures.set(samplerName, { texture, sampler })
+      }
     }
 
     // Build every pass's pipeline, uniform buffer, and bind groups once.
@@ -422,11 +465,9 @@ class ExportRenderTargetImpl implements ExportRenderTarget {
 
   /**
    * Build group(1): each declared sampler is either an inter-pass texture
-   * (bound to the producing pass's intermediate) or an image sampler. Image
-   * textures live on the MAIN renderer and aren't wired into export in v1 — a
-   * 1×1 transparent dummy is bound so the bind group stays complete and the
-   * draw never throws. (Image-based exports render the image as transparent
-   * until a texture-provider hook is added — see report.)
+   * (bound to the producing pass's intermediate) or an image sampler (bound to
+   * the image uploaded via the `images` map). A missing/undecodable image falls
+   * back to a 1×1 transparent dummy so the bind group stays complete.
    */
   private buildTextureBindGroup(
     pipeline: GPURenderPipeline,
@@ -449,8 +490,10 @@ class ExportRenderTargetImpl implements ExportRenderTarget {
         })
         continue
       }
-      // Image sampler (or an out-of-range pass index) → dummy fallback.
-      const { texture, sampler } = this.ensureDummy()
+      // Image sampler → the uploaded image texture, else a transparent dummy.
+      const img = this.imageTextures.get(binding.samplerName)
+      const texture = img?.texture ?? this.ensureDummy().texture
+      const sampler = img?.sampler ?? this.ensureDummy().sampler
       entries.push({ binding: binding.textureBinding, resource: texture.createView() })
       entries.push({ binding: binding.samplerBinding, resource: sampler })
     }
@@ -494,6 +537,7 @@ class ExportRenderTargetImpl implements ExportRenderTarget {
     this.disposed = true
     for (const ps of this.passStates) ps.uniformBuffer.destroy()
     for (const tex of this.intermediateTextures) tex.destroy()
+    for (const { texture } of this.imageTextures.values()) texture.destroy()
     this.renderTexture.destroy()
     this.stagingBuffer.destroy()
     this.quadBuffer.destroy()

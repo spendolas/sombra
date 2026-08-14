@@ -493,7 +493,12 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
     framing: { uDpr: 1, anchor: [0.5, 0.5] },
     exportW: 1,
   })
-  useExportPreview(previewCanvasRef, previewStateRef)
+  // Whether the shader's output is ever translucent — read straight off the
+  // preview frames we already render (a colour-typed source like hsv_to_rgb or
+  // blur can't be told apart from a transparent one without the actual pixels).
+  // Default hidden so the common opaque case never flashes the matte control.
+  const [shaderHasAlpha, setShaderHasAlpha] = useState(false)
+  useExportPreview(previewCanvasRef, previewStateRef, setShaderHasAlpha)
 
   // Draggable panel — offset from the centred position. Window listeners so the
   // drag survives pointer-capture loss (per the repo's pointer-drag rule).
@@ -563,6 +568,11 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
   // than a retina view → the Reveal button mislabeled itself "Crop".
   const viewArea = cssW * cssH
   const bigger = outW * outH >= viewArea
+  // When the export aspect matches the view's, Fit and Fill are identical (both
+  // just scale the same composition) — so Fit is redundant. Disable it, and
+  // treat a stale 'fit' selection as 'fill' for rendering.
+  const aspectMatches = Math.abs(outW / outH - cssW / cssH) < 0.01
+  const effFraming: FramingMode = aspectMatches && framing === 'fit' ? 'fill' : framing
 
   // Per-mode framing card copy (title + short body; the mode-name prefix is
   // stripped so the card title doesn't repeat it).
@@ -594,14 +604,23 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
   const compileOk = !hasErrors && fragmentShader !== null
   const canExport = webgpuOk && compileOk && !!selectedSink && phase === 'config'
 
+  const framingChoice = computeFraming(effFraming, view, outW, outH)
   // Feed the live-preview loop the current size / framing / active state.
   previewStateRef.current = {
     active: open && phase === 'config' && webgpuOk && compileOk,
     outW,
     outH,
-    framing: computeFraming(framing, view, outW, outH),
+    framing: framingChoice,
     exportW: outW,
   }
+
+  // Blue guide: where the current view maps inside the export frame. The view
+  // occupies (cssW·uDpr / outW) × (cssH·uDpr / outH) of the frame, centred — so
+  // Reveal shows it smaller (reveals around it) and Fill shows it overflowing
+  // (the excess is cropped). Only meaningful when the frame differs from the view.
+  const guideW = (cssW * framingChoice.uDpr) / outW
+  const guideH = (cssH * framingChoice.uDpr) / outH
+  const showGuide = !framingHidden && Number.isFinite(guideW) && Number.isFinite(guideH)
 
   const gateNote = !webgpuOk
     ? 'Video export requires WebGPU.'
@@ -639,7 +658,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
       alpha: selectedSink.supportsAlpha,
       matte: selectedSink.supportsAlpha ? undefined : matte,
       quality: (['draft', 'good', 'high', 'max'] as const)[quality],
-      framing: computeFraming(framing, view, width, height),
+      framing: computeFraming(effFraming, view, width, height),
     }
 
     const ac = new AbortController()
@@ -684,17 +703,34 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
       >
         {/* Left: square panel (side == modal height); the export-aspect preview frame fits centred inside it */}
         <div className="hidden h-full w-[700px] flex-none flex-col bg-surface p-xl md:flex">
-          <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center">
+          <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden">
+            {/* Frame box (not clipped) so the guide can overflow it when the view
+                extends past the output (Fill/crop) — bounded by the panel above. */}
             <div
-              className="relative max-h-full max-w-full overflow-hidden rounded-sm"
+              className="relative max-h-full max-w-full"
               style={{
                 aspectRatio: `${outW} / ${outH}`,
                 width: outW >= outH ? '100%' : 'auto',
                 height: outW >= outH ? 'auto' : '100%',
-                ...(selectedSink && !selectedSink.supportsAlpha ? { background: matte } : CHECKER),
               }}
             >
-              <canvas ref={previewCanvasRef} className="absolute inset-0 h-full w-full" />
+              <div
+                className="absolute inset-0 overflow-hidden rounded-sm"
+                style={selectedSink && !selectedSink.supportsAlpha ? { background: matte } : CHECKER}
+              >
+                <canvas ref={previewCanvasRef} className="absolute inset-0 h-full w-full" />
+              </div>
+              {showGuide && (
+                <div
+                  className="pointer-events-none absolute rounded-sm border-2 border-dotted border-blue-400"
+                  style={{
+                    left: `${(1 - guideW) * 50}%`,
+                    top: `${(1 - guideH) * 50}%`,
+                    width: `${guideW * 100}%`,
+                    height: `${guideH * 100}%`,
+                  }}
+                />
+              )}
             </div>
           </div>
           <div className="mt-lg flex-none text-fg-subtle">
@@ -702,7 +738,11 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
               {outW} × {outH} · {aspectStr(outW, outH)}
             </div>
             <div className="text-param">
-              {selectedSink && !selectedSink.supportsAlpha ? 'Opaque — flattened onto the matte.' : 'Transparent background preserved.'}
+              {selectedSink && !selectedSink.supportsAlpha
+                ? shaderHasAlpha
+                  ? 'Opaque — flattened onto the matte.'
+                  : 'Fully opaque — no transparency to flatten.'
+                : 'Transparent background preserved.'}
             </div>
           </div>
         </div>
@@ -814,15 +854,20 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                     <span className={LABEL}>Framing</span>
                     <div className="grid grid-cols-3 gap-sm">
                       {framingModes.map((m) => {
-                        const on = framing === m.v
+                        const on = effFraming === m.v
+                        // Fit ≡ Fill when the aspect already matches → disable it.
+                        const disabled = m.v === 'fit' && aspectMatches
                         return (
                           <button
                             key={m.v}
                             type="button"
+                            disabled={disabled}
+                            title={disabled ? 'Same as Fill — the aspect ratio already matches' : undefined}
                             onClick={() => setFraming(m.v)}
                             className={cn(
                               'flex h-full flex-col justify-between gap-lg rounded-sm p-lg text-left transition-colors',
                               on ? CARD_ON : CARD_OFF,
+                              disabled && 'cursor-not-allowed opacity-40 hover:bg-surface-raised',
                             )}
                           >
                             <span className={cn('text-body', on ? 'text-fg' : 'text-fg-dim')}>
@@ -916,8 +961,9 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                   </div>
                 )}
 
-                {/* Background / matte — only when the format has no alpha */}
-                {selectedSink && !selectedSink.supportsAlpha && (
+                {/* Background / matte — only when the format has no alpha AND the
+                    shader actually produces transparency to flatten. */}
+                {selectedSink && !selectedSink.supportsAlpha && shaderHasAlpha && (
                   <div className="flex flex-col gap-sm">
                     <span className={LABEL}>Background</span>
                     <div className="flex items-center gap-md">

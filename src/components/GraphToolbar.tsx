@@ -13,6 +13,7 @@ import {
   openSombraFile,
   encodeCompactHash,
 } from '@/utils/sombra-file'
+import { normalizeGraphImages } from '@/utils/process-image'
 import { ds } from '@/generated/ds'
 import { EmbedModal } from '@/components/EmbedModal'
 
@@ -36,7 +37,10 @@ export function GraphToolbar() {
     try {
       const json = await openSombraFile()
       const { nodes, edges } = importFromFile(json)
-      useGraphStore.getState().loadGraph(nodes, edges)
+      // Downscale/re-encode any large embedded image (e.g. a .sombra carrying a
+      // 67MB source) — the same import processing an uploaded file gets.
+      const normalized = await normalizeGraphImages(nodes)
+      useGraphStore.getState().loadGraph(normalized, edges)
       setTimeout(() => fitView({ padding: 0.2, duration: 300 }), 50)
     } catch (err) {
       if (err instanceof Error && err.message === 'File selection cancelled') return

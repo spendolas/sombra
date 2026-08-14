@@ -16,6 +16,7 @@ import type { RenderPlan } from '../compiler/glsl-generator'
 import type { ShaderRenderer, QualityTier } from '../renderer/types'
 import type { UniformBufferLayout, TextureBinding } from '../compiler/ir/wgsl-assembler'
 import { passTargetSize, type PassTargetSize } from '../renderer/pass-size'
+import { generateMipmaps, mipLevelCount } from './mipmaps'
 
 // ---------------------------------------------------------------------------
 // Internal types
@@ -810,8 +811,12 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
       existing.texture.destroy()
     }
 
+    const iw = image.naturalWidth || image.width
+    const ih = image.naturalHeight || image.height
+    const levels = mipLevelCount(iw, ih)
     const texture = this.device.createTexture({
-      size: [image.naturalWidth || image.width, image.naturalHeight || image.height],
+      size: [iw, ih],
+      mipLevelCount: levels,
       format: 'rgba8unorm',
       usage: GPUTextureUsage.TEXTURE_BINDING |
              GPUTextureUsage.COPY_DST |
@@ -824,10 +829,13 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
         { texture },
         [bitmap.width, bitmap.height],
       )
+      // Fill the mip chain so minification (small canvas, or pixelate/reeded) is clean.
+      generateMipmaps(this.device, texture, levels)
 
       const sampler = this.device.createSampler({
         minFilter: 'linear',
         magFilter: 'linear',
+        mipmapFilter: 'linear',
         addressModeU: 'clamp-to-edge',
         addressModeV: 'clamp-to-edge',
       })

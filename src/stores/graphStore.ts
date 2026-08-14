@@ -447,15 +447,27 @@ export const useGraphStore = create<GraphState>()(
         }
         return state
       },
-      partialize: (state) => ({
-        // Strip large binary data (imageData) from persistence to avoid localStorage quota
-        nodes: state.nodes.map(n => {
-          if (!n.data.params?.imageData) return n
+      partialize: (state) => {
+        // Persist image nodes' data so loaded images survive a reload — feasible
+        // now that images are downsized + re-encoded at import (ImageUploader →
+        // processImageFile, typically tens of KB). A budget still caps the total
+        // so a rare large image (e.g. an alpha PNG) can't overflow the ~5MB
+        // localStorage quota (which would throw and drop the whole save); any
+        // image past the budget is stripped, dropped on reload as before.
+        const IMAGE_PERSIST_BUDGET = 2_000_000 // data-URL chars (~4MB UTF-16)
+        let used = 0
+        const nodes = state.nodes.map((n) => {
+          const imageData = n.data.params?.imageData
+          if (typeof imageData !== 'string' || imageData.length === 0) return n
+          if (used + imageData.length <= IMAGE_PERSIST_BUDGET) {
+            used += imageData.length
+            return n
+          }
           const { imageData: _, ...restParams } = n.data.params as Record<string, unknown>
           return { ...n, data: { ...n.data, params: restParams } }
-        }),
-        edges: state.edges,
-      }),
+        })
+        return { nodes, edges: state.edges }
+      },
     }
   )
 )

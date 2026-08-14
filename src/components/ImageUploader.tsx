@@ -12,6 +12,7 @@ import { useGraphStore } from '@/stores/graphStore'
 import { usePreviewStore } from '@/stores/previewStore'
 import { ds } from '@/generated/ds'
 import { svgCursor, moveCursor } from '@/utils/cursors'
+import { processImageFile } from '@/utils/process-image'
 
 const ACCEPTED_TYPES = 'image/png,image/jpeg,image/webp,image/gif'
 const CORNER_ZONE = 8
@@ -254,6 +255,7 @@ export function ImageUploader({ nodeId, data }: {
   const svgRef = useRef<SVGSVGElement>(null)
   const [thumbSize, setThumbSize] = useState<[number, number]>([156, 96])
   const [hoverCursor, setHoverCursor] = useState('default')
+  const [processing, setProcessing] = useState(false)
   // Toggled on pointerdown/up so the drag listeners live on `window` (below),
   // not on the <svg>. The gizmo restyles the polygon every frame, which slides
   // it out from under the cursor and silently drops pointer capture — binding
@@ -482,25 +484,25 @@ export function ImageUploader({ nodeId, data }: {
 
   // --- File handlers ---
   const handleFileChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0]
       if (!file) return
-      const reader = new FileReader()
-      reader.onload = () => {
-        const dataUrl = reader.result as string
-        const img = new Image()
-        img.onload = () => {
-          updateNodeData(nodeId, {
-            params: {
-              ...data, imageData: dataUrl, imageName: file.name,
-              imageAspect: img.naturalWidth / img.naturalHeight,
-              imageWidth: img.naturalWidth, imageHeight: img.naturalHeight,
-            },
-          })
-        }
-        img.src = dataUrl
+      setProcessing(true)
+      try {
+        // Downscale + re-encode at import (Figma-style) so we store only a small
+        // image, not the multi-MB original — see processImageFile.
+        const { dataUrl, width, height, aspect } = await processImageFile(file)
+        updateNodeData(nodeId, {
+          params: {
+            ...data, imageData: dataUrl, imageName: file.name,
+            imageAspect: aspect, imageWidth: width, imageHeight: height,
+          },
+        })
+      } catch (err) {
+        console.error('[ImageUploader] failed to process image', err)
+      } finally {
+        setProcessing(false)
       }
-      reader.readAsDataURL(file)
     },
     [nodeId, data, updateNodeData],
   )
@@ -578,9 +580,10 @@ export function ImageUploader({ nodeId, data }: {
       ) : (
         <button
           onClick={handleClick}
-          className="flex items-center justify-center w-full py-md rounded-sm bg-surface-raised border border-edge-subtle text-body text-fg-dim hover:bg-hover hover:text-fg transition-colors cursor-pointer"
+          disabled={processing}
+          className="flex items-center justify-center w-full py-md rounded-sm bg-surface-raised border border-edge-subtle text-body text-fg-dim hover:bg-hover hover:text-fg transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
         >
-          Upload Image
+          {processing ? 'Processing…' : 'Upload Image'}
         </button>
       )}
     </div>
