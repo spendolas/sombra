@@ -386,11 +386,12 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
               </div>
             </div>
             <div className="flex-none text-[11.5px] leading-relaxed text-fg-subtle">
-              Output frame at{' '}
-              <b className="font-mono tabular-nums text-fg-dim">
+              <div className="font-mono tabular-nums text-fg-dim">
                 {outW} × {outH} · {aspectStr(outW, outH)}
-              </b>
-              . {selectedSink && !selectedSink.supportsAlpha ? 'Opaque — flattened onto the matte.' : 'Transparent background preserved.'}
+              </div>
+              <div>
+                {selectedSink && !selectedSink.supportsAlpha ? 'Opaque — flattened onto the matte.' : 'Transparent background preserved.'}
+              </div>
             </div>
           </div>
 
