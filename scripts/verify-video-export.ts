@@ -49,6 +49,7 @@ interface Cfg {
   dur20: number
   engineUrl: string
   webmUrl: string
+  mp4Url: string
   pngUrl: string
   sinksIndexUrl: string
   registryUrl: string
@@ -64,6 +65,7 @@ const CFG: Cfg = {
   dur20: 20 / 12, // 20 frames
   engineUrl: '/sombra/src/export/export-engine.ts',
   webmUrl: '/sombra/src/export/sinks/webm-alpha.ts',
+  mp4Url: '/sombra/src/export/sinks/webcodecs-mp4.ts',
   pngUrl: '/sombra/src/export/sinks/png-sequence.ts',
   sinksIndexUrl: '/sombra/src/export/sinks/index.ts',
   registryUrl: '/sombra/src/export/registry.ts',
@@ -116,6 +118,9 @@ async function runAssertions(cfg: Cfg): Promise<EvalResult> {
   }
   interface WebmModule {
     makeWebmAlphaSink(): SinkLike
+  }
+  interface Mp4Module {
+    makeMp4Sink(): SinkLike
   }
   interface PngModule {
     makePngSequenceSink(): SinkLike
@@ -172,6 +177,7 @@ async function runAssertions(cfg: Cfg): Promise<EvalResult> {
 
   const engine = (await import(cfg.engineUrl)) as EngineModule
   const webm = (await import(cfg.webmUrl)) as WebmModule
+  const mp4 = (await import(cfg.mp4Url)) as Mp4Module
   const png = (await import(cfg.pngUrl)) as PngModule
   await import(cfg.sinksIndexUrl) // side-effect: registers the 3 built-in sinks
   const registry = (await import(cfg.registryUrl)) as RegistryModule
@@ -271,6 +277,7 @@ async function runAssertions(cfg: Cfg): Promise<EvalResult> {
 
   // Feature detection up front — gate assertions on real host support.
   const webmSupported = await webm.makeWebmAlphaSink().isSupported()
+  const mp4Supported = await mp4.makeMp4Sink().isSupported()
   const pngSupported = await png.makePngSequenceSink().isSupported()
 
   // =====================================================================
@@ -353,6 +360,45 @@ async function runAssertions(cfg: Cfg): Promise<EvalResult> {
     }
   } else {
     skip('alpha-present', 'webm-alpha sink unsupported on host')
+  }
+
+  // =====================================================================
+  // #3b mp4 encodes at a REAL resolution (regression guard)
+  //   Mechanism: MediaBunny's qualitative quality levels resolve to
+  //   quantizer-based encoding, which the WebCodecs H.264 encoder REJECTS
+  //   ("Unsupported configuration parameters.") at real resolutions — it only
+  //   slips through at tiny sizes. So this check MUST export at ≥720p (the
+  //   160x90 used elsewhere would pass even with the bug). Encode 1280x720
+  //   H.264 and decode it back; a broken bitrate/quality config throws here.
+  // =====================================================================
+  if (mp4Supported) {
+    try {
+      buildAnimated()
+      const MP4_W = 1280
+      const MP4_H = 720
+      const blob = await runExport({
+        sink: mp4.makeMp4Sink(),
+        width: MP4_W,
+        height: MP4_H,
+        fps: 30,
+        durationSec: 4 / 30, // 4 frames — enough to prove the encoder configured
+        alpha: false,
+        matte: '#000000',
+        quality: 'high',
+        framing,
+      })
+      const { n, dims } = await countFrames(blob)
+      const ok = blob.type === 'video/mp4' && n === 4 && dims.length > 0 && dims.every(([w, h]) => w === MP4_W && h === MP4_H)
+      if (ok) {
+        pass('mp4-realsize', `1280x720 H.264 encoded + decoded ${n} frames @ ${dims[0][0]}x${dims[0][1]}`)
+      } else {
+        fail('mp4-realsize', `type=${blob.type}, ${n} frames, first dim ${JSON.stringify(dims[0])}`)
+      }
+    } catch (e) {
+      fail('mp4-realsize', `threw: ${String(e)} — H.264 config rejected at 720p (qualitative-quality → quantizer regression?)`)
+    }
+  } else {
+    skip('mp4-realsize', 'mp4-h264 sink unsupported on host')
   }
 
   // =====================================================================
