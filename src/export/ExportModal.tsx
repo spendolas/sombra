@@ -24,6 +24,7 @@ import { useCompilerStore } from '@/stores/compilerStore'
 import { isWebGL2Forced } from '@/renderer/create-renderer'
 import { getAvailableSinks } from './registry'
 import { runExport, type ExportJob } from './export-engine'
+import { useExportPreview, type ExportPreviewState } from './use-export-preview'
 import {
   targetSize,
   computeFraming,
@@ -182,6 +183,19 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
     [],
   )
 
+  // Live WYSIWYG export preview — renders an actual export frame into the canvas.
+  // Ref-driven so these hooks stay above the `if (!open)` early return; the ref
+  // is updated with current size/framing/active below (after they're derived).
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null)
+  const previewStateRef = useRef<ExportPreviewState>({
+    active: false,
+    outW: 1,
+    outH: 1,
+    framing: { uDpr: 1, anchor: [0.5, 0.5] },
+    exportW: 1,
+  })
+  useExportPreview(previewCanvasRef, previewStateRef)
+
   if (!open) return null
 
   // ── derived values ────────────────────────────────────────────────────────
@@ -242,6 +256,15 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
     (backend === 'unknown' && typeof navigator !== 'undefined' && !!navigator.gpu && !isWebGL2Forced())
   const compileOk = !hasErrors && fragmentShader !== null
   const canExport = webgpuOk && compileOk && !!selectedSink && phase === 'config'
+
+  // Feed the live-preview loop the current size / framing / active state.
+  previewStateRef.current = {
+    active: open && phase === 'config' && webgpuOk && compileOk,
+    outW,
+    outH,
+    framing: computeFraming(framing, view, outW, outH),
+    exportW: outW,
+  }
 
   const gateNote = !webgpuOk
     ? 'Video export requires WebGPU.'
@@ -351,6 +374,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                   ...(selectedSink && !selectedSink.supportsAlpha ? { background: matte } : CHECKER),
                 }}
               >
+                <canvas ref={previewCanvasRef} className="absolute inset-0 h-full w-full" />
                 <span className="absolute bottom-2 left-2 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-fg-dim backdrop-blur-sm">
                   {outW} × {outH} · {aspectStr(outW, outH)}
                 </span>
