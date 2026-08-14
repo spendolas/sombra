@@ -26,22 +26,21 @@ export interface ViewInfo {
 
 /**
  * Compute target export size from the source specification.
- * - match: the view's device pixels (cssW*deviceDpr, cssH*deviceDpr)
- * - mul: view device px × factor
+ * - match: the view's LOGICAL (CSS) size — exactly what the modal shows as
+ *   "current view", so Match is a true 1:1. (On a retina display, 2× yields the
+ *   device-pixel resolution — the familiar designer 1×/2× model.)
+ * - mul: view logical size × factor (2×/4×)
  * - preset/custom: literal dimensions
+ *
+ * NOTE: deliberately NOT × deviceDpr. Multiplying made Match secretly 2× on
+ * retina — mislabeled 1:1 and, with Reveal, revealed 2× more scene.
  */
 export function targetSize(src: SizeSource, view: ViewInfo): { width: number; height: number } {
   switch (src.kind) {
     case 'match':
-      return {
-        width: view.cssW * view.deviceDpr,
-        height: view.cssH * view.deviceDpr,
-      }
+      return { width: view.cssW, height: view.cssH }
     case 'mul':
-      return {
-        width: view.cssW * view.deviceDpr * src.factor,
-        height: view.cssH * view.deviceDpr * src.factor,
-      }
+      return { width: view.cssW * src.factor, height: view.cssH * src.factor }
     case 'preset':
       return { width: src.w, height: src.h }
     case 'custom':
@@ -86,10 +85,14 @@ function gcd(a: number, b: number): number {
   return b ? gcd(b, a % b) : a
 }
 
-// Helper: format aspect ratio as simplified string (e.g., "16:9")
+// Helper: format aspect ratio. Clean ratios read as "16:9"; odd view sizes
+// reduce to ugly numbers (e.g. 124:53) — show a decimal "2.34:1" instead.
 function aspectRatio(w: number, h: number): string {
   const g = gcd(Math.round(w), Math.round(h)) || 1
-  return `${Math.round(w / g)}:${Math.round(h / g)}`
+  const rw = Math.round(w / g)
+  const rh = Math.round(h / g)
+  if (rw > 21 || rh > 21) return `${(w / h).toFixed(2)}:1`
+  return `${rw}:${rh}`
 }
 
 /**
@@ -106,13 +109,13 @@ export function describeResult(
 ): { text: string; framingHidden: boolean } {
   const { width: targetW, height: targetH } = targetSize(src, view)
 
-  // Compute view in device pixels for comparison
-  const viewDeviceW = view.cssW * view.deviceDpr
-  const viewDeviceH = view.cssH * view.deviceDpr
+  // Compare against the view's LOGICAL size (Match == this, so it reads 1:1).
+  const viewW = view.cssW
+  const viewH = view.cssH
 
-  const sizeDiff = targetW !== viewDeviceW || targetH !== viewDeviceH
+  const sizeDiff = targetW !== viewW || targetH !== viewH
   const targetAR = targetW / targetH
-  const viewAR = viewDeviceW / viewDeviceH
+  const viewAR = viewW / viewH
   const aspDiff = Math.abs(targetAR - viewAR) > 0.01
 
   // Hidden case: no size difference and no aspect ratio difference
@@ -120,7 +123,7 @@ export function describeResult(
     return { text: 'Exporting your current view exactly, 1:1.', framingHidden: true }
   }
 
-  const bigger = targetW * targetH >= viewDeviceW * viewDeviceH
+  const bigger = targetW * targetH >= viewW * viewH
   const ar = aspectRatio(targetW, targetH)
 
   let text: string
