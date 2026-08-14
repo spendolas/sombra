@@ -113,7 +113,10 @@ export function describeResult(
   const viewW = view.cssW
   const viewH = view.cssH
 
-  const sizeDiff = targetW !== viewW || targetH !== viewH
+  // Compare the displayed (rounded) sizes: the view's CSS size is fractional,
+  // so an exact-integer target (e.g. a Custom size typed to match the shown
+  // "1364 × 756") would otherwise read as different and needlessly show framing.
+  const sizeDiff = Math.round(targetW) !== Math.round(viewW) || Math.round(targetH) !== Math.round(viewH)
   const targetAR = targetW / targetH
   const viewAR = viewW / viewH
   const aspDiff = Math.abs(targetAR - viewAR) > 0.01
