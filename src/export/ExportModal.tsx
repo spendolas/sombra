@@ -69,7 +69,12 @@ const CHECKER: React.CSSProperties = {
 const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a)
 const aspectStr = (w: number, h: number) => {
   const g = gcd(Math.round(w), Math.round(h)) || 1
-  return `${Math.round(w / g)}:${Math.round(h / g)}`
+  const rw = Math.round(w / g)
+  const rh = Math.round(h / g)
+  // Clean ratios read as "16:9"; odd sizes reduce to ugly numbers (508:135) —
+  // show a decimal "3.76:1" instead.
+  if (rw > 21 || rh > 21) return `${(w / h).toFixed(2)}:1`
+  return `${rw}:${rh}`
 }
 const evenDim = (n: number) => Math.max(16, Math.round(n) & ~1)
 
