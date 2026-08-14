@@ -548,18 +548,18 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                           v: 'reveal',
                           label: bigger ? 'Reveal' : 'Crop',
                           title: bigger
-                            ? 'The export size sets the shot — a bigger frame reveals more scene. Anchor-relative, never letterboxed.'
+                            ? 'The export size sets the shot — a bigger frame reveals more scene. Anchor-relative.'
                             : 'The export size sets the shot — a smaller frame crops in to a tighter view. Anchor-relative.',
                         },
                         {
                           v: 'fill',
                           label: 'Fill',
-                          title: 'Scale your composition to COVER the target aspect; crop the overflow. No bars.',
+                          title: 'Scale your composition to COVER the target aspect; crop the overflow.',
                         },
                         {
                           v: 'fit',
                           label: 'Fit',
-                          title: 'Keep your WHOLE composition; fill the leftover with revealed scene instead of letterbox bars.',
+                          title: 'Keep your WHOLE composition; fill the leftover with revealed scene.',
                         },
                       ]}
                       value={framing}
