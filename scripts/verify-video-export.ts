@@ -547,7 +547,13 @@ async function main(): Promise<number> {
     const page = await browser.newPage()
     page.on('pageerror', (err) => console.error('[pageerror]', err.message))
     page.on('console', (m) => {
-      if (m.type() === 'error') console.error('[page.error]', m.text())
+      if (m.type() !== 'error') return
+      // Expected + benign: this gate deliberately loads a SECOND MediaBunny
+      // instance for decode (the sinks own the encode instance), which makes
+      // MediaBunny log this once per run. Suppress ONLY this exact message so
+      // the output stays pristine; every other error/warning still prints.
+      if (m.text().includes('Mediabunny was loaded twice')) return
+      console.error('[page.error]', m.text())
     })
 
     // tsx transpiles this file with esbuild, which injects a `__name` helper
@@ -612,9 +618,34 @@ async function main(): Promise<number> {
     return failed === 0 ? 0 : 1
   } finally {
     await browser?.close().catch(() => {})
-    vite.kill('SIGTERM')
-    // Ensure it is really gone even if SIGTERM is slow.
-    setTimeout(() => vite.kill('SIGKILL'), 3_000).unref()
+    // Actually WAIT for vite to exit before returning — otherwise main()
+    // resolves, process.exit() runs on the next microtask, and any pending
+    // SIGKILL timer is torn down with the process, leaving a vite that ignored
+    // SIGTERM bound to the port. Escalate to SIGKILL after a grace period, and
+    // stay robust to the child having already exited.
+    await new Promise<void>((resolve) => {
+      if (vite.exitCode !== null || vite.signalCode !== null) {
+        resolve()
+        return
+      }
+      let settled = false
+      const done = (): void => {
+        if (settled) return
+        settled = true
+        resolve()
+      }
+      vite.once('exit', done)
+      vite.kill('SIGTERM')
+      setTimeout(() => {
+        try {
+          vite.kill('SIGKILL')
+        } catch {
+          /* already gone */
+        }
+        // Give the OS a beat to reap, then resolve regardless.
+        setTimeout(done, 250)
+      }, 3_000).unref()
+    })
   }
 }
 
