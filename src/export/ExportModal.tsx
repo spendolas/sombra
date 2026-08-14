@@ -238,8 +238,11 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
   const outW = evenDim(raw.width)
   const outH = evenDim(raw.height)
   const { text: resultText, framingHidden } = describeResult(src, framing, view)
-  const viewDeviceArea = cssW * dpr * cssH * dpr
-  const bigger = outW * outH >= viewDeviceArea
+  // Compare export size against the view's LOGICAL area (matches targetSize's
+  // Match = logical). Using device px here made a 1080p preset read as "smaller"
+  // than a retina view → the Reveal button mislabeled itself "Crop".
+  const viewArea = cssW * cssH
+  const bigger = outW * outH >= viewArea
 
   const frames = Math.max(1, Math.round(dur * fps))
   const areaK = (outW * outH) / 1000
