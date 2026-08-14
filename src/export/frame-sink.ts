@@ -1,4 +1,5 @@
-export interface SinkOpts { width: number; height: number; fps: number; alpha: boolean; matte?: string }
+export type QualityLevel = 'draft' | 'good' | 'high' | 'max'
+export interface SinkOpts { width: number; height: number; fps: number; alpha: boolean; matte?: string; quality: QualityLevel }
 export interface FrameSink {
   readonly id: string
   readonly label: string
