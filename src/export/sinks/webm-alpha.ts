@@ -1,10 +1,16 @@
 /**
  * WebM · alpha sink (transparent, MediaBunny `alpha: 'keep'`).
  *
- * Prefers AV1 (better compression at a given quality); falls back to VP9 when
- * the browser can't encode AV1. Alpha is preserved end-to-end: the frame's
- * straight alpha channel is encoded as VP9/AV1 alpha side data and carried by
- * the WebM container.
+ * Prefers VP9, falls back to AV1 only if VP9 can't be encoded. This ordering is
+ * deliberate and load-bearing for the "hand a transparent file to a user" goal:
+ * browsers composite **VP9** alpha in a bare `<video>` (and ffmpeg/editors read
+ * it), whereas **AV1** alpha — stored as a separate Matroska BlockAdditional
+ * stream — is NOT composited by `<video>` or ffmpeg; only alpha-aware decoders
+ * (e.g. MediaBunny) read it, so an AV1-alpha file renders OPAQUE when dropped
+ * into a page. AV1 is smaller, but that is worthless if the alpha is invisible
+ * everywhere but MediaBunny. Alpha is preserved end-to-end: the frame's straight
+ * alpha channel is encoded as VP9/AV1 alpha side data and carried by the WebM
+ * container.
  */
 
 import { Output, WebMOutputFormat, BufferTarget, VideoSampleSource, VideoSample } from 'mediabunny'
@@ -27,6 +33,19 @@ export function makeWebmAlphaSink(): FrameSink {
 
     async isSupported() {
       try {
+        // VP9 first — its alpha composites in a bare <video> (see file header).
+        const vp9 = await VideoEncoder.isConfigSupported({
+          codec: 'vp09.00.10.08',
+          width: 1280,
+          height: 720,
+          bitrate: 8e6,
+        })
+        if (vp9.supported === true) {
+          codec = 'vp9'
+          return true
+        }
+        // AV1 only as a last resort (VP9 encode unavailable). Its alpha survives
+        // in the file for MediaBunny-class decoders but not for <video>/ffmpeg.
         const av1 = await VideoEncoder.isConfigSupported({
           codec: 'av01.0.04M.08',
           width: 1280,
@@ -37,14 +56,7 @@ export function makeWebmAlphaSink(): FrameSink {
           codec = 'av1'
           return true
         }
-
-        const vp9 = await VideoEncoder.isConfigSupported({
-          codec: 'vp09.00.10.08',
-          width: 1280,
-          height: 720,
-          bitrate: 8e6,
-        })
-        return vp9.supported === true
+        return false
       } catch {
         return false
       }
