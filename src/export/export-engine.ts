@@ -19,7 +19,7 @@ import { compileGraph } from '../compiler/glsl-generator'
 import { compileGraphIR } from '../compiler/ir-compiler'
 import { useGraphStore } from '../stores/graphStore'
 import { createExportRenderTarget, type ExportRenderTarget } from './export-renderer'
-import type { FrameSink } from './frame-sink'
+import type { FrameSink, QualityLevel } from './frame-sink'
 import type { FramingChoice } from './framing'
 
 export interface ExportJob {
@@ -30,6 +30,7 @@ export interface ExportJob {
   durationSec: number
   alpha: boolean
   matte?: string
+  quality: QualityLevel
   framing: FramingChoice
 }
 
@@ -74,6 +75,7 @@ export async function runExport(
       fps: job.fps,
       alpha: job.alpha,
       matte: job.matte,
+      quality: job.quality,
     })
 
     // -----------------------------------------------------------------

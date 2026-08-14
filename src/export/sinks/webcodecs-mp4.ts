@@ -6,8 +6,9 @@
  * `VideoSampleSource`.
  */
 
-import { Output, Mp4OutputFormat, BufferTarget, VideoSampleSource, VideoSample, QUALITY_HIGH } from 'mediabunny'
+import { Output, Mp4OutputFormat, BufferTarget, VideoSampleSource, VideoSample } from 'mediabunny'
 import type { FrameSink, SinkOpts } from '../frame-sink'
+import { QMAP } from './quality-map'
 
 export function makeMp4Sink(): FrameSink {
   let out!: Output<Mp4OutputFormat, BufferTarget>
@@ -41,7 +42,7 @@ export function makeMp4Sink(): FrameSink {
     async begin(opts) {
       o = opts
       out = new Output({ format: new Mp4OutputFormat(), target: new BufferTarget() })
-      src = new VideoSampleSource({ codec: 'avc', bitrate: QUALITY_HIGH })
+      src = new VideoSampleSource({ codec: 'avc', quality: QMAP[o.quality] })
       out.addVideoTrack(src)
       await out.start()
 

@@ -278,6 +278,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
       durationSec: dur,
       alpha: selectedSink.supportsAlpha,
       matte: selectedSink.supportsAlpha ? undefined : matte,
+      quality: (['draft', 'good', 'high', 'max'] as const)[quality],
       framing: computeFraming(framing, view, width, height),
     }
 
