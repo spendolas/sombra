@@ -349,54 +349,54 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
       onClick={onClose}
     >
       <div
-        className="flex max-h-[92vh] w-[800px] max-w-[92vw] flex-col overflow-hidden rounded-xl border border-edge bg-surface-alt text-fg shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]"
+        className="flex max-h-[92vh] w-[890px] max-w-[92vw] overflow-hidden rounded-xl border border-edge bg-surface text-fg shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex flex-none items-center justify-between border-b border-edge-subtle px-[18px] py-3.5">
-          <div className="flex items-center gap-2.5 text-[15px] font-semibold">
-            <span className="size-2 rounded-full bg-indigo shadow-[0_0_10px_var(--color-indigo)]" />
-            Export
+        {/* Left: preview panel (fills height; caption pinned to the bottom) */}
+        <div className="hidden w-[360px] flex-none flex-col bg-surface p-[18px] md:flex">
+          <div className="relative flex min-h-0 flex-1 items-center justify-center">
+            <div
+              className="relative max-h-full max-w-full overflow-hidden rounded-md border border-edge-card"
+              style={{
+                aspectRatio: `${outW} / ${outH}`,
+                width: outW >= outH ? '100%' : 'auto',
+                height: outW >= outH ? 'auto' : '100%',
+                ...(selectedSink && !selectedSink.supportsAlpha ? { background: matte } : CHECKER),
+              }}
+            >
+              <canvas ref={previewCanvasRef} className="absolute inset-0 h-full w-full" />
+            </div>
           </div>
-          <button
-            className="rounded px-2 py-1 text-fg-subtle transition-colors hover:bg-surface-elevated hover:text-fg"
-            title="Close"
-            aria-label="Close"
-            onClick={onClose}
-          >
-            ✕
-          </button>
+          <div className="mt-3 flex-none text-[11.5px] leading-relaxed text-fg-subtle">
+            <div className="font-mono tabular-nums text-fg-dim">
+              {outW} × {outH} · {aspectStr(outW, outH)}
+            </div>
+            <div>
+              {selectedSink && !selectedSink.supportsAlpha ? 'Opaque — flattened onto the matte.' : 'Transparent background preserved.'}
+            </div>
+          </div>
         </div>
 
-        {/* Body: preview | right column */}
-        <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[330px_minmax(0,1fr)]">
-          {/* Preview */}
-          <div className="flex min-h-0 min-w-0 flex-col gap-2.5 border-b border-edge-subtle bg-surface p-[18px] md:border-b-0 md:border-r">
-            <div className="relative flex min-h-0 flex-1 items-center justify-center">
-              <div
-                className="relative max-h-full max-w-full overflow-hidden rounded-md border border-edge-card bg-surface"
-                style={{
-                  aspectRatio: `${outW} / ${outH}`,
-                  width: outW >= outH ? '100%' : 'auto',
-                  height: outW >= outH ? 'auto' : '100%',
-                  ...(selectedSink && !selectedSink.supportsAlpha ? { background: matte } : CHECKER),
-                }}
-              >
-                <canvas ref={previewCanvasRef} className="absolute inset-0 h-full w-full" />
-              </div>
+        {/* Right: controls panel (its own header + footer) */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-alt md:border-l md:border-edge">
+          {/* Header */}
+          <div className="flex flex-none items-center justify-between border-b border-edge-subtle px-[18px] py-3.5">
+            <div className="flex items-center gap-2.5 text-[15px] font-semibold">
+              <span className="size-2 rounded-full bg-indigo shadow-[0_0_10px_var(--color-indigo)]" />
+              Export
             </div>
-            <div className="flex-none text-[11.5px] leading-relaxed text-fg-subtle">
-              <div className="font-mono tabular-nums text-fg-dim">
-                {outW} × {outH} · {aspectStr(outW, outH)}
-              </div>
-              <div>
-                {selectedSink && !selectedSink.supportsAlpha ? 'Opaque — flattened onto the matte.' : 'Transparent background preserved.'}
-              </div>
-            </div>
+            <button
+              className="rounded px-2 py-1 text-fg-subtle transition-colors hover:bg-surface-elevated hover:text-fg"
+              title="Close"
+              aria-label="Close"
+              onClick={onClose}
+            >
+              ✕
+            </button>
           </div>
 
-          {/* Right column: controls OR progress/done */}
-          <div className="flex min-h-0 min-w-0">
+          {/* Content: config controls OR progress/done */}
+          <div className="flex min-h-0 min-w-0 flex-1">
             {phase === 'config' ? (
               <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto overflow-x-hidden p-[18px] [scrollbar-gutter:stable]">
                 {error && (
@@ -725,45 +725,45 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
               </div>
             )}
           </div>
-        </div>
 
-        {/* Footer (config only) */}
-        {phase === 'config' && (
-          <div className="flex flex-none items-center justify-between gap-3.5 border-t border-edge-subtle bg-surface-alt px-[18px] py-3">
-            <div className="flex min-w-0 items-baseline gap-2 font-mono text-xs tabular-nums text-fg-subtle">
-              <span>
-                <b className="font-semibold text-fg-dim">{frames}</b> frames
-              </span>
-              <span className="text-fg-muted">·</span>
-              <span>~{estSize}</span>
-              <span className="text-fg-muted">·</span>
-              <span>~{estTime}</span>
+          {/* Footer (config only) */}
+          {phase === 'config' && (
+            <div className="flex flex-none items-center justify-between gap-3.5 border-t border-edge-subtle bg-surface-alt px-[18px] py-3">
+              <div className="flex min-w-0 items-baseline gap-2 font-mono text-xs tabular-nums text-fg-subtle">
+                <span>
+                  <b className="font-semibold text-fg-dim">{frames}</b> frames
+                </span>
+                <span className="text-fg-muted">·</span>
+                <span>~{estSize}</span>
+                <span className="text-fg-muted">·</span>
+                <span>~{estTime}</span>
+              </div>
+              <div className="flex flex-none gap-2.5">
+                <button
+                  type="button"
+                  className="rounded-lg border border-edge px-[18px] py-2 text-[13px] font-medium text-fg-dim transition-colors hover:bg-surface-elevated hover:text-fg"
+                  onClick={onClose}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!canExport}
+                  onClick={startExport}
+                  title={gateNote ?? undefined}
+                  className={cn(
+                    'rounded-lg px-[18px] py-2 text-[13px] font-medium transition-colors',
+                    canExport
+                      ? 'bg-indigo text-white hover:bg-indigo-hover'
+                      : 'cursor-not-allowed bg-indigo/40 text-white/70',
+                  )}
+                >
+                  Export
+                </button>
+              </div>
             </div>
-            <div className="flex flex-none gap-2.5">
-              <button
-                type="button"
-                className="rounded-lg border border-edge px-[18px] py-2 text-[13px] font-medium text-fg-dim transition-colors hover:bg-surface-elevated hover:text-fg"
-                onClick={onClose}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={!canExport}
-                onClick={startExport}
-                title={gateNote ?? undefined}
-                className={cn(
-                  'rounded-lg px-[18px] py-2 text-[13px] font-medium transition-colors',
-                  canExport
-                    ? 'bg-indigo text-white hover:bg-indigo-hover'
-                    : 'cursor-not-allowed bg-indigo/40 text-white/70',
-                )}
-              >
-                Export
-              </button>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>,
     document.body,
