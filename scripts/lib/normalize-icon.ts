@@ -78,3 +78,18 @@ export async function normalizeIcon(lucideSvg: string): Promise<{ svgText: strin
   }
   return { svgText: stringify(ownedRoot), node }
 }
+
+// No scaling — extract child geometry from an already-owned 16-grid SVG.
+export async function svgToNode(svgText: string): Promise<IconNode> {
+  const root = await parse(svgText)
+  return root.children
+    .filter((c) => c.type === 'element')
+    .map((el) => {
+      const attrs: Record<string, string | number> = {}
+      for (const [k, v] of Object.entries(el.attributes)) {
+        if (DROP_ATTRS.has(k)) continue
+        attrs[k] = v
+      }
+      return [el.name, attrs] as [string, Record<string, string | number>]
+    })
+}
