@@ -59,6 +59,15 @@ interface SizeEntry {
   tailwind: TailwindRef[]
 }
 
+/** Strokes mirror sizes (Figma "Strokes" collection) */
+interface StrokeEntry {
+  figmaName: string
+  cssVar: string
+  value: number
+  unit: string
+  tailwind: TailwindRef[]
+}
+
 interface ComputedEntry {
   cssVar: string
   expression: string
@@ -157,6 +166,7 @@ interface DB {
   spacing: Record<string, SpacingEntry>
   radius: Record<string, RadiusEntry>
   sizes: Record<string, SizeEntry>
+  strokes?: Record<string, StrokeEntry>
   computed: Record<string, ComputedEntry>
   textStyles: Record<string, TextStyleEntry>
   components: Record<string, ComponentEntry>
@@ -206,6 +216,15 @@ function generateRootVars(): string {
     const name = entry.figmaName.replace('/', '-')
     const padded = (entry.cssVar + ':').padEnd(19)
     lines.push(`  ${padded} ${entry.value}${entry.unit};  /* size/${name.padEnd(12)} ${varId} */`)
+  }
+
+  // Strokes
+  lines.push('')
+  lines.push('  /* ── Sombra stroke tokens (Figma: Strokes collection) ── */')
+  for (const [varId, entry] of Object.entries(db.strokes ?? {})) {
+    const name = entry.figmaName.replace('/', '-')
+    const padded = (entry.cssVar + ':').padEnd(19)
+    lines.push(`  ${padded} ${entry.value}${entry.unit};  /* stroke/${name.padEnd(12)} ${varId} */`)
   }
 
   // Computed

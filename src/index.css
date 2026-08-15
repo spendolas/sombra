@@ -63,6 +63,9 @@
   --sz-node-min-w:    212px;  /* size/node-min-w   VariableID:106:47 */
   --sz-input-w:       64px;  /* size/size-input-w VariableID:216:1080 */
 
+  /* ── Sombra stroke tokens (Figma: Strokes collection) ── */
+  --stroke-icon:      1.5px;  /* stroke/icon         VariableID:868:3057 */
+
   /* ── Computed ── */
   /* === GENERATED:END root-vars === */
 }
