@@ -213,6 +213,7 @@ Every non-trivial change should propagate across these layers. Check each that a
 - [ ] Token compliance: no raw hex values outside `port-colors.ts` and `bg-black` containers
 - [ ] Connectable params / new port types: update `isValidConnection` in `FlowCanvas.tsx`
 - [ ] New port type: add to `src/utils/port-colors.ts` + update Figma Port Types variable collection
+- [ ] New icon: `npm run icons:add <codeName> <lucideName>` (fetches from lucide-static → owned 16px/1.5 SVG in `src/icons/svg/` → regenerates `src/generated/icon-nodes.ts`), add the key to the `icons` registry (`src/components/icons.ts`), then mirror it into the Figma DS icon set (306:236) at 1.5 stroke. Icons are OWNED — no runtime lucide dependency; `npm run icons:gen:check` guards against stale generated output.
 
 ### Design System Database
 - [ ] New UI component: add component entry to `sombra.ds.json` with `dsKey`, `parts`, `figmaNodeId`

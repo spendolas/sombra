@@ -1,0 +1,38 @@
+Icons in this directory are derived from Lucide (https://lucide.dev),
+licensed under the ISC License:
+
+  ISC License
+  Copyright (c) 2026 Lucide Icons and Contributors
+
+  Permission to use, copy, modify, and/or distribute this software for any
+  purpose with or without fee is hereby granted, provided that the above
+  copyright notice and this permission notice appear in all copies.
+
+  THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+  WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+  MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+  ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+  WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+  ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+  OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+Lucide is a fork of Feather Icons (MIT License, Copyright (c) 2013-present
+Cole Bemis). Per lucide-static's own LICENSE file, a number of icons are
+still listed as derived from Feather and carry that MIT notice alongside
+Lucide's ISC grant. Of the icons vendored in this directory, the following
+source lucide names appear on that Feather-derived list: check,
+chevron-down, code, download, maximize, minimize-2, minus, plus, square.
+The remaining vendored icons (columns-2, copy, eye, film, folder-open,
+grid-2x2, picture-in-picture-2, pipette, rows-2, scan, share-2, shuffle)
+are Lucide-original, under ISC only.
+
+Geometry in this directory has been rescaled from Lucide's 24px grid /
+2px stroke to a 16px grid / 1.5px stroke for Sombra's design system
+(see scripts/generate-icons.ts and scripts/lib/normalize-icon.ts). Only
+path/shape geometry is retained; no code, class names, or build tooling
+from the lucide packages ship in the app bundle. Original copyright is
+retained by the Lucide contributors and, for the icons named above, the
+Feather Icons contributors.
+
+Source mapping (owned name -> lucide-static icon) is tracked in
+src/icons/icon-manifest.json.
