@@ -21,6 +21,7 @@
     "icons:add": "tsx scripts/generate-icons.ts add",
     "icons:gen": "tsx scripts/generate-icons.ts gen",
     "icons:gen:check": "tsx scripts/generate-icons.ts gen --check",
+    "icons:verify": "tsx scripts/verify-icons.ts",
     "predev": "npm run check-deps && npm run tokens",
     "prebuild": "npm run check-deps && npm run tokens",
     "dev": "vite",
