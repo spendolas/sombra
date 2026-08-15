@@ -29,7 +29,7 @@ const CHECKER_BACKDROP_L = 0.18
 const contrastInk = (r: number, g: number, b: number, a: number) => {
   const lColor = 0.2126 * r + 0.7152 * g + 0.0722 * b
   const l = a * lColor + (1 - a) * CHECKER_BACKDROP_L
-  return l > 0.55 ? '#141420' : '#ffffff'
+  return l > 0.55 ? 'var(--surface)' : 'var(--fg-dim)'
 }
 
 type ColorSwatchProps = Omit<React.ComponentProps<'button'>, 'color' | 'value'> & {
