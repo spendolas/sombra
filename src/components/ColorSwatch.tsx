@@ -1,7 +1,7 @@
 /**
  * ColorSwatch — a color swatch that is a button (an icon button, to be precise).
  * Shows the current color composited over a checkerboard so alpha reads; an
- * OPTIONAL icon (from the DS lucide registry) is overlaid, its ink auto-picked
+ * OPTIONAL icon (from the DS icon registry) is overlaid, its ink auto-picked
  * for contrast against the fill. Most swatches want no icon (the plain color
  * button that opens a picker); pass `icon` only where the affordance is needed
  * (currently just the export-matte custom color).
