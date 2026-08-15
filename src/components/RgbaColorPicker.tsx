@@ -1,5 +1,5 @@
 /**
- * RgbaColorPicker — Coolors-style colour picker on Sombra DS tokens + the lucide
+ * RgbaColorPicker — Coolors-style colour picker on Sombra DS tokens + the owned
  * DS icon set. The footer menu switches the whole body:
  *  - HEX  : 2D saturation/value area + hue slider + editable hex + swatch
  *  - RGB / HSB / HSL : three (or four with alpha) labelled channel sliders, each

@@ -43,7 +43,7 @@ export function ColorPickerSandbox() {
         <h1 className="text-[22px] font-semibold tracking-tight m-0">
           Color Picker <span className="ml-2 align-middle text-[10px] tracking-wider uppercase font-bold text-indigo-hover border border-indigo px-1.5 py-0.5 rounded-full">Prototype</span>
         </h1>
-        <p className="text-fg-subtle mt-1 max-w-[62ch]">Coolors-style picker as real React on Sombra DS tokens + the lucide DS icon set. The footer menu swaps the whole body (HEX ↔ RGB/HSB/HSL). Lives in <code className="text-fg-dim">RgbaColorPicker.tsx</code> until sign-off, then replaces <code className="text-fg-dim">RgbaColorPicker</code>.</p>
+        <p className="text-fg-subtle mt-1 max-w-[62ch]">Coolors-style picker as real React on Sombra DS tokens + the owned DS icon set. The footer menu swaps the whole body (HEX ↔ RGB/HSB/HSL). Lives in <code className="text-fg-dim">RgbaColorPicker.tsx</code> until sign-off, then replaces <code className="text-fg-dim">RgbaColorPicker</code>.</p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2xl mt-2xl items-start">
           <div>
@@ -82,7 +82,7 @@ export function ColorPickerSandbox() {
               <dt className="text-[11px] uppercase tracking-wide text-fg-muted">RGBA</dt><dd className="m-0 text-fg-dim">{to255(r)}, {to255(g)}, {to255(b)}{showAlpha ? `, ${a.toFixed(2)}` : ''}</dd>
             </dl>
             <div className="mt-2xl p-lg bg-surface-alt border border-edge-subtle rounded-md text-[12.5px] text-fg-subtle">
-              <b className="text-fg-dim font-semibold">Now real DS:</b> tokens via Tailwind utilities, icons via <code className="text-fg-dim">icons.ts</code> (lucide). Sliders are custom pointer-capture (pen-safe). Eyedropper shows on Chromium only.
+              <b className="text-fg-dim font-semibold">Now real DS:</b> tokens via Tailwind utilities, icons via <code className="text-fg-dim">icons.ts</code> (owned, vendored). Sliders are custom pointer-capture (pen-safe). Eyedropper shows on Chromium only.
             </div>
           </div>
         </div>
