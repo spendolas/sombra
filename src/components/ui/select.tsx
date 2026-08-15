@@ -1,7 +1,9 @@
 import { Select as SelectPrimitive } from "radix-ui"
-import { ChevronDownIcon } from "lucide-react"
+import { icons } from "@/components/icons"
 import { cn } from "@/lib/utils"
 import { ds } from "@/generated/ds"
+
+const ChevronDown = icons.chevronDown
 
 function Select(props: React.ComponentProps<typeof SelectPrimitive.Root>) {
   return <SelectPrimitive.Root {...props} />
@@ -27,7 +29,7 @@ function SelectTrigger({
       <span className="flex w-full items-center justify-between gap-md">
         {children}
         <SelectPrimitive.Icon>
-          <ChevronDownIcon className="size-3.5 opacity-50" />
+          <ChevronDown className="size-icon-sm opacity-50" />
         </SelectPrimitive.Icon>
       </span>
     </SelectPrimitive.Trigger>
