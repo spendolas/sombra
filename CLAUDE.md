@@ -212,6 +212,7 @@ Non-trivial changes propagate across layers. Check what applies:
 - **New UI component:** reuse existing DS components first; add entry to `sombra.ds.json` (dsKey, parts with all visual fields, figmaNodeId), `npm run tokens`, wire to `ds.*`; Figma component (atomic hierarchy, variable-bound); wiki page + parity table.
 - **New `window.__sombra` method or store shape change:** update `BROWSER-AUTOMATION.md`.
 - **New token:** Figma variable collection first, then sync.
+- **New icon:** `npm run icons:add <codeName> <lucideName>` (fetches from lucide-static → owned 16px/1.5 SVG in `src/icons/svg/` → regenerates `src/generated/icon-nodes.ts`), add the key to the `icons` registry (`src/components/icons.ts`), then mirror it into the Figma DS icon set (306:236) at 1.5 stroke. Icons are OWNED — no runtime lucide dependency; `npm run icons:gen:check` guards against stale generated output.
 
 ## Tips
 

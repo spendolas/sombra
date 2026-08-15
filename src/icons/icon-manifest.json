@@ -1,0 +1,23 @@
+{
+  "check": "check",
+  "chevronDown": "chevron-down",
+  "code": "code",
+  "columns": "columns-2",
+  "copy": "copy",
+  "download": "download",
+  "eye": "eye",
+  "film": "film",
+  "folderOpen": "folder-open",
+  "grid": "grid-2x2",
+  "maximize": "maximize",
+  "minimize": "minimize-2",
+  "minus": "minus",
+  "pip": "picture-in-picture-2",
+  "pipette": "pipette",
+  "plus": "plus",
+  "rows": "rows-2",
+  "scan": "scan",
+  "share": "share-2",
+  "shuffle": "shuffle",
+  "square": "square"
+}
