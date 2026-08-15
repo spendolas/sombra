@@ -5,14 +5,15 @@
 
 import type { LucideIcon } from 'lucide-react'
 import {
-  Ban, Check, Code, Columns2, Copy, Download, Eye, Film, FolderOpen, Grid2x2, Maximize,
-  Minimize2, Minus, PictureInPicture2, Plus,
+  Ban, Check, ChevronDown, Code, Columns2, Copy, Download, Eye, Film, FolderOpen, Grid2x2, Maximize,
+  Minimize2, Minus, PictureInPicture2, Pipette, Plus,
   Rows2, Scan, Share2, Shuffle, Square,
 } from 'lucide-react'
 
 export const icons = {
   ban: Ban,
   check: Check,
+  chevronDown: ChevronDown,
   code: Code,
   columns: Columns2,
   copy: Copy,
@@ -25,6 +26,7 @@ export const icons = {
   minimize: Minimize2,
   minus: Minus,
   pip: PictureInPicture2,
+  pipette: Pipette,
   plus: Plus,
   rows: Rows2,
   scan: Scan,

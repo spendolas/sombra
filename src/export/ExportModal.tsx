@@ -986,6 +986,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                           <RgbaColorPicker
                             mode="popover"
                             showAlpha={false}
+                            triggerIcon="pipette"
                             value={customRgba}
                             onChange={(rgba) => {
                               setCustomOverride(rgba)
