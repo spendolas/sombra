@@ -52,7 +52,6 @@
     "@xyflow/react": "^12.10.0",
     "clsx": "^2.1.1",
     "fflate": "^0.8.3",
-    "lucide-react": "^0.571.0",
     "mediabunny": "^1.53.1",
     "pako": "^2.1.0",
     "radix-ui": "^1.4.3",
