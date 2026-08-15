@@ -21,7 +21,7 @@ function lucidePath(lucideName: string): string {
 // Read every owned SVG on disk, re-derive its IconNode, and emit icon-nodes.ts.
 // Returns the generated file text (for --check without writing).
 async function buildNodesFile(): Promise<string> {
-  const names = Object.keys(manifest).sort()
+  const names = Object.keys(manifest).sort((a, b) => a.localeCompare(b))
   const entries: string[] = []
   for (const name of names) {
     const svg = readFileSync(join(SVG_DIR, `${name}.svg`), 'utf8')
