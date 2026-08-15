@@ -1,4 +1,3 @@
-import { GripVerticalIcon } from "lucide-react"
 import * as ResizablePrimitive from "react-resizable-panels"
 
 import { cn } from "@/lib/utils"
@@ -26,12 +25,9 @@ function ResizablePanel({ ...props }: ResizablePrimitive.PanelProps) {
 }
 
 function ResizableHandle({
-  withHandle,
   className,
   ...props
-}: ResizablePrimitive.SeparatorProps & {
-  withHandle?: boolean
-}) {
+}: ResizablePrimitive.SeparatorProps) {
   return (
     <ResizablePrimitive.Separator
       data-slot="resizable-handle"
@@ -40,13 +36,7 @@ function ResizableHandle({
         className
       )}
       {...props}
-    >
-      {withHandle && (
-        <div className="bg-edge-card z-10 flex h-4 w-3 items-center justify-center rounded-xs border border-edge">
-          <GripVerticalIcon className="size-2.5" />
-        </div>
-      )}
-    </ResizablePrimitive.Separator>
+    />
   )
 }
 
