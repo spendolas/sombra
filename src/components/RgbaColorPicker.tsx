@@ -1,438 +1,363 @@
 /**
- * RgbaColorPicker — self-contained HSV + alpha color picker.
+ * RgbaColorPicker — Coolors-style colour picker on Sombra DS tokens + the lucide
+ * DS icon set. The footer menu switches the whole body:
+ *  - HEX  : 2D saturation/value area + hue slider + editable hex + swatch
+ *  - RGB / HSB / HSL : three (or four with alpha) labelled channel sliders, each
+ *    with a live gradient track + editable value.
  *
- * Two modes:
- * - `popover` (default): a swatch button (current color composited over a
- *   checkerboard so alpha is visible) opens a portaled, viewport-clamped
- *   panel with a saturation/value area, a hue slider, and an alpha slider.
- * - `inline`: the panel renders directly in-flow (no swatch trigger, no
- *   portal, always open, no outside-click/Escape/scroll dismiss) — used when
- *   the picker IS the control (e.g. the Color node body, the Properties
- *   panel color param).
- *
- * Controlled: value/onChange are normalized [r,g,b,a] floats (0-1). No
- * external dependency — HSV<->RGB conversion is done inline.
+ * Controlled: value/onChange are normalized [r,g,b,a] floats (0-1). Sliders are
+ * custom pointer-capture (pen-safe) — never a native <input type=range>. All
+ * chrome comes from `ds.colorPicker.*` (Figma component set "Color Picker").
  */
 
 import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
+import { icons, type IconName } from '@/components/icons'
+import { ColorSwatch } from '@/components/ColorSwatch'
+import { IconButton } from '@/components/IconButton'
 
 export type Rgba = [number, number, number, number]
+type View = 'hex' | 'rgb' | 'hsb' | 'hsl'
+interface Hsv { h: number; s: number; v: number }
 
-interface RgbaColorPickerProps {
-  value: Rgba
-  onChange: (value: Rgba) => void
-  label?: string
-  className?: string
-  /** 'popover' (default) or 'inline' — see file header. */
-  mode?: 'inline' | 'popover'
-  /**
-   * Whether to show the alpha slider (default true). Set false where the
-   * context has no use for opacity (e.g. an opaque solid background) — the
-   * alpha row is hidden and the emitted color is forced fully opaque.
-   */
-  showAlpha?: boolean
-}
+const ChevronIcon = icons.chevronDown
+const CheckIcon = icons.check
 
-interface Hsv {
-  h: number // 0-360
-  s: number // 0-1
-  v: number // 0-1
-}
+const VIEW_ORDER: Array<{ v: View; label: string }> = [
+  { v: 'hex', label: 'HEX' }, { v: 'hsb', label: 'HSB' }, { v: 'hsl', label: 'HSL' }, { v: 'rgb', label: 'RGB' },
+]
+const VIEW_LABEL: Record<View, string> = { hex: 'HEX', rgb: 'RGB', hsb: 'HSB', hsl: 'HSL' }
 
-function clamp01(v: number) {
-  return Math.min(1, Math.max(0, v))
-}
-
+// ── color math ──
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
 function rgbToHsv(r: number, g: number, b: number): Hsv {
-  const max = Math.max(r, g, b)
-  const min = Math.min(r, g, b)
-  const d = max - min
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn
   let h = 0
-  if (d !== 0) {
-    if (max === r) h = ((g - b) / d) % 6
-    else if (max === g) h = (b - r) / d + 2
-    else h = (r - g) / d + 4
-    h *= 60
-    if (h < 0) h += 360
-  }
-  const s = max === 0 ? 0 : d / max
-  return { h, s, v: max }
+  if (d !== 0) { if (mx === r) h = ((g - b) / d) % 6; else if (mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4; h *= 60; if (h < 0) h += 360 }
+  return { h, s: mx === 0 ? 0 : d / mx, v: mx }
 }
-
 function hsvToRgb({ h, s, v }: Hsv): [number, number, number] {
-  const c = v * s
-  const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
-  const m = v - c
-  let r = 0
-  let g = 0
-  let b = 0
-  if (h < 60) [r, g, b] = [c, x, 0]
-  else if (h < 120) [r, g, b] = [x, c, 0]
-  else if (h < 180) [r, g, b] = [0, c, x]
-  else if (h < 240) [r, g, b] = [0, x, c]
-  else if (h < 300) [r, g, b] = [x, 0, c]
-  else [r, g, b] = [c, 0, x]
+  const c = v * s, x = c * (1 - Math.abs(((h / 60) % 2) - 1)), m = v - c
+  let r = 0, g = 0, b = 0
+  if (h < 60) [r, g, b] = [c, x, 0]; else if (h < 120) [r, g, b] = [x, c, 0]; else if (h < 180) [r, g, b] = [0, c, x]
+  else if (h < 240) [r, g, b] = [0, x, c]; else if (h < 300) [r, g, b] = [x, 0, c]; else [r, g, b] = [c, 0, x]
   return [r + m, g + m, b + m]
 }
-
-function rgbaCss(r: number, g: number, b: number, a: number) {
-  return `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${a})`
+function hsvToHsl(h: number, s: number, v: number) { const l = v * (1 - s / 2), m = Math.min(l, 1 - l); return { h, s: m === 0 ? 0 : (v - l) / m, l } }
+function hslToHsv(h: number, s: number, l: number): Hsv { const v = l + s * Math.min(l, 1 - l); return { h, s: v === 0 ? 0 : 2 * (1 - l / v), v } }
+function hslToRgb(h: number, s: number, l: number) { return hsvToRgb(hslToHsv(h, s, l)) }
+const to255 = (x: number) => Math.round(x * 255)
+const hex2 = (n: number) => ('0' + n.toString(16)).slice(-2)
+const rgbStr = (rgb: number[]) => `rgb(${to255(rgb[0])},${to255(rgb[1])},${to255(rgb[2])})`
+const rgbaCss = (r: number, g: number, b: number, a: number) => `rgba(${to255(r)}, ${to255(g)}, ${to255(b)}, ${a})`
+// Alpha thumb fill: fade the colour toward the checker's lightest cell as alpha
+// → 0, so the thumb represents the opacity it sets (matches the track's
+// transparent end). Light cell = the grey checker square over surface-raised.
+const CHECKER_LIGHT: [number, number, number] = [73, 73, 85]
+function alphaHandleFill(r: number, g: number, b: number, a: number) {
+  const mix = (c: number, l: number) => Math.round(to255(c) * a + l * (1 - a))
+  return `rgb(${mix(r, CHECKER_LIGHT[0])}, ${mix(g, CHECKER_LIGHT[1])}, ${mix(b, CHECKER_LIGHT[2])})`
 }
+function toHex(rgb: number[], a: number, withAlpha: boolean) {
+  let s = '#' + hex2(to255(rgb[0])) + hex2(to255(rgb[1])) + hex2(to255(rgb[2]))
+  if (withAlpha) s += hex2(to255(a))
+  return s.toUpperCase()
+}
+function parseHex(str: string) {
+  const s = str.trim().replace(/^#/, '')
+  if (!/^[0-9a-fA-F]+$/.test(s)) return null
+  let r: number, g: number, b: number, a = 1
+  if (s.length === 3) { r = parseInt(s[0] + s[0], 16); g = parseInt(s[1] + s[1], 16); b = parseInt(s[2] + s[2], 16) }
+  else if (s.length === 6) { r = parseInt(s.slice(0, 2), 16); g = parseInt(s.slice(2, 4), 16); b = parseInt(s.slice(4, 6), 16) }
+  else if (s.length === 8) { r = parseInt(s.slice(0, 2), 16); g = parseInt(s.slice(2, 4), 16); b = parseInt(s.slice(4, 6), 16); a = parseInt(s.slice(6, 8), 16) / 255 }
+  else return null
+  return { r: r / 255, g: g / 255, b: b / 255, a }
+}
+function valuesEqual(a: Rgba, b: Rgba) { return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3] }
 
-/** Fixed decorative pattern behind the swatch/alpha track so alpha reads visually. */
+// checker tiles (behind alpha / transparent swatches)
+const CHECKER =
+  'linear-gradient(45deg,rgba(128,128,128,.4) 25%,transparent 25%),' +
+  'linear-gradient(-45deg,rgba(128,128,128,.4) 25%,transparent 25%),' +
+  'linear-gradient(45deg,transparent 75%,rgba(128,128,128,.4) 75%),' +
+  'linear-gradient(-45deg,transparent 75%,rgba(128,128,128,.4) 75%)'
 const CHECKER_STYLE: React.CSSProperties = {
-  backgroundImage:
-    'linear-gradient(45deg, rgba(128,128,128,0.4) 25%, transparent 25%), ' +
-    'linear-gradient(-45deg, rgba(128,128,128,0.4) 25%, transparent 25%), ' +
-    'linear-gradient(45deg, transparent 75%, rgba(128,128,128,0.4) 75%), ' +
-    'linear-gradient(-45deg, transparent 75%, rgba(128,128,128,0.4) 75%)',
-  backgroundSize: '8px 8px',
-  backgroundPosition: '0 0, 0 4px, 4px -4px, -4px 0px',
+  backgroundImage: CHECKER, backgroundSize: '8px 8px', backgroundPosition: '0 0,0 4px,4px -4px,-4px 0',
 }
+const HUE_GRAD = 'linear-gradient(to right,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00)'
+const RING_SHADOW = '0 0 0 1.5px rgba(0,0,0,.4), 0 1px 4px rgba(0,0,0,.5)'
 
-function valuesEqual(a: Rgba, b: Rgba) {
-  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3]
-}
-
-/**
- * Custom pointer-driven slider with a gradient track (hue / alpha). NOT a native
- * <input type=range>: native range drives its thumb via focus + implicit pointer
- * capture, which some pens/styluses intermittently fail to grant — the drag then
- * aborts with zero value change. This computes value from clientX under explicit
- * pointer capture with window move/up/cancel listeners, so pen/touch/mouse behave
- * identically and a drag can't be lost to focus or a scroll/pan claim.
- */
-function GradientSlider({ min, max, step, value, onChange, className, style, ariaLabel }: {
-  min: number
-  max: number
-  step: number
-  value: number
-  onChange: (v: number) => void
-  className?: string
-  style?: React.CSSProperties
-  ariaLabel?: string
+// ── custom pointer-capture slider (pen-safe; see slider rule) ──
+function TrackSlider({ value, onChange, style, className, ariaLabel, handleColor }: {
+  value: number; onChange: (frac: number) => void; style?: React.CSSProperties; className?: string; ariaLabel?: string; handleColor?: string
 }) {
-  const trackRef = useRef<HTMLDivElement>(null)
-  // Always call the latest onChange (hue/alpha handlers close over live hsv/alpha).
-  const onChangeRef = useRef(onChange)
-  onChangeRef.current = onChange
-
-  const valueFromClientX = (clientX: number) => {
-    const rect = trackRef.current?.getBoundingClientRect()
+  const ref = useRef<HTMLDivElement>(null)
+  const cb = useRef(onChange); cb.current = onChange
+  const fracFromX = (clientX: number) => {
+    const rect = ref.current?.getBoundingClientRect()
     if (!rect || rect.width === 0) return value
-    const raw = min + ((clientX - rect.left) / rect.width) * (max - min)
-    return Math.min(max, Math.max(min, Math.round(raw / step) * step))
+    return clamp01((clientX - rect.left) / rect.width)
   }
-
   const onPointerDown = (e: React.PointerEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    const el = e.currentTarget
-    try { el.setPointerCapture(e.pointerId) } catch { /* pointer already released */ }
-    onChangeRef.current(valueFromClientX(e.clientX))
-    const onMove = (ev: PointerEvent) => onChangeRef.current(valueFromClientX(ev.clientX))
-    const stop = () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', stop)
-      window.removeEventListener('pointercancel', stop)
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', stop)
-    window.addEventListener('pointercancel', stop)
+    e.preventDefault(); e.stopPropagation()
+    try { e.currentTarget.setPointerCapture(e.pointerId) } catch { /* already released */ }
+    cb.current(fracFromX(e.clientX))
+    const mv = (ev: PointerEvent) => cb.current(fracFromX(ev.clientX))
+    const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up) }
+    window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up)
   }
-
-  const pct = max === min ? 0 : ((value - min) / (max - min)) * 100
   return (
-    <div
-      ref={trackRef}
-      role="slider"
-      aria-valuemin={min}
-      aria-valuemax={max}
-      aria-valuenow={value}
-      aria-label={ariaLabel}
-      className={cn('relative w-full h-2 rounded-sm cursor-pointer touch-none select-none', className)}
-      style={style}
-      onPointerDown={onPointerDown}
-    >
-      <div
-        className="absolute top-1/2 w-3 h-3 rounded-full bg-white border border-edge -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-        style={{ left: `${pct}%` }}
-      />
+    <div ref={ref} role="slider" aria-label={ariaLabel} aria-valuenow={Math.round(value * 100)}
+      className={cn(ds.colorPicker.slider, className)}
+      style={style} onPointerDown={onPointerDown}>
+      <div className={cn(ds.colorPicker.handle, 'top-1/2 w-4 h-4 -translate-x-1/2 -translate-y-1/2')}
+        style={{ left: `${value * 100}%`, boxShadow: RING_SHADOW, background: handleColor }} />
     </div>
   )
 }
 
-/** Popover is portaled to document.body; these keep it clear of viewport edges. */
+// ── channel descriptor for RGB/HSB/HSL views ──
+interface ChannelSpec { label: string; max: number; frac: number; disp: number; set: (frac: number) => Hsv; alpha?: boolean; track?: string }
+function channelSpec(key: string, hsv: Hsv): ChannelSpec {
+  const rgb = hsvToRgb(hsv), [r, g, b] = rgb
+  const hsl = hsvToHsl(hsv.h, hsv.s, hsv.v)
+  switch (key) {
+    case 'r': return { label: 'Red', max: 255, frac: r, disp: to255(r), set: (f) => rgbToHsv(f, g, b), track: `linear-gradient(to right,${rgbStr([0, g, b])},${rgbStr([1, g, b])})` }
+    case 'g': return { label: 'Green', max: 255, frac: g, disp: to255(g), set: (f) => rgbToHsv(r, f, b), track: `linear-gradient(to right,${rgbStr([r, 0, b])},${rgbStr([r, 1, b])})` }
+    case 'b': return { label: 'Blue', max: 255, frac: b, disp: to255(b), set: (f) => rgbToHsv(r, g, f), track: `linear-gradient(to right,${rgbStr([r, g, 0])},${rgbStr([r, g, 1])})` }
+    case 'H': return { label: 'Hue', max: 360, frac: hsv.h / 360, disp: Math.round(hsv.h), set: (f) => ({ ...hsv, h: f * 360 }), track: HUE_GRAD }
+    case 'Sb': return { label: 'Saturation', max: 100, frac: hsv.s, disp: Math.round(hsv.s * 100), set: (f) => ({ ...hsv, s: f }), track: `linear-gradient(to right,${rgbStr(hsvToRgb({ ...hsv, s: 0 }))},${rgbStr(hsvToRgb({ ...hsv, s: 1 }))})` }
+    case 'Bv': return { label: 'Brightness', max: 100, frac: hsv.v, disp: Math.round(hsv.v * 100), set: (f) => ({ ...hsv, v: f }), track: `linear-gradient(to right,#000,${rgbStr(hsvToRgb({ ...hsv, v: 1 }))})` }
+    case 'Sl': return { label: 'Saturation', max: 100, frac: hsl.s, disp: Math.round(hsl.s * 100), set: (f) => hslToHsv(hsv.h, f, hsl.l), track: `linear-gradient(to right,${rgbStr(hslToRgb(hsv.h, 0, hsl.l))},${rgbStr(hslToRgb(hsv.h, 1, hsl.l))})` }
+    case 'Ll': return { label: 'Luminance', max: 100, frac: hsl.l, disp: Math.round(hsl.l * 100), set: (f) => hslToHsv(hsv.h, hsl.s, f), track: `linear-gradient(to right,#000,${rgbStr(hslToRgb(hsv.h, hsl.s, 0.5))},#fff)` }
+    default: return { label: 'Alpha', max: 100, frac: 0, disp: 0, set: () => hsv, alpha: true }
+  }
+}
+function viewKeys(view: View, showAlpha: boolean): string[] {
+  const base = view === 'rgb' ? ['r', 'g', 'b'] : view === 'hsb' ? ['H', 'Sb', 'Bv'] : ['H', 'Sl', 'Ll']
+  return showAlpha ? base.concat(['A']) : base
+}
+
 const VIEWPORT_MARGIN = 8
 const TRIGGER_GAP = 4
 
-/**
- * Shared panel chrome. The DB/Figma mock for `panel` carries `overflow-hidden`
- * (a static mock artifact) — override to visible at runtime so the
- * saturation/value drag handle, which can extend a few px past the SV area's
- * own box at the extreme corners, is never clipped.
- */
-const PANEL_BASE = cn(ds.colorPicker.panel, 'overflow-visible')
+interface Props {
+  value: Rgba
+  onChange: (v: Rgba) => void
+  mode?: 'inline' | 'popover'
+  showAlpha?: boolean
+  label?: string
+  className?: string
+  /** optional icon overlaid on the popover trigger swatch (e.g. 'pipette' for the export matte) */
+  triggerIcon?: IconName
+}
 
-export function RgbaColorPicker({ value, onChange, label, className, mode = 'popover', showAlpha = true }: RgbaColorPickerProps) {
+export function RgbaColorPicker({ value, onChange, mode = 'popover', showAlpha = true, label, className, triggerIcon }: Props) {
   const inline = mode === 'inline'
-  const [open, setOpen] = useState(false)
-  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
   const [hsv, setHsv] = useState<Hsv>(() => rgbToHsv(value[0], value[1], value[2]))
+  const [view, setView] = useState<View>('hex')
+  const [open, setOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [hexDraft, setHexDraft] = useState<string | null>(null)
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   const svRef = useRef<HTMLDivElement>(null)
   const lastEmitted = useRef<Rgba>(value)
 
-  // Resync HSV from external value changes (undo/redo, loading a graph) —
-  // but not from our own onChange echoes, so hue/sat survive s=0 or v=0.
+  const a = showAlpha ? value[3] : 1
+  const rgb = hsvToRgb(hsv)
+  const [r, g, b] = rgb
+
+  // Resync from external value changes (undo/redo, load), never our own echoes.
+  // Keyed on the numeric value, not the array identity — consumers often pass a
+  // fresh array every render (e.g. the color node body), and depending on
+  // identity re-ran this effect (and its setHsv) every frame → 2x re-render.
+  const valueKey = value.join(',')
   useEffect(() => {
-    if (!valuesEqual(value, lastEmitted.current)) {
-      setHsv(rgbToHsv(value[0], value[1], value[2]))
-      lastEmitted.current = value
-    }
-  }, [value])
+    if (!valuesEqual(value, lastEmitted.current)) { setHsv(rgbToHsv(value[0], value[1], value[2])); lastEmitted.current = value }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [valueKey])
 
+  const emit = useCallback((next: Hsv, alpha: number) => {
+    const [nr, ng, nb] = hsvToRgb(next)
+    const out: Rgba = [nr, ng, nb, alpha]
+    lastEmitted.current = out
+    onChange(out)
+  }, [onChange])
+
+  const commit = useCallback((next: Hsv, alpha = a) => { setHsv(next); emit(next, alpha) }, [a, emit])
+
+  // ── popover open + viewport clamp ──
   const openPopover = useCallback(() => {
-    const rect = triggerRef.current?.getBoundingClientRect()
-    if (!rect) return
-    // Initial guess directly under the trigger; refined post-mount once we
-    // know the popover's real size (see layout effect below).
-    setPos({ top: rect.bottom + TRIGGER_GAP, left: rect.left })
-    setOpen(true)
+    const rect = triggerRef.current?.getBoundingClientRect(); if (!rect) return
+    setPos({ top: rect.bottom + TRIGGER_GAP, left: rect.left }); setOpen(true)
   }, [])
-
-  // Once the popover has mounted (still portaled to <body>) measure its real
-  // size and the trigger's current position, then flip/clamp so it always
-  // stays fully inside the viewport. Popover-only.
   useLayoutEffect(() => {
     if (inline || !open) return
-    const trigger = triggerRef.current
-    const popover = popoverRef.current
-    if (!trigger || !popover) return
-
-    const triggerRect = trigger.getBoundingClientRect()
-    const popRect = popover.getBoundingClientRect()
-
-    let top = triggerRect.bottom + TRIGGER_GAP
-    if (top + popRect.height > window.innerHeight - VIEWPORT_MARGIN) {
-      const above = triggerRect.top - TRIGGER_GAP - popRect.height
-      top = above >= VIEWPORT_MARGIN ? above : Math.max(VIEWPORT_MARGIN, window.innerHeight - VIEWPORT_MARGIN - popRect.height)
+    const t = triggerRef.current, p = popoverRef.current; if (!t || !p) return
+    const tr = t.getBoundingClientRect(), pr = p.getBoundingClientRect()
+    let top = tr.bottom + TRIGGER_GAP
+    if (top + pr.height > window.innerHeight - VIEWPORT_MARGIN) {
+      const above = tr.top - TRIGGER_GAP - pr.height
+      top = above >= VIEWPORT_MARGIN ? above : Math.max(VIEWPORT_MARGIN, window.innerHeight - VIEWPORT_MARGIN - pr.height)
     }
-
-    let left = triggerRect.left
-    if (left + popRect.width > window.innerWidth - VIEWPORT_MARGIN) {
-      left = window.innerWidth - VIEWPORT_MARGIN - popRect.width
-    }
+    let left = tr.left
+    if (left + pr.width > window.innerWidth - VIEWPORT_MARGIN) left = window.innerWidth - VIEWPORT_MARGIN - pr.width
     left = Math.max(VIEWPORT_MARGIN, left)
-
     setPos({ top, left })
-    // Intentionally keyed only on `open` — this should re-measure once per
-    // open, not on every pos change (which would just re-measure the
-    // position we ourselves just set).
   }, [inline, open])
-
-  // Close on outside click, Escape, or scroll (position would go stale). Popover-only.
   useEffect(() => {
     if (inline || !open) return
     const onDown = (e: PointerEvent) => {
-      const target = e.target as Node
-      if (
-        (!rootRef.current || !rootRef.current.contains(target)) &&
-        (!popoverRef.current || !popoverRef.current.contains(target))
-      ) {
-        setOpen(false)
-      }
+      const t = e.target as Node
+      if ((!rootRef.current || !rootRef.current.contains(t)) && (!popoverRef.current || !popoverRef.current.contains(t))) { setOpen(false); setMenuOpen(false) }
     }
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    const onScroll = () => setOpen(false)
-    window.addEventListener('pointerdown', onDown)
-    window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('scroll', onScroll, true)
-    window.addEventListener('resize', onScroll)
-    return () => {
-      window.removeEventListener('pointerdown', onDown)
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('scroll', onScroll, true)
-      window.removeEventListener('resize', onScroll)
-    }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { setOpen(false); setMenuOpen(false) } }
+    window.addEventListener('pointerdown', onDown); window.addEventListener('keydown', onKey)
+    return () => { window.removeEventListener('pointerdown', onDown); window.removeEventListener('keydown', onKey) }
   }, [inline, open])
 
-  const emit = useCallback(
-    (next: Hsv, a: number) => {
-      const [r, g, b] = hsvToRgb(next)
-      const rgba: Rgba = [r, g, b, a]
-      lastEmitted.current = rgba
-      onChange(rgba)
-    },
-    [onChange]
-  )
+  // ── SV drag ──
+  const onSvPointer = useCallback((e: React.PointerEvent) => {
+    e.preventDefault(); e.stopPropagation()
+    try { e.currentTarget.setPointerCapture(e.pointerId) } catch { /* already released */ }
+    const rect = svRef.current?.getBoundingClientRect(); if (!rect) return
+    const update = (x: number, y: number) => commit({ ...hsv, s: clamp01((x - rect.left) / rect.width), v: clamp01(1 - (y - rect.top) / rect.height) })
+    update(e.clientX, e.clientY)
+    const mv = (ev: PointerEvent) => update(ev.clientX, ev.clientY)
+    const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up) }
+    window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up)
+  }, [hsv, commit])
 
-  // When alpha is disabled, always treat/emit the color as fully opaque.
-  const a = showAlpha ? value[3] : 1
+  const eyeDropper = useCallback(() => {
+    const ED = (window as unknown as { EyeDropper?: new () => { open: () => Promise<{ sRGBHex: string }> } }).EyeDropper
+    if (!ED) return
+    new ED().open().then((res) => { const p = parseHex(res.sRGBHex); if (p) commit(rgbToHsv(p.r, p.g, p.b)) }).catch(() => { /* cancelled */ })
+  }, [commit])
 
-  const handleSvPointer = useCallback(
-    (e: React.PointerEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-      // Bind the drag to the SV area (stable container div) and end cleanly on cancel.
-      try { e.currentTarget.setPointerCapture(e.pointerId) } catch { /* pointer already released */ }
-      const rect = svRef.current?.getBoundingClientRect()
-      if (!rect) return
+  const formattedValue = useCallback(() => {
+    if (view === 'hex') return toHex(rgb, a, showAlpha)
+    if (view === 'rgb') return `${showAlpha ? 'rgba(' : 'rgb('}${to255(r)}, ${to255(g)}, ${to255(b)}${showAlpha ? `, ${a.toFixed(2)}` : ''})`
+    if (view === 'hsb') return `hsb(${Math.round(hsv.h)}, ${Math.round(hsv.s * 100)}%, ${Math.round(hsv.v * 100)}%${showAlpha ? `, ${a.toFixed(2)}` : ''})`
+    const hsl = hsvToHsl(hsv.h, hsv.s, hsv.v)
+    return `hsl(${Math.round(hsl.h)}, ${Math.round(hsl.s * 100)}%, ${Math.round(hsl.l * 100)}%${showAlpha ? `, ${a.toFixed(2)}` : ''})`
+  }, [view, rgb, a, r, g, b, hsv, showAlpha])
+  const copyValue = useCallback(() => {
+    const text = formattedValue()
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).catch(() => {})
+  }, [formattedValue])
 
-      const update = (clientX: number, clientY: number) => {
-        const s = clamp01((clientX - rect.left) / rect.width)
-        const v = clamp01(1 - (clientY - rect.top) / rect.height)
-        const next = { ...hsv, s, v }
-        setHsv(next)
-        emit(next, a)
-      }
-      update(e.clientX, e.clientY)
+  const hasEyeDropper = typeof window !== 'undefined' && 'EyeDropper' in window
+  const alphaTrackStyle: React.CSSProperties = {
+    backgroundImage: `linear-gradient(to right,${rgbaCss(r, g, b, 0)},${rgbaCss(r, g, b, 1)}),` + CHECKER,
+    backgroundSize: '100% 100%,8px 8px,8px 8px,8px 8px,8px 8px',
+    backgroundPosition: '0 0,0 0,0 4px,4px -4px,-4px 0',
+    backgroundRepeat: 'no-repeat,repeat,repeat,repeat,repeat',
+  }
 
-      const onMove = (ev: PointerEvent) => update(ev.clientX, ev.clientY)
-      const onUp = () => {
-        window.removeEventListener('pointermove', onMove)
-        window.removeEventListener('pointerup', onUp)
-        window.removeEventListener('pointercancel', onUp)
-      }
-      window.addEventListener('pointermove', onMove)
-      window.addEventListener('pointerup', onUp)
-      window.addEventListener('pointercancel', onUp)
-    },
-    [hsv, a, emit]
-  )
-
-  const handleHueChange = useCallback(
-    (h: number) => {
-      const next = { ...hsv, h }
-      setHsv(next)
-      emit(next, a)
-    },
-    [hsv, a, emit]
-  )
-
-  const handleAlphaChange = useCallback(
-    (newA: number) => {
-      emit(hsv, newA)
-    },
-    [hsv, emit]
-  )
-
-  const [r, g, b] = hsvToRgb(hsv)
-
-  const panelContent = (
+  // ── body per view ──
+  const body = view === 'hex' ? (
     <>
-      {/* Saturation/Value area — width overridden to fill the panel at runtime
-          (the DB/Figma mock's fixed 180px is a static preview dimension). */}
-      <div
-        ref={svRef}
-        className={cn(ds.colorPicker.svArea, 'relative w-full touch-none')}
-        style={{
-          backgroundColor: `hsl(${hsv.h}, 100%, 50%)`,
-          backgroundImage:
-            'linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent)',
-        }}
-        onPointerDown={handleSvPointer}
-      >
-        <div
-          className="absolute w-3 h-3 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(0,0,0,0.6)] -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-          style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%` }}
-        />
+      <div ref={svRef} className={ds.colorPicker.svArea} onPointerDown={onSvPointer}>
+        <div className={ds.colorPicker.svFill}
+          style={{ backgroundColor: `hsl(${hsv.h},100%,50%)`, backgroundImage: 'linear-gradient(to top,#000,transparent),linear-gradient(to right,#fff,transparent)' }} />
+        <div className={cn(ds.colorPicker.handle, 'w-[18px] h-[18px] -translate-x-1/2 -translate-y-1/2')}
+          style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%`, boxShadow: RING_SHADOW, background: rgbaCss(r, g, b, 1) }} />
       </div>
+      <TrackSlider ariaLabel="Hue" value={hsv.h / 360} onChange={(f) => commit({ ...hsv, h: f * 360 })} style={{ background: HUE_GRAD }} handleColor={rgbaCss(r, g, b, 1)} />
+      {showAlpha && <TrackSlider ariaLabel="Alpha" value={a} onChange={(f) => commit(hsv, f)} style={alphaTrackStyle} handleColor={alphaHandleFill(r, g, b, a)} />}
+      <div className={ds.colorPicker.inputRow}>
+        <input type="text" spellCheck={false} aria-label="Hex value"
+          value={hexDraft ?? toHex(rgb, a, showAlpha)}
+          onFocus={() => setHexDraft(toHex(rgb, a, showAlpha))}
+          onChange={(e) => { setHexDraft(e.target.value); const p = parseHex(e.target.value); if (p) commit(rgbToHsv(p.r, p.g, p.b), showAlpha ? p.a : 1) }}
+          onBlur={() => setHexDraft(null)}
+          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+          className={ds.colorPicker.hexInput} />
+        <div className="relative flex-none w-8 h-8 rounded-md border border-edge overflow-hidden" style={CHECKER_STYLE} aria-hidden>
+          <span className="absolute inset-0" style={{ background: rgbaCss(r, g, b, a) }} />
+        </div>
+      </div>
+    </>
+  ) : (
+    <div className={ds.colorPicker.channels}>
+      {viewKeys(view, showAlpha).map((key) => {
+        const spec = channelSpec(key, hsv)
+        const style: React.CSSProperties = spec.alpha ? alphaTrackStyle : { background: spec.track }
+        const frac = spec.alpha ? a : spec.frac
+        const disp = spec.alpha ? Math.round(a * 100) : spec.disp
+        return (
+          <div key={key} className={ds.colorPicker.channelRow}>
+            <div className={ds.colorPicker.channelHead}>
+              <span className={ds.colorPicker.channelLabel}>{spec.label}</span>
+              <input type="number" min={0} max={spec.max} value={disp} aria-label={spec.label}
+                onChange={(e) => { const n = parseFloat(e.target.value); if (isNaN(n)) return; const f = clamp01(n / spec.max); if (spec.alpha) commit(hsv, f); else commit(spec.set(f)) }}
+                className={ds.colorPicker.channelValue} />
+            </div>
+            <TrackSlider ariaLabel={spec.label} value={frac} onChange={(f) => { if (spec.alpha) commit(hsv, f); else commit(spec.set(f)) }} style={style} handleColor={spec.alpha ? alphaHandleFill(r, g, b, a) : rgbaCss(r, g, b, 1)} />
+          </div>
+        )
+      })}
+    </div>
+  )
 
-      {/* Hue slider */}
-      <GradientSlider
-        min={0}
-        max={360}
-        step={1}
-        value={hsv.h}
-        onChange={handleHueChange}
-        ariaLabel="Hue"
-        className={cn(ds.colorPicker.hueSlider, 'w-full')}
-        style={{ backgroundImage: 'linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)' }}
-      />
-
-      {/* Alpha slider — checker + color gradient stacked directly on the input
-          (same structure as the hue slider) so the thumb floats above the track
-          and is never clipped by a wrapper's overflow. Omitted when the context
-          has no use for opacity. */}
-      {showAlpha && (
-        <GradientSlider
-          min={0}
-          max={1}
-          step={0.01}
-          value={a}
-          onChange={handleAlphaChange}
-          ariaLabel="Alpha"
-          className={cn(ds.colorPicker.alphaSlider, 'w-full')}
-          style={{
-            backgroundImage:
-              `linear-gradient(to right, ${rgbaCss(r, g, b, 0)}, ${rgbaCss(r, g, b, 1)}), ` +
-              CHECKER_STYLE.backgroundImage,
-            backgroundSize: '100% 100%, 8px 8px, 8px 8px, 8px 8px, 8px 8px',
-            backgroundPosition: '0 0, 0 0, 0 4px, 4px -4px, -4px 0px',
-            backgroundRepeat: 'no-repeat, repeat, repeat, repeat, repeat',
-          }}
-        />
+  const footer = (
+    <div className={ds.colorPicker.footer}>
+      <button type="button" aria-haspopup="true" aria-expanded={menuOpen} onClick={(e) => { e.stopPropagation(); setMenuOpen((o) => !o) }}
+        className={ds.colorPicker.formTrigger}>
+        {VIEW_LABEL[view]}
+        <ChevronIcon className={cn('w-3.5 h-3.5 transition-transform', menuOpen && 'rotate-180')} />
+      </button>
+      <div className="flex gap-xs">
+        {hasEyeDropper && <IconButton icon="pipette" onClick={eyeDropper} aria-label="Pick color from screen" title="Pick from screen" />}
+        <IconButton icon="copy" onClick={copyValue} aria-label="Copy value" title="Copy value" />
+      </div>
+      {menuOpen && (
+        <div className={ds.colorPicker.menu}>
+          {VIEW_ORDER.map((o) => {
+            const sel = o.v === view
+            return (
+              <button key={o.v} type="button" aria-selected={sel} onClick={(e) => { e.stopPropagation(); setView(o.v); setMenuOpen(false) }}
+                className={cn(ds.colorPicker.menuItem, sel ? ds.colorPicker.menuItemActive : ds.colorPicker.menuItemIdle)}>
+                {o.label}
+                <CheckIcon className={cn('w-[15px] h-[15px]', !sel && 'invisible')} />
+              </button>
+            )
+          })}
+        </div>
       )}
+    </div>
+  )
 
-      <div className="flex flex-row items-center justify-between text-param text-fg-subtle">
-        <span>{showAlpha ? 'RGBA' : 'RGB'}</span>
-        <span className={ds.colorPicker.readout}>
-          {Math.round(r * 255)}, {Math.round(g * 255)}, {Math.round(b * 255)}{showAlpha ? `, ${a.toFixed(2)}` : ''}
-        </span>
-      </div>
+  const panelInner = (
+    <>
+      <div className={ds.colorPicker.body}>{body}</div>
+      {footer}
     </>
   )
 
   return (
-    <div ref={rootRef} className={cn(ds.colorPicker.root, 'relative nodrag nowheel', className)}>
-      {label && <label className={ds.colorPicker.label}>{label}</label>}
+    <div ref={rootRef} className={cn('relative nodrag nowheel', inline ? 'w-full' : 'w-fit', className)}>
+      {label && <label className="text-param text-fg-subtle">{label}</label>}
 
-      {!inline && (
-        <button
-          ref={triggerRef}
-          type="button"
-          className={cn(ds.colorPicker.swatch, 'relative overflow-hidden block')}
-          style={CHECKER_STYLE}
-          onClick={() => (open ? setOpen(false) : openPopover())}
-          aria-label={label ?? 'Color'}
-        >
-          <span className="absolute inset-0" style={{ backgroundColor: rgbaCss(r, g, b, a) }} />
-        </button>
+      {inline ? (
+        <div className={cn(ds.colorPicker.body, 'w-full')}>{panelInner}</div>
+      ) : (
+        <ColorSwatch ref={triggerRef} value={[r, g, b, a]} icon={triggerIcon}
+          onClick={() => (open ? setOpen(false) : openPopover())} aria-label={label ?? 'Color'} />
       )}
 
-      {inline && (
-        // Inline (node body / properties panel): the picker already sits inside
-        // a surface, so drop the panel's own fill/border/padding to avoid a
-        // redundant card-on-card — keep only the vertical layout + gap.
-        <div className={cn(ds.colorPicker.panel, 'flex flex-col gap-sm w-full bg-transparent border-0 p-0 overflow-visible')}>
-          {panelContent}
-        </div>
+      {!inline && open && pos && createPortal(
+        <div ref={popoverRef} className={cn(ds.colorPicker.panel, 'fixed z-[1000]')}
+          style={{ top: pos.top, left: pos.left }} onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
+          {panelInner}
+        </div>,
+        document.body,
       )}
-
-      {!inline &&
-        open &&
-        pos &&
-        createPortal(
-          <div
-            ref={popoverRef}
-            data-color-popover=""
-            className={cn(PANEL_BASE, 'fixed z-[1000] w-[180px] shadow-lg')}
-            style={{ top: pos.top, left: pos.left }}
-            onPointerDown={(e) => e.stopPropagation()}
-            onWheel={(e) => e.stopPropagation()}
-          >
-            {panelContent}
-          </div>,
-          document.body
-        )}
     </div>
   )
 }

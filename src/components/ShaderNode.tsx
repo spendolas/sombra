@@ -294,6 +294,8 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
 
   // color_constant: resolve the `color` param as an RGBA tuple for the
   // inline picker below (pad legacy 3-tuple saves with a=1).
+  // The picker keeps a stable value internally (its resync effect keys on the
+  // numeric value, not this array's identity), so a fresh array here is fine.
   const colorConstantValue: Rgba | null = (() => {
     if (definition.type !== 'color_constant') return null
     const colorParamDef = allParams.find((p) => p.id === 'color')
