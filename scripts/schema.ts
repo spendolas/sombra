@@ -70,6 +70,20 @@ const SizeEntry = z.object({
   tailwind: z.array(TailwindRef),
 })
 
+/**
+ * Strokes mirror sizes (Figma "Strokes" collection, FLOAT vars, cssVar + px
+ * value). Array tailwind refs, same as sizes — empty when no clean Tailwind
+ * utility exists (e.g. stroke-width has no arbitrary-key scale like radius).
+ * Optional at the top level so older DBs without this category still validate.
+ */
+const StrokeEntry = z.object({
+  figmaName: z.string(),
+  cssVar: z.string(),
+  value: z.number(),
+  unit: z.literal('px'),
+  tailwind: z.array(TailwindRef),
+})
+
 const TextStyleEntry = z.object({
   figmaName: z.string(),
   utility: z.string(),
@@ -195,6 +209,7 @@ export const SombraDB = z.object({
   spacing: z.record(z.string(), SpacingEntry),
   radius: z.record(z.string(), RadiusEntry),
   sizes: z.record(z.string(), SizeEntry),
+  strokes: z.record(z.string(), StrokeEntry).optional(),
   computed: z.record(z.string(), z.unknown()),
   textStyles: z.record(z.string(), TextStyleEntry),
   components: z.record(z.string(), ComponentEntry),
@@ -232,6 +247,7 @@ if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith
     console.log(`  spacing:        ${Object.keys(db.spacing).length}`)
     console.log(`  radius:         ${Object.keys(db.radius).length}`)
     console.log(`  sizes:          ${Object.keys(db.sizes).length}`)
+    console.log(`  strokes:        ${Object.keys(db.strokes ?? {}).length}`)
     console.log(`  textStyles:     ${Object.keys(db.textStyles).length}`)
     console.log(`  components:     ${Object.keys(db.components).length}`)
     console.log(`  nodeTemplates:  ${Object.keys(db.nodeTemplates).length}`)
