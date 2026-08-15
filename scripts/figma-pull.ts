@@ -65,6 +65,7 @@ interface DB {
   spacing: Record<string, { figmaName: string; cssVar: string; value: number; unit: string; tailwind: { namespace: string; key: string } }>
   radius: Record<string, { figmaName: string; value: number; unit: string; tailwind: { namespace: string; key: string } }>
   sizes: Record<string, { figmaName: string; cssVar: string; value: number; unit: string; tailwind: Array<{ namespace: string; key: string }> }>
+  strokes?: Record<string, { figmaName: string; cssVar: string; value: number; unit: string; tailwind: Array<{ namespace: string; key: string }> }>
   textStyles: Record<string, { figmaName: string; utility: string; properties: Record<string, string | number> }>
   [key: string]: unknown
 }
@@ -169,6 +170,7 @@ async function fetchViaGrip(fileKey: string): Promise<GripFetchResult> {
 
 async function main() {
   const db: DB = JSON.parse(readFileSync(DB_PATH, 'utf-8'))
+  if (!db.strokes) db.strokes = {}
   const fileKey = db.figmaFileKey
 
   console.log(`Figma file: ${fileKey} — source: ${useGrip ? 'Grip bridge (Plugin API)' : 'REST API'}`)
@@ -341,6 +343,22 @@ async function main() {
       } else {
         changes.push({ type: 'new', section: 'sizes', name: variable.name, after: `${figmaValue}px` })
         console.log(`  + NEW: sizes/${variable.name} (${varId}) — needs manual DB entry`)
+      }
+    }
+
+    if (variable.collection === 'Strokes' && variable.type === 'FLOAT') {
+      const figmaValue = Number(rawValue)
+      if (db.strokes![varId]) {
+        if (db.strokes![varId].value !== figmaValue) {
+          changes.push({
+            type: 'update', section: 'strokes', name: db.strokes![varId].figmaName,
+            before: `${db.strokes![varId].value}px`, after: `${figmaValue}px`
+          })
+          db.strokes![varId].value = figmaValue
+        }
+      } else {
+        changes.push({ type: 'new', section: 'strokes', name: variable.name, after: `${figmaValue}px` })
+        console.log(`  + NEW: strokes/${variable.name} (${varId}) — needs manual DB entry`)
       }
     }
   }

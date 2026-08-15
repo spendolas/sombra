@@ -481,6 +481,15 @@
       ]
     }
   },
+  "strokes": {
+    "VariableID:868:3057": {
+      "figmaName": "icon",
+      "cssVar": "--stroke-icon",
+      "value": 1.5,
+      "unit": "px",
+      "tailwind": []
+    }
+  },
   "computed": {},
   "textStyles": {
     "S:ae1da69bb6e4f63f683fb1463dfc6bac4c6a9c33,": {
