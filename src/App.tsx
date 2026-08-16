@@ -11,6 +11,7 @@ import { useGraphStore } from './stores/graphStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { useCompilerStore } from './stores/compilerStore'
 import { usePreviewStore } from './stores/previewStore'
+import { useRendererStore } from './stores/rendererStore'
 import { createDefaultGraph } from './utils/test-graph'
 import { nodeRegistry } from './nodes/registry'
 import { ShaderNode } from './components/ShaderNode'
@@ -145,6 +146,13 @@ function App() {
   const splitPct = useSettingsStore((s) => splitDirection === 'vertical' ? s.verticalSplitPct : s.horizontalSplitPct)
   const setSplitPct = useSettingsStore((s) => s.setSplitPct)
   const splitSwapped = useSettingsStore((s) => splitDirection === 'vertical' ? s.verticalSplitSwapped : s.horizontalSplitSwapped)
+  const previewBackground = useSettingsStore((s) => s.previewBackground)
+
+  // Push preview-background changes to the renderer: checker/solid → opaque
+  // canvas painting the bg in; see-through → transparent canvas. No-op on WebGL2.
+  useEffect(() => {
+    rendererRef.current?.setBackgroundComposite?.(previewBackground)
+  }, [previewBackground])
 
   // Command palette state (ephemeral UI — not persisted)
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
@@ -225,6 +233,16 @@ function App() {
       if (disposed) { r.dispose(); return }
       renderer = r
       rendererRef.current = r
+
+      // Record AMD (WebGPU only) so the editor can warn before see-through, the
+      // one mode that keeps a transparent canvas (which flickers on AMD/Metal).
+      useRendererStore.getState().setIsAmd(
+        r.backend === 'webgpu' && (r as unknown as { isAmd?: boolean }).isAmd === true,
+      )
+
+      // Seed the background composite: checker/solid paint into the (opaque)
+      // canvas; see-through keeps it transparent. No-op on WebGL2 fallback.
+      r.setBackgroundComposite?.(useSettingsStore.getState().previewBackground)
 
       // Expose the renderer on the dev bridge (`.backend` plus full instance
       // for automation — e.g. exercising device-loss recovery)

@@ -49,6 +49,57 @@ interface PassState {
   resolution?: number
 }
 
+/** Premultiplied source-over blend, baked into every canvas (final-pass)
+ *  pipeline unconditionally. Over an opaque cleared background (checker/solid
+ *  modes) it composites the premultiplied shader; over a transparent clear
+ *  (see-through) it is mathematically identity (src.rgb·1 + 0·(1−a) = src.rgb),
+ *  so see-through stays pixel-identical to a plain transparent canvas. Because
+ *  the blend is constant, flipping background mode never rebuilds a pipeline —
+ *  only the context alphaMode + the clear/checker change. */
+const PREMULT_OVER: GPUBlendState = {
+  color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+  alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
+}
+/** App surface colour (#0f0f1a) — opaque clear fallback. */
+const SURFACE_RGB = { r: 0x0f / 255, g: 0x0f / 255, b: 0x1a / 255 }
+/** Checker base colour (#2d2d44, surface-elevated) — cleared behind the drawn checker. */
+const CHECKER_RGB = { r: 0x2d / 255, g: 0x2d / 255, b: 0x44 / 255 }
+
+/** Procedural transparency checker, drawn opaque behind the shader in checker
+ *  mode (the canvas is opaque then). Matches the DOM PreviewBackdrop exactly —
+ *  surface-elevated #2d2d44 base + fg-muted #5a5a6e squares — and its 10 CSS-px
+ *  tile: `squarePx` is 10·dpr device px, so the checker is dpr-invariant and
+ *  identical to the CSS backdrop the WebGL2 fallback still paints. */
+const CHECKER_WGSL = `
+struct CheckerU { squarePx: f32, _pad0: f32, _pad1: f32, _pad2: f32 };
+@group(0) @binding(0) var<uniform> cu: CheckerU;
+@vertex fn vs_main(@location(0) pos: vec2f) -> @builtin(position) vec4f {
+  return vec4f(pos, 0.0, 1.0);
+}
+@fragment fn fs_main(@builtin(position) fc: vec4f) -> @location(0) vec4f {
+  let sq = max(cu.squarePx, 1.0);
+  let cx = floor(fc.x / sq);
+  let cy = floor(fc.y / sq);
+  let s = (cx + cy) - 2.0 * floor((cx + cy) * 0.5);
+  let base = vec3f(0.176, 0.176, 0.267);
+  let alt  = vec3f(0.353, 0.353, 0.431);
+  return vec4f(select(base, alt, s > 0.5), 1.0);
+}`
+
+/** Parse #rgb / #rrggbb / rgb()/rgba() to 0–1 RGB. Returns null on unknown format. */
+function parseCssRgb(css: string): { r: number; g: number; b: number } | null {
+  const s = css.trim()
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(s)
+  if (hex) {
+    let h = hex[1]
+    if (h.length === 3) h = h.split('').map((c) => c + c).join('')
+    return { r: parseInt(h.slice(0, 2), 16) / 255, g: parseInt(h.slice(2, 4), 16) / 255, b: parseInt(h.slice(4, 6), 16) / 255 }
+  }
+  const rgb = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i.exec(s)
+  if (rgb) return { r: +rgb[1] / 255, g: +rgb[2] / 255, b: +rgb[3] / 255 }
+  return null
+}
+
 // ---------------------------------------------------------------------------
 // Renderer
 // ---------------------------------------------------------------------------
@@ -64,6 +115,11 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
 
   /** Expose the GPUDevice for sharing with the preview renderer. */
   getDevice(): GPUDevice { return this.device }
+
+  /** True on AMD GPUs, where a transparent (premultiplied) canvas composited
+   *  over the page flickers under macOS/Chrome. The editor reads this to gate
+   *  the see-through warning. */
+  get isAmd(): boolean { return this.vendor === 'amd' }
 
   /** Expose uploaded image textures so the preview renderer can bind them too. */
   getImageTexture(samplerName: string): { texture: GPUTexture; sampler: GPUSampler } | null {
@@ -124,6 +180,23 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
   private currentDprScale = 1.0
   private lastAnimationSpeed = 1.0
 
+  // Background compositing (editor preview only). setBackgroundComposite() is
+  // called with the current preview background mode:
+  //   checker / solid → opaque canvas, background painted INTO the canvas, so
+  //     the browser never does transparent compositing over the page (which
+  //     flickers on AMD/Metal — see the preview-banding findings doc).
+  //   see-through ('none') → transparent (premultiplied) canvas; the UI shows
+  //     through. On AMD this flickers (informed + accepted; the editor shows a
+  //     warning). Embeds/viewer never call this → they stay premultiplied.
+  private opaqueBackground = false
+  private compositeBg = SURFACE_RGB
+  private compositeChecker = false
+  private checkerPipeline: GPURenderPipeline | null = null
+  private checkerUniformBuffer: GPUBuffer | null = null
+  private checkerBindGroup: GPUBindGroup | null = null
+  /** adapter.info.vendor, lowercased ('amd' | 'apple' | 'intel' | …). '' if unavailable. */
+  private vendor = ''
+
   /** Fixed reference size for DPR-independent UV scaling (shared constant). */
   private static readonly REFERENCE_SIZE = SHARED_REFERENCE_SIZE
 
@@ -137,7 +210,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
   // Lifecycle
   // -----------------------------------------------------------------------
 
-  private contextConfigured = false
+  private configuredAlphaMode: GPUCanvasAlphaMode | null = null
 
   async init(canvas: HTMLCanvasElement): Promise<void> {
     this.canvas = canvas
@@ -145,6 +218,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     const adapter = await navigator.gpu.requestAdapter()
     if (!adapter) throw new Error('WebGPU not supported — no adapter')
     this.adapter = adapter
+    this.vendor = (adapter.info?.vendor ?? '').toLowerCase()
 
     this.device = await adapter.requestDevice()
     this.canvasFormat = navigator.gpu.getPreferredCanvasFormat()
@@ -166,15 +240,18 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     this.resizeObserver.observe(canvas)
   }
 
-  /** Configure the canvas context on first use. */
+  /** Configure (or reconfigure) the canvas context. alphaMode tracks the current
+   *  background mode — opaque for checker/solid, premultiplied for see-through.
+   *  Called every render; reconfigures only when the mode actually flips. */
   private ensureContextConfigured(): void {
-    if (this.contextConfigured) return
+    const want: GPUCanvasAlphaMode = this.opaqueBackground ? 'opaque' : 'premultiplied'
+    if (this.configuredAlphaMode === want) return
     this.context.configure({
       device: this.device,
       format: this.canvasFormat,
-      alphaMode: 'premultiplied',
+      alphaMode: want,
     })
-    this.contextConfigured = true
+    this.configuredAlphaMode = want
   }
 
   onDeviceLost(callback: () => void): void {
@@ -236,11 +313,9 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
       this.adapter.requestDevice().then((device: GPUDevice) => {
         this.device = device
 
-        this.context.configure({
-          device: this.device,
-          format: this.canvasFormat,
-          alphaMode: 'premultiplied',
-        })
+        // Fresh device: force a reconfigure at the current mode's alphaMode.
+        this.configuredAlphaMode = null
+        this.ensureContextConfigured()
 
         this.setupFullscreenQuad()
         this.setupDeviceLostHandler()
@@ -248,6 +323,9 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
         // Clear caches — old GPU objects are invalid
         this.pipelineCache.clear()
         this.pipeline = null
+        this.checkerPipeline = null
+        this.checkerUniformBuffer = null
+        this.checkerBindGroup = null
         this.uniformBindGroup = null
         this.textureBindGroup = null
         this.uniformBuffer = null
@@ -323,7 +401,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
         fragment: {
           module: shaderModule,
           entryPoint: 'fs_main',
-          targets: [{ format: this.canvasFormat }],
+          targets: [{ format: this.canvasFormat, blend: PREMULT_OVER }],
         },
         primitive: { topology: 'triangle-list' },
       })
@@ -381,7 +459,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
           fragment: {
             module: shaderModule,
             entryPoint: 'fs_main',
-            targets: [{ format: isLastPass ? this.canvasFormat : 'rgba8unorm' }],
+            targets: [{ format: isLastPass ? this.canvasFormat : 'rgba8unorm', blend: isLastPass ? PREMULT_OVER : undefined }],
           },
           primitive: { topology: 'triangle-list' },
         })
@@ -903,10 +981,11 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
         view: currentTexture.createView(),
         loadOp: 'clear',
         storeOp: 'store',
-        clearValue: { r: 0, g: 0, b: 0, a: 0 },
+        clearValue: this.opaqueBackground ? { ...this.compositeBg, a: 1 } : { r: 0, g: 0, b: 0, a: 0 },
       }],
     })
 
+    if (this.opaqueBackground && this.compositeChecker) this.drawChecker(pass, dpr)
     pass.setPipeline(this.pipeline)
     pass.setBindGroup(0, this.uniformBindGroup)
     if (this.textureBindGroup) {
@@ -948,10 +1027,11 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
           view: targetView,
           loadOp: 'clear',
           storeOp: 'store',
-          clearValue: { r: 0, g: 0, b: 0, a: 0 },
+          clearValue: (isLastPass && this.opaqueBackground) ? { ...this.compositeBg, a: 1 } : { r: 0, g: 0, b: 0, a: 0 },
         }],
       })
 
+      if (isLastPass && this.opaqueBackground && this.compositeChecker) this.drawChecker(pass, dpr)
       pass.setPipeline(ps.pipeline)
       pass.setBindGroup(0, ps.uniformBindGroup!)
       if (ps.textureBindGroup) {
@@ -1017,6 +1097,61 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
   setAnchor(anchor: [number, number]): void {
     this.anchor = anchor
     this.requestRender()
+  }
+
+  /** Editor-only: set the preview background mode. checker/solid make the canvas
+   *  opaque and paint the background into it (no transparent compositing over the
+   *  page → no AMD flicker); see-through ('none') keeps the canvas transparent so
+   *  the UI shows through. The alphaMode flip is applied on the next render.
+   *  Embeds/viewer never call this and stay transparent (premultiplied). */
+  setBackgroundComposite(bg: { mode: 'checker' | 'solid' | 'none'; color: string } | null): void {
+    if (!bg) return
+    this.opaqueBackground = bg.mode !== 'none'
+    this.compositeChecker = bg.mode === 'checker'
+    if (bg.mode === 'solid') this.compositeBg = parseCssRgb(bg.color) ?? SURFACE_RGB
+    else if (bg.mode === 'checker') this.compositeBg = CHECKER_RGB
+    else this.compositeBg = SURFACE_RGB
+    // Apply the alphaMode flip now rather than waiting for the next render — the
+    // reconfigure is deterministic and avoids a one-frame frame at the wrong
+    // alphaMode. Safe: only the live renderer receives this call (the disposed
+    // StrictMode twin is never wired up), and the context exists post-init.
+    if (this.context) this.ensureContextConfigured()
+    this.requestRender()
+  }
+
+  /** Draw the opaque transparency checker (checker mode) behind the shader. The
+   *  square size is 10·dpr device px, so the tile matches the CSS PreviewBackdrop
+   *  on every display. Nulled resources rebuild lazily after device loss. */
+  private drawChecker(pass: GPURenderPassEncoder, dpr: number): void {
+    const pipeline = this.ensureCheckerPipeline()
+    this.device.queue.writeBuffer(this.checkerUniformBuffer!, 0, new Float32Array([10 * dpr, 0, 0, 0]))
+    pass.setPipeline(pipeline)
+    pass.setBindGroup(0, this.checkerBindGroup!)
+    pass.setVertexBuffer(0, this.quadBuffer)
+    pass.draw(6)
+  }
+
+  /** Lazily build the checker-fill pipeline (opaque, no blend) plus its
+   *  squarePx uniform + bind group. Nulled on device loss so it rebuilds. */
+  private ensureCheckerPipeline(): GPURenderPipeline {
+    if (!this.checkerPipeline) {
+      const module = this.device.createShaderModule({ code: CHECKER_WGSL })
+      this.checkerPipeline = this.device.createRenderPipeline({
+        layout: 'auto',
+        vertex: { module, entryPoint: 'vs_main', buffers: [VERTEX_BUFFER_LAYOUT] },
+        fragment: { module, entryPoint: 'fs_main', targets: [{ format: this.canvasFormat }] },
+        primitive: { topology: 'triangle-list' },
+      })
+      this.checkerUniformBuffer = this.device.createBuffer({
+        size: 16,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      })
+      this.checkerBindGroup = this.device.createBindGroup({
+        layout: this.checkerPipeline.getBindGroupLayout(0),
+        entries: [{ binding: 0, resource: { buffer: this.checkerUniformBuffer } }],
+      })
+    }
+    return this.checkerPipeline
   }
 
   private applyTier(): void {

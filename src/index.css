@@ -33,6 +33,7 @@
   --overlay-scrim: #000000;
 
   --error: #ef4444;
+  --warning: #fbbf24;
 
   --highlight: rgba(99, 102, 241, 0.15);
   --hover: rgba(255, 255, 255, 0.06);
@@ -199,6 +200,7 @@ html, body, #root {
   --color-indigo-active: var(--indigo-active);
   --color-overlay-scrim: var(--overlay-scrim);
   --color-error: var(--error);
+  --color-warning: var(--warning);
   --color-highlight: var(--highlight);
   --color-hover: var(--hover);
   --color-active: var(--active);
