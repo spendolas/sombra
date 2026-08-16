@@ -67,6 +67,13 @@ export interface ShaderRenderer {
   /** Set the 9-point anchor for coordinate origin. */
   setAnchor(anchor: [number, number]): void
 
+  /** Editor-only, optional: set the preview background mode. checker/solid make
+   *  the canvas opaque and paint the background into it (so the browser never
+   *  composites a transparent canvas over the page — which flickers on AMD/Metal);
+   *  see-through ('none') keeps it transparent. WebGL2 fallback omits this and
+   *  relies on the DOM PreviewBackdrop instead. */
+  setBackgroundComposite?(bg: { mode: 'checker' | 'solid' | 'none'; color: string } | null): void
+
   /** Notify of a change (triggers snap-to-static DPR for quality snapshot). */
   notifyChange(): void
 
