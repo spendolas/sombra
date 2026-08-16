@@ -161,11 +161,14 @@ export function RgbaColorPicker({ value, onChange, mode = 'popover', showAlpha =
   const [open, setOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [hexDraft, setHexDraft] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   const svRef = useRef<HTMLDivElement>(null)
+  const colorInputRef = useRef<HTMLInputElement>(null)
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastEmitted = useRef<Rgba>(value)
 
   const a = showAlpha ? value[3] : 1
@@ -233,10 +236,22 @@ export function RgbaColorPicker({ value, onChange, mode = 'popover', showAlpha =
     window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up)
   }, [hsv, commit])
 
-  const eyeDropper = useCallback(() => {
+  // Pick a colour from the screen. EyeDropper is a pure screen-pick but is
+  // Chromium-only. Elsewhere (Safari 16+, Firefox) drive the hidden native
+  // <input type="color"> via showPicker(): it opens the OS colour panel, which on
+  // macOS carries its own system eyedropper (the magnifier). Either way alpha is
+  // kept. NB the input stays pointer-events-none — Safari won't shrink a color
+  // input below its intrinsic size, so an interactive overlay bleeds onto the
+  // neighbouring button; letting the button drive showPicker() avoids that.
+  const pickFromScreen = useCallback(() => {
     const ED = (window as unknown as { EyeDropper?: new () => { open: () => Promise<{ sRGBHex: string }> } }).EyeDropper
-    if (!ED) return
-    new ED().open().then((res) => { const p = parseHex(res.sRGBHex); if (p) commit(rgbToHsv(p.r, p.g, p.b)) }).catch(() => { /* cancelled */ })
+    if (ED) {
+      new ED().open().then((res) => { const p = parseHex(res.sRGBHex); if (p) commit(rgbToHsv(p.r, p.g, p.b)) }).catch(() => { /* cancelled */ })
+      return
+    }
+    const el = colorInputRef.current
+    if (!el) return
+    try { el.showPicker() } catch { el.click() }
   }, [commit])
 
   const formattedValue = useCallback(() => {
@@ -248,10 +263,20 @@ export function RgbaColorPicker({ value, onChange, mode = 'popover', showAlpha =
   }, [view, rgb, a, r, g, b, hsv, showAlpha])
   const copyValue = useCallback(() => {
     const text = formattedValue()
-    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).catch(() => {})
+    if (!navigator.clipboard?.writeText) return
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      if (copiedTimer.current) clearTimeout(copiedTimer.current)
+      copiedTimer.current = setTimeout(() => setCopied(false), 1400)
+    }).catch(() => {})
   }, [formattedValue])
+  useEffect(() => () => { if (copiedTimer.current) clearTimeout(copiedTimer.current) }, [])
 
   const hasEyeDropper = typeof window !== 'undefined' && 'EyeDropper' in window
+  // showPicker() lets non-Chromium browsers open the native OS colour panel.
+  const hasColorInputPicker = typeof HTMLInputElement !== 'undefined' && 'showPicker' in HTMLInputElement.prototype
+  const canPickFromScreen = hasEyeDropper || hasColorInputPicker
+  const pickTitle = hasEyeDropper ? 'Pick from screen' : 'Pick from screen (system colour picker)'
   const alphaTrackStyle: React.CSSProperties = {
     backgroundImage: `linear-gradient(to right,${rgbaCss(r, g, b, 0)},${rgbaCss(r, g, b, 1)}),` + CHECKER,
     backgroundSize: '100% 100%,8px 8px,8px 8px,8px 8px,8px 8px',
@@ -313,8 +338,28 @@ export function RgbaColorPicker({ value, onChange, mode = 'popover', showAlpha =
         <ChevronIcon className={cn('w-3.5 h-3.5 transition-transform', menuOpen && 'rotate-180')} />
       </button>
       <div className="flex gap-xs">
-        {hasEyeDropper && <IconButton icon="pipette" onClick={eyeDropper} aria-label="Pick color from screen" title="Pick from screen" />}
-        <IconButton icon="copy" onClick={copyValue} aria-label="Copy value" title="Copy value" />
+        {canPickFromScreen && (
+          <span className="relative inline-flex">
+            <IconButton icon="pipette" onClick={pickFromScreen} aria-label="Pick color from screen" title={pickTitle} />
+            {/* Safari/Firefox fallback: hidden native colour input the button drives
+                via showPicker(). inset-0 so the popover anchors near the swatch, but
+                pointer-events-none so it never intercepts clicks meant for other
+                buttons (Safari won't shrink it below its intrinsic size). #rrggbb
+                only → alpha preserved via commit. */}
+            {!hasEyeDropper && hasColorInputPicker && (
+              <input
+                ref={colorInputRef}
+                type="color"
+                value={toHex(rgb, 1, false).toLowerCase()}
+                onChange={(e) => { const p = parseHex(e.target.value); if (p) commit(rgbToHsv(p.r, p.g, p.b)) }}
+                aria-hidden
+                tabIndex={-1}
+                className="absolute inset-0 opacity-0 pointer-events-none"
+              />
+            )}
+          </span>
+        )}
+        <IconButton icon={copied ? 'check' : 'copy'} iconClassName={copied ? 'text-success' : undefined} onClick={copyValue} aria-label="Copy value" title={copied ? 'Copied' : 'Copy value'} />
       </div>
       {menuOpen && (
         <div className={ds.colorPicker.menu}>

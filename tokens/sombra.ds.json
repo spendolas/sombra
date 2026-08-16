@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "lastSync": "2026-07-13T00:36:05.505Z",
+  "lastSync": "2026-08-16T22:26:44.695Z",
   "figmaFileKey": "gq5i0l617YkXy0GzAZPtqz",
   "colors": {
     "VariableID:106:3": {
@@ -154,6 +154,15 @@
       "tailwind": {
         "namespace": "color",
         "key": "warning"
+      }
+    },
+    "VariableID:886:377": {
+      "figmaName": "color/success",
+      "cssVar": "--success",
+      "value": "#4ade80",
+      "tailwind": {
+        "namespace": "color",
+        "key": "success"
       }
     },
     "VariableID:576:987": {
@@ -620,10 +629,6 @@
           "figmaNodeId": "106:405",
           "layout": "vertical",
           "fill": "surface/elevated",
-          "stroke": {
-            "color": "edge/card",
-            "weight": 1
-          },
           "radius": "md",
           "position": "relative",
           "hover": {
@@ -1506,10 +1511,6 @@
         "root": {
           "figmaNodeId": "111:963",
           "fill": "surface/alt",
-          "stroke": {
-            "color": "edge/subtle",
-            "weight": 1
-          },
           "radius": "md",
           "overflow": "hidden"
         }

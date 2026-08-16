@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils'
 function NodesCard() {
   return (
     <div
-      className="max-h-full bg-surface-alt rounded-xl border border-edge-card shadow-2xl overflow-hidden flex flex-col"
+      className="max-h-full bg-surface-alt rounded-xl shadow-2xl overflow-hidden flex flex-col"
       style={{ width: NODES_CARD_WIDTH }}
     >
       <div className="shrink-0 flex items-center px-xl pt-lg pb-sm">

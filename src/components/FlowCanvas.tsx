@@ -2,7 +2,7 @@
  * FlowCanvas - React Flow canvas with drag-and-drop support
  */
 
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { ReactFlow, Background, MiniMap, useReactFlow } from '@xyflow/react'
 import type { Node, Edge, NodeTypes, OnNodesChange, OnEdgesChange, OnReconnect, Connection, IsValidConnection } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
@@ -37,11 +37,38 @@ export function FlowCanvas({
   onConnect,
   onAddNode,
 }: FlowCanvasProps) {
-  const { screenToFlowPosition, fitView } = useReactFlow()
+  const { screenToFlowPosition, fitView, getViewport, setViewport } = useReactFlow()
 
   const onInit = useCallback(() => {
     setTimeout(() => fitView({ padding: getFitViewPadding(useSettingsStore.getState().nodesPanelOpen), duration: 200 }), 50)
   }, [fitView])
+
+  // Keep the canvas CENTRE fixed when the flow area resizes (panel drags, preview
+  // dock, window resize). React Flow leaves the viewport transform untouched on
+  // resize, which pins content to the top-left; shifting the viewport by half the
+  // size delta re-anchors it to the centre instead. Zoom is unaffected — the delta
+  // is in screen pixels, which is exactly the viewport translation's space.
+  const wrapperRef = useRef<HTMLDivElement>(null)
+  const prevSize = useRef<{ w: number; h: number } | null>(null)
+  useEffect(() => {
+    const el = wrapperRef.current
+    if (!el) return
+    const ro = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect
+      const prev = prevSize.current
+      prevSize.current = { w: width, h: height }
+      // First callback establishes the baseline; also skip zero-size blips (a
+      // panel momentarily collapsing) so re-showing doesn't shift by a full pane.
+      if (!prev || !prev.w || !prev.h || !width || !height) return
+      const dw = width - prev.w
+      const dh = height - prev.h
+      if (dw === 0 && dh === 0) return
+      const vp = getViewport()
+      setViewport({ x: vp.x + dw / 2, y: vp.y + dh / 2, zoom: vp.zoom })
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [getViewport, setViewport])
 
   const edgeTypes = EDGE_TYPES
 
@@ -186,6 +213,7 @@ export function FlowCanvas({
   )
 
   return (
+    <div ref={wrapperRef} style={{ width: '100%', height: '100%' }}>
     <ReactFlow
       nodes={nodes}
       edges={edges}
@@ -229,5 +257,6 @@ export function FlowCanvas({
         zoomable
       />
     </ReactFlow>
+    </div>
   )
 }
