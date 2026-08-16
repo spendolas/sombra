@@ -10,7 +10,9 @@ import { nodeRegistry } from '../nodes/registry'
 import { areTypesCompatible } from '../nodes/type-coercion'
 import { useGraphStore } from '../stores/graphStore'
 import { ZoomSlider } from '@/components/zoom-slider'
-import { GraphToolbar } from '@/components/GraphToolbar'
+import { NodesPanelOverlay } from '@/components/NodesPanelOverlay'
+import { getFitViewPadding } from '@/components/nodes-panel-layout'
+import { useSettingsStore } from '@/stores/settingsStore'
 import { TypedEdge } from './TypedEdge'
 import { ds } from '@/generated/ds'
 
@@ -38,7 +40,7 @@ export function FlowCanvas({
   const { screenToFlowPosition, fitView } = useReactFlow()
 
   const onInit = useCallback(() => {
-    setTimeout(() => fitView({ padding: 0.2, duration: 200 }), 50)
+    setTimeout(() => fitView({ padding: getFitViewPadding(useSettingsStore.getState().nodesPanelOpen), duration: 200 }), 50)
   }, [fitView])
 
   const edgeTypes = EDGE_TYPES
@@ -213,7 +215,7 @@ export function FlowCanvas({
         gap={16}
         style={{ backgroundColor: 'var(--surface)' }}
       />
-      <GraphToolbar />
+      <NodesPanelOverlay />
       <ZoomSlider position="bottom-left" />
       <MiniMap
         className={ds.miniMap.root}
