@@ -70,6 +70,10 @@ transparent embed, and matches the editor's see-through behaviour.
   user's Figma mock (`AMD Warning/expanded` 878:285, `/Collapsed` 878:294).
 - AMD detection: `WebGPUShaderRenderer.isAmd` (`adapter.info.vendor === 'amd'`), surfaced
   to the UI via the runtime (non-persisted) `rendererStore`.
+- **Gated to Chromium** (`IS_CHROMIUM` in the component): the flicker is a Chromium +
+  AMD/Metal compositor bug. Safari and Firefox composite the transparent canvas cleanly
+  (confirmed: Safari shows no flicker on the same AMD box, and runs noticeably smoother),
+  so the warning would be a false positive there and is suppressed.
 
 ## Verification (on the AMD RDNA-2 machine)
 
