@@ -197,6 +197,21 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
   /** adapter.info.vendor, lowercased ('amd' | 'apple' | 'intel' | …). '' if unavailable. */
   private vendor = ''
 
+  // Output alpha probe (editor-only). After a compile / settled uniform change,
+  // the final pass is re-rendered to a tiny offscreen target with a TRANSPARENT
+  // clear (PREMULT_OVER over transparent is identity, so it preserves the shader's
+  // own alpha), read back, and the min alpha decides whether the master output has
+  // any transparency. Reported via onOutputAlpha → compilerStore.outputHasAlpha.
+  private static readonly ALPHA_PROBE_SIZE = 32
+  private static readonly ALPHA_PROBE_BYTES_PER_ROW = 256 // align(32*4, 256)
+  private static readonly ALPHA_PROBE_THROTTLE_MS = 250
+  private probeTexture: GPUTexture | null = null
+  private probeReadBuffer: GPUBuffer | null = null
+  private needsAlphaProbe = false
+  private probing = false
+  private lastAlphaProbeAt = 0
+  private outputAlphaCallback: ((hasAlpha: boolean) => void) | null = null
+
   /** Fixed reference size for DPR-independent UV scaling (shared constant). */
   private static readonly REFERENCE_SIZE = SHARED_REFERENCE_SIZE
 
@@ -258,6 +273,10 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     this.deviceLostCallback = callback
   }
 
+  onOutputAlpha(callback: (hasAlpha: boolean) => void): void {
+    this.outputAlphaCallback = callback
+  }
+
   dispose(): void {
     this.stopAnimation()
     this.resizeObserver?.disconnect()
@@ -277,6 +296,10 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     this.pipeline = null
     this.uniformBindGroup = null
     this.textureBindGroup = null
+    this.probeTexture?.destroy()
+    this.probeReadBuffer?.destroy()
+    this.probeTexture = null
+    this.probeReadBuffer = null
 
     // Release the GPUDevice itself — browsers cap devices per page, and
     // StrictMode double-init would otherwise leak one per mount cycle.
@@ -326,6 +349,9 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
         this.checkerPipeline = null
         this.checkerUniformBuffer = null
         this.checkerBindGroup = null
+        this.probeTexture = null       // belonged to the dead device
+        this.probeReadBuffer = null
+        this.needsAlphaProbe = true    // re-probe on the fresh device
         this.uniformBindGroup = null
         this.textureBindGroup = null
         this.uniformBuffer = null
@@ -360,15 +386,18 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
 
     const wgslPasses = plan.wgsl.passes
 
+    let result: { success: boolean; error?: string }
     if (wgslPasses.length === 1) {
       // Single-pass fast path
       this.destroyMultiPassState()
       this.isMultiPass = false
-      return this.updateSinglePass(wgslPasses[0])
+      result = this.updateSinglePass(wgslPasses[0])
+    } else {
+      result = this.updateMultiPass(wgslPasses)
     }
-
-    // Multi-pass
-    return this.updateMultiPass(wgslPasses)
+    // A new plan can change the output's transparency — re-probe on next render.
+    if (result.success) this.needsAlphaProbe = true
+    return result
   }
 
   private updateSinglePass(wgslPass: NonNullable<RenderPlan['wgsl']>['passes'][number]): { success: boolean; error?: string } {
@@ -773,6 +802,9 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     } else {
       this.updateSinglePassUniforms(uniforms)
     }
+    // A param can drive alpha (e.g. an opacity slider), so re-probe — throttled in
+    // maybeProbeAlpha so a drag doesn't cause a readback storm.
+    this.needsAlphaProbe = true
     this.requestRender()
   }
 
@@ -967,6 +999,9 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     } else {
       this.renderSinglePass(displayWidth, displayHeight, dpr, time)
     }
+
+    // After the real frame, probe the output's alpha if pending (throttled).
+    this.maybeProbeAlpha(time)
   }
 
   private renderSinglePass(w: number, h: number, dpr: number, time: number): void {
@@ -1152,6 +1187,116 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
       })
     }
     return this.checkerPipeline
+  }
+
+  // -----------------------------------------------------------------------
+  // Output alpha probe
+  // -----------------------------------------------------------------------
+
+  /** Run a pending alpha probe (throttled) after a real frame. Fire-and-forget:
+   *  the readback resolves async and calls back with the result. */
+  private maybeProbeAlpha(time: number): void {
+    if (!this.needsAlphaProbe || this.probing || !this.outputAlphaCallback) return
+    const ready = this.isMultiPass ? this.passStates.length > 0 : !!this.pipeline
+    if (!ready) return
+    const now = Date.now()
+    if (now - this.lastAlphaProbeAt < WebGPUShaderRenderer.ALPHA_PROBE_THROTTLE_MS) return
+
+    this.needsAlphaProbe = false
+    this.lastAlphaProbeAt = now
+    this.probing = true
+    this.probeOutputAlpha(time)
+      .then((hasAlpha) => { this.outputAlphaCallback?.(hasAlpha) })
+      .catch(() => { /* device lost / mapping failed — leave last value */ })
+      .finally(() => { this.probing = false })
+  }
+
+  private ensureProbeResources(size: number): void {
+    if (!this.probeTexture) {
+      this.probeTexture = this.device.createTexture({
+        size: [size, size],
+        format: this.canvasFormat,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+      })
+    }
+    if (!this.probeReadBuffer) {
+      this.probeReadBuffer = this.device.createBuffer({
+        size: WebGPUShaderRenderer.ALPHA_PROBE_BYTES_PER_ROW * size,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      })
+    }
+  }
+
+  /**
+   * Re-render the final pass to a tiny offscreen target with a transparent clear
+   * and read back the minimum alpha. Reuses the live pipeline + bind groups; only
+   * the built-in uniforms are rewritten to the probe resolution (so auto_uv spans
+   * the whole frame) — params stay as-is. The shared uniform buffer is written per
+   * submit in queue order, so the concurrent main frames stay correct.
+   * Returns true if any sampled pixel has alpha < ~1.
+   */
+  private async probeOutputAlpha(time: number): Promise<boolean> {
+    const SIZE = WebGPUShaderRenderer.ALPHA_PROBE_SIZE
+    const bytesPerRow = WebGPUShaderRenderer.ALPHA_PROBE_BYTES_PER_ROW
+    this.ensureProbeResources(SIZE)
+    const tex = this.probeTexture
+    const buf = this.probeReadBuffer
+    if (!tex || !buf) return true
+
+    let pipeline: GPURenderPipeline | null
+    let uniformBindGroup: GPUBindGroup | null
+    let textureBindGroup: GPUBindGroup | null
+    if (this.isMultiPass) {
+      this.writeMultiPassBuiltinUniforms(SIZE, SIZE, 1, time)
+      const last = this.passStates[this.passStates.length - 1]
+      pipeline = last?.pipeline ?? null
+      uniformBindGroup = last?.uniformBindGroup ?? null
+      textureBindGroup = last?.textureBindGroup ?? null
+    } else {
+      this.writeSinglePassBuiltinUniforms(SIZE, SIZE, 1, time)
+      pipeline = this.pipeline
+      uniformBindGroup = this.uniformBindGroup
+      textureBindGroup = this.textureBindGroup
+    }
+    if (!pipeline || !uniformBindGroup) return true // can't probe → assume alpha (safe)
+
+    const encoder = this.device.createCommandEncoder()
+    const pass = encoder.beginRenderPass({
+      colorAttachments: [{
+        view: tex.createView(),
+        loadOp: 'clear',
+        storeOp: 'store',
+        clearValue: { r: 0, g: 0, b: 0, a: 0 },
+      }],
+    })
+    pass.setPipeline(pipeline)
+    pass.setBindGroup(0, uniformBindGroup)
+    if (textureBindGroup) pass.setBindGroup(1, textureBindGroup)
+    pass.setVertexBuffer(0, this.quadBuffer)
+    pass.draw(6)
+    pass.end()
+    encoder.copyTextureToBuffer(
+      { texture: tex },
+      { buffer: buf, bytesPerRow, rowsPerImage: SIZE },
+      { width: SIZE, height: SIZE },
+    )
+    this.device.queue.submit([encoder.finish()])
+
+    await buf.mapAsync(GPUMapMode.READ)
+    let minAlpha = 255
+    try {
+      const data = new Uint8Array(buf.getMappedRange())
+      for (let row = 0; row < SIZE; row++) {
+        const base = row * bytesPerRow
+        for (let col = 0; col < SIZE; col++) {
+          const a = data[base + col * 4 + 3]
+          if (a < minAlpha) minAlpha = a
+        }
+      }
+    } finally {
+      buf.unmap()
+    }
+    return minAlpha < 250 // < ~0.98 ⇒ output carries transparency
   }
 
   private applyTier(): void {

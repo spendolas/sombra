@@ -2,6 +2,7 @@ import { IconButton } from '@/components/IconButton'
 import { RgbaColorPicker, type Rgba } from '@/components/RgbaColorPicker'
 import { AmdSeeThroughWarning } from '@/components/AmdSeeThroughWarning'
 import { useSettingsStore } from '@/stores/settingsStore'
+import { useCompilerStore } from '@/stores/compilerStore'
 import { effectiveBackground, seeThroughAvailable } from '@/utils/preview-background'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
@@ -67,9 +68,14 @@ export function BackgroundModeControl({ className }: BackgroundModeControlProps)
   const previewBackground = useSettingsStore((s) => s.previewBackground)
   const setPreviewBackground = useSettingsStore((s) => s.setPreviewBackground)
   const previewMode = useSettingsStore((s) => s.previewMode)
+  const outputHasAlpha = useCompilerStore((s) => s.outputHasAlpha)
 
   const active = ds.button.ghostActive
   const inactive = ds.button.ghost
+
+  // Fully-opaque output → checker/solid/see-through are all no-ops; hide the
+  // whole switcher rather than offer a choice that does nothing.
+  if (!outputHasAlpha) return null
 
   // Highlight the mode actually in effect: see-through collapses to checker where
   // it isn't available (docked/fullwindow), and the eye button is hidden there.

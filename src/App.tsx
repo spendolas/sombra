@@ -249,6 +249,12 @@ function App() {
         useSettingsStore.getState().previewMode,
       ))
 
+      // Host the master output's alpha-presence in compilerStore (runtime signal).
+      // WebGPU probes it post-compile / on settled uniform changes; WebGL2 has no
+      // probe so it stays true (switcher shown). The background switcher hides when
+      // the output is fully opaque (checker/solid/see-through would be no-ops).
+      r.onOutputAlpha?.((hasAlpha) => useCompilerStore.getState().setOutputHasAlpha(hasAlpha))
+
       // Expose the renderer on the dev bridge (`.backend` plus full instance
       // for automation — e.g. exercising device-loss recovery)
       const sombra = (window as unknown as Record<string, unknown>).__sombra as Record<string, unknown> | undefined

@@ -31,6 +31,16 @@ interface CompilerState {
   errors: CompilationError[]
   hasErrors: boolean
 
+  /**
+   * Whether the master output (Fragment Output) has alpha < 1 anywhere — probed
+   * by the renderer after each compile / on settled uniform changes. Runtime-only
+   * (never persisted). Anything that cares about transparency polls this: the
+   * background switcher hides entirely when the output is fully opaque, since
+   * checker/solid/see-through would all be no-ops. Defaults true (show) until the
+   * first probe resolves, and stays true on backends without a probe (WebGL2).
+   */
+  outputHasAlpha: boolean
+
   // Actions
   setShaders: (vertex: string, fragment: string, wgsl?: string | null) => void
   setFragmentShader: (fragment: string) => void
@@ -40,6 +50,7 @@ interface CompilerState {
   addError: (error: CompilationError) => void
   clearErrors: () => void
   markCompileSuccess: () => void
+  setOutputHasAlpha: (hasAlpha: boolean) => void
 
   // Utility
   getErrorsForNode: (nodeId: string) => CompilationError[]
@@ -56,6 +67,7 @@ export const useCompilerStore = create<CompilerState>((set, get) => ({
   lastCompileTime: null,
   errors: [],
   hasErrors: false,
+  outputHasAlpha: true,
 
   setShaders: (vertex, fragment, wgsl) =>
     set({
@@ -97,6 +109,9 @@ export const useCompilerStore = create<CompilerState>((set, get) => ({
       errors: [],
       hasErrors: false,
     }),
+
+  setOutputHasAlpha: (outputHasAlpha) =>
+    set({ outputHasAlpha }),
 
   getErrorsForNode: (nodeId) =>
     get().errors.filter((error) => error.nodeId === nodeId),

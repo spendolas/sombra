@@ -64,6 +64,12 @@ export interface ShaderRenderer {
   /** Set the quality/performance tier. */
   setQualityTier(tier: QualityTier): void
 
+  /** Optional: register a callback fired after the renderer probes the master
+   *  output's alpha (post-compile, and on settled uniform changes). `hasAlpha` is
+   *  true when the output has alpha < 1 somewhere. Backends without a probe
+   *  (WebGL2) omit this, so consumers default to "has alpha" (switcher shown). */
+  onOutputAlpha?(callback: (hasAlpha: boolean) => void): void
+
   /** Set the 9-point anchor for coordinate origin. */
   setAnchor(anchor: [number, number]): void
 
