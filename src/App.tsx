@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import type { Connection } from '@xyflow/react'
 import type { ShaderRenderer, PreviewRenderer, QualityTier } from './renderer/types'
@@ -18,9 +18,7 @@ import { anchorToVec2 } from './nodes/output/fragment-output'
 
 // Module-level constant — prevents React Flow from remounting all nodes on re-render
 const NODE_TYPES = { shaderNode: ShaderNode } as const
-import { NodePalette } from './components/NodePalette'
 import { FlowCanvas } from './components/FlowCanvas'
-import { PropertiesPanel } from './components/PropertiesPanel'
 import { PreviewPanel } from './components/PreviewPanel'
 import { FloatingPreview } from './components/FloatingPreview'
 import { FullWindowOverlay } from './components/FullWindowOverlay'
@@ -206,11 +204,6 @@ function App() {
   )
 
   const nodeTypes = NODE_TYPES
-
-  // Find selected node for properties panel
-  const selectedNode = useMemo(() => {
-    return nodes.find((node) => node.selected) || null
-  }, [nodes])
 
   // Load default graph only when no persisted graph exists
   useEffect(() => {
@@ -570,49 +563,30 @@ function App() {
           />
         </div>
 
-        <ResizablePanelGroup direction="horizontal">
-          {/* Left — Node Palette */}
-          <ResizablePanel id="palette" defaultSize="12%" minSize="12%" maxSize="30%">
-            <div className="h-full overflow-y-auto min-w-node bg-surface-alt">
-              <NodePalette />
+        {/* Canvas + Preview split fills the window — the Nodes palette is now a
+            floaty overlay inside FlowCanvas; Properties panel was retired. */}
+        <ResizablePanelGroup direction={splitDirection} className={isDocked && splitSwapped ? (splitDirection === 'vertical' ? '!flex-col-reverse' : '!flex-row-reverse') : undefined} onLayoutChanged={(layout) => { if (layout.preview != null) setSplitPct(splitDirection, layout.preview) }}>
+          <ResizablePanel id="canvas" defaultSize={isDocked ? `${100 - splitPct}%` : '100%'} minSize="30%">
+            <div className="relative w-full h-full">
+              <FlowCanvas
+                nodes={nodes}
+                edges={edges}
+                nodeTypes={nodeTypes}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onConnect={onConnect}
+                onAddNode={addNode}
+              />
             </div>
           </ResizablePanel>
-          <ResizableHandle />
-
-          {/* Center — Canvas + Preview */}
-          <ResizablePanel id="center" defaultSize="64%">
-            <ResizablePanelGroup direction={splitDirection} className={isDocked && splitSwapped ? (splitDirection === 'vertical' ? '!flex-col-reverse' : '!flex-row-reverse') : undefined} onLayoutChanged={(layout) => { if (layout.preview != null) setSplitPct(splitDirection, layout.preview) }}>
-              <ResizablePanel id="canvas" defaultSize={isDocked ? `${100 - splitPct}%` : '100%'} minSize="30%">
-                <div className="relative w-full h-full">
-                  <FlowCanvas
-                    nodes={nodes}
-                    edges={edges}
-                    nodeTypes={nodeTypes}
-                    onNodesChange={onNodesChange}
-                    onEdgesChange={onEdgesChange}
-                    onConnect={onConnect}
-                    onAddNode={addNode}
-                  />
-                </div>
+          {isDocked && (
+            <>
+              <ResizableHandle />
+              <ResizablePanel id="preview" defaultSize={`${splitPct}%`} minSize="10%">
+                <PreviewPanel targetRef={dockTargetRef} />
               </ResizablePanel>
-              {isDocked && (
-                <>
-                  <ResizableHandle />
-                  <ResizablePanel id="preview" defaultSize={`${splitPct}%`} minSize="10%">
-                    <PreviewPanel targetRef={dockTargetRef} />
-                  </ResizablePanel>
-                </>
-              )}
-            </ResizablePanelGroup>
-          </ResizablePanel>
-          <ResizableHandle />
-
-          {/* Right — Properties */}
-          <ResizablePanel id="properties" defaultSize="12%" minSize="12%" maxSize="30%">
-            <div className="h-full overflow-y-auto min-w-node bg-surface-alt">
-              <PropertiesPanel selectedNode={selectedNode} />
-            </div>
-          </ResizablePanel>
+            </>
+          )}
         </ResizablePanelGroup>
 
         {/* Floating preview — rendered outside panel layout */}

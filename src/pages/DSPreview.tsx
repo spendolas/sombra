@@ -17,7 +17,6 @@ import { estimateNodeSize } from '@/utils/layout'
 import { useGraphStore } from '@/stores/graphStore'
 import { ShaderNode } from '@/components/ShaderNode'
 import { NodePalette } from '@/components/NodePalette'
-import { PropertiesPanel } from '@/components/PropertiesPanel'
 import { Separator } from '@/components/ui/separator'
 import { SombraSlider } from '@/components/ui/sombra-slider'
 import {
@@ -795,9 +794,6 @@ function NodeCardGrid() {
 }
 
 function OrganismsSection() {
-  const nodes = useGraphStore((s) => s.nodes)
-  const firstNode = nodes[0] || null
-
   return (
     <Section title="Organisms">
       {/* nodeCard — all 23 types in a ReactFlow grid */}
@@ -805,20 +801,6 @@ function OrganismsSection() {
         <ReactFlowProvider>
           <NodeCardGrid />
         </ReactFlowProvider>
-      </SubSection>
-
-      {/* propertiesPanel */}
-      <SubSection title="propertiesPanel">
-        <div className="flex gap-6">
-          <Cell dsComponent="propertiesPanel" dsVariant="with-node" label="with selected node" className="w-64">
-            <div className="h-[500px] overflow-y-auto">
-              <PropertiesPanel selectedNode={firstNode} />
-            </div>
-          </Cell>
-          <Cell dsComponent="propertiesPanel" dsVariant="empty" label="empty state" className="w-64">
-            <PropertiesPanel selectedNode={null} />
-          </Cell>
-        </div>
       </SubSection>
 
       {/* nodePalette */}

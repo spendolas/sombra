@@ -10,6 +10,8 @@ import {
 
 import { Slider } from "@/components/ui/slider";
 import { IconButton } from "@/components/IconButton";
+import { useSettingsStore } from "@/stores/settingsStore";
+import { getFitViewPadding } from "@/components/nodes-panel-layout";
 import { cn } from "@/lib/utils";
 import { ds } from "@/generated/ds";
 
@@ -72,7 +74,7 @@ export function ZoomSlider({
       />
       <IconButton
         icon="maximize"
-        onClick={() => fitView({ duration: 300 })}
+        onClick={() => fitView({ padding: getFitViewPadding(useSettingsStore.getState().nodesPanelOpen), duration: 300 })}
       />
     </Panel>
   );
