@@ -80,7 +80,7 @@ export function GraphToolbar() {
         />
         <IconButton
           icon={copied ? 'check' : 'share'}
-          iconClassName={copied ? 'text-green-400' : undefined}
+          iconClassName={copied ? 'text-success' : undefined}
           onClick={handleShare}
           title="Copy shareable viewer URL"
         />

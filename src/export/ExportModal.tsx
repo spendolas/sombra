@@ -1032,7 +1032,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                 {phase === 'done' && done && (
                   <div className="flex flex-col gap-2xs">
                     <div className="flex items-center gap-sm text-body">
-                      <icons.check className="size-5 text-green-400" />
+                      <icons.check className="size-5 text-success" />
                       <span>Exported</span>
                     </div>
                     <div className="text-mono-value tabular-nums text-fg-dim">

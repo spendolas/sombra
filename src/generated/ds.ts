@@ -3,7 +3,7 @@
 
 export const ds = {
   nodeCard: {
-    root: "flex flex-col bg-surface-elevated rounded-md border border-edge-card relative hover:ring-1 [.react-flow\_\_node.selected_&]:shadow-[0_0_8px_2px_rgba(99,102,241,0.4)]",
+    root: "flex flex-col bg-surface-elevated rounded-md relative hover:ring-1 [.react-flow\_\_node.selected_&]:shadow-[0_0_8px_2px_rgba(99,102,241,0.4)]",
     header: "flex flex-row items-center bg-surface-raised rounded-t-md border-b border-edge-subtle px-lg py-md gap-md overflow-hidden h-[32px] -mb-1",
     title: "text-node-title text-fg select-none flex-1",
     content: "flex flex-col p-lg gap-y-md",
@@ -114,7 +114,7 @@ export const ds = {
     value: "text-mono-value text-fg flex-1",
   },
   miniMap: {
-    root: "bg-surface-alt rounded-md border border-edge-subtle overflow-hidden",
+    root: "bg-surface-alt rounded-md overflow-hidden",
   },
   graphToolbar: {
     root: "flex flex-row items-center justify-center bg-surface-alt rounded-md p-xs gap-xs text-fg-dim",

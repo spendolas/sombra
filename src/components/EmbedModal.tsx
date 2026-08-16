@@ -89,7 +89,7 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
             title="Copy embed snippet" aria-label="Copy embed snippet"
             onClick={() => result && copy(result.snippets.hosted, 'hosted')}
           >
-            {copied === 'hosted' ? <icons.check className="w-4 h-4" /> : <icons.copy className="w-4 h-4" />}
+            {copied === 'hosted' ? <icons.check className="w-4 h-4 text-success" /> : <icons.copy className="w-4 h-4" />}
           </button>
         </div>
         <div className="text-xs text-fg-subtle mt-1">
@@ -106,7 +106,7 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
                 title="Copy control snippet" aria-label="Copy control snippet"
                 onClick={() => copy(result.snippets.control, 'control')}
               >
-                {copied === 'control' ? <icons.check className="w-4 h-4" /> : <icons.copy className="w-4 h-4" />}
+                {copied === 'control' ? <icons.check className="w-4 h-4 text-success" /> : <icons.copy className="w-4 h-4" />}
               </button>
             </div>
             <div className="text-xs text-fg-subtle mt-1">
@@ -126,7 +126,7 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
                 title="Copy inline snippet" aria-label="Copy inline snippet"
                 onClick={() => copy(result.snippets.embed, 'embed')}
               >
-                {copied === 'embed' ? <icons.check className="w-4 h-4" /> : <icons.copy className="w-4 h-4" />}
+                {copied === 'embed' ? <icons.check className="w-4 h-4 text-success" /> : <icons.copy className="w-4 h-4" />}
               </button>
             </div>
             <div className="text-xs text-fg-subtle mt-2">The entire scene lives in the tag — no file to host, but a large string. Best for small scenes.</div>
@@ -144,7 +144,7 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
                 title="Copy iframe snippet" aria-label="Copy iframe snippet"
                 onClick={() => copy(result.snippets.iframe, 'iframe')}
               >
-                {copied === 'iframe' ? <icons.check className="w-4 h-4" /> : <icons.copy className="w-4 h-4" />}
+                {copied === 'iframe' ? <icons.check className="w-4 h-4 text-success" /> : <icons.copy className="w-4 h-4" />}
               </button>
             </div>
             <div className="text-xs text-fg-subtle mt-2">Fully sandboxed — heaviest at runtime and exposes no knob API. Use for strict-CSP hosts or paste-and-forget.</div>

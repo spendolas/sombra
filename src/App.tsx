@@ -399,8 +399,10 @@ function App() {
   const redo = useGraphStore((state) => state.redo)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      // Shift+Z reports key 'Z' — compare case-insensitively or redo never fires
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+      // Match physical key position (e.code), not the produced character (e.key),
+      // so the shortcut fires on any keyboard layout (e.g. Cyrillic, AZERTY).
+      // e.code is also shift/case-independent, so redo (Shift+Z) needs no extra care.
+      if ((e.metaKey || e.ctrlKey) && e.code === 'KeyZ') {
         // Don't hijack native text undo while typing in a field
         const tag = (e.target as HTMLElement)?.tagName
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
@@ -425,7 +427,8 @@ function App() {
   // Cmd+K / Cmd+/ opens command palette
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === '/')) {
+      // Physical key position (e.code) so it works on any keyboard layout
+      if ((e.metaKey || e.ctrlKey) && (e.code === 'KeyK' || e.code === 'Slash')) {
         // Don't trigger when typing in inputs
         const tag = (e.target as HTMLElement)?.tagName
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
@@ -447,7 +450,8 @@ function App() {
       const tag = (e.target as HTMLElement)?.tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
 
-      if (e.key === 'f' || e.key === 'F') {
+      // Physical key position (e.code) so it works on any keyboard layout
+      if (e.code === 'KeyF') {
         if (previewMode === 'fullwindow') {
           setPreviewMode(previousPreviewMode === 'fullwindow' ? 'docked' : previousPreviewMode)
         } else {

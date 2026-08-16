@@ -20,6 +20,9 @@ export function PreviewToolbar({ className }: PreviewToolbarProps) {
 
   const active = ds.button.ghostActive
   const inactive = ds.button.ghost
+  // Split buttons keep a secondary action while active (re-click swaps sides),
+  // so they stay clickable; floating has no secondary action → default cursor.
+  const activeSwap = cn(ds.button.ghostActive, 'cursor-pointer')
 
   // In fullwindow mode, only show a collapse button
   if (previewMode === 'fullwindow') {
@@ -48,13 +51,13 @@ export function PreviewToolbar({ className }: PreviewToolbarProps) {
         <IconButton
           icon="rows"
           title="Vertical split"
-          className={isDockedV ? active : inactive}
+          className={isDockedV ? activeSwap : inactive}
           onClick={() => { if (isDockedV) { toggleSplitSwapped() } else { setPreviewMode('docked'); setSplitDirection('vertical') } }}
         />
         <IconButton
           icon="columns"
           title="Horizontal split"
-          className={isDockedH ? active : inactive}
+          className={isDockedH ? activeSwap : inactive}
           onClick={() => { if (isDockedH) { toggleSplitSwapped() } else { setPreviewMode('docked'); setSplitDirection('horizontal') } }}
         />
         <IconButton
