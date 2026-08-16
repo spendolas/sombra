@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from 'react'
 import { icons } from '@/components/icons'
 import { useRendererStore } from '@/stores/rendererStore'
 import { useSettingsStore } from '@/stores/settingsStore'
+import { seeThroughAvailable } from '@/utils/preview-background'
 import { cn } from '@/lib/utils'
 
 const TriangleAlert = icons.triangleAlert
@@ -39,8 +40,10 @@ const AUTO_COLLAPSE_MS = 4500
 export function AmdSeeThroughWarning() {
   const isAmd = useRendererStore((s) => s.isAmd)
   const mode = useSettingsStore((s) => s.previewBackground.mode)
-  // Gated to Chromium: the flicker is a Chromium+AMD/Metal compositor bug only.
-  const active = isAmd && IS_CHROMIUM && mode === 'none'
+  const previewMode = useSettingsStore((s) => s.previewMode)
+  // Only when see-through is actually rendering (floating) on Chromium+AMD — the
+  // one place a transparent canvas is composited over the page and flickers.
+  const active = isAmd && IS_CHROMIUM && mode === 'none' && seeThroughAvailable(previewMode)
 
   const [expanded, setExpanded] = useState(false)
   const collapseTimer = useRef<number | null>(null)

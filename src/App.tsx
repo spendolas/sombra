@@ -12,6 +12,7 @@ import { useSettingsStore } from './stores/settingsStore'
 import { useCompilerStore } from './stores/compilerStore'
 import { usePreviewStore } from './stores/previewStore'
 import { useRendererStore } from './stores/rendererStore'
+import { effectiveBackground } from './utils/preview-background'
 import { createDefaultGraph } from './utils/test-graph'
 import { nodeRegistry } from './nodes/registry'
 import { ShaderNode } from './components/ShaderNode'
@@ -150,9 +151,10 @@ function App() {
 
   // Push preview-background changes to the renderer: checker/solid → opaque
   // canvas painting the bg in; see-through → transparent canvas. No-op on WebGL2.
+  // See-through only applies in floating; elsewhere it renders as checker.
   useEffect(() => {
-    rendererRef.current?.setBackgroundComposite?.(previewBackground)
-  }, [previewBackground])
+    rendererRef.current?.setBackgroundComposite?.(effectiveBackground(previewBackground, previewMode))
+  }, [previewBackground, previewMode])
 
   // Command palette state (ephemeral UI — not persisted)
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
@@ -242,7 +244,10 @@ function App() {
 
       // Seed the background composite: checker/solid paint into the (opaque)
       // canvas; see-through keeps it transparent. No-op on WebGL2 fallback.
-      r.setBackgroundComposite?.(useSettingsStore.getState().previewBackground)
+      r.setBackgroundComposite?.(effectiveBackground(
+        useSettingsStore.getState().previewBackground,
+        useSettingsStore.getState().previewMode,
+      ))
 
       // Expose the renderer on the dev bridge (`.backend` plus full instance
       // for automation — e.g. exercising device-loss recovery)

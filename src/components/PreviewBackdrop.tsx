@@ -1,4 +1,5 @@
 import { useSettingsStore } from '@/stores/settingsStore'
+import { effectiveBackground } from '@/utils/preview-background'
 
 // Runtime-dynamic backdrop values (checker tile + user-picked solid color) —
 // documented CLAUDE.md exception to the "no inline style" rule. Colors come
@@ -25,14 +26,17 @@ const checkerStyle = {
  */
 export function PreviewBackdrop() {
   const previewBackground = useSettingsStore((s) => s.previewBackground)
+  const previewMode = useSettingsStore((s) => s.previewMode)
 
-  if (previewBackground.mode === 'none') return null
+  // See-through only applies floating; docked/fullwindow fall back to checker.
+  const bg = effectiveBackground(previewBackground, previewMode)
+  if (bg.mode === 'none') return null
 
   return (
     <div
       aria-hidden
       className="absolute inset-0 -z-10 pointer-events-none"
-      style={previewBackground.mode === 'checker' ? checkerStyle : { background: previewBackground.color }}
+      style={bg.mode === 'checker' ? checkerStyle : { background: bg.color }}
     />
   )
 }
