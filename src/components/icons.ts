@@ -29,6 +29,7 @@ export const icons = {
   share: createIcon('share', nodes.share),
   shuffle: createIcon('shuffle', nodes.shuffle),
   square: createIcon('square', nodes.square),
+  squareMousePointer: createIcon('squareMousePointer', nodes.squareMousePointer),
 } as const
 
 export type IconName = keyof typeof icons
