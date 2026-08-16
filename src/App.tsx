@@ -26,6 +26,7 @@ import { FloatingPreview } from './components/FloatingPreview'
 import { FullWindowOverlay } from './components/FullWindowOverlay'
 import { PreviewGizmoOverlay } from './components/PreviewGizmoOverlay'
 import { CommandPalette } from './components/CommandPalette'
+import { DebugBandPanel } from './components/DebugBandPanel'
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -638,6 +639,9 @@ function App() {
         {commandPaletteOpen && (
           <CommandPalette onClose={() => setCommandPaletteOpen(false)} mousePosition={paletteMousePos} />
         )}
+
+        {/* TEMP band-bisect debug console (dev only) */}
+        {import.meta.env.DEV && <DebugBandPanel />}
       </div>
     </ReactFlowProvider>
   )
