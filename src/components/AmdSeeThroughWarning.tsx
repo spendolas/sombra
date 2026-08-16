@@ -76,7 +76,7 @@ export function AmdSeeThroughWarning() {
       role="status"
       onMouseEnter={() => { clearTimer(); setExpanded(true) }}
       onMouseLeave={() => setExpanded(false)}
-      title="See-through is unstable on this GPU (AMD): the preview may flicker."
+      title="See-through can flicker on this GPU (AMD)"
       className={cn(
         'nodrag relative isolate flex items-center overflow-hidden select-none',
         'rounded-md p-md text-warning bg-surface-alt/60 backdrop-blur-lg',
