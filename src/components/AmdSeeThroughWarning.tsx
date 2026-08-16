@@ -22,6 +22,16 @@ import { cn } from '@/lib/utils'
 
 const TriangleAlert = icons.triangleAlert
 
+/** Chromium-based browser (Chrome/Edge/Brave/…). The see-through flicker is a
+ *  Chromium + AMD/Metal compositor bug — Safari and Firefox composite the
+ *  transparent canvas cleanly, so the warning would be a false positive there. */
+const IS_CHROMIUM = (() => {
+  if (typeof navigator === 'undefined') return false
+  const uaData = (navigator as unknown as { userAgentData?: { brands?: Array<{ brand: string }> } }).userAgentData
+  if (uaData?.brands?.length) return uaData.brands.some((b) => /Chromium|Chrome|Edge/i.test(b.brand))
+  return /\bChrome\//.test(navigator.userAgent)
+})()
+
 /** Expanded once per session (page load); collapsed on later activations. */
 let shownExpandedThisSession = false
 const AUTO_COLLAPSE_MS = 4500
@@ -29,7 +39,8 @@ const AUTO_COLLAPSE_MS = 4500
 export function AmdSeeThroughWarning() {
   const isAmd = useRendererStore((s) => s.isAmd)
   const mode = useSettingsStore((s) => s.previewBackground.mode)
-  const active = isAmd && mode === 'none'
+  // Gated to Chromium: the flicker is a Chromium+AMD/Metal compositor bug only.
+  const active = isAmd && IS_CHROMIUM && mode === 'none'
 
   const [expanded, setExpanded] = useState(false)
   const collapseTimer = useRef<number | null>(null)
