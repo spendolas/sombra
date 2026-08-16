@@ -14,7 +14,6 @@ import { BaseNode, BaseNodeHeader, BaseNodeHeaderTitle, BaseNodeContent } from '
 import { LabeledHandle } from '@/components/labeled-handle'
 import { BaseHandle } from '@/components/base-handle'
 import { IconButton } from '@/components/IconButton'
-import { BackgroundModeControl } from './BackgroundModeControl'
 import { RgbaColorPicker, type Rgba } from '@/components/RgbaColorPicker'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { cn } from '@/lib/utils'
@@ -526,15 +525,6 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
               value={colorConstantValue}
               onChange={(rgba) => handleParamChange('color', rgba)}
             />
-          </div>
-        )}
-
-        {/* Mirrored preview-background control on the master output node —
-            shares the previewBackground setting with the preview overlay. */}
-        {definition.type === 'fragment_output' && (
-          <div className={cn("w-full mt-md pt-md flex flex-col gap-xs", ds.shaderNode.paramDivider)}>
-            <span className="text-param text-fg-subtle">Preview Background</span>
-            <BackgroundModeControl className="w-fit" />
           </div>
         )}
 
