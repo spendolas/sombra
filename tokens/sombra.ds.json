@@ -147,6 +147,15 @@
         "key": "error"
       }
     },
+    "VariableID:881:311": {
+      "figmaName": "color/warning",
+      "cssVar": "--warning",
+      "value": "#fbbf24",
+      "tailwind": {
+        "namespace": "color",
+        "key": "warning"
+      }
+    },
     "VariableID:576:987": {
       "figmaName": "interactive/highlight",
       "cssVar": "--highlight",

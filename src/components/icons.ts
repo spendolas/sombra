@@ -9,6 +9,7 @@ import * as nodes from '@/generated/icon-nodes'
 
 export const icons = {
   check: createIcon('check', nodes.check),
+  chessKnight: createIcon('chessKnight', nodes.chessKnight),
   chevronDown: createIcon('chevronDown', nodes.chevronDown),
   code: createIcon('code', nodes.code),
   columns: createIcon('columns', nodes.columns),
@@ -17,10 +18,10 @@ export const icons = {
   eye: createIcon('eye', nodes.eye),
   film: createIcon('film', nodes.film),
   folderOpen: createIcon('folderOpen', nodes.folderOpen),
-  grid: createIcon('grid', nodes.grid),
   maximize: createIcon('maximize', nodes.maximize),
   minimize: createIcon('minimize', nodes.minimize),
   minus: createIcon('minus', nodes.minus),
+  paintBucket: createIcon('paintBucket', nodes.paintBucket),
   pip: createIcon('pip', nodes.pip),
   pipette: createIcon('pipette', nodes.pipette),
   plus: createIcon('plus', nodes.plus),
@@ -28,8 +29,8 @@ export const icons = {
   scan: createIcon('scan', nodes.scan),
   share: createIcon('share', nodes.share),
   shuffle: createIcon('shuffle', nodes.shuffle),
-  square: createIcon('square', nodes.square),
   squareMousePointer: createIcon('squareMousePointer', nodes.squareMousePointer),
+  triangleAlert: createIcon('triangleAlert', nodes.triangleAlert),
 } as const
 
 export type IconName = keyof typeof icons

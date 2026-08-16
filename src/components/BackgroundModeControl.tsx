@@ -1,5 +1,6 @@
 import { IconButton } from '@/components/IconButton'
 import { RgbaColorPicker, type Rgba } from '@/components/RgbaColorPicker'
+import { AmdSeeThroughWarning } from '@/components/AmdSeeThroughWarning'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
@@ -69,33 +70,36 @@ export function BackgroundModeControl({ className }: BackgroundModeControlProps)
   const inactive = ds.button.ghost
 
   return (
-    <div className={cn(ds.previewToolbar.root, 'nodrag nowheel', className)}>
-      <IconButton
-        icon="grid"
-        title="Background: checker"
-        className={previewBackground.mode === 'checker' ? active : inactive}
-        onClick={() => setPreviewBackground({ mode: 'checker' })}
-      />
-      <IconButton
-        icon="eye"
-        title="Background: see-through (transparent — shows the UI behind)"
-        className={previewBackground.mode === 'none' ? active : inactive}
-        onClick={() => setPreviewBackground({ mode: 'none' })}
-      />
-      <IconButton
-        icon="square"
-        title="Background: solid"
-        className={previewBackground.mode === 'solid' ? active : inactive}
-        onClick={() => setPreviewBackground({ mode: 'solid' })}
-      />
-      {previewBackground.mode === 'solid' && (
-        <RgbaColorPicker
-          mode="popover"
-          showAlpha={false}
-          value={cssColorToRgba(previewBackground.color)}
-          onChange={(rgba) => setPreviewBackground({ color: rgbaToCssColor(rgba) })}
+    <div className={cn('flex items-center gap-md', className)}>
+      <div className={cn(ds.previewToolbar.root, 'nodrag nowheel')}>
+        <IconButton
+          icon="chessKnight"
+          title="Background: checker"
+          className={previewBackground.mode === 'checker' ? active : inactive}
+          onClick={() => setPreviewBackground({ mode: 'checker' })}
         />
-      )}
+        <IconButton
+          icon="eye"
+          title="Background: see-through (transparent — shows the UI behind)"
+          className={previewBackground.mode === 'none' ? active : inactive}
+          onClick={() => setPreviewBackground({ mode: 'none' })}
+        />
+        <IconButton
+          icon="paintBucket"
+          title="Background: solid"
+          className={previewBackground.mode === 'solid' ? active : inactive}
+          onClick={() => setPreviewBackground({ mode: 'solid' })}
+        />
+        {previewBackground.mode === 'solid' && (
+          <RgbaColorPicker
+            mode="popover"
+            showAlpha={false}
+            value={cssColorToRgba(previewBackground.color)}
+            onChange={(rgba) => setPreviewBackground({ color: rgbaToCssColor(rgba) })}
+          />
+        )}
+      </div>
+      <AmdSeeThroughWarning />
     </div>
   )
 }

@@ -1,5 +1,6 @@
 {
   "check": "check",
+  "chessKnight": "chess-knight",
   "chevronDown": "chevron-down",
   "code": "code",
   "columns": "columns-2",
@@ -8,10 +9,10 @@
   "eye": "eye",
   "film": "film",
   "folderOpen": "folder-open",
-  "grid": "grid-2x2",
   "maximize": "maximize",
   "minimize": "minimize-2",
   "minus": "minus",
+  "paintBucket": "paint-bucket",
   "pip": "picture-in-picture-2",
   "pipette": "pipette",
   "plus": "plus",
@@ -19,6 +20,6 @@
   "scan": "scan",
   "share": "share-2",
   "shuffle": "shuffle",
-  "square": "square",
-  "squareMousePointer": "square-mouse-pointer"
+  "squareMousePointer": "square-mouse-pointer",
+  "triangleAlert": "triangle-alert"
 }
