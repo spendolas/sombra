@@ -2,6 +2,7 @@ import { IconButton } from '@/components/IconButton'
 import { RgbaColorPicker, type Rgba } from '@/components/RgbaColorPicker'
 import { AmdSeeThroughWarning } from '@/components/AmdSeeThroughWarning'
 import { useSettingsStore } from '@/stores/settingsStore'
+import { effectiveBackground, seeThroughAvailable } from '@/utils/preview-background'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
 
@@ -65,9 +66,15 @@ function rgbaToCssColor([r, g, b, a]: Rgba): string {
 export function BackgroundModeControl({ className }: BackgroundModeControlProps) {
   const previewBackground = useSettingsStore((s) => s.previewBackground)
   const setPreviewBackground = useSettingsStore((s) => s.setPreviewBackground)
+  const previewMode = useSettingsStore((s) => s.previewMode)
 
   const active = ds.button.ghostActive
   const inactive = ds.button.ghost
+
+  // Highlight the mode actually in effect: see-through collapses to checker where
+  // it isn't available (docked/fullwindow), and the eye button is hidden there.
+  const effMode = effectiveBackground(previewBackground, previewMode).mode
+  const showSeeThrough = seeThroughAvailable(previewMode)
 
   return (
     <div className={cn('flex items-center gap-md', className)}>
@@ -75,19 +82,21 @@ export function BackgroundModeControl({ className }: BackgroundModeControlProps)
         <IconButton
           icon="chessKnight"
           title="Background: checker"
-          className={previewBackground.mode === 'checker' ? active : inactive}
+          className={effMode === 'checker' ? active : inactive}
           onClick={() => setPreviewBackground({ mode: 'checker' })}
         />
-        <IconButton
-          icon="eye"
-          title="Background: see-through (transparent — shows the UI behind)"
-          className={previewBackground.mode === 'none' ? active : inactive}
-          onClick={() => setPreviewBackground({ mode: 'none' })}
-        />
+        {showSeeThrough && (
+          <IconButton
+            icon="eye"
+            title="Background: see-through (transparent — shows the UI behind)"
+            className={effMode === 'none' ? active : inactive}
+            onClick={() => setPreviewBackground({ mode: 'none' })}
+          />
+        )}
         <IconButton
           icon="paintBucket"
           title="Background: solid"
-          className={previewBackground.mode === 'solid' ? active : inactive}
+          className={effMode === 'solid' ? active : inactive}
           onClick={() => setPreviewBackground({ mode: 'solid' })}
         />
         {previewBackground.mode === 'solid' && (
