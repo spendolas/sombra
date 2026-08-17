@@ -73,13 +73,16 @@ const DEFAULT_SETTINGS: Omit<SettingsState, keyof SettingsActions> = {
   compileDebounceMs: 100,
   previewMode: 'docked',
   previousPreviewMode: 'docked',
-  splitDirection: 'vertical',
+  // First-timer default layout: side-by-side split with the shader (preview) on
+  // the left at the golden ratio. (react-resizable-panels 'horizontal' = a
+  // vertical divider / left-right panes; swap puts the preview panel first = left.)
+  splitDirection: 'horizontal',
   floatingPosition: { x: -1, y: -1 },  // sentinel → compute default on first use
   floatingSize: { width: 400, height: 300 },
   verticalSplitPct: 30,
-  horizontalSplitPct: 30,
+  horizontalSplitPct: 38.2,  // golden ratio — shader (left panel) gets the minor share, editor the major
   verticalSplitSwapped: false,
-  horizontalSplitSwapped: false,
+  horizontalSplitSwapped: true,  // preview (shader) on the left, editor on the right
   previewBackground: { mode: 'checker', color: '#1a1a2e' },
   defaultNodeWidth: 200,
   defaultNodeHeight: 100,
