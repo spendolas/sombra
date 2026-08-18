@@ -91,8 +91,15 @@ export function lowerExprToGLSL(expr: IRExpr, parentPrec = 0, isRightOfParent = 
       return `${expr.name}(${args})`
     }
 
-    case 'swizzle':
-      return `${lowerExprToGLSL(expr.expr)}.${expr.components}`
+    case 'swizzle': {
+      // Swizzle/member access binds tighter than any binary op, so a binary
+      // operand must be parenthesised: (a + b).yx, never a + b.yx (which parses
+      // as a + (b.yx)). Passing a parent precedence above every binary op (max
+      // is 6) forces the wrap; atoms (variable/call/construct) ignore parentPrec
+      // and stay bare. WGSL parenthesises every binary, so it was already correct.
+      const POSTFIX_PREC = 7
+      return `${lowerExprToGLSL(expr.expr, POSTFIX_PREC)}.${expr.components}`
+    }
 
     case 'construct': {
       const args = expr.args.map(a => lowerExprToGLSL(a)).join(', ')
