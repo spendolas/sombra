@@ -1065,6 +1065,7 @@ export function assembleFragmentShader(
 
   return `#version 300 es
 precision highp float;
+precision highp int;
 
 in vec2 v_uv;
 out vec4 fragColor;
