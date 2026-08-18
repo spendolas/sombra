@@ -1,0 +1,33 @@
+name: CI
+
+# Pull-request gate. Deploy (deploy.yml) runs the same verify suite before
+# publishing on push to main, so PRs and production are checked by one source.
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Verify codegen parity
+        run: npm run verify:ci
+
+      - name: Typecheck + build
+        run: npm run build
