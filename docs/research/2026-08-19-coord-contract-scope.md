@@ -1,6 +1,15 @@
 # Scope: GPU coordinate-contract differential (the real "mixed-up UV" catcher)
 
-**Date:** 2026-08-19 · **Status:** PLAN. Complements the Tier-1 static lint (`scripts/verify-coord-hygiene.ts`), which only flags danger zones. This is the behavioural catcher.
+**Date:** 2026-08-19 · **Status:** v1 SHIPPED — `scripts/verify-coord-contract-gpu.ts` (`npm run verify:coord-contract:gpu`). Complements the Tier-1 static lint (`scripts/verify-coord-hygiene.ts`), which only flags danger zones. This is the behavioural catcher.
+
+## v1 (shipped)
+**Resize invariance**, both backends via system Chrome. For anchor=center, `auto_uv` depends only on offset-from-centre, so the centre NxN crop of a larger render must byte-match an NxN render. Verifies 6 auto_uv nodes (gradient-pinned, checkerboard, stripes, dots, noise, fbm) are invariant (0.00% diff), each with a misaligned-crop control so the metric can't be vacuous, plus a **real-node negative control** — gradient-*stretch* (fills the canvas from `v_uv`) is asserted resize-*variant* (33.4%), proving the check detects genuine `u_resolution`-scaling. GPU gate (needs Chrome), not in headless `verify:ci`.
+
+## Remaining (not yet built)
+DPR invariance, anchor re-basing, SRT-exact (needed for the SRT-order epic), static-determinism (phantom-animation — needs a `startTime` override since `render()` reads the wall clock), and the WebGL↔WebGPU Y-origin diff. Each needs a per-node contract + a mechanism-engaged perturbation. The v1 harness is the scaffold to extend.
+
+---
+_Original plan below._
 
 ## Why static isn't enough
 Coordinate correctness is behavioural, not textual. The reeded grain bug was a *seed-vs-sample space mismatch* + a coverage/animation coupling — no regex sees that, and the Tier-1 lint flags 8 legitimate screen-space samplers as false positives. To actually catch it you have to *render the node and watch how its output responds to coordinate perturbations*.
