@@ -1037,7 +1037,11 @@ export const reededGlassNode: NodeDefinition = {
       lines.push(`vec2 ${sampleUV}_b = (gl_FragCoord.xy + ${seam.normal} * (${seam.centroidB})) / u_viewport + ${subB.delta};`)
 
       const frostVar = `rg_frost_${id}`
-      lines.push(`float ${frostVar} = ${inputs.frost};`)
+      // Clamp to the declared [0,1] domain: a WIRED frost input bypasses the
+      // param slider's min/max, and a driver > 1 (e.g. a remap to 2.81) blows the
+      // gather radius up ~3× and averages the per-cell grain away entirely — grain
+      // is only visible below full frost. See docs/research/2026-08-19-entanglement-audit.md.
+      lines.push(`float ${frostVar} = clamp(${inputs.frost}, 0.0, 1.0);`)
       lines.push(`vec4 ${outputs.color};`)
       lines.push(`if (${frostVar} > 0.001) {`)
       lines.push('  ' + emitFrostGather({
@@ -1358,7 +1362,9 @@ export const reededGlassNode: NodeDefinition = {
       // colour into transparent taps. Reduces exactly to sum(rgb)/8 with alpha 1
       // for a fully opaque source (see rgba-node-audit.md).
       const frostVar = `rg_frost_${id}`
-      stmts.push(declare(frostVar, 'float', variable(ctx.inputs.frost)))
+      // Clamp to the declared [0,1] domain — a wired frost bypasses the slider
+      // clamp and > 1 washes the grain out (see glsl() above).
+      stmts.push(declare(frostVar, 'float', call('clamp', [variable(ctx.inputs.frost), literal('float', 0), literal('float', 1)], 'float')))
 
       // Use raw() for the conditional frost blur — complex control flow with loop.
       //
