@@ -86,8 +86,10 @@ console.log('\n#2 — grain overlay: frost-scaled, applied on top of the gather'
   check('grain overlay is emitted (reedPcg-seeded amplitude term)', /rg_gamp_\w+/.test(glsl) && /reedPcg\(/.test(glsl))
   check('overlay amplitude scales WITH frost (perturb: a constant amp would not reference the frost var)',
     /rg_gamp_\w+\s*=\s*rg_frost_\w+\s*\*/.test(glsl))
-  check('overlay is applied ON TOP of the gather (out = vec4(out.rgb + grain, out.a))',
-    /(node_\w+_color)\s*=\s*vec4\(\s*\1\.rgb\s*\+/.test(glsl), 'overlay does not read+rewrite the gathered colour')
+  check('overlay is a FLAT addition over the whole texture, NOT modulated by coverage (out = vec4(out.rgb + grain, out.a))',
+    /(node_\w+_color)\s*=\s*vec4\(\s*\1\.rgb\s*\+\s*vec3\([^)]*\),\s*\1\.a\)/.test(glsl),
+    'grain is coverage-gated (× out.a) or does not read+rewrite the gathered colour — would confine/twinkle it')
+  check('overlay never writes alpha (out.a passed through)', /(node_\w+_color)\s*=\s*vec4\([^;]*,\s*\1\.a\)/.test(glsl))
   check('overlay present on the WGSL backend too', wgsl.length ? /rg_gamp_\w+/.test(wgsl) : true)
 }
 
