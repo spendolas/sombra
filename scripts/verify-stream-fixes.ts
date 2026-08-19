@@ -76,6 +76,21 @@ console.log('\n#1 — reeded_glass clamps frost to [0,1] on both backends')
   check('the clamp is specifically clamp(x, 0.0, 1.0)', /rg_frost_\w+\s*=\s*clamp\([^,]+,\s*0\.0,\s*1\.0\)/.test(glsl))
 }
 
+console.log('\n#2 — grain overlay: frost-scaled, applied on top of the gather')
+{
+  const nodes = [node('grad-d', 'gradient'), node('rg-d', 'reeded_glass'), node('out-d', 'fragment_output')]
+  const edges = [edge('grad-d', 'color', 'rg-d', 'source'), edge('rg-d', 'color', 'out-d', 'color')]
+  const plan = compileGraph(nodes, edges)
+  const glsl = plan.passes.map((p) => p.fragmentShader).join('\n')
+  const wgsl = (plan.wgsl?.passes ?? []).map((p) => p.shaderCode).join('\n')
+  check('grain overlay is emitted (reedPcg-seeded amplitude term)', /rg_gamp_\w+/.test(glsl) && /reedPcg\(/.test(glsl))
+  check('overlay amplitude scales WITH frost (perturb: a constant amp would not reference the frost var)',
+    /rg_gamp_\w+\s*=\s*rg_frost_\w+\s*\*/.test(glsl))
+  check('overlay is applied ON TOP of the gather (out = vec4(out.rgb + grain, out.a))',
+    /(node_\w+_color)\s*=\s*vec4\(\s*\1\.rgb\s*\+/.test(glsl), 'overlay does not read+rewrite the gathered colour')
+  check('overlay present on the WGSL backend too', wgsl.length ? /rg_gamp_\w+/.test(wgsl) : true)
+}
+
 console.log('\n' + '='.repeat(60))
 console.log(failures === 0 ? '  SUMMARY: all stream-fix checks passed' : `  SUMMARY: ${failures} FAILED`)
 console.log('='.repeat(60))
