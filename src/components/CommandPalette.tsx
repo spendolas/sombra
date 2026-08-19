@@ -8,6 +8,7 @@ import type { Node } from '@xyflow/react'
 import type { NodeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { useGraphStore } from '../stores/graphStore'
+import { makeNodeId } from '../utils/node-id'
 import { searchNodes, groupByCategory, type SearchResult } from '../utils/fuzzy-search'
 
 /** Node types that can only exist once on the graph */
@@ -134,7 +135,7 @@ export function CommandPalette({ onClose, mousePosition }: CommandPaletteProps) 
       }
 
       const newNode: Node<NodeData> = {
-        id: `${nodeType}-${Date.now()}`,
+        id: makeNodeId(nodeType),
         type: 'shaderNode',
         position,
         selected: true,

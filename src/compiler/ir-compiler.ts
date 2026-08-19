@@ -21,7 +21,7 @@ import {
 } from './glsl-generator'
 import type { TextureBoundaryEdge } from './glsl-generator'
 import { assembleWGSL } from './ir/wgsl-assembler'
-import { expandMultiPassNodes } from './expand-passes'
+import { expandMultiPassNodes, baseNodeId } from './expand-passes'
 import { resolvePassResolution } from './pass-resolution'
 
 // ---------------------------------------------------------------------------
@@ -246,7 +246,7 @@ export function generateNodeIR(
         name: uName,
         glslType: paramGlslType(param.type),
         value: padColorUniformValue(param.type, paramValue),
-        nodeId: node.id,
+        nodeId: baseNodeId(node.id), // authored id — see resolveParamFallbackIR
         paramId: param.id,
       })
       inputs[param.id] = uName
@@ -406,7 +406,10 @@ export function resolveParamFallbackIR(
       name: uName,
       glslType: paramGlslType(param.type),
       value: padColorUniformValue(param.type, paramValue),
-      nodeId: node.id,
+      // Authored id, not the expanded sub-pass id: the live-drag fast path
+      // (collectCurrentUniformValues) looks this up in the authored store, so a
+      // sub-pass uniform must resolve to its authored node or it freezes on drag.
+      nodeId: baseNodeId(node.id),
       paramId: param.id,
     })
     inputs[param.id] = uName

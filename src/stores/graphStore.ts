@@ -9,12 +9,15 @@ import type { Node, Edge, OnNodesChange, OnEdgesChange } from '@xyflow/react'
 import { applyNodeChanges, applyEdgeChanges } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
+import { dedupeNodeIds } from '../utils/node-id'
 import { anchorToVec2 } from '../nodes/output/fragment-output'
 import { REFERENCE_SIZE } from '../renderer/constants'
 import { previewCanvasSize } from '../utils/preview-canvas-size'
 
-/** Schema version — bump when persisted shape changes */
-const GRAPH_SCHEMA_VERSION = 3
+/** Schema version — bump when persisted shape changes.
+ *  v4: one-time dedupe of duplicate node ids left by the old
+ *  `${type}-${Date.now()}` mint scheme (see src/utils/node-id.ts). */
+const GRAPH_SCHEMA_VERSION = 4
 
 /** Renamed node types — applied on localStorage load */
 const TYPE_RENAMES: Record<string, string> = {
@@ -369,9 +372,16 @@ export const useGraphStore = create<GraphState>()(
       loadGraph: (nodes, edges) => {
         const state = get()
         const past = pushHistory(state._past, snapshot(state))
+        // A loaded graph (.sombra file, share URL, import) may predate the uuid
+        // id scheme and carry duplicate node ids — repair them before they
+        // collapse in the compiler / preview store.
+        const repaired = dedupeNodeIds(nodes, edges)
+        if (repaired.repaired > 0) {
+          console.warn(`[graph] loadGraph: reassigned ${repaired.repaired} duplicate node id(s)`)
+        }
         set({
-          nodes,
-          edges,
+          nodes: repaired.nodes,
+          edges: repaired.edges,
           selectedNodeIds: [],
           selectedEdgeIds: [],
           _past: past,
@@ -444,6 +454,16 @@ export const useGraphStore = create<GraphState>()(
             }
             return true
           })
+        }
+        // Repair duplicate node ids left by the old `${type}-${Date.now()}`
+        // mint scheme (v4). Idempotent: a no-op once ids are unique.
+        if (state.nodes) {
+          const repaired = dedupeNodeIds(state.nodes, state.edges ?? [])
+          if (repaired.repaired > 0) {
+            console.warn(`[graph] migrate: reassigned ${repaired.repaired} duplicate node id(s)`)
+          }
+          state.nodes = repaired.nodes
+          state.edges = repaired.edges
         }
         return state
       },

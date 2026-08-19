@@ -9,6 +9,7 @@ import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { areTypesCompatible } from '../nodes/type-coercion'
 import { useGraphStore } from '../stores/graphStore'
+import { makeNodeId } from '../utils/node-id'
 import { ZoomSlider } from '@/components/zoom-slider'
 import { NodesPanelOverlay } from '@/components/NodesPanelOverlay'
 import { getFitViewPadding } from '@/components/nodes-panel-layout'
@@ -198,7 +199,7 @@ export function FlowCanvas({
       }
 
       const newNode: Node<NodeData> = {
-        id: `${nodeType}-${Date.now()}`,
+        id: makeNodeId(nodeType),
         type: 'shaderNode',
         position,
         data: {
