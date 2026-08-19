@@ -410,8 +410,9 @@ const FROST_TAPS = 16
 /** Golden angle, the Vogel/sunflower spiral increment. */
 const GOLDEN_ANGLE = '2.39996323'
 
-/** Peak grain-overlay amplitude at frost=1 (luminance units). Tunable. */
-const GRAIN_OVERLAY_STRENGTH = '0.2'
+/** Grain-overlay amplitude at frost=1 — the std-dev of the Gaussian grain in
+ *  luminance units (so typical grain ≈ this, with rarer ±3σ specks). Tunable. */
+const GRAIN_OVERLAY_STRENGTH = '0.08'
 
 /**
  * Additive luminance grain applied ON TOP of the frost result — not inside the
@@ -420,6 +421,10 @@ const GRAIN_OVERLAY_STRENGTH = '0.2'
  * scales WITH frost, so grain increases with frost, and it lands on the final
  * colour, so it reads as an overlay. Cell seed is the frozen-ref coordinate
  * (same stability contract as the scatter seed — no re-randomise on resize/DPR).
+ * The per-cell noise is GAUSSIAN (Box–Muller over reedPcg's two uncorrelated
+ * uniforms), not flat uniform — a uniform value per cell reads as a monotonous
+ * lattice, whereas a normal distribution is mostly faint with occasional specks,
+ * i.e. organic film grain.
  * A FLAT rgb addition over the WHOLE texture — deliberately NOT modulated by the
  * gathered coverage out.a: that confined grain to covered pixels and, because out.a
  * animates when the source is time-driven, made the grain twinkle. Grain is a static
@@ -443,11 +448,13 @@ function emitGrainOverlay(o: {
   const v4 = w ? 'vec4f' : 'vec4'
   const refSz = w ? 'uniforms.u_ref_size' : 'u_ref_size'
   const dprU = w ? 'uniforms.u_dpr' : 'u_dpr'
-  const gcell = `rg_gcell_${id}`, ggc = `rg_ggc_${id}`, gn = `rg_gn_${id}`, gamp = `rg_gamp_${id}`
+  const gcell = `rg_gcell_${id}`, ggc = `rg_ggc_${id}`, gh = `rg_gh_${id}`, gn = `rg_gn_${id}`, gamp = `rg_gamp_${id}`
   return [
     `${dcl('float')}${gcell} = max(${grain}, 1.0 / ${dprU});`,
     `${dcl(v2)}${ggc} = floor(${coords} * (${refSz} / ${gcell}));`,
-    `${dcl('float')}${gn} = reedPcg(${ggc}).x - 0.5;`,
+    // Two uncorrelated uniforms per cell → one standard-normal via Box–Muller.
+    `${dcl(v2)}${gh} = reedPcg(${ggc});`,
+    `${dcl('float')}${gn} = clamp(sqrt(-2.0 * log(max(${gh}.x, 1e-6))) * cos(6.28318530718 * ${gh}.y), -3.0, 3.0);`,
     `${dcl('float')}${gamp} = ${frost} * ${GRAIN_OVERLAY_STRENGTH};`,
     `${out} = ${v4}(${out}.rgb + ${v3}(${gn} * ${gamp}), ${out}.a);`,
   ].join('\n  ')
