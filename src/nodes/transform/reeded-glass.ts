@@ -410,6 +410,56 @@ const FROST_TAPS = 16
 /** Golden angle, the Vogel/sunflower spiral increment. */
 const GOLDEN_ANGLE = '2.39996323'
 
+/** Grain-overlay amplitude at frost=1 — the std-dev of the Gaussian grain in
+ *  luminance units (so typical grain ≈ this, with rarer ±3σ specks). Tunable. */
+const GRAIN_OVERLAY_STRENGTH = '0.08'
+
+/**
+ * Additive luminance grain applied ON TOP of the frost result — not inside the
+ * averaged gather (which consumes the per-cell scatter jitter, so that "grain"
+ * is inversely visible vs frost and reads as blurred). This overlay's amplitude
+ * scales WITH frost, so grain increases with frost, and it lands on the final
+ * colour, so it reads as an overlay. Cell seed is the frozen-ref coordinate
+ * (same stability contract as the scatter seed — no re-randomise on resize/DPR).
+ * The per-cell noise is GAUSSIAN (Box–Muller over reedPcg's two uncorrelated
+ * uniforms), not flat uniform — a uniform value per cell reads as a monotonous
+ * lattice, whereas a normal distribution is mostly faint with occasional specks,
+ * i.e. organic film grain.
+ * A FLAT rgb addition over the WHOLE texture — deliberately NOT modulated by the
+ * gathered coverage out.a: that confined grain to covered pixels and, because out.a
+ * animates when the source is time-driven, made the grain twinkle. Grain is a static
+ * screen-locked layer on top; alpha is passed through untouched (never write alpha).
+ * Single emitter parameterised by backend (not hand-written twice).
+ * See docs/research/2026-08-19-grain-overlay-scope.md.
+ */
+function emitGrainOverlay(o: {
+  id: string
+  lang: 'glsl' | 'wgsl'
+  out: string
+  coords: string
+  frost: string
+  grain: string
+}): string {
+  const { id, lang, out, coords, frost, grain } = o
+  const w = lang === 'wgsl'
+  const dcl = (t: string) => (w ? 'let ' : `${t} `)
+  const v2 = w ? 'vec2f' : 'vec2'
+  const v3 = w ? 'vec3f' : 'vec3'
+  const v4 = w ? 'vec4f' : 'vec4'
+  const refSz = w ? 'uniforms.u_ref_size' : 'u_ref_size'
+  const dprU = w ? 'uniforms.u_dpr' : 'u_dpr'
+  const gcell = `rg_gcell_${id}`, ggc = `rg_ggc_${id}`, gh = `rg_gh_${id}`, gn = `rg_gn_${id}`, gamp = `rg_gamp_${id}`
+  return [
+    `${dcl('float')}${gcell} = max(${grain}, 1.0 / ${dprU});`,
+    `${dcl(v2)}${ggc} = floor(${coords} * (${refSz} / ${gcell}));`,
+    // Two uncorrelated uniforms per cell → one standard-normal via Box–Muller.
+    `${dcl(v2)}${gh} = reedPcg(${ggc});`,
+    `${dcl('float')}${gn} = clamp(sqrt(-2.0 * log(max(${gh}.x, 1e-6))) * cos(6.28318530718 * ${gh}.y), -3.0, 3.0);`,
+    `${dcl('float')}${gamp} = ${frost} * ${GRAIN_OVERLAY_STRENGTH};`,
+    `${out} = ${v4}(${out}.rgb + ${v3}(${gn} * ${gamp}), ${out}.a);`,
+  ].join('\n  ')
+}
+
 /**
  * Frosted glass: a stratified disc gather.
  *
@@ -1037,7 +1087,11 @@ export const reededGlassNode: NodeDefinition = {
       lines.push(`vec2 ${sampleUV}_b = (gl_FragCoord.xy + ${seam.normal} * (${seam.centroidB})) / u_viewport + ${subB.delta};`)
 
       const frostVar = `rg_frost_${id}`
-      lines.push(`float ${frostVar} = ${inputs.frost};`)
+      // Clamp to the declared [0,1] domain: a WIRED frost input bypasses the
+      // param slider's min/max, and a driver > 1 (e.g. a remap to 2.81) blows the
+      // gather radius up ~3× and averages the per-cell grain away entirely — grain
+      // is only visible below full frost. See docs/research/2026-08-19-entanglement-audit.md.
+      lines.push(`float ${frostVar} = clamp(${inputs.frost}, 0.0, 1.0);`)
       lines.push(`vec4 ${outputs.color};`)
       lines.push(`if (${frostVar} > 0.001) {`)
       lines.push('  ' + emitFrostGather({
@@ -1072,6 +1126,8 @@ export const reededGlassNode: NodeDefinition = {
       lines.push(`} else {`)
       lines.push(`  ${outputs.color} = texture(${samplerName}, ${sampleUV});`)
       lines.push(`}`)
+      // Grain overlay on top of the frost result (amplitude scales with frost).
+      lines.push(emitGrainOverlay({ id, lang: 'glsl', out: `${outputs.color}`, coords: coordsVar, frost: frostVar, grain: `${inputs.grain}` }))
     } else {
       lines.push(`vec4 ${outputs.color} = ${inputs.source};`)
     }
@@ -1358,7 +1414,9 @@ export const reededGlassNode: NodeDefinition = {
       // colour into transparent taps. Reduces exactly to sum(rgb)/8 with alpha 1
       // for a fully opaque source (see rgba-node-audit.md).
       const frostVar = `rg_frost_${id}`
-      stmts.push(declare(frostVar, 'float', variable(ctx.inputs.frost)))
+      // Clamp to the declared [0,1] domain — a wired frost bypasses the slider
+      // clamp and > 1 washes the grain out (see glsl() above).
+      stmts.push(declare(frostVar, 'float', call('clamp', [variable(ctx.inputs.frost), literal('float', 0), literal('float', 1)], 'float')))
 
       // Use raw() for the conditional frost blur — complex control flow with loop.
       //
@@ -1431,6 +1489,9 @@ export const reededGlassNode: NodeDefinition = {
           ],
           [assign(ctx.outputs.color, textureSample(samplerName, variable(sampleUV), 'vec4', lod0))],
         ),
+        // Grain overlay on top of the frost result (single emitter per backend).
+        raw(emitGrainOverlay({ id, lang: 'glsl', out: `${ctx.outputs.color}`, coords: coordsVar, frost: frostVar, grain: `${ctx.inputs.grain}` }),
+            emitGrainOverlay({ id, lang: 'wgsl', out: `${ctx.outputs.color}`, coords: coordsVar, frost: frostVar, grain: `${ctx.inputs.grain}` })),
       ]
             stmts.push(...frostStmts)
     } else {

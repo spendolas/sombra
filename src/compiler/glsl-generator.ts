@@ -12,7 +12,7 @@ import type { NodeData, EdgeData, GLSLContext, UniformSpec } from '../nodes/type
 import { nodeRegistry } from '../nodes/registry'
 import { topologicalSort, hasCycles } from './topological-sort'
 import { coerceType } from '../nodes/type-coercion'
-import { expandMultiPassNodes } from './expand-passes'
+import { expandMultiPassNodes, baseNodeId } from './expand-passes'
 import { resolvePassResolution } from './pass-resolution'
 
 export function uniformName(sanitizedNodeId: string, paramId: string): string {
@@ -373,7 +373,9 @@ function resolveParamFallback(
       name: uName,
       glslType: paramGlslType(param.type),
       value: padColorUniformValue(param.type, paramValue),
-      nodeId: node.id,
+      // Authored id, not the expanded sub-pass id — the live-drag fast path
+      // resolves uniform values through the authored store (see ir-compiler).
+      nodeId: baseNodeId(node.id),
       paramId: param.id,
     })
     inputs[param.id] = uName
@@ -540,7 +542,7 @@ export function generateNodeGlsl(
         name: uName,
         glslType: paramGlslType(param.type),
         value: padColorUniformValue(param.type, paramValue),
-        nodeId: node.id,
+        nodeId: baseNodeId(node.id), // authored id — see resolveParamFallback
         paramId: param.id,
       })
       inputs[param.id] = uName
