@@ -420,7 +420,10 @@ const GRAIN_OVERLAY_STRENGTH = '0.2'
  * scales WITH frost, so grain increases with frost, and it lands on the final
  * colour, so it reads as an overlay. Cell seed is the frozen-ref coordinate
  * (same stability contract as the scatter seed — no re-randomise on resize/DPR).
- * rgb only, modulated by coverage so transparent stays clean (never writes alpha).
+ * A FLAT rgb addition over the WHOLE texture — deliberately NOT modulated by the
+ * gathered coverage out.a: that confined grain to covered pixels and, because out.a
+ * animates when the source is time-driven, made the grain twinkle. Grain is a static
+ * screen-locked layer on top; alpha is passed through untouched (never write alpha).
  * Single emitter parameterised by backend (not hand-written twice).
  * See docs/research/2026-08-19-grain-overlay-scope.md.
  */
@@ -446,7 +449,7 @@ function emitGrainOverlay(o: {
     `${dcl(v2)}${ggc} = floor(${coords} * (${refSz} / ${gcell}));`,
     `${dcl('float')}${gn} = reedPcg(${ggc}).x - 0.5;`,
     `${dcl('float')}${gamp} = ${frost} * ${GRAIN_OVERLAY_STRENGTH};`,
-    `${out} = ${v4}(${out}.rgb + ${v3}(${gn} * ${gamp}) * ${out}.a, ${out}.a);`,
+    `${out} = ${v4}(${out}.rgb + ${v3}(${gn} * ${gamp}), ${out}.a);`,
   ].join('\n  ')
 }
 
