@@ -4,7 +4,7 @@
 
 import type { NodeDefinition } from '../types'
 import type { IRContext, IRNodeOutput, IRStmt } from '../../compiler/ir/types'
-import { variable, declare, construct, binary, literal, call, textureSample, raw } from '../../compiler/ir/types'
+import { variable, declare, construct, binary, literal, call, textureSample, raw, fragCoord } from '../../compiler/ir/types'
 
 export const pixelateNode: NodeDefinition = {
   type: 'pixelate',
@@ -86,7 +86,7 @@ export const pixelateNode: NodeDefinition = {
     const stmts: IRStmt[] = [
       // Grid in pixel space, centered on canvas center
       declare(`pxl_centered_${id}`, 'vec2',
-        binary('-', variable('gl_FragCoord.xy'), binary('*', variable('u_resolution'), variable('u_anchor'), 'vec2'), 'vec2'),
+        binary('-', fragCoord('native'), binary('*', variable('u_resolution'), variable('u_anchor'), 'vec2'), 'vec2'),
       ),
       // See the glsl() note: reference px -> device px, quantised, shared by the
       // cell grid and the cell centre.

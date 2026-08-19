@@ -7,7 +7,7 @@
 import type { NodeDefinition } from '../types'
 import { addFunction } from '../types'
 import type { IRContext, IRFunction, IRNodeOutput } from '../../compiler/ir/types'
-import { variable, call, declare, raw, binary, literal, construct, swizzle, textureSample } from '../../compiler/ir/types'
+import { variable, call, declare, raw, binary, literal, construct, swizzle, textureSample, fragCoord } from '../../compiler/ir/types'
 
 /** Register shared 8x8 Bayer dithering function (recursive quadrant split) */
 function registerBayer(ctx: import('../types').GLSLContext) {
@@ -296,7 +296,7 @@ export const ditherNode: NodeDefinition = {
     const stmts = [
       // Screen-space pixel coordinates centered on canvas center (stable on resize)
       declare(px, 'vec2',
-        binary('-', variable('gl_FragCoord.xy'), binary('*', variable('u_resolution'), variable('u_anchor'), 'vec2'), 'vec2'),
+        binary('-', fragCoord('native'), binary('*', variable('u_resolution'), variable('u_anchor'), 'vec2'), 'vec2'),
       ),
       // See the glsl() note: reference px -> device px, quantised, shared by the
       // cell grid, the in-cell fract and the cell-centre resample.
@@ -381,7 +381,7 @@ export const ditherNode: NodeDefinition = {
       const suv = `pg_suv_${id}`
       if (colorSource === 'live') {
         stmts.push(declare(suv, 'vec2',
-          binary('/', variable('gl_FragCoord.xy'), variable('u_viewport'), 'vec2')))
+          binary('/', fragCoord('native'), variable('u_viewport'), 'vec2')))
       } else {
         stmts.push(declare(suv, 'vec2',
           binary('/',

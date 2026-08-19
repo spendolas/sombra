@@ -11,7 +11,7 @@
 import type { Node, Edge } from '@xyflow/react'
 import type { NodeData, EdgeData, UniformSpec, PortType, NodeParameter } from '../nodes/types'
 import type { IRNodeOutput, IRContext, IRSpatialTransform } from './ir/types'
-import { raw } from './ir/types'
+import { raw, declare, binary, variable, fragCoord } from './ir/types'
 import { nodeRegistry } from '../nodes/registry'
 import { topologicalSort, hasCycles } from './topological-sort'
 import {
@@ -187,10 +187,11 @@ export function generateNodeIR(
       // Uses FragCoord because on WGSL in.position.y=0 at top matches WebGPU texture convention.
       if (isTextureMode && inputPort.default === 'auto_uv' && inputPort.type === 'vec2') {
         const screenUvVar = `node_${sanitizedNodeId}_screen_uv`
-        preambleStatements.push(raw(
-          `vec2 ${screenUvVar} = gl_FragCoord.xy / u_viewport;`,
-          `let ${screenUvVar}: vec2f = in.position.xy / uniforms.u_viewport;`,
-        ))
+        // fragCoord('native') matches the WebGPU texture convention per backend
+        // (was a hand-written two-arg raw()); byte-identical, now single-source.
+        preambleStatements.push(
+          declare(screenUvVar, 'vec2', binary('/', fragCoord('native'), variable('u_viewport'), 'vec2')),
+        )
         collectedStandardUniforms.add('u_viewport')
         inputs[inputPort.id] = screenUvVar
       } else if (!resolveInputDefaultIR(inputPort, sanitizedNodeId, preambleStatements, inputs, collectedStandardUniforms)) {
@@ -355,11 +356,16 @@ export function resolveInputDefaultIR(
 ): boolean {
   if (inputPort.default === 'auto_uv' && inputPort.type === 'vec2') {
     const autoUvVar = `node_${sanitizedNodeId}_auto_uv`
-    // WGSL: in.position.y is already top-to-bottom — NO y-flip needed
-    preambleStatements.push(raw(
-      `vec2 ${autoUvVar} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * u_anchor) / (u_dpr * u_ref_size) + u_anchor;`,
-      `let ${autoUvVar}: vec2f = (in.position.xy - uniforms.u_resolution * uniforms.u_anchor) / (uniforms.u_dpr * uniforms.u_ref_size) + uniforms.u_anchor;`,
-    ))
+    // fragCoord('yDown') owns the WebGL↔WebGPU Y-origin difference (GLSL flips
+    // gl_FragCoord.y, WGSL's in.position is already y-down) — was hand-written
+    // per-backend as a two-arg raw(). Structured IR, byte-identical output.
+    preambleStatements.push(
+      declare(autoUvVar, 'vec2', binary('+',
+        binary('/',
+          binary('-', fragCoord('yDown'), binary('*', variable('u_resolution'), variable('u_anchor'), 'vec2'), 'vec2'),
+          binary('*', variable('u_dpr'), variable('u_ref_size'), 'float'), 'vec2'),
+        variable('u_anchor'), 'vec2')),
+    )
     uniforms.add('u_resolution')
     uniforms.add('u_anchor')
     uniforms.add('u_dpr')
@@ -373,10 +379,11 @@ export function resolveInputDefaultIR(
   }
   if (inputPort.default === 'auto_fragcoord' && inputPort.type === 'vec2') {
     const autoFcVar = `node_${sanitizedNodeId}_auto_fc`
-    preambleStatements.push(raw(
-      `vec2 ${autoFcVar} = gl_FragCoord.xy - u_resolution * u_anchor;`,
-      `let ${autoFcVar}: vec2f = in.position.xy - uniforms.u_resolution * uniforms.u_anchor;`,
-    ))
+    // fragCoord('native') — byte-identical to the previous two-arg raw() (GLSL
+    // gl_FragCoord.xy, WGSL in.position.xy), now single-source.
+    preambleStatements.push(
+      declare(autoFcVar, 'vec2', binary('-', fragCoord('native'), binary('*', variable('u_resolution'), variable('u_anchor'), 'vec2'), 'vec2')),
+    )
     uniforms.add('u_resolution')
     uniforms.add('u_anchor')
     inputs[inputPort.id] = autoFcVar
