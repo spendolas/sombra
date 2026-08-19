@@ -138,14 +138,20 @@ export class PreviewScheduler {
     // Determine which nodes changed
     const currentNodeIds = new Set(nodes.map(n => n.id))
 
-    // Removed nodes — clean up
+    // Removed nodes — clean up. Also purge the preview-store bitmap: it is
+    // keyed by node id and nothing else purges it (previewStore.clearNodes had
+    // no other caller), so a deleted node's thumbnail lingered and a later node
+    // that reacquired the id inherited the ghost image.
+    const departed: string[] = []
     for (const oldId of prevNodeIds) {
       if (!currentNodeIds.has(oldId)) {
         this.staleNodes.delete(oldId)
         this.shaderCache.delete(oldId)
         this.timeLiveNodes.delete(oldId)
+        departed.push(oldId)
       }
     }
+    if (departed.length) usePreviewStore.getState().clearNodes(departed)
 
     // Detect edge changes (added/removed connections)
     const prevEdgeKey = (e: Edge<EdgeData>) => `${e.source}:${e.sourceHandle}->${e.target}:${e.targetHandle}`
