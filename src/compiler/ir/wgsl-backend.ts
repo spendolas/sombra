@@ -359,13 +359,24 @@ export function lowerExprToWGSL(expr: IRExpr): string {
     case 'call': {
       // WGSL builtin name differences
       let fnName = expr.name
-      if (fnName === 'mod') fnName = 'sombra_mod'
+      if (fnName === 'mod') {
+        // WGSL has no mod() and cannot overload a user fn by signature, so the
+        // helper is name-per-type. Pick the name DETERMINISTICALLY from the
+        // call's result type (was a brittle whole-program regex in the
+        // assembler — see F7 in docs/research/2026-08-19-entanglement-audit.md).
+        fnName = expr.type === 'vec2' ? 'sombra_mod_v2'
+          : expr.type === 'vec3' ? 'sombra_mod_v3'
+          : expr.type === 'vec4' ? 'sombra_mod_v4'
+          : 'sombra_mod'
+      }
       if (fnName === 'atan' && expr.args.length === 2) fnName = 'atan2'
 
       // WGSL builtins like clamp/min/max/mix/smoothstep require matching types.
       // Promote scalar literal args to vector constructors when return type is vector.
       const vecReturnType = expr.type === 'vec2' || expr.type === 'vec3' || expr.type === 'vec4'
-      const PROMOTE_BUILTINS = new Set(['clamp', 'min', 'max', 'mix', 'smoothstep', 'step'])
+      // 'mod' included so a vector mod(vec, scalarLiteral) promotes the scalar to
+      // the vector ctor — sombra_mod_vN takes two matching vectors (no broadcast).
+      const PROMOTE_BUILTINS = new Set(['clamp', 'min', 'max', 'mix', 'smoothstep', 'step', 'mod'])
       if (vecReturnType && PROMOTE_BUILTINS.has(expr.name)) {
         const ctor = wgslConstructorName(expr.type)
         const promoted = expr.args.map(a => {
