@@ -43,6 +43,7 @@
     "verify:node-id": "tsx scripts/verify-node-id.ts",
     "verify:stream-integrity": "tsx scripts/verify-stream-integrity.ts",
     "verify:stream-fixes": "tsx scripts/verify-stream-fixes.ts",
+    "verify:coord-hygiene": "tsx scripts/verify-coord-hygiene.ts",
     "verify:ci": "npm run verify:ir-poc && npm run verify:wgsl-multipass && npm run verify:raw-budget && npm run verify:pass-size && npm run verify:pass-resolution && npm run verify:ir-control-flow && npm run verify:wired-branch && npm run verify:node-id && npm run verify:stream-fixes",
     "build:embed": "vite build --config vite.embed.config.ts",
     "verify:embed:artifact": "tsx scripts/verify-artifact-roundtrip.ts",
