@@ -41,6 +41,7 @@
     "verify:wgsl-multipass": "tsx scripts/validate-wgsl-multipass.ts",
     "verify:video-export": "tsx scripts/verify-video-export.ts",
     "verify:node-id": "tsx scripts/verify-node-id.ts",
+    "verify:stream-integrity": "tsx scripts/verify-stream-integrity.ts",
     "verify:ci": "npm run verify:ir-poc && npm run verify:wgsl-multipass && npm run verify:raw-budget && npm run verify:pass-size && npm run verify:pass-resolution && npm run verify:ir-control-flow && npm run verify:wired-branch && npm run verify:node-id",
     "build:embed": "vite build --config vite.embed.config.ts",
     "verify:embed:artifact": "tsx scripts/verify-artifact-roundtrip.ts",
