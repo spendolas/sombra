@@ -45,7 +45,13 @@ export const gradientNode: NodeDefinition = {
   ],
 
   params: [
-    ...getSpatialParams({ transforms: ['scale', 'rotate', 'translate'] }),
+    // SRT is HIDDEN (not removed) pending the transform/gizmo epic — see
+    // docs/research/2026-08-19-srt-gizmo-epic.md. It is a no-op at the defaults
+    // (scale 1 / rotate 0 / translate 0), inert in stretch mode already, and its
+    // per-mode gizmo/order story is being reworked. Revive by dropping the
+    // `.map(hidden)` once the epic lands. The `spatial` config stays so the
+    // machinery is intact.
+    ...getSpatialParams({ transforms: ['scale', 'rotate', 'translate'] }).map((p) => ({ ...p, hidden: true })),
     {
       id: 'gradientType', label: 'Type', type: 'enum', default: 'linear',
       options: [
