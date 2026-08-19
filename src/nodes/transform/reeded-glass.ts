@@ -410,6 +410,46 @@ const FROST_TAPS = 16
 /** Golden angle, the Vogel/sunflower spiral increment. */
 const GOLDEN_ANGLE = '2.39996323'
 
+/** Peak grain-overlay amplitude at frost=1 (luminance units). Tunable. */
+const GRAIN_OVERLAY_STRENGTH = '0.2'
+
+/**
+ * Additive luminance grain applied ON TOP of the frost result — not inside the
+ * averaged gather (which consumes the per-cell scatter jitter, so that "grain"
+ * is inversely visible vs frost and reads as blurred). This overlay's amplitude
+ * scales WITH frost, so grain increases with frost, and it lands on the final
+ * colour, so it reads as an overlay. Cell seed is the frozen-ref coordinate
+ * (same stability contract as the scatter seed — no re-randomise on resize/DPR).
+ * rgb only, modulated by coverage so transparent stays clean (never writes alpha).
+ * Single emitter parameterised by backend (not hand-written twice).
+ * See docs/research/2026-08-19-grain-overlay-scope.md.
+ */
+function emitGrainOverlay(o: {
+  id: string
+  lang: 'glsl' | 'wgsl'
+  out: string
+  coords: string
+  frost: string
+  grain: string
+}): string {
+  const { id, lang, out, coords, frost, grain } = o
+  const w = lang === 'wgsl'
+  const dcl = (t: string) => (w ? 'let ' : `${t} `)
+  const v2 = w ? 'vec2f' : 'vec2'
+  const v3 = w ? 'vec3f' : 'vec3'
+  const v4 = w ? 'vec4f' : 'vec4'
+  const refSz = w ? 'uniforms.u_ref_size' : 'u_ref_size'
+  const dprU = w ? 'uniforms.u_dpr' : 'u_dpr'
+  const gcell = `rg_gcell_${id}`, ggc = `rg_ggc_${id}`, gn = `rg_gn_${id}`, gamp = `rg_gamp_${id}`
+  return [
+    `${dcl('float')}${gcell} = max(${grain}, 1.0 / ${dprU});`,
+    `${dcl(v2)}${ggc} = floor(${coords} * (${refSz} / ${gcell}));`,
+    `${dcl('float')}${gn} = reedPcg(${ggc}).x - 0.5;`,
+    `${dcl('float')}${gamp} = ${frost} * ${GRAIN_OVERLAY_STRENGTH};`,
+    `${out} = ${v4}(${out}.rgb + ${v3}(${gn} * ${gamp}) * ${out}.a, ${out}.a);`,
+  ].join('\n  ')
+}
+
 /**
  * Frosted glass: a stratified disc gather.
  *
@@ -1076,6 +1116,8 @@ export const reededGlassNode: NodeDefinition = {
       lines.push(`} else {`)
       lines.push(`  ${outputs.color} = texture(${samplerName}, ${sampleUV});`)
       lines.push(`}`)
+      // Grain overlay on top of the frost result (amplitude scales with frost).
+      lines.push(emitGrainOverlay({ id, lang: 'glsl', out: `${outputs.color}`, coords: coordsVar, frost: frostVar, grain: `${inputs.grain}` }))
     } else {
       lines.push(`vec4 ${outputs.color} = ${inputs.source};`)
     }
@@ -1437,6 +1479,9 @@ export const reededGlassNode: NodeDefinition = {
           ],
           [assign(ctx.outputs.color, textureSample(samplerName, variable(sampleUV), 'vec4', lod0))],
         ),
+        // Grain overlay on top of the frost result (single emitter per backend).
+        raw(emitGrainOverlay({ id, lang: 'glsl', out: `${ctx.outputs.color}`, coords: coordsVar, frost: frostVar, grain: `${ctx.inputs.grain}` }),
+            emitGrainOverlay({ id, lang: 'wgsl', out: `${ctx.outputs.color}`, coords: coordsVar, frost: frostVar, grain: `${ctx.inputs.grain}` })),
       ]
             stmts.push(...frostStmts)
     } else {
