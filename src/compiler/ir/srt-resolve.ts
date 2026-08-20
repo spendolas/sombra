@@ -12,9 +12,13 @@
  * Coordinate conventions:
  * - Params: world-frame offsets, +Y = up (ONE STORAGE — see ir/srt.ts).
  * - Gizmo space: canvas CSS px, y-DOWN, relative to the canvas anchor point
- *   (the Fragment Output anchor at `canvasSize * anchorFraction`). A world
- *   offset of T px displaces content exactly T CSS px, so `originOffset` is
- *   directly addable to the anchor's CSS position.
+ *   (the Fragment Output anchor at `canvasSize * anchorFraction`).
+ * - A world offset of T px displaces content T px in the render BUFFER
+ *   (auto_uv's u_dpr divisor cancels against the buffer's dpr·qualityScale),
+ *   i.e. T × cssPerPx CSS px where cssPerPx = canvasRect.width / canvas.width.
+ *   The caller measures that ratio off the live canvas and passes it in;
+ *   originOffset and dragTranslate bake it, so the gizmo tracks the content
+ *   1:1 on any dpr / adaptive-quality tier.
  * - `space` mirrors the node's Offset Space view param: it changes the AXES
  *   the gizmo shows/constrains to — never the stored values (one storage).
  *
@@ -58,6 +62,11 @@ export interface ResolvedSRT {
 export interface ResolveSRTOptions {
   /** The node's SpatialConfig transforms (which SRT ops exist). */
   transforms: ReadonlyArray<'scale' | 'scaleXY' | 'rotate' | 'translate'>
+  /**
+   * CSS px that one world-offset px displaces content on screen:
+   * canvasRect.width / canvas.width (buffer px). Default 1 (dpr-1, full-res).
+   */
+  cssPerPx?: number
 }
 
 const deg2rad = Math.PI / 180
@@ -79,6 +88,7 @@ export function resolveSRT(params: Record<string, unknown>, opts: ResolveSRTOpti
   const sx = has.scaleXY ? ((params.srt_scaleX as number) ?? 1) : ((params.srt_scale as number) ?? 1)
   const sy = has.scaleXY ? ((params.srt_scaleY as number) ?? 1) : ((params.srt_scale as number) ?? 1)
   const space = normalizeTranslateSpace(params.srt_translateSpace)
+  const cssPerPx = opts.cssPerPx && Number.isFinite(opts.cssPerPx) && opts.cssPerPx > 0 ? opts.cssPerPx : 1
 
   const rad = rotate * deg2rad
   const c = Math.cos(rad), s = Math.sin(rad)
@@ -104,8 +114,9 @@ export function resolveSRT(params: Record<string, unknown>, opts: ResolveSRTOpti
       dx = a.x * k
       dy = a.y * k
     }
-    // CSS displacement (dx, dy) ↔ world params (+dx, −dy): +Y param = up.
-    return { srt_translateX: tx + dx, srt_translateY: ty - dy }
+    // CSS displacement (dx, dy) → offset px (÷cssPerPx so content tracks the
+    // cursor 1:1) → world params (+dx, −dy): +Y param = up.
+    return { srt_translateX: tx + dx / cssPerPx, srt_translateY: ty - dy / cssPerPx }
   }
 
   // Visible content rotation in CSS y-down is −θ (see header): the handle sits
@@ -132,7 +143,7 @@ export function resolveSRT(params: Record<string, unknown>, opts: ResolveSRTOpti
     scale: { x: sx, y: sy },
     space,
     has,
-    originOffset: { x: tx, y: -ty },
+    originOffset: { x: tx * cssPerPx, y: -ty * cssPerPx },
     axes,
     rotateHandleAngle,
     scaleMag,

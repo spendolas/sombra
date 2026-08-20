@@ -143,7 +143,11 @@ export function SrtGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetRef }
       if (!rect) return
       const latest = useGraphStore.getState().nodes.find((n) => n.id === nodeId)
       const latestParams = (latest?.data.params ?? {}) as Record<string, unknown>
-      const r: ResolvedSRT = resolveSRT(latestParams, { transforms })
+      // CSS px per world-offset px, measured off the live canvas (buffer px) —
+      // tracks content across dpr and adaptive-quality buffer scaling.
+      const cv = canvasElRef.current
+      const cssPerPx = cv && cv.width > 0 ? rect.width / cv.width : 1
+      const r: ResolvedSRT = resolveSRT(latestParams, { transforms, cssPerPx })
       // Gizmo center in viewport px: canvas anchor point + world offset.
       const cx = rect.left + rect.width * outputAnchor[0] + r.originOffset.x
       const cy = rect.top + rect.height * outputAnchor[1] + r.originOffset.y
@@ -178,7 +182,9 @@ export function SrtGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetRef }
 
   if (!active || !canvasRect || !spatial) return null
 
-  const r = resolveSRT(currentParams, { transforms: spatial.transforms })
+  const canvasEl = canvasElRef.current
+  const cssPerPx = canvasEl && canvasEl.width > 0 ? canvasRect.width / canvasEl.width : 1
+  const r = resolveSRT(currentParams, { transforms: spatial.transforms, cssPerPx })
   // Center within the overlay (overlay div is positioned at the canvas rect).
   const cx = canvasRect.width * outputAnchor[0] + r.originOffset.x
   const cy = canvasRect.height * outputAnchor[1] + r.originOffset.y
