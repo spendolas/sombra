@@ -494,12 +494,21 @@ export function openSombraFile(): Promise<unknown> {
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = '.sombra,.json'
-    input.style.display = 'none'
+    input.hidden = true
+
+    let settled = false
+    const finish = (result: { value: unknown } | { error: Error }) => {
+      if (settled) return
+      settled = true
+      input.remove()
+      if ('error' in result) reject(result.error)
+      else resolve(result.value)
+    }
 
     input.addEventListener('change', () => {
       const file = input.files?.[0]
       if (!file) {
-        reject(new Error('No file selected'))
+        finish({ error: new Error('File selection cancelled') })
         return
       }
 
@@ -507,22 +516,24 @@ export function openSombraFile(): Promise<unknown> {
       reader.onload = () => {
         try {
           const json = JSON.parse(reader.result as string)
-          resolve(json)
+          finish({ value: json })
         } catch {
-          reject(new Error('Failed to parse file as JSON'))
+          finish({ error: new Error('Failed to parse file as JSON') })
         }
       }
-      reader.onerror = () => reject(new Error('Failed to read file'))
+      reader.onerror = () => finish({ error: new Error('Failed to read file') })
       reader.readAsText(file)
     })
 
     // Handle cancel (no file selected)
     input.addEventListener('cancel', () => {
-      reject(new Error('File selection cancelled'))
+      finish({ error: new Error('File selection cancelled') })
     })
 
+    // Keep the input connected until the picker resolves. Removing it directly
+    // after click() detaches the event target while the native picker is open;
+    // Chrome and Safari may then drop the eventual change event entirely.
     document.body.appendChild(input)
     input.click()
-    document.body.removeChild(input)
   })
 }
