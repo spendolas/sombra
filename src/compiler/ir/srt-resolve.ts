@@ -28,7 +28,7 @@
  * `space` mirrors the GLOBAL coords-view switch: it changes the AXES the gizmo
  * shows/constrains to — never the stored values (ONE STORAGE, see ir/srt.ts).
  */
-import { normalizeTranslateSpace, nodeOffsetToWorld } from './srt'
+import { normalizeTranslateSpace, nodeOffsetToWorld, worldOffsetToNode } from './srt'
 import { REFERENCE_SIZE } from '../../renderer/constants'
 import type { TranslateSpace } from './types'
 
@@ -80,6 +80,14 @@ export interface ResolveSRTOptions {
   /** The coords-view frame (the GLOBAL switch). Falls back to the node's
    *  stored srt_translateSpace (legacy saves), then 'world'. */
   space?: TranslateSpace
+  /**
+   * What the node's stored offsets MEAN. 'world' (default): one-storage,
+   * framework-injected SRT. 'node-legacy': hand-rolled SRT that still applies
+   * translate inside the scaled+rotated frame (reeded_glass) — params are
+   * node-frame values, so the visible shift is S·R(−θ)·t and the mappers wrap
+   * the same conversions the migration uses. Dies with the reeded migration.
+   */
+  translateFrame?: 'world' | 'node-legacy'
 }
 
 const deg2rad = Math.PI / 180
@@ -143,6 +151,21 @@ export function resolveSRT(params: Record<string, unknown>, opts: ResolveSRTOpti
     ? { x: axisDir(1, 0, 1, 0), y: axisDir(0, 1, 0, -1) }
     : { x: worldAxis(1, 0, 1, 0), y: worldAxis(0, 1, 0, -1) }
 
+  // Stored-offset meaning: in 'node-legacy' (hand-rolled reeded SRT) the
+  // params are node-frame, so the content-visible world step is
+  // nodeOffsetToWorld(params) and writes convert back with worldOffsetToNode.
+  const legacy = opts.translateFrame === 'node-legacy'
+  const paramsToWorld = (px: number, py: number): Vec2 => {
+    if (!legacy) return { x: px, y: py }
+    const w = nodeOffsetToWorld(px, py, rotate, sx, sy)
+    return { x: w.tx, y: w.ty }
+  }
+  const worldToParams = (wx: number, wy: number): Vec2 => {
+    if (!legacy) return { x: wx, y: wy }
+    const n = worldOffsetToNode(wx, wy, rotate, sx, sy)
+    return { x: n.tx, y: n.ty }
+  }
+
   const dragTranslate = (dxCss: number, dyCss: number, constraint: 'free' | 'x' | 'y') => {
     let dx = dxCss, dy = dyCss
     if (constraint !== 'free') {
@@ -152,7 +175,11 @@ export function resolveSRT(params: Record<string, unknown>, opts: ResolveSRTOpti
       dy = a.y * k
     }
     const d = toParam(dx, dy)
-    return { srt_translateX: tx + d.x, srt_translateY: ty + d.y }
+    // World step → stored-frame step. For legacy the delta must convert as a
+    // VECTOR (difference of converted absolutes keeps rotation/scale exact).
+    const cur = paramsToWorld(tx, ty)
+    const next = worldToParams(cur.x + d.x, cur.y + d.y)
+    return { srt_translateX: next.x, srt_translateY: next.y }
   }
 
   // Rotate handle sits along the css direction of a unit node-X offset at the
@@ -187,7 +214,7 @@ export function resolveSRT(params: Record<string, unknown>, opts: ResolveSRTOpti
     scale: { x: sx, y: sy },
     space,
     has,
-    originOffset: toCss(tx, ty),
+    originOffset: (() => { const w = paramsToWorld(tx, ty); return toCss(w.x, w.y) })(),
     axes,
     rotateHandleAngle,
     scaleMag,
