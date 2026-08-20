@@ -167,3 +167,26 @@ Needs a look-preserving pixel harness FIRST (frost/grain must not shift).
 
 Each kill deletes a `resolveSRT`/overlay special case AND a `KNOWN_DEVIATIONS`
 entry — the ratchet reaches 0 when all three land.
+
+## IMPLEMENTED 2026-08-21 — ctx.spatialCoords + effect-in-place (warp done)
+
+The "poll the SRT API" model is real. A node polls the framework for its
+own-content coordinate and computes freely; it never re-derives the transform:
+
+- **ctx.spatialCoords** (GLSLContext + IRContext): the node's own-content coord
+  = auto_uv with the framework SRT (single source, emitSRT) applied. Present for
+  spatial nodes, both codegen paths, both single-pass and texture mode. This is
+  the "finished spot" a node reads to position its own structure.
+- **Effect in place (texture mode):** the framework no longer SRTs the sample
+  base — `inputs.coords` stays the raw screen_uv, so the source is read in its
+  own frame. SRT is applied ONLY to `ctx.spatialCoords`. Move the source by
+  putting SRT on the SOURCE node (its own SRT), never through the effect. This
+  is the coords-vs-source-read split, now enforced by the framework rather than
+  hand-rolled per node.
+- **warp migrated:** noise field ← ctx.spatialCoords; sample base ← raw
+  screen_uv; hand-rolled SRT deleted. Off the conformity ratchet (2 left).
+  Pixel-verified: source fixed under warp scale, only the noise field responds.
+
+The remaining migrations (image, reeded) follow this exact pattern: consume
+ctx.spatialCoords for own structure, sample sources in their own frame, delete
+the hand-rolls. The conformity auditor reaches 0 when they do.
