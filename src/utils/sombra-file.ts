@@ -9,8 +9,12 @@ import pako from 'pako'
 import type { Node, Edge } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
+import { migrateOffsetSpace } from './srt-migration'
 
-export const SOMBRA_FILE_VERSION = 2
+// v3: ONE-STORAGE Offset Space — srt_translateX/Y store the world-frame offset.
+// Files < 3 were authored under node-frame translate semantics and get their
+// offsets converted on import (srt-migration.ts).
+export const SOMBRA_FILE_VERSION = 3
 
 export interface SombraFile {
   sombra: number
@@ -218,6 +222,14 @@ export function importFromFile(json: unknown): {
     nodes = migrateV1ToV2(nodes)
   }
 
+  // v2 → v3: ONE-STORAGE Offset Space — pre-v3 offsets were node-frame; convert
+  // to world so the file renders identically. MUST run BEFORE the defaults
+  // merge below: seeding the srt_translateSpace default would destroy the
+  // missing-key signal the migration keys on.
+  if (fileVersion < 3) {
+    nodes = migrateOffsetSpace(nodes, 'convert').nodes
+  }
+
   // Merge definition defaults for params added after the file was saved —
   // mirrors decodeCompactHash; without this a missing param arrives undefined
   // and bakes NaN/fallback garbage into generated shaders.
@@ -342,7 +354,9 @@ interface CompactEdge {
 }
 
 interface CompactGraph {
-  v: 1
+  // v2: ONE-STORAGE Offset Space (world-frame offsets). v1 offsets were
+  // node-frame and are converted on decode.
+  v: 1 | 2
   n: CompactNode[]
   e: CompactEdge[]
 }
@@ -413,7 +427,7 @@ export function encodeCompactHash(
     th: edge.targetHandle!,
   }))
 
-  const compact: CompactGraph = { v: 1, n: compactNodes, e: compactEdges }
+  const compact: CompactGraph = { v: 2, n: compactNodes, e: compactEdges }
   const json = JSON.stringify(compact)
   const compressed = pako.deflate(new TextEncoder().encode(json))
   return toBase64Url(compressed)
@@ -434,12 +448,12 @@ export function decodeCompactHash(hash: string): {
   const json = new TextDecoder().decode(pako.inflate(bytes))
   const compact = JSON.parse(json) as CompactGraph
 
-  if (compact.v !== 1) {
+  if (compact.v !== 1 && compact.v !== 2) {
     throw new Error(`Unsupported compact format version: ${compact.v}`)
   }
 
   // Reconstruct full nodes
-  const nodes: Node<NodeData>[] = compact.n.map(cn => {
+  let nodes: Node<NodeData>[] = compact.n.map(cn => {
     const def = nodeRegistry.get(cn.t)
     if (!def) throw new Error(`Unknown node type "${cn.t}"`)
 
@@ -452,6 +466,13 @@ export function decodeCompactHash(hash: string): {
     }
     if (cn.p) Object.assign(params, cn.p)
 
+    // v1 hash: encode strips default params, so a seeded srt_translateSpace
+    // default is NOT stored data — remove it to restore the missing-key signal
+    // the one-storage migration below keys on (an explicit stored value stays).
+    if (compact.v === 1 && !(cn.p && 'srt_translateSpace' in cn.p)) {
+      delete params.srt_translateSpace
+    }
+
     return {
       id: cn.i,
       type: 'shaderNode',
@@ -459,6 +480,12 @@ export function decodeCompactHash(hash: string): {
       data: { type: cn.t, params },
     }
   })
+
+  // v1 → v2: ONE-STORAGE Offset Space — v1 offsets were node-frame; convert to
+  // world so shared links render identically.
+  if (compact.v === 1) {
+    nodes = migrateOffsetSpace(nodes, 'convert').nodes
+  }
 
   // Reconstruct full edges
   const edges: Edge<EdgeData>[] = compact.e.map(ce => {

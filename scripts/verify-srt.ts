@@ -1,45 +1,54 @@
 /**
  * Regression gate for the SRT single-source op-list (src/compiler/ir/srt.ts).
- * (docs/research/2026-08-20-srt-api-design-spec.md)
+ * (docs/research/2026-08-20-srt-api-design-spec.md — see its decision log.)
  *
- * emitSRT() is now the ONE place the compose order lives — both IR backends and
- * the legacy GLSL generator route through it. This gate asserts:
+ * ONE STORAGE model: srt_translateX/Y always store the WORLD-frame offset and
+ * the shader has exactly ONE translate semantic (translate applied in the world
+ * frame, before the anchor/scale/rotate block). The Offset Space param
+ * ('world'/'node') is a VIEW/edit mode that never reaches codegen. This gate
+ * asserts:
  *   A. single source — GLSL and WGSL emit the SAME op order (only syntax differs).
- *   B. translateSpace positions translate correctly: 'world' applies it BEFORE
- *      the anchor/scale/rotate block (constant canvas nudge); 'node' AFTER
- *      rotate (in the node's scaled+rotated frame). Perturbation: world ≠ node —
- *      if translateSpace were ignored the two would be identical and this fails.
- *   C. 'node' is byte-identical to the pre-refactor hand-written lowering, so
- *      the consolidation didn't change legacy behaviour (bare uniform names; the
- *      assembler rewrites them to uniforms.* for WGSL — coord-contract:gpu
- *      proves the post-rewrite render is unchanged).
- *   D. exposeTranslateSpace reaches node params for exactly the exposed nodes.
- *   E. legacy alias migration — stored 'screen'/'local' values (pre-rename
- *      saves) normalize to 'world'/'node' and emit byte-identically.
+ *   B. single semantic — translate lands in the opening decl and is applied
+ *      exactly ONCE (the retired node-frame application after rotate is gone).
+ *   C. emit is byte-pinned to the canonical world lowering.
+ *   D. exposeTranslateSpace reaches node params for exactly the exposed nodes,
+ *      with World/node values, default world.
+ *   E. frame conversions (edit layer + migration math): known numeric case +
+ *      world↔node round-trips, including non-uniform scale.
+ *   F. load-time migration (srt-migration.ts): pre-one-storage saves convert
+ *      ('convert' mode), localStorage stamps without touching values
+ *      ('stamp-only'), canonical saves untouched (idempotent), hand-rolled SRT
+ *      types untouched, and the migrating-type list cannot drift from the
+ *      registry's spatial configs.
  *
  * Run: npx tsx scripts/verify-srt.ts
  */
-import { emitSRT, normalizeTranslateSpace } from '../src/compiler/ir/srt'
+import type { Node } from '@xyflow/react'
+import { emitSRT, normalizeTranslateSpace, worldOffsetToNode, nodeOffsetToWorld } from '../src/compiler/ir/srt'
 import type { IRSpatialTransform } from '../src/compiler/ir/types'
-import { ALL_NODES } from '../src/nodes/index'
+import type { NodeData } from '../src/nodes/types'
+import { ALL_NODES, initializeNodeLibrary } from '../src/nodes/index'
+import { migrateOffsetSpace, FRAMEWORK_SPATIAL_TRANSLATE_TYPES } from '../src/utils/srt-migration'
+import { importFromFile, exportToFile, encodeCompactHash, decodeCompactHash } from '../src/utils/sombra-file'
+import pako from 'pako'
 
 let failures = 0
 const check = (name: string, cond: boolean, detail = '') => {
   console.log(`  ${cond ? '[PASS]' : '[FAIL]'} ${name}${cond ? '' : ` — ${detail}`}`)
   if (!cond) failures++
 }
+const approx = (a: number, b: number, eps = 1e-6) => Math.abs(a - b) < eps
 
-const full = (translateSpace: IRSpatialTransform['translateSpace']): IRSpatialTransform => ({
+const full = (): IRSpatialTransform => ({
   coordsVar: 'C', outputVar: 'V',
   scaleUniform: 'S', rotateUniform: 'R',
   translateXUniform: 'TX', translateYUniform: 'TY',
-  translateSpace,
 })
 
 /** Tag each line by which op it is, so GLSL and WGSL can be compared structurally. */
 function ops(lines: string[]): string[] {
   return lines.map((l) => {
-    if (/TX/.test(l) && /C\b/.test(l)) return 'start+translate' // world: decl includes translate
+    if (/TX/.test(l) && /C\b/.test(l)) return 'start+translate' // world decl includes translate
     if (/=\s*C\b/.test(l) || /=\s*C /.test(l)) return 'start'
     if (/-= u_anchor/.test(l)) return 'subAnchor'
     if (/\/=/.test(l)) return 'scale'
@@ -53,50 +62,40 @@ function ops(lines: string[]): string[] {
 }
 
 console.log('\nA. single source — GLSL and WGSL emit the same op order')
-for (const space of ['world', 'node'] as const) {
-  const g = ops(emitSRT(full(space), 'glsl'))
-  const w = ops(emitSRT(full(space), 'wgsl'))
-  check(`${space}: op order identical across backends`, JSON.stringify(g) === JSON.stringify(w), `glsl=${g} wgsl=${w}`)
-}
-
-console.log('\nB. translateSpace positions translate (world before the block, node after rotate)')
 {
-  const world = emitSRT(full('world'), 'wgsl')
-  const node = emitSRT(full('node'), 'wgsl')
-  const idx = (lines: string[], re: RegExp) => lines.findIndex((l) => re.test(l))
-  // world: translate is in the very first line (the declaration), before subAnchor
-  check('world: translate in the opening decl (before subAnchor)', /TX/.test(world[0]) && /C\b/.test(world[0]))
-  check('world: translate NOT inside the scale block', idx(world, /TX/) < idx(world, /\/=/))
-  // node: translate after the rotate apply, before addAnchor
-  const tNode = idx(node, /-=.*TX/)
-  check('node: translate after rotate', tNode > idx(node, /\.x \* V_c/), `tNode=${tNode}`)
-  check('node: translate before addAnchor', tNode < idx(node, /\+= u_anchor/))
-  // mechanism-engaged: the two modes MUST differ (else translateSpace is a no-op)
-  check('world ≠ node (translateSpace actually changes the emit)', JSON.stringify(world) !== JSON.stringify(node))
+  const g = ops(emitSRT(full(), 'glsl'))
+  const w = ops(emitSRT(full(), 'wgsl'))
+  check('op order identical across backends', JSON.stringify(g) === JSON.stringify(w), `glsl=${g} wgsl=${w}`)
 }
 
-console.log("\nC. 'node' byte-identical to the pre-refactor hand-written lowering")
+console.log('\nB. single semantic — translate applied once, in the opening decl')
+{
+  const lines = emitSRT(full(), 'wgsl')
+  check('translate in the opening decl (world frame, before subAnchor)', /TX/.test(lines[0]) && /C\b/.test(lines[0]))
+  const translateLines = lines.filter((l) => /TX/.test(l))
+  check('translate applied exactly ONCE (node-frame application retired)', translateLines.length === 1,
+    `found ${translateLines.length}: ${JSON.stringify(translateLines)}`)
+  const cosIdx = lines.findIndex((l) => /cos\(/.test(l))
+  check('no translate after rotate', !lines.some((l, i) => i > cosIdx && /TX/.test(l)))
+}
+
+console.log('\nC. emit byte-pinned to the canonical world lowering')
 {
   const expected = [
-    'var V: vec2f = C - u_anchor;',
+    'var V: vec2f = C - vec2f(TX, -(TY)) / (u_dpr * u_ref_size);',
+    'V -= u_anchor;',
     'V /= vec2f(S);',
     'let V_rad: f32 = R * 0.01745329;',
     'let V_c: f32 = cos(V_rad); let V_s: f32 = sin(V_rad);',
     'V = vec2f(V.x * V_c - V.y * V_s, V.x * V_s + V.y * V_c);',
-    'V -= vec2f(TX, -(TY)) / (u_dpr * u_ref_size);',
     'V += u_anchor;',
   ]
-  const got = emitSRT(full('node'), 'wgsl')
-  check('node WGSL matches the canonical (pre-refactor) lines', JSON.stringify(got) === JSON.stringify(expected),
+  const got = emitSRT(full(), 'wgsl')
+  check('WGSL matches the canonical world lines', JSON.stringify(got) === JSON.stringify(expected),
     `\n    got: ${JSON.stringify(got)}\n    exp: ${JSON.stringify(expected)}`)
 }
 
-console.log('\nD. exposeTranslateSpace reaches node params')
-// The flag lives on the node's `spatial:` field, but params come from a SEPARATE
-// getSpatialParams({...}) call literal — the two drift trivially (they did: the
-// param was set on spatial: yet never passed to the call, so it never rendered).
-// This asserts the wiring end-to-end. Mechanism-engaged: drop the flag from any of
-// the 5 calls and this fails (verified — that was the shipped bug).
+console.log('\nD. exposeTranslateSpace reaches node params (World/node, default world)')
 {
   const exposed = new Set(['noise', 'fbm', 'stripes', 'dots', 'checkerboard'])
   for (const n of ALL_NODES) {
@@ -113,19 +112,150 @@ console.log('\nD. exposeTranslateSpace reaches node params')
       check(`${n.type}: does not leak Offset Space param`, false, 'unexpected srt_translateSpace')
     }
   }
+  check("normalize('screen') === 'world' (legacy alias)", normalizeTranslateSpace('screen') === 'world')
+  check("normalize('local') === 'node' (legacy alias)", normalizeTranslateSpace('local') === 'node')
+  check("normalize(undefined) === 'world' (default)", normalizeTranslateSpace(undefined) === 'world')
 }
 
-console.log("\nE. legacy alias migration — 'screen'→'world', 'local'→'node'")
+console.log('\nE. frame conversions (view/edit + migration math)')
 {
-  check("normalize('screen') === 'world'", normalizeTranslateSpace('screen') === 'world')
-  check("normalize('local') === 'node'", normalizeTranslateSpace('local') === 'node')
-  check("normalize(undefined) === 'world' (default)", normalizeTranslateSpace(undefined) === 'world')
-  check("normalize('garbage') === 'world' (safe fallback)", normalizeTranslateSpace('garbage') === 'world')
-  for (const lang of ['glsl', 'wgsl'] as const) {
-    check(`${lang}: legacy 'screen' emits byte-identically to 'world'`,
-      JSON.stringify(emitSRT(full('screen'), lang)) === JSON.stringify(emitSRT(full('world'), lang)))
-    check(`${lang}: legacy 'local' emits byte-identically to 'node'`,
-      JSON.stringify(emitSRT(full('local'), lang)) === JSON.stringify(emitSRT(full('node'), lang)))
+  // Known case (live-verified in the renderer sandbox): rot 30°, scale 1,
+  // world (120, 0) reads as node (103.92, −60).
+  const n = worldOffsetToNode(120, 0, 30, 1, 1)
+  check('world (120,0) @ rot30 → node (103.92, −60)', approx(n.tx, 103.92, 0.01) && approx(n.ty, -60, 0.01),
+    `got (${n.tx}, ${n.ty})`)
+  const w = nodeOffsetToWorld(n.tx, n.ty, 30, 1, 1)
+  check('…and round-trips back to (120, 0)', approx(w.tx, 120) && approx(w.ty, 0), `got (${w.tx}, ${w.ty})`)
+  // Non-uniform scale round-trip (uv_transform uses scaleXY)
+  const w2 = nodeOffsetToWorld(10, 0, 90, 2, 3)
+  const n2 = worldOffsetToNode(w2.tx, w2.ty, 90, 2, 3)
+  check('non-uniform scale round-trips (10,0) @ rot90 sx2 sy3', approx(n2.tx, 10) && approx(n2.ty, 0),
+    `world=(${w2.tx},${w2.ty}) back=(${n2.tx},${n2.ty})`)
+  // Degenerate scale must not produce non-finite view values
+  const g = worldOffsetToNode(50, 20, 45, 0, 0)
+  check('degenerate scale view is finite', Number.isFinite(g.tx) && Number.isFinite(g.ty))
+}
+
+console.log('\nF. load-time migration (srt-migration.ts)')
+{
+  const mk = (type: string, params: Record<string, unknown>): Node<NodeData> =>
+    ({ id: `${type}-t`, type: 'shaderNode', position: { x: 0, y: 0 }, data: { type, params } }) as Node<NodeData>
+  const P = (n: Node<NodeData>) => n.data.params as Record<string, unknown>
+
+  // convert mode: missing key = main-era node-semantics save → values convert
+  {
+    const r = migrateOffsetSpace([mk('stripes', { srt_translateX: 120, srt_translateY: 0, srt_rotate: 30, srt_scale: 2 })], 'convert')
+    const p = P(r.nodes[0])
+    const exp = nodeOffsetToWorld(120, 0, 30, 2, 2)
+    check('convert: missing key → offsets converted node→world',
+      approx(p.srt_translateX as number, exp.tx) && approx(p.srt_translateY as number, exp.ty),
+      `got (${p.srt_translateX}, ${p.srt_translateY}) exp (${exp.tx}, ${exp.ty})`)
+    check("convert: missing key → stamped 'world'", p.srt_translateSpace === 'world')
+    check('convert: reports migrated', r.migrated === 1)
+  }
+  // stamp-only mode: values untouched (localStorage rendered world all along)
+  {
+    const r = migrateOffsetSpace([mk('stripes', { srt_translateX: 120, srt_translateY: 0, srt_rotate: 30, srt_scale: 2 })], 'stamp-only')
+    const p = P(r.nodes[0])
+    check('stamp-only: values untouched', p.srt_translateX === 120 && p.srt_translateY === 0)
+    check("stamp-only: stamped 'world'", p.srt_translateSpace === 'world')
+  }
+  // legacy 'local' (QA-era node shader semantics) → convert, keep the view as 'node'
+  {
+    const r = migrateOffsetSpace([mk('dots', { srt_translateX: 120, srt_translateY: 0, srt_rotate: 30, srt_scale: 1, srt_translateSpace: 'local' })], 'stamp-only')
+    const p = P(r.nodes[0])
+    const exp = nodeOffsetToWorld(120, 0, 30, 1, 1)
+    check("'local' → converted even in stamp-only (explicit node semantics)",
+      approx(p.srt_translateX as number, exp.tx) && approx(p.srt_translateY as number, exp.ty),
+      `got (${p.srt_translateX}, ${p.srt_translateY})`)
+    check("'local' → view preserved as 'node'", p.srt_translateSpace === 'node')
+  }
+  // legacy 'screen' (QA-era world shader semantics) → rename only
+  {
+    const r = migrateOffsetSpace([mk('noise', { srt_translateX: 40, srt_translateY: 5, srt_scale: 3, srt_translateSpace: 'screen' })], 'convert')
+    const p = P(r.nodes[0])
+    check("'screen' → values untouched, renamed 'world'",
+      p.srt_translateX === 40 && p.srt_translateY === 5 && p.srt_translateSpace === 'world')
+  }
+  // canonical saves untouched → idempotent
+  {
+    const canonical = mk('stripes', { srt_translateX: 7, srt_translateY: 8, srt_rotate: 45, srt_scale: 2, srt_translateSpace: 'node' })
+    const r = migrateOffsetSpace([canonical], 'convert')
+    check('idempotent: canonical save untouched', r.migrated === 0 && r.nodes[0] === canonical)
+  }
+  // hand-rolled SRT types never migrate
+  {
+    const reeded = mk('reeded_glass', { srt_translateX: 100, srt_rotate: 45, srt_scale: 2 })
+    const r = migrateOffsetSpace([reeded], 'convert')
+    check('reeded_glass (hand-rolled SRT) untouched', r.migrated === 0 && r.nodes[0] === reeded)
+  }
+  // drift gate: the hardcoded list must equal the registry's framework-spatial
+  // translate nodes — adding/removing spatial: on a node without updating the
+  // migration list fails here.
+  {
+    const fromRegistry = new Set(
+      ALL_NODES.filter((n) => n.spatial?.transforms.some((t) => t === 'translate')).map((n) => n.type),
+    )
+    const a = [...fromRegistry].sort().join(',')
+    const b = [...FRAMEWORK_SPATIAL_TRANSLATE_TYPES].sort().join(',')
+    check('migration list matches registry spatial configs', a === b, `registry=[${a}] list=[${b}]`)
+  }
+}
+
+console.log('\nG. file/share formats route through the migration (version-fingerprinted)')
+{
+  initializeNodeLibrary()
+  const mkFileNode = (id: string, type: string, params: Record<string, unknown>) =>
+    ({ id, type: 'shaderNode', position: { x: 0, y: 0 }, data: { type, params } })
+  const legacyParams = { srt_translateX: 120, srt_translateY: 0, srt_rotate: 30, srt_scale: 2, width: 40, gap: 40 }
+  const expW = nodeOffsetToWorld(120, 0, 30, 2, 2)
+  const getP = (nodes: Node<NodeData>[], id: string) => nodes.find((n) => n.id === id)!.data.params as Record<string, unknown>
+
+  // .sombra v2 (pre-one-storage): offsets convert; the defaults merge must not
+  // have destroyed the missing-key signal (regression: it did, live).
+  {
+    const r = importFromFile({ sombra: 2, nodes: [mkFileNode('a', 'stripes', { ...legacyParams })], edges: [] })
+    const p = getP(r.nodes, 'a')
+    check('.sombra v2: offsets converted node→world',
+      approx(p.srt_translateX as number, expW.tx) && approx(p.srt_translateY as number, expW.ty),
+      `got (${p.srt_translateX}, ${p.srt_translateY}) exp (${expW.tx}, ${expW.ty})`)
+    check(".sombra v2: stamped 'world'", p.srt_translateSpace === 'world')
+  }
+  // .sombra v3 (one-storage): values untouched
+  {
+    const r = importFromFile({ sombra: 3, nodes: [mkFileNode('a', 'stripes', { ...legacyParams, srt_translateSpace: 'world' })], edges: [] })
+    const p = getP(r.nodes, 'a')
+    check('.sombra v3: values untouched', p.srt_translateX === 120 && p.srt_translateY === 0)
+  }
+  // exportToFile now writes v3
+  check('exportToFile writes sombra: 3', exportToFile([], []).sombra === 3)
+  // Compact round-trip of a canonical world graph is lossless — the encoder
+  // strips default params; v2 decode must NOT misread that as legacy.
+  {
+    // The encoder keeps only nodes wired to the Fragment Output — include one.
+    const nodes = [
+      mkFileNode('c', 'stripes', { ...legacyParams, srt_translateSpace: 'world' }),
+      mkFileNode('out', 'fragment_output', {}),
+    ] as Node<NodeData>[]
+    const edges = [{ id: 'e1', source: 'c', target: 'out', sourceHandle: 'color', targetHandle: 'color' }] as never[]
+    const r = decodeCompactHash(encodeCompactHash(nodes, edges))
+    const p = getP(r.nodes, 'c')
+    check('compact v2 round-trip: offsets lossless (no double conversion)',
+      p.srt_translateX === 120 && p.srt_translateY === 0 && p.srt_translateSpace === 'world',
+      `got (${p.srt_translateX}, ${p.srt_translateY}, ${p.srt_translateSpace})`)
+  }
+  // Hand-built compact v1 (legacy share URL): stripped default must not mask
+  // the missing key — offsets convert.
+  {
+    const compact = { v: 1, n: [{ i: 'l1', t: 'stripes', p: { srt_translateX: 120, srt_rotate: 30, srt_scale: 2 } }], e: [] }
+    const bytes = pako.deflate(new TextEncoder().encode(JSON.stringify(compact)))
+    const b64 = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    const r = decodeCompactHash(b64)
+    const p = getP(r.nodes, 'l1')
+    check('compact v1: offsets converted node→world',
+      approx(p.srt_translateX as number, expW.tx) && approx(p.srt_translateY as number, expW.ty),
+      `got (${p.srt_translateX}, ${p.srt_translateY}) exp (${expW.tx}, ${expW.ty})`)
+    check("compact v1: stamped 'world'", p.srt_translateSpace === 'world')
   }
 }
 

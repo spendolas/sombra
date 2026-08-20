@@ -7,6 +7,7 @@ import { Position, useEdges, type NodeProps } from '@xyflow/react'
 import { matchesShowWhen, type NodeData, type NodeParameter } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { FloatSlider, AnchorGrid, EnumSelect, BoolCheckbox, SegmentedControl } from './NodeParameters'
+import { normalizeTranslateSpace, worldOffsetToNode, nodeOffsetToWorld } from '../compiler/ir/srt'
 import { useGraphStore } from '../stores/graphStore'
 import { usePreviewStore } from '../stores/previewStore'
 import { useCompilerStore } from '../stores/compilerStore'
@@ -92,6 +93,21 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
         params: {
           ...(nodeData.params || {}),
           [paramId]: value,
+        },
+      })
+    },
+    [id, nodeData.params, updateNodeData]
+  )
+
+  // Multi-param write in ONE update — two sequential handleParamChange calls
+  // would clobber each other through the stale nodeData.params closure.
+  // Used by the Node-view offset sliders (one drag writes both X and Y).
+  const handleParamsChange = useCallback(
+    (patch: Record<string, unknown>) => {
+      updateNodeData(id, {
+        params: {
+          ...(nodeData.params || {}),
+          ...patch,
         },
       })
     },
@@ -307,6 +323,26 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
     return [raw[0] ?? 0, raw[1] ?? 0, raw[2] ?? 0, raw[3] ?? 1]
   })()
 
+  // ONE STORAGE Offset Space: srt_translateX/Y always store the WORLD offset;
+  // the Offset Space toggle is a VIEW — in 'node' view the offset sliders
+  // display/edit the offset along the node's rotated+scaled axes and convert
+  // back to world on write (ir/srt.ts). Toggling never changes the render.
+  // Raw world values are shown when either offset param is wire-driven.
+  const srtRotDeg = (currentValues.srt_rotate as number) ?? 0
+  const srtSx = (currentValues.srt_scaleX as number) ?? (currentValues.srt_scale as number) ?? 1
+  const srtSy = (currentValues.srt_scaleY as number) ?? (currentValues.srt_scale as number) ?? 1
+  const offsetNodeView =
+    allParams.some((p) => p.id === 'srt_translateSpace') &&
+    normalizeTranslateSpace(currentValues.srt_translateSpace) === 'node' &&
+    !connectedInputs.has('srt_translateX') && !connectedInputs.has('srt_translateY')
+  const nodeViewOffsets = offsetNodeView
+    ? worldOffsetToNode(
+        (currentValues.srt_translateX as number) ?? 0,
+        (currentValues.srt_translateY as number) ?? 0,
+        srtRotDeg, srtSx, srtSy,
+      )
+    : null
+
   return (
     <BaseNode className={cn('min-w-node', nodeErrors.length > 0 && 'ring-2 ring-error')}>
       <BaseNodeHeader>
@@ -501,6 +537,26 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
               } else if (param.type === 'bool') {
                 control = (
                   <BoolCheckbox param={param} value={(currentValues[param.id] as boolean) ?? (param.default as boolean)} onChange={(v) => handleParamChange(param.id, v)} />
+                )
+              } else if (nodeViewOffsets && (param.id === 'srt_translateX' || param.id === 'srt_translateY')) {
+                // Node view: this slider shows/edits the offset along the
+                // node's axes; one drag rewrites BOTH world params (one write —
+                // see handleParamsChange).
+                const isX = param.id === 'srt_translateX'
+                control = (
+                  <FloatSlider
+                    param={param}
+                    value={isX ? nodeViewOffsets.tx : nodeViewOffsets.ty}
+                    onChange={(value) => {
+                      const w = nodeOffsetToWorld(
+                        isX ? value : nodeViewOffsets.tx,
+                        isX ? nodeViewOffsets.ty : value,
+                        srtRotDeg, srtSx, srtSy,
+                      )
+                      handleParamsChange({ srt_translateX: w.tx, srt_translateY: w.ty })
+                    }}
+                    disabled={isConnected}
+                  />
                 )
               } else {
                 control = (

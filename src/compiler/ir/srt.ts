@@ -10,21 +10,22 @@
  *
  * The transform maps an OUTPUT coordinate to the coordinate the node evaluates
  * at (it is the inverse of the visible transform, hence /scale, and translate
- * subtracted). Canonical op order about the anchor: subAnchor, scale, rotate,
- * translate, addAnchor.
+ * subtracted). Canonical op order about the anchor: translate (world frame),
+ * subAnchor, scale, rotate, addAnchor.
  *
- * `translateSpace` (default 'world') decides WHERE translate lands:
- *   - 'world' (independent): translate is applied in the fixed canvas frame,
- *     BEFORE the anchor/scale/rotate block, so an Offset is a constant screen
- *     nudge — the content moves by exactly T regardless of scale or rotation.
- *   - 'node': translate is applied inside the node's scaled+rotated frame (the
- *     legacy behaviour), so the Offset distance scales and its direction rotates.
- * At scale=1 & rotate=0 the two are identical, so default params (scale 1 /
- * rotate 0 / translate 0) render byte-identically to before.
+ * ONE STORAGE (DECIDED 2026-08-20): the shader has exactly ONE translate
+ * semantic — `srt_translateX/Y` always store the offset in the WORLD frame
+ * (the fixed canvas), applied before the anchor/scale/rotate block, so an
+ * Offset is a constant canvas nudge regardless of scale or rotation.
  *
- * Naming: World / node matches the gizmo coordinate switch (Blender-style
- * global/local axes). 'screen' and 'local' are accepted as legacy aliases on
- * read — normalizeTranslateSpace is the ONE place that mapping lives.
+ * The Offset Space param (`srt_translateSpace`, 'world' | 'node') never reaches
+ * the shader: it is a VIEW/edit mode — how the sliders and the future gizmo
+ * interpret coords. In 'node' view, offsets are displayed/edited along the
+ * node's rotated+scaled axes and converted to the world storage on write
+ * (worldOffsetToNode / nodeOffsetToWorld below). Legacy stored values
+ * 'screen'/'local' normalize via normalizeTranslateSpace — the ONE place that
+ * alias mapping lives. Pre-one-storage saves are converted on load by
+ * src/utils/srt-migration.ts using nodeOffsetToWorld.
  */
 import type { IRSpatialTransform, TranslateSpace } from './types'
 
@@ -38,13 +39,48 @@ export function normalizeTranslateSpace(value: unknown): TranslateSpace {
   return 'world' // 'world', legacy 'screen', unset, or unknown
 }
 
+/**
+ * Offset frame conversions — the SRT math the edit layer (sliders, gizmo) and
+ * the load-time migration share. Derivation: the emit below samples at
+ * R(θ)·S⁻¹·(c − t_world − anchor) + anchor; the legacy node-frame emit sampled
+ * at R(θ)·S⁻¹·(c − anchor) − t_node + anchor. Identical renders ⇔
+ * t_world = S·R(−θ)·t_node  (and inversely t_node = R(θ)·S⁻¹·t_world),
+ * where t = (tx, −ty) — the shader's y-negated offset vector ("+Y is up").
+ */
+export function nodeOffsetToWorld(
+  tx: number, ty: number, rotateDeg: number, scaleX: number, scaleY: number,
+): { tx: number; ty: number } {
+  const rad = (rotateDeg * Math.PI) / 180
+  const c = Math.cos(rad), s = Math.sin(rad)
+  const ax = tx, ay = -ty
+  // R(−θ)·a, then per-axis scale
+  const rx = c * ax + s * ay
+  const ry = -s * ax + c * ay
+  return { tx: scaleX * rx, ty: -(scaleY * ry) }
+}
+
+export function worldOffsetToNode(
+  tx: number, ty: number, rotateDeg: number, scaleX: number, scaleY: number,
+): { tx: number; ty: number } {
+  // View-only inverse; guard degenerate scale (param min is 0) — at scale≈0
+  // the node frame is undefined, fall back to axis scale 1 for display.
+  const sx = Math.abs(scaleX) < 1e-6 ? 1 : scaleX
+  const sy = Math.abs(scaleY) < 1e-6 ? 1 : scaleY
+  const rad = (rotateDeg * Math.PI) / 180
+  const c = Math.cos(rad), s = Math.sin(rad)
+  const ux = tx / sx, uy = -ty / sy
+  // R(θ)·u
+  const nx = c * ux - s * uy
+  const ny = s * ux + c * uy
+  return { tx: nx, ty: -ny }
+}
+
 export function emitSRT(srt: IRSpatialTransform, lang: 'glsl' | 'wgsl'): string[] {
   const w = lang === 'wgsl'
   const v = srt.outputVar
   const v2 = w ? 'vec2f' : 'vec2'
   const declV = w ? `var ${v}: vec2f =` : `vec2 ${v} =`
   const letF = (n: string) => (w ? `let ${n}: f32 =` : `float ${n} =`)
-  const space = normalizeTranslateSpace(srt.translateSpace)
   const hasTranslate = !!(srt.translateXUniform && srt.translateYUniform)
   // Pixel Offset → frozen-ref UV. Y negated so +Offset Y reads as "up".
   const tExpr = hasTranslate
@@ -53,9 +89,9 @@ export function emitSRT(srt: IRSpatialTransform, lang: 'glsl' | 'wgsl'): string[
 
   const lines: string[] = []
 
-  // 1. Start from coords. In 'world' mode the translate is applied here, in
-  //    the fixed canvas frame, before the anchor/scale/rotate block.
-  if (space === 'world' && tExpr) {
+  // 1. Start from coords, translate applied in the world frame (before the
+  //    anchor/scale/rotate block) — the one and only translate semantic.
+  if (tExpr) {
     lines.push(`${declV} ${srt.coordsVar} - ${tExpr};`)
     lines.push(`${v} -= u_anchor;`)
   } else {
@@ -78,12 +114,7 @@ export function emitSRT(srt: IRSpatialTransform, lang: 'glsl' | 'wgsl'): string[
     lines.push(`${v} = ${v2}(${v}.x * ${c} - ${v}.y * ${s}, ${v}.x * ${s} + ${v}.y * ${c});`)
   }
 
-  // 4. Translate ('node' mode): inside the node's scaled+rotated frame.
-  if (space !== 'world' && tExpr) {
-    lines.push(`${v} -= ${tExpr};`)
-  }
-
-  // 5. Back to anchor-relative.
+  // 4. Back to anchor-relative.
   lines.push(`${v} += u_anchor;`)
   return lines
 }
