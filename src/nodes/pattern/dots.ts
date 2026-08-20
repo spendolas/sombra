@@ -11,7 +11,7 @@ export const dotsNode: NodeDefinition = {
   label: 'Dots',
   category: 'Pattern',
   description: 'Grid of circles — pixel gap X/Y, shape-only aspect, and A/B colors',
-  spatial: { transforms: ['scale', 'rotate', 'translate'] } satisfies SpatialConfig,
+  spatial: { transforms: ['scale', 'rotate', 'translate'], exposeTranslateSpace: true } satisfies SpatialConfig,
 
   inputs: [
     { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },

@@ -18,7 +18,7 @@ export const checkerboardNode: NodeDefinition = {
   label: 'Checkerboard',
   category: 'Pattern',
   description: 'Alternating grid pattern — cell size/density tile modes, softness, and A/B colors',
-  spatial: { transforms: ['scale', 'rotate', 'translate'] } satisfies SpatialConfig,
+  spatial: { transforms: ['scale', 'rotate', 'translate'], exposeTranslateSpace: true } satisfies SpatialConfig,
 
   inputs: [
     { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },

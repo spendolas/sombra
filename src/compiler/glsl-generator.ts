@@ -14,6 +14,8 @@ import { topologicalSort, hasCycles } from './topological-sort'
 import { coerceType } from '../nodes/type-coercion'
 import { expandMultiPassNodes, baseNodeId } from './expand-passes'
 import { resolvePassResolution } from './pass-resolution'
+import { emitSRT } from './ir/srt'
+import type { IRSpatialTransform } from './ir/types'
 
 export function uniformName(sanitizedNodeId: string, paramId: string): string {
   return `u_${sanitizedNodeId}_${paramId}`
@@ -553,42 +555,25 @@ export function generateNodeGlsl(
   if (definition.spatial && inputs.coords) {
     const srtVar = `srt_${sanitizedNodeId}`
     const spatial = definition.spatial
-    const hasScale = spatial.transforms.includes('scale')
     const hasScaleXY = spatial.transforms.includes('scaleXY')
-    const hasRotate = spatial.transforms.includes('rotate')
     const hasTranslate = spatial.transforms.includes('translate')
 
     uniforms.add('u_anchor')
-    preambleLines.push(`vec2 ${srtVar} = ${inputs.coords} - u_anchor;`)
+    if (hasTranslate) { uniforms.add('u_dpr'); uniforms.add('u_ref_size') }
 
-    // Scale (new convention: coords /= scale → scale=2 means twice as large)
-    if (hasScale) {
-      preambleLines.push(`${srtVar} /= vec2(${inputs.srt_scale});`)
-    } else if (hasScaleXY) {
-      preambleLines.push(`${srtVar} /= vec2(${inputs.srt_scaleX}, ${inputs.srt_scaleY});`)
+    // Single source: op order lives in ir/srt.ts (shared with both IR backends).
+    const srt: IRSpatialTransform = {
+      coordsVar: inputs.coords,
+      outputVar: srtVar,
+      scaleUniform: spatial.transforms.includes('scale') ? inputs.srt_scale : undefined,
+      scaleXUniform: hasScaleXY ? inputs.srt_scaleX : undefined,
+      scaleYUniform: hasScaleXY ? inputs.srt_scaleY : undefined,
+      rotateUniform: spatial.transforms.includes('rotate') ? inputs.srt_rotate : undefined,
+      translateXUniform: hasTranslate ? inputs.srt_translateX : undefined,
+      translateYUniform: hasTranslate ? inputs.srt_translateY : undefined,
+      translateSpace: (node.data.params?.srt_translateSpace as 'screen' | 'local') ?? 'screen',
     }
-
-    // Rotate. coords are isotropic (auto_uv divides both axes by the frozen
-    // u_ref_size), so a plain rotation gives a true, resolution-independent
-    // angle. No aspect term — conjugating by the LIVE u_resolution aspect made
-    // the rendered angle drift as the canvas was resized. srt_rotate is degrees.
-    if (hasRotate) {
-      const cVar = `srt_c_${sanitizedNodeId}`
-      const sVar = `srt_s_${sanitizedNodeId}`
-      const radVar = `srt_rad_${sanitizedNodeId}`
-      preambleLines.push(`float ${radVar} = ${inputs.srt_rotate} * 0.01745329;`)
-      preambleLines.push(`float ${cVar} = cos(${radVar}); float ${sVar} = sin(${radVar});`)
-      preambleLines.push(`${srtVar} = vec2(${srtVar}.x * ${cVar} - ${srtVar}.y * ${sVar}, ${srtVar}.x * ${sVar} + ${srtVar}.y * ${cVar});`)
-    }
-
-    // Translate (pixel units → UV conversion, stable on resize)
-    if (hasTranslate) {
-      uniforms.add('u_dpr')
-      uniforms.add('u_ref_size')
-      preambleLines.push(`${srtVar} -= vec2(${inputs.srt_translateX}, -(${inputs.srt_translateY})) / (u_dpr * u_ref_size);`)
-    }
-
-    preambleLines.push(`${srtVar} += u_anchor;`)
+    preambleLines.push(...emitSRT(srt, 'glsl'))
 
     // Replace coords input with transformed variable
     inputs.coords = srtVar
