@@ -7,7 +7,8 @@ import { Position, useEdges, type NodeProps } from '@xyflow/react'
 import { matchesShowWhen, type NodeData, type NodeParameter } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { FloatSlider, AnchorGrid, EnumSelect, BoolCheckbox, SegmentedControl } from './NodeParameters'
-import { normalizeTranslateSpace, worldOffsetToNode, nodeOffsetToWorld } from '../compiler/ir/srt'
+import { worldOffsetToNode, nodeOffsetToWorld } from '../compiler/ir/srt'
+import { useSettingsStore } from '../stores/settingsStore'
 import { useGraphStore } from '../stores/graphStore'
 import { usePreviewStore } from '../stores/previewStore'
 import { useCompilerStore } from '../stores/compilerStore'
@@ -76,6 +77,8 @@ function resolveSourceFloat(sourceType: string, sourceParams: Record<string, unk
 export const ShaderNode = memo(({ id, data }: NodeProps) => {
   const edges = useEdges()
   const allNodes = useGraphStore((state) => state.nodes)
+  // Global coords-view switch — drives the Node-view offset-slider display.
+  const gizmoView = useSettingsStore((s) => s.gizmoView)
   const nodeData = data as NodeData
   const definition = nodeRegistry.get(nodeData.type)
   const updateNodeData = useGraphStore((state) => state.updateNodeData)
@@ -324,16 +327,17 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   })()
 
   // ONE STORAGE Offset Space: srt_translateX/Y always store the WORLD offset;
-  // the Offset Space toggle is a VIEW — in 'node' view the offset sliders
-  // display/edit the offset along the node's rotated+scaled axes and convert
-  // back to world on write (ir/srt.ts). Toggling never changes the render.
-  // Raw world values are shown when either offset param is wire-driven.
+  // the GLOBAL coords-view switch (GizmoViewControl → settingsStore.gizmoView)
+  // is a VIEW — in 'node' view the offset sliders display/edit the offset
+  // along the node's rotated+scaled axes and convert back to world on write
+  // (ir/srt.ts). Switching never changes the render. Raw world values are
+  // shown when either offset param is wire-driven.
   const srtRotDeg = (currentValues.srt_rotate as number) ?? 0
   const srtSx = (currentValues.srt_scaleX as number) ?? (currentValues.srt_scale as number) ?? 1
   const srtSy = (currentValues.srt_scaleY as number) ?? (currentValues.srt_scale as number) ?? 1
   const offsetNodeView =
-    allParams.some((p) => p.id === 'srt_translateSpace') &&
-    normalizeTranslateSpace(currentValues.srt_translateSpace) === 'node' &&
+    gizmoView === 'node' &&
+    allParams.some((p) => p.id === 'srt_translateX' && !p.hidden) &&
     !connectedInputs.has('srt_translateX') && !connectedInputs.has('srt_translateY')
   const nodeViewOffsets = offsetNodeView
     ? worldOffsetToNode(

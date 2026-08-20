@@ -14,7 +14,7 @@ export const noiseNode: NodeDefinition = {
   label: 'Noise',
   category: 'Noise',
   description: 'Configurable noise — simplex, value, worley (2D/3D), or box',
-  spatial: { transforms: ['scale', 'translate'], exposeTranslateSpace: true } satisfies SpatialConfig,
+  spatial: { transforms: ['scale', 'translate'] } satisfies SpatialConfig,
 
   inputs: [
     { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },
@@ -26,7 +26,7 @@ export const noiseNode: NodeDefinition = {
   ],
 
   params: [
-    ...getSpatialParams({ transforms: ['scale', 'translate'], exposeTranslateSpace: true }),
+    ...getSpatialParams({ transforms: ['scale', 'translate'] }),
     {
       id: 'noiseType', label: 'Type', type: 'enum', default: 'simplex',
       options: NOISE_TYPE_OPTIONS, updateMode: 'recompile',

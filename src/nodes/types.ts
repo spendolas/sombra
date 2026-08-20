@@ -95,10 +95,6 @@ export interface GLSLContext {
 export interface SpatialConfig {
   transforms: Array<'scale' | 'scaleXY' | 'rotate' | 'translate'>
   order?: 'SRT' | 'TRS' | 'RST'  // default: 'SRT'
-  /** Expose a Screen/Local "Offset Space" enum param (requires 'translate').
-   *  Screen (default) = Offset is a constant screen nudge; Local = Offset moves
-   *  in the scaled+rotated frame. See src/compiler/ir/srt.ts. */
-  exposeTranslateSpace?: boolean
 }
 
 /**
@@ -153,24 +149,10 @@ export function getSpatialParams(spatial: SpatialConfig): NodeParameter[] {
         break
     }
   }
-  if (spatial.exposeTranslateSpace && spatial.transforms.includes('translate')) {
-    params.push({
-      // World/node naming matches the gizmo coordinate switch. Legacy stored
-      // values 'screen'/'local' are normalized on read (ir/srt.ts).
-      // ONE STORAGE: this is a VIEW/edit mode only — offsets always store the
-      // world value; 'node' re-interprets the offset sliders (and the future
-      // gizmo axes) along the node's rotated+scaled frame. It never reaches
-      // codegen, so the updateMode:'recompile' below recompiles to an
-      // identical shader — kept because there is no "UI-only" updateMode.
-      id: 'srt_translateSpace', label: 'Offset Space', type: 'enum', default: 'world',
-      control: 'segmented',
-      options: [
-        { value: 'world', label: 'World' },
-        { value: 'node', label: 'Node' },
-      ],
-      updateMode: 'recompile',
-    })
-  }
+  // NOTE: the World/node coords view is a GLOBAL switch (GizmoViewControl →
+  // settingsStore.gizmoView), not a per-node param. `srt_translateSpace` no
+  // longer exists as a param; the key survives only as the one-storage
+  // migration marker in saved graphs (utils/srt-migration.ts).
   return params
 }
 

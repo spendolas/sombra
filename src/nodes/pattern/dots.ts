@@ -11,7 +11,7 @@ export const dotsNode: NodeDefinition = {
   label: 'Dots',
   category: 'Pattern',
   description: 'Grid of circles — pixel gap X/Y, shape-only aspect, and A/B colors',
-  spatial: { transforms: ['scale', 'rotate', 'translate'], exposeTranslateSpace: true } satisfies SpatialConfig,
+  spatial: { transforms: ['scale', 'rotate', 'translate'] } satisfies SpatialConfig,
 
   inputs: [
     { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },
@@ -23,7 +23,7 @@ export const dotsNode: NodeDefinition = {
   ],
 
   params: [
-    ...getSpatialParams({ transforms: ['scale', 'rotate', 'translate'], exposeTranslateSpace: true }),
+    ...getSpatialParams({ transforms: ['scale', 'rotate', 'translate'] }),
     { id: 'radius', label: 'Radius', type: 'float', default: 20, min: 1, max: 256, step: 1, connectable: true, updateMode: 'uniform' },
     { id: 'gapX', label: 'Gap X', type: 'float', default: 20, min: 0, max: 512, step: 1, connectable: true, updateMode: 'uniform' },
     { id: 'gapY', label: 'Gap Y', type: 'float', default: 20, min: 0, max: 512, step: 1, connectable: true, updateMode: 'uniform' },

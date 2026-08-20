@@ -46,7 +46,10 @@ type DragKind = 'free' | 'x' | 'y' | 'rotate' | 'scale'
 
 export function SrtGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetRef }: SrtGizmoOverlayProps) {
   const previewMode = useSettingsStore((s) => s.previewMode)
-  const gizmoOn = useSettingsStore((s) => s.srtGizmo)
+  // Global coords-view switch (GizmoViewControl): 'off' hides the gizmo;
+  // 'world'/'node' pick the frame the axes (and slider display) resolve in.
+  const gizmoView = useSettingsStore((s) => s.gizmoView)
+  const gizmoOn = gizmoView !== 'off'
   const nodes = useGraphStore((s) => s.nodes)
   const updateNodeData = useGraphStore((s) => s.updateNodeData)
 
@@ -147,7 +150,8 @@ export function SrtGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetRef }
       // tracks content across dpr and adaptive-quality buffer scaling.
       const cv = canvasElRef.current
       const cssPerPx = cv && cv.width > 0 ? rect.width / cv.width : 1
-      const r: ResolvedSRT = resolveSRT(latestParams, { transforms, cssPerPx })
+      const view = useSettingsStore.getState().gizmoView
+      const r: ResolvedSRT = resolveSRT(latestParams, { transforms, cssPerPx, space: view === 'node' ? 'node' : 'world' })
       // Gizmo center in viewport px: canvas anchor point + world offset.
       const cx = rect.left + rect.width * outputAnchor[0] + r.originOffset.x
       const cy = rect.top + rect.height * outputAnchor[1] + r.originOffset.y
@@ -184,7 +188,7 @@ export function SrtGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetRef }
 
   const canvasEl = canvasElRef.current
   const cssPerPx = canvasEl && canvasEl.width > 0 ? canvasRect.width / canvasEl.width : 1
-  const r = resolveSRT(currentParams, { transforms: spatial.transforms, cssPerPx })
+  const r = resolveSRT(currentParams, { transforms: spatial.transforms, cssPerPx, space: gizmoView === 'node' ? 'node' : 'world' })
   // Center within the overlay (overlay div is positioned at the canvas rect).
   const cx = canvasRect.width * outputAnchor[0] + r.originOffset.x
   const cy = canvasRect.height * outputAnchor[1] + r.originOffset.y

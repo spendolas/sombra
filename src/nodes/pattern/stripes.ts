@@ -11,7 +11,7 @@ export const stripesNode: NodeDefinition = {
   label: 'Stripes',
   category: 'Pattern',
   description: 'Repeating bands — pixel width/gap, duty cycle, and A/B colors',
-  spatial: { transforms: ['scale', 'rotate', 'translate'], exposeTranslateSpace: true } satisfies SpatialConfig,
+  spatial: { transforms: ['scale', 'rotate', 'translate'] } satisfies SpatialConfig,
 
   inputs: [
     { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },
@@ -23,7 +23,7 @@ export const stripesNode: NodeDefinition = {
   ],
 
   params: [
-    ...getSpatialParams({ transforms: ['scale', 'rotate', 'translate'], exposeTranslateSpace: true }),
+    ...getSpatialParams({ transforms: ['scale', 'rotate', 'translate'] }),
     { id: 'width', label: 'Width', type: 'float', default: 40, min: 1, max: 512, step: 1, connectable: true, updateMode: 'uniform' },
     { id: 'gap', label: 'Gap', type: 'float', default: 40, min: 0, max: 512, step: 1, connectable: true, updateMode: 'uniform' },
     { id: 'softness', label: 'Softness', type: 'float', default: 0.0, min: 0.0, max: 1.0, step: 0.01, connectable: true, updateMode: 'uniform' },

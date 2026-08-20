@@ -96,23 +96,16 @@ console.log('\nC. emit byte-pinned to the canonical world lowering')
     `\n    got: ${JSON.stringify(got)}\n    exp: ${JSON.stringify(expected)}`)
 }
 
-console.log('\nD. exposeTranslateSpace reaches node params (World/node, default world)')
+console.log('\nD. the coords view is GLOBAL — no node carries an Offset Space param')
+// The World/node view lives on settingsStore.gizmoView (GizmoViewControl),
+// decoupled from nodes. A node param reappearing here means the retired
+// per-node control leaked back in.
 {
-  const exposed = new Set(['noise', 'fbm', 'stripes', 'dots', 'checkerboard'])
   for (const n of ALL_NODES) {
     const p = n.params?.find((x) => x.id === 'srt_translateSpace')
-    if (exposed.has(n.type)) {
-      check(`${n.type}: Offset Space param present`, !!p,
-        'exposeTranslateSpace is on spatial: but not passed to the getSpatialParams() call')
-      if (p) {
-        check(`${n.type}: World/node values with default world`,
-          p.default === 'world' && JSON.stringify(p.options?.map((o) => o.value)) === '["world","node"]',
-          `default=${String(p.default)} options=${JSON.stringify(p.options)}`)
-      }
-    } else if (p) {
-      check(`${n.type}: does not leak Offset Space param`, false, 'unexpected srt_translateSpace')
-    }
+    if (p) check(`${n.type}: must not carry srt_translateSpace`, false, 'the view is global (gizmoView)')
   }
+  check('no node declares srt_translateSpace', ALL_NODES.every((n) => !n.params?.some((x) => x.id === 'srt_translateSpace')))
   check("normalize('screen') === 'world' (legacy alias)", normalizeTranslateSpace('screen') === 'world')
   check("normalize('local') === 'node' (legacy alias)", normalizeTranslateSpace('local') === 'node')
   check("normalize(undefined) === 'world' (default)", normalizeTranslateSpace(undefined) === 'world')
@@ -268,6 +261,12 @@ console.log('\nH. resolveSRT — the gizmo API (all math encapsulated)')
     const r = resolveSRT({ srt_translateSpace: 'world', srt_rotate: 30, srt_scale: 2 }, { transforms: T })
     check('world axes are canvas axes regardless of rotate/scale',
       r.axes.x.x === 1 && r.axes.x.y === 0 && r.axes.y.x === 0 && r.axes.y.y === -1)
+  }
+  // options.space (the GLOBAL switch) overrides any stored param value
+  {
+    const r = resolveSRT({ srt_translateSpace: 'node', srt_rotate: 30, srt_scale: 1 }, { transforms: T, space: 'world' })
+    check('options.space overrides the stored param (global switch wins)',
+      r.space === 'world' && r.axes.x.x === 1 && r.axes.x.y === 0)
   }
   // node axes: rotated content directions; must match the slider conversion math
   {
