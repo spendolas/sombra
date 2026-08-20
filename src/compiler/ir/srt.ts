@@ -13,16 +13,30 @@
  * subtracted). Canonical op order about the anchor: subAnchor, scale, rotate,
  * translate, addAnchor.
  *
- * `translateSpace` (default 'screen') decides WHERE translate lands:
- *   - 'screen' (independent): translate is applied in screen space, BEFORE the
- *     anchor/scale/rotate block, so an Offset is a constant screen nudge — the
- *     content moves by exactly T regardless of scale or rotation.
- *   - 'local': translate is applied inside the scaled+rotated frame (the legacy
- *     behaviour), so the Offset distance scales and its direction rotates.
+ * `translateSpace` (default 'world') decides WHERE translate lands:
+ *   - 'world' (independent): translate is applied in the fixed canvas frame,
+ *     BEFORE the anchor/scale/rotate block, so an Offset is a constant screen
+ *     nudge — the content moves by exactly T regardless of scale or rotation.
+ *   - 'node': translate is applied inside the node's scaled+rotated frame (the
+ *     legacy behaviour), so the Offset distance scales and its direction rotates.
  * At scale=1 & rotate=0 the two are identical, so default params (scale 1 /
  * rotate 0 / translate 0) render byte-identically to before.
+ *
+ * Naming: World / node matches the gizmo coordinate switch (Blender-style
+ * global/local axes). 'screen' and 'local' are accepted as legacy aliases on
+ * read — normalizeTranslateSpace is the ONE place that mapping lives.
  */
-import type { IRSpatialTransform } from './types'
+import type { IRSpatialTransform, TranslateSpace } from './types'
+
+/**
+ * Normalize a stored srt_translateSpace param value to the canonical
+ * TranslateSpace. Accepts the legacy 'screen'/'local' values (pre-rename saves)
+ * and anything unknown falls back to the default 'world'.
+ */
+export function normalizeTranslateSpace(value: unknown): TranslateSpace {
+  if (value === 'node' || value === 'local') return 'node'
+  return 'world' // 'world', legacy 'screen', unset, or unknown
+}
 
 export function emitSRT(srt: IRSpatialTransform, lang: 'glsl' | 'wgsl'): string[] {
   const w = lang === 'wgsl'
@@ -30,7 +44,7 @@ export function emitSRT(srt: IRSpatialTransform, lang: 'glsl' | 'wgsl'): string[
   const v2 = w ? 'vec2f' : 'vec2'
   const declV = w ? `var ${v}: vec2f =` : `vec2 ${v} =`
   const letF = (n: string) => (w ? `let ${n}: f32 =` : `float ${n} =`)
-  const space = srt.translateSpace ?? 'screen'
+  const space = normalizeTranslateSpace(srt.translateSpace)
   const hasTranslate = !!(srt.translateXUniform && srt.translateYUniform)
   // Pixel Offset → frozen-ref UV. Y negated so +Offset Y reads as "up".
   const tExpr = hasTranslate
@@ -39,9 +53,9 @@ export function emitSRT(srt: IRSpatialTransform, lang: 'glsl' | 'wgsl'): string[
 
   const lines: string[] = []
 
-  // 1. Start from coords. In 'screen' mode the translate is applied here, in
-  //    screen space, before the anchor/scale/rotate block.
-  if (space === 'screen' && tExpr) {
+  // 1. Start from coords. In 'world' mode the translate is applied here, in
+  //    the fixed canvas frame, before the anchor/scale/rotate block.
+  if (space === 'world' && tExpr) {
     lines.push(`${declV} ${srt.coordsVar} - ${tExpr};`)
     lines.push(`${v} -= u_anchor;`)
   } else {
@@ -64,8 +78,8 @@ export function emitSRT(srt: IRSpatialTransform, lang: 'glsl' | 'wgsl'): string[
     lines.push(`${v} = ${v2}(${v}.x * ${c} - ${v}.y * ${s}, ${v}.x * ${s} + ${v}.y * ${c});`)
   }
 
-  // 4. Translate ('local' mode): inside the scaled+rotated frame.
-  if (space !== 'screen' && tExpr) {
+  // 4. Translate ('node' mode): inside the node's scaled+rotated frame.
+  if (space !== 'world' && tExpr) {
     lines.push(`${v} -= ${tExpr};`)
   }
 

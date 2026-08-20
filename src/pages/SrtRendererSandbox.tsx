@@ -6,7 +6,7 @@
  * compiler and renders it with the real createShaderRenderer (WebGPU, WebGL2
  * fallback) — the same path viewer.ts uses. The Transform controls (real
  * FloatSlider + SegmentedControl) drive srt_* params; every change recompiles
- * and re-renders. Toggle Offset Space Screen↔Local with Scale/Offset set and
+ * and re-renders. Toggle Offset Space World↔Node with Scale/Offset set and
  * watch the actual shader output change.
  */
 
@@ -21,13 +21,13 @@ import type { NodeData, EdgeData, PortType, NodeParameter } from '@/nodes/types'
 import type { ShaderRenderer } from '@/renderer/types'
 
 interface Params { scale: number; rotate: number; tx: number; ty: number; space: string }
-const INITIAL: Params = { scale: 2, rotate: 0, tx: 120, ty: 0, space: 'screen' }
+const INITIAL: Params = { scale: 2, rotate: 0, tx: 120, ty: 0, space: 'world' }
 
 /**
  * Continuity-preserving frame switch. Toggling Offset Space should NOT move the
  * content — it re-expresses the offset in the new frame so the render is
  * identical at the switch, then you keep navigating in the new frame's axes.
- * With a = (tx, -ty): screen→local a' = R(θ)a/scale; local→screen a' = scale·R(-θ)a.
+ * With a = (tx, -ty): world→node a' = R(θ)a/scale; node→world a' = scale·R(-θ)a.
  */
 function convertOffset(from: string, to: string, tx: number, ty: number, rotateDeg: number, scale: number): { tx: number; ty: number } {
   if (from === to || scale === 0) return { tx, ty }
@@ -35,7 +35,7 @@ function convertOffset(from: string, to: string, tx: number, ty: number, rotateD
   const c = Math.cos(rad), s = Math.sin(rad)
   const ax = tx, ay = -ty
   let bx: number, by: number
-  if (from === 'screen' && to === 'local') {
+  if (from === 'world' && to === 'node') {
     bx = (ax * c - ay * s) / scale
     by = (ax * s + ay * c) / scale
   } else {
@@ -50,8 +50,8 @@ const rotateParam: NodeParameter = { id: 'srt_rotate', label: 'Rotate', type: 'f
 const txParam: NodeParameter = { id: 'srt_translateX', label: 'Offset X', type: 'float', default: 0, min: -200, max: 200, step: 1, updateMode: 'uniform' }
 const tyParam: NodeParameter = { id: 'srt_translateY', label: 'Offset Y', type: 'float', default: 0, min: -200, max: 200, step: 1, updateMode: 'uniform' }
 const spaceParam: NodeParameter = {
-  id: 'srt_translateSpace', label: 'Offset Space', type: 'enum', default: 'screen', control: 'segmented',
-  updateMode: 'recompile', options: [{ value: 'screen', label: 'Screen' }, { value: 'local', label: 'Local' }],
+  id: 'srt_translateSpace', label: 'Offset Space', type: 'enum', default: 'world', control: 'segmented',
+  updateMode: 'recompile', options: [{ value: 'world', label: 'World' }, { value: 'node', label: 'Node' }],
 }
 
 function buildGraph(p: Params): { nodes: Node<NodeData>[]; edges: Edge<EdgeData>[] } {
@@ -134,9 +134,9 @@ export function SrtRendererSandbox() {
 
   const caption = (() => {
     const scaled = Math.abs(p.scale - 1) > 0.01, rotated = Math.abs(p.rotate) > 0.5, offset = p.tx !== 0 || p.ty !== 0
-    if (!offset) return 'Add an Offset — with none, Screen and Local are identical.'
+    if (!offset) return 'Add an Offset — with none, World and Node are identical.'
     if (!scaled && !rotated) return 'At Scale 1× / Rotate 0° the modes match. Push Scale or Rotate, then toggle.'
-    return 'Toggle Offset Space: Screen keeps the offset a constant screen nudge; Local rides the scaled/rotated frame.'
+    return 'Toggle Offset Space: World keeps the offset a constant canvas nudge; Node rides the node’s scaled/rotated frame.'
   })()
 
   return (

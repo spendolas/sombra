@@ -14,7 +14,7 @@ import { topologicalSort, hasCycles } from './topological-sort'
 import { coerceType } from '../nodes/type-coercion'
 import { expandMultiPassNodes, baseNodeId } from './expand-passes'
 import { resolvePassResolution } from './pass-resolution'
-import { emitSRT } from './ir/srt'
+import { emitSRT, normalizeTranslateSpace } from './ir/srt'
 import type { IRSpatialTransform } from './ir/types'
 
 export function uniformName(sanitizedNodeId: string, paramId: string): string {
@@ -571,7 +571,8 @@ export function generateNodeGlsl(
       rotateUniform: spatial.transforms.includes('rotate') ? inputs.srt_rotate : undefined,
       translateXUniform: hasTranslate ? inputs.srt_translateX : undefined,
       translateYUniform: hasTranslate ? inputs.srt_translateY : undefined,
-      translateSpace: (node.data.params?.srt_translateSpace as 'screen' | 'local') ?? 'screen',
+      // normalizeTranslateSpace maps legacy 'screen'/'local' saves to World/node.
+      translateSpace: normalizeTranslateSpace(node.data.params?.srt_translateSpace),
     }
     preambleLines.push(...emitSRT(srt, 'glsl'))
 

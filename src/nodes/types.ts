@@ -155,11 +155,13 @@ export function getSpatialParams(spatial: SpatialConfig): NodeParameter[] {
   }
   if (spatial.exposeTranslateSpace && spatial.transforms.includes('translate')) {
     params.push({
-      id: 'srt_translateSpace', label: 'Offset Space', type: 'enum', default: 'screen',
+      // World/node naming matches the gizmo coordinate switch. Legacy stored
+      // values 'screen'/'local' are normalized on read (ir/srt.ts).
+      id: 'srt_translateSpace', label: 'Offset Space', type: 'enum', default: 'world',
       control: 'segmented',
       options: [
-        { value: 'screen', label: 'Screen' },
-        { value: 'local', label: 'Local' },
+        { value: 'world', label: 'World' },
+        { value: 'node', label: 'Node' },
       ],
       updateMode: 'recompile',
     })

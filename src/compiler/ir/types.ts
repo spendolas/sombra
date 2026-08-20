@@ -268,10 +268,16 @@ export interface IRSpatialTransform {
   readonly translateXUniform?: string
   /** Translate Y uniform name (if translate enabled) */
   readonly translateYUniform?: string
-  /** Where translate lands: 'screen' (default, independent of scale/rotate) or
-   *  'local' (inside the scaled+rotated frame — legacy). See ir/srt.ts. */
-  readonly translateSpace?: 'screen' | 'local'
+  /** Where translate lands: 'world' (default, the fixed canvas frame —
+   *  independent of scale/rotate) or 'node' (inside the node's scaled+rotated
+   *  frame — legacy). Matches the gizmo World/node coordinate switch. Stored
+   *  param values may still be the legacy 'screen'/'local' — emitSRT normalizes
+   *  via normalizeTranslateSpace. See ir/srt.ts. */
+  readonly translateSpace?: TranslateSpace | 'screen' | 'local'
 }
+
+/** Canonical Offset Space values (gizmo-aligned World/node naming). */
+export type TranslateSpace = 'world' | 'node'
 
 // ---------------------------------------------------------------------------
 // Node output bundle — what a single node contributes to the shader
