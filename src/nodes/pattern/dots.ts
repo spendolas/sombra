@@ -23,7 +23,7 @@ export const dotsNode: NodeDefinition = {
   ],
 
   params: [
-    ...getSpatialParams({ transforms: ['scale', 'rotate', 'translate'] }),
+    ...getSpatialParams({ transforms: ['scale', 'rotate', 'translate'], exposeTranslateSpace: true }),
     { id: 'radius', label: 'Radius', type: 'float', default: 20, min: 1, max: 256, step: 1, connectable: true, updateMode: 'uniform' },
     { id: 'gapX', label: 'Gap X', type: 'float', default: 20, min: 0, max: 512, step: 1, connectable: true, updateMode: 'uniform' },
     { id: 'gapY', label: 'Gap Y', type: 'float', default: 20, min: 0, max: 512, step: 1, connectable: true, updateMode: 'uniform' },
