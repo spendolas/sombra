@@ -117,3 +117,53 @@ registry-drift check on the migrating-type list.
 **Follow-up noted (not this change):** warp hand-rolls a second SRT copy onto
 its internal noise coords (node-frame math, `warp.ts:84/162`) — now divergent
 from its framework-injected coords. Fold into the reeded migration (step 5).
+
+## Dialect kill plan — verified 2026-08-21 (Opus 4.8)
+
+Source-verified (line numbers current at writing) against the impulse to
+"just delete the hand-roll". The three dialects the conformity ratchet
+(`scripts/verify-srt-conformity.ts`) tracks, in kill order:
+
+### warp — TWO changes, not one delete
+Texture-mode coord resolution: `ir-compiler.ts:188` remaps an `auto_uv` port to
+`screen_uv` (FBO sampling convention), THEN SRT is injected onto it
+(`:278`). So in texture mode `inputs.coords` = `SRT(screen_uv)`. Warp uses that
+as its base sample coord AND hand-rolls a second coord `SRT(auto_uv)` for the
+noise field (`warp.ts:83-84` glsl, `:161-162` ir) — the framework never hands
+it an own-content coord in texture mode.
+
+- **LATENT BUG found:** warp's hand-rolled texture-mode noise SRT is
+  `(autoUv − anchor)/scale − t + anchor` = NODE-frame order (translate after
+  scale), while single-pass noise uses `inputs.coords` = framework `emitSRT` =
+  WORLD order (translate before scale). At `scale ≠ 1` the warp noise field
+  therefore sits in a DIFFERENT place in texture mode vs single-pass. Verify
+  the exact visual with a large-noise probe (per
+  [[probe-textures-for-pixel-verification]]) before/after.
+- **(1a) framework own-content coord:** expose an always-`SRT(auto_uv)`
+  coordinate to spatial nodes (new `ctx` field / synthesized input), computed
+  with `fragCoord('yDown')` + `emitSRT` — the tested constructs. Single-pass:
+  equals the SRT'd coords. Texture mode: the new var.
+- **(1b) warp consumes it:** noise field ← the framework coord (both modes);
+  delete the `gl_FragCoord` reconstruction + hand-rolled SRT. This UNIFIES
+  texture/single-pass (fixes the latent bug) → a behavior change at scale ≠ 1,
+  needs sign-off + pixel probe. Removes `hand-rolled-origin` +
+  `body-consumes-srt` from warp's ratchet allowlist.
+- **(2) semantic redesign (separate, sign-off):** should warp's BASE SAMPLE
+  stop being `SRT(screen_uv)` (spec's "effect in place, sample source in its
+  own frame")? Changes what's on screen when warp is scaled/offset.
+
+### image — coordinate-contract migration
+`screen_uv` (y-up, canvas-relative, aspect-warped rotation). Fold fit-mode
+aspect handling to AFTER a standard `auto_uv`; delete `resolveSRT`'s
+`screen_uv` branch + the overlay's coordSpace pick. Uploader-gizmo math
+simplifies. Behavior change (image currently rotates mirrored/warped) → probe
+with a ramp + framework side-by-side.
+
+### reeded_glass — framework migration (spec step 5, biggest)
+Three inline SRT copies (rib pattern space + lens/coords), mixed internal
+consistency. Declare `spatial:`, route all through one `emitSRT` on one
+`auto_uv`, delete the hand-rolls + the gizmo's `node-legacy` translateFrame.
+Needs a look-preserving pixel harness FIRST (frost/grain must not shift).
+
+Each kill deletes a `resolveSRT`/overlay special case AND a `KNOWN_DEVIATIONS`
+entry — the ratchet reaches 0 when all three land.
