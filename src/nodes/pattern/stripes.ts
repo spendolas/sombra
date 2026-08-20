@@ -11,7 +11,7 @@ export const stripesNode: NodeDefinition = {
   label: 'Stripes',
   category: 'Pattern',
   description: 'Repeating bands — pixel width/gap, duty cycle, and A/B colors',
-  spatial: { transforms: ['scale', 'rotate', 'translate'] } satisfies SpatialConfig,
+  spatial: { transforms: ['scale', 'rotate', 'translate'], exposeTranslateSpace: true } satisfies SpatialConfig,
 
   inputs: [
     { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },

@@ -94,6 +94,10 @@ export interface GLSLContext {
 export interface SpatialConfig {
   transforms: Array<'scale' | 'scaleXY' | 'rotate' | 'translate'>
   order?: 'SRT' | 'TRS' | 'RST'  // default: 'SRT'
+  /** Expose a Screen/Local "Offset Space" enum param (requires 'translate').
+   *  Screen (default) = Offset is a constant screen nudge; Local = Offset moves
+   *  in the scaled+rotated frame. See src/compiler/ir/srt.ts. */
+  exposeTranslateSpace?: boolean
 }
 
 /**
@@ -147,6 +151,16 @@ export function getSpatialParams(spatial: SpatialConfig): NodeParameter[] {
         )
         break
     }
+  }
+  if (spatial.exposeTranslateSpace && spatial.transforms.includes('translate')) {
+    params.push({
+      id: 'srt_translateSpace', label: 'Offset Space', type: 'enum', default: 'screen',
+      options: [
+        { value: 'screen', label: 'Screen' },
+        { value: 'local', label: 'Local' },
+      ],
+      updateMode: 'recompile',
+    })
   }
   return params
 }

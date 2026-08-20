@@ -11,6 +11,7 @@
  */
 
 import type { IRExpr, IRStmt, IRNodeOutput, IRType, IRFunction, IRSpatialTransform } from './types'
+import { emitSRT } from './srt'
 
 // ---------------------------------------------------------------------------
 // Float formatting
@@ -550,38 +551,10 @@ function applyWgslOverloadRenames(wgsl: string): string {
 // ---------------------------------------------------------------------------
 
 export function lowerSpatialTransformToWGSL(srt: IRSpatialTransform): string[] {
-  const lines: string[] = []
-  const v = srt.outputVar
-
-  lines.push(`var ${v}: vec2f = ${srt.coordsVar} - uniforms.u_anchor;`)
-
-  // Scale
-  if (srt.scaleUniform) {
-    lines.push(`${v} /= vec2f(${srt.scaleUniform});`)
-  } else if (srt.scaleXUniform && srt.scaleYUniform) {
-    lines.push(`${v} /= vec2f(${srt.scaleXUniform}, ${srt.scaleYUniform});`)
-  }
-
-  // Rotate. coords are isotropic (auto_uv divides both axes by the frozen
-  // u_ref_size), so a plain rotation gives a true, resolution-independent
-  // angle. No aspect term — conjugating by the LIVE u_resolution aspect made
-  // the rendered angle drift as the canvas was resized. srt_rotate is degrees.
-  if (srt.rotateUniform) {
-    const rad = `${v}_rad`
-    const c = `${v}_c`
-    const s = `${v}_s`
-    lines.push(`let ${rad}: f32 = ${srt.rotateUniform} * 0.01745329;`)
-    lines.push(`let ${c}: f32 = cos(${rad}); let ${s}: f32 = sin(${rad});`)
-    lines.push(`${v} = vec2f(${v}.x * ${c} - ${v}.y * ${s}, ${v}.x * ${s} + ${v}.y * ${c});`)
-  }
-
-  // Translate
-  if (srt.translateXUniform && srt.translateYUniform) {
-    lines.push(`${v} -= vec2f(${srt.translateXUniform}, -(${srt.translateYUniform})) / (u_dpr * u_ref_size);`)
-  }
-
-  lines.push(`${v} += uniforms.u_anchor;`)
-  return lines
+  // Single source: the op order lives in ir/srt.ts, this supplies WGSL syntax.
+  // Bare uniform names (u_anchor, u_dpr, u_ref_size) are prefixed to uniforms.*
+  // by the assembler's rewriteUniformReferences.
+  return emitSRT(srt, 'wgsl')
 }
 
 // ---------------------------------------------------------------------------

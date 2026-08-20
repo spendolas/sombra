@@ -7,6 +7,7 @@
  */
 
 import type { IRExpr, IRStmt, IRNodeOutput, IRType, IRFunction, IRSpatialTransform } from './types'
+import { emitSRT } from './srt'
 
 // ---------------------------------------------------------------------------
 // Float formatting — must match glsl-generator.ts `safeFloat()`
@@ -195,38 +196,8 @@ export function lowerFunctionToGLSL(fn: IRFunction): string {
 // ---------------------------------------------------------------------------
 
 export function lowerSpatialTransformToGLSL(srt: IRSpatialTransform): string[] {
-  const lines: string[] = []
-  const v = srt.outputVar
-
-  lines.push(`vec2 ${v} = ${srt.coordsVar} - u_anchor;`)
-
-  // Scale
-  if (srt.scaleUniform) {
-    lines.push(`${v} /= vec2(${srt.scaleUniform});`)
-  } else if (srt.scaleXUniform && srt.scaleYUniform) {
-    lines.push(`${v} /= vec2(${srt.scaleXUniform}, ${srt.scaleYUniform});`)
-  }
-
-  // Rotate. coords are isotropic (auto_uv divides both axes by the frozen
-  // u_ref_size), so a plain rotation gives a true, resolution-independent
-  // angle. No aspect term — conjugating by the LIVE u_resolution aspect made
-  // the rendered angle drift as the canvas was resized. srt_rotate is degrees.
-  if (srt.rotateUniform) {
-    const rad = `${v}_rad`
-    const c = `${v}_c`
-    const s = `${v}_s`
-    lines.push(`float ${rad} = ${srt.rotateUniform} * 0.01745329;`)
-    lines.push(`float ${c} = cos(${rad}); float ${s} = sin(${rad});`)
-    lines.push(`${v} = vec2(${v}.x * ${c} - ${v}.y * ${s}, ${v}.x * ${s} + ${v}.y * ${c});`)
-  }
-
-  // Translate
-  if (srt.translateXUniform && srt.translateYUniform) {
-    lines.push(`${v} -= vec2(${srt.translateXUniform}, -(${srt.translateYUniform})) / (u_dpr * u_ref_size);`)
-  }
-
-  lines.push(`${v} += u_anchor;`)
-  return lines
+  // Single source: the op order lives in ir/srt.ts, this supplies GLSL syntax.
+  return emitSRT(srt, 'glsl')
 }
 
 // ---------------------------------------------------------------------------

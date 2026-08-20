@@ -268,6 +268,9 @@ export interface IRSpatialTransform {
   readonly translateXUniform?: string
   /** Translate Y uniform name (if translate enabled) */
   readonly translateYUniform?: string
+  /** Where translate lands: 'screen' (default, independent of scale/rotate) or
+   *  'local' (inside the scaled+rotated frame — legacy). See ir/srt.ts. */
+  readonly translateSpace?: 'screen' | 'local'
 }
 
 // ---------------------------------------------------------------------------

@@ -288,6 +288,9 @@ export function generateNodeIR(
       rotateUniform: spatial.transforms.includes('rotate') ? inputs.srt_rotate : undefined,
       translateXUniform: spatial.transforms.includes('translate') ? inputs.srt_translateX : undefined,
       translateYUniform: spatial.transforms.includes('translate') ? inputs.srt_translateY : undefined,
+      // Default 'screen' (Offset is a constant screen nudge, independent of
+      // scale/rotate); a node that exposes the param can switch to 'local'.
+      translateSpace: (node.data.params?.srt_translateSpace as 'screen' | 'local') ?? 'screen',
     }
 
     // Add standard uniforms needed by SRT
