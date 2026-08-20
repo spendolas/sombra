@@ -3,7 +3,7 @@
  */
 
 import { useCallback, useEffect, useRef } from 'react'
-import { ReactFlow, Background, MiniMap, useReactFlow } from '@xyflow/react'
+import { ReactFlow, Background, MiniMap, useNodesInitialized, useReactFlow } from '@xyflow/react'
 import type { Node, Edge, NodeTypes, OnNodesChange, OnEdgesChange, OnReconnect, Connection, IsValidConnection } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
@@ -38,11 +38,8 @@ export function FlowCanvas({
   onConnect,
   onAddNode,
 }: FlowCanvasProps) {
-  const { screenToFlowPosition, fitView, getViewport, setViewport } = useReactFlow()
-
-  const onInit = useCallback(() => {
-    setTimeout(() => fitView({ padding: getFitViewPadding(useSettingsStore.getState().nodesPanelOpen), duration: 200 }), 50)
-  }, [fitView])
+  const { screenToFlowPosition, fitView, getViewport, setViewport, viewportInitialized } = useReactFlow()
+  const nodesInitialized = useNodesInitialized()
 
   // Keep the canvas CENTRE fixed when the flow area resizes (panel drags, preview
   // dock, window resize). React Flow leaves the viewport transform untouched on
@@ -51,6 +48,43 @@ export function FlowCanvas({
   // is in screen pixels, which is exactly the viewport translation's space.
   const wrapperRef = useRef<HTMLDivElement>(null)
   const prevSize = useRef<{ w: number; h: number } | null>(null)
+  const initialFitStarted = useRef(false)
+  const initialFitComplete = useRef(false)
+
+  // Frame the restored graph only after React Flow has measured the actual node
+  // DOM. A fixed delay races persisted `measured` metadata, node mounting, and
+  // the resizable panel's first layout. Two animation frames let that layout
+  // commit before fitView reads the canvas dimensions. While this runs, the
+  // resize observer below records size changes but must not adjust the viewport
+  // that fitView is actively calculating.
+  useEffect(() => {
+    if (!viewportInitialized || !nodesInitialized || nodes.length === 0 || initialFitStarted.current) return
+
+    let cancelled = false
+    let secondFrame = 0
+    const firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => {
+        if (cancelled || initialFitStarted.current) return
+        initialFitStarted.current = true
+        void fitView({
+          padding: getFitViewPadding(useSettingsStore.getState().nodesPanelOpen),
+          duration: 200,
+        }).then(() => {
+          if (cancelled) return
+          const rect = wrapperRef.current?.getBoundingClientRect()
+          if (rect) prevSize.current = { w: rect.width, h: rect.height }
+          initialFitComplete.current = true
+        })
+      })
+    })
+
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(firstFrame)
+      cancelAnimationFrame(secondFrame)
+    }
+  }, [fitView, nodes.length, nodesInitialized, viewportInitialized])
+
   useEffect(() => {
     const el = wrapperRef.current
     if (!el) return
@@ -61,6 +95,7 @@ export function FlowCanvas({
       // First callback establishes the baseline; also skip zero-size blips (a
       // panel momentarily collapsing) so re-showing doesn't shift by a full pane.
       if (!prev || !prev.w || !prev.h || !width || !height) return
+      if (!initialFitComplete.current) return
       const dw = width - prev.w
       const dh = height - prev.h
       if (dw === 0 && dh === 0) return
@@ -235,7 +270,6 @@ export function FlowCanvas({
       defaultViewport={{ x: 0, y: 0, zoom: 1 }}
       minZoom={0.1}
       maxZoom={4}
-      onInit={onInit}
       proOptions={{ hideAttribution: true }}
       style={{ width: '100%', height: '100%', backgroundColor: 'var(--surface)' }}
     >
