@@ -6,7 +6,7 @@ import { memo, useCallback, useMemo, useRef, useEffect } from 'react'
 import { Position, useEdges, type NodeProps } from '@xyflow/react'
 import { matchesShowWhen, type NodeData, type NodeParameter } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
-import { FloatSlider, AnchorGrid, EnumSelect, BoolCheckbox } from './NodeParameters'
+import { FloatSlider, AnchorGrid, EnumSelect, BoolCheckbox, SegmentedControl } from './NodeParameters'
 import { useGraphStore } from '../stores/graphStore'
 import { usePreviewStore } from '../stores/previewStore'
 import { useCompilerStore } from '../stores/compilerStore'
@@ -435,6 +435,8 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
               } else if (param.type === 'enum' && param.options) {
                 control = param.control === 'anchor-grid' ? (
                   <AnchorGrid param={param} value={(currentValues[param.id] as string) ?? (param.default as string)} onChange={(v) => nodeData.type === 'fragment_output' && param.id === 'anchor' ? setOutputAnchor(id, v) : handleParamChange(param.id, v)} />
+                ) : param.control === 'segmented' ? (
+                  <SegmentedControl param={param} value={(currentValues[param.id] as string) ?? (param.default as string)} onChange={(v) => handleParamChange(param.id, v)} />
                 ) : (
                   <EnumSelect param={param} value={(currentValues[param.id] as string) ?? (param.default as string)} onChange={(v) => handleParamChange(param.id, v)} />
                 )
@@ -491,7 +493,9 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
               const isSlider = param.type !== 'enum' && param.type !== 'bool'
               let control
               if (param.type === 'enum' && param.options) {
-                control = (
+                control = param.control === 'segmented' ? (
+                  <SegmentedControl param={param} value={(currentValues[param.id] as string) ?? (param.default as string)} onChange={(v) => handleParamChange(param.id, v)} />
+                ) : (
                   <EnumSelect param={param} value={(currentValues[param.id] as string) ?? (param.default as string)} onChange={(v) => handleParamChange(param.id, v)} />
                 )
               } else if (param.type === 'bool') {

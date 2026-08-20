@@ -44,9 +44,10 @@ export interface NodeParameter {
   /**
    * Alternate UI control for an enum param. 'anchor-grid' renders a 3×3
    * pin-position toggle grid instead of a dropdown — requires exactly 9
-   * options in row-major order (tl..br).
+   * options in row-major order (tl..br). 'segmented' renders a segmented
+   * button row (all options visible at once) — best for 2–3 options.
    */
-  control?: 'anchor-grid'
+  control?: 'anchor-grid' | 'segmented'
   showWhen?: Record<string, string | string[]>        // Only show when other params match (array = any of)
   connectable?: boolean                              // If true, renders as wirable handle + inline slider
   hidden?: boolean                                   // If true, param is not rendered in UI (internal state)
@@ -155,6 +156,7 @@ export function getSpatialParams(spatial: SpatialConfig): NodeParameter[] {
   if (spatial.exposeTranslateSpace && spatial.transforms.includes('translate')) {
     params.push({
       id: 'srt_translateSpace', label: 'Offset Space', type: 'enum', default: 'screen',
+      control: 'segmented',
       options: [
         { value: 'screen', label: 'Screen' },
         { value: 'local', label: 'Local' },
