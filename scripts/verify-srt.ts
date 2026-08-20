@@ -354,6 +354,27 @@ console.log('\nH. resolveSRT — the gizmo API (all math encapsulated)')
       rw.dragRotate(rw.rotateHandleAngle).srt_rotate === 40,
       `got ${rw.dragRotate(rw.rotateHandleAngle).srt_rotate}`)
   }
+  // translateFrame 'node-legacy' (reeded's hand-rolled SRT): stored offsets are
+  // NODE-frame; visible world step = nodeOffsetToWorld(params). The gizmo
+  // center and drags must map through that.
+  {
+    const L = { transforms: T, translateFrame: 'node-legacy' as const }
+    const r = resolveSRT({ srt_translateX: 120, srt_translateY: 0, srt_rotate: 30, srt_scale: 2 }, L)
+    const w = nodeOffsetToWorld(120, 0, 30, 2, 2)
+    check('node-legacy: originOffset = css of nodeOffsetToWorld(params)',
+      approx(r.originOffset.x, w.tx) && approx(r.originOffset.y, -w.ty),
+      `got (${r.originOffset.x}, ${r.originOffset.y}) exp (${w.tx}, ${-w.ty})`)
+    // free drag follows the cursor: css step converts through the frame and back
+    const p = r.dragTranslate(10, 0, 'free')
+    const w2 = nodeOffsetToWorld(p.srt_translateX, p.srt_translateY, 30, 2, 2)
+    check('node-legacy: free drag moves the WORLD position by the css step',
+      approx(w2.tx, w.tx + 10) && approx(w2.ty, w.ty),
+      `world after (${w2.tx}, ${w2.ty}) exp (${w.tx + 10}, ${w.ty})`)
+    // mechanism-engaged: legacy ≠ world frame when rotated
+    const rw2 = resolveSRT({ srt_translateX: 120, srt_translateY: 0, srt_rotate: 30, srt_scale: 2 }, { transforms: T })
+    check('node-legacy ≠ world originOffset when rotated (mechanism-engaged)',
+      !approx(r.originOffset.x, rw2.originOffset.x) || !approx(r.originOffset.y, rw2.originOffset.y))
+  }
 }
 
 console.log('\n' + '='.repeat(60))

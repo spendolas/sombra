@@ -337,6 +337,9 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   const srtSy = (currentValues.srt_scaleY as number) ?? (currentValues.srt_scale as number) ?? 1
   const offsetNodeView =
     gizmoView === 'node' &&
+    // Framework-spatial only: hand-rolled SRT (reeded) stores NODE-frame
+    // offsets already — converting them would double-apply the frame.
+    !!definition?.spatial &&
     allParams.some((p) => p.id === 'srt_translateX' && !p.hidden) &&
     !connectedInputs.has('srt_translateX') && !connectedInputs.has('srt_translateY')
   const nodeViewOffsets = offsetNodeView
