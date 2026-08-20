@@ -375,6 +375,26 @@ console.log('\nH. resolveSRT — the gizmo API (all math encapsulated)')
     check('node-legacy ≠ world originOffset when rotated (mechanism-engaged)',
       !approx(r.originOffset.x, rw2.originOffset.x) || !approx(r.originOffset.y, rw2.originOffset.y))
   }
+  // 'ref_yup' (reeded rib space, patRef): auto_uv units but y-FLIPPED — the
+  // full chain toCss(nodeOffsetToWorld(t)) must reproduce the physical rib
+  // shift F·S·R(−θ)·(tx,−ty).
+  {
+    const RY = { transforms: T, coordSpace: 'ref_yup' as const, translateFrame: 'node-legacy' as const }
+    const r = resolveSRT({ srt_translateX: 120, srt_translateY: 0, srt_rotate: 30, srt_scale: 2 }, RY)
+    const w = nodeOffsetToWorld(120, 0, 30, 2, 2) // param-convention world step
+    check('ref_yup: originOffset = (w.tx, +w.ty) — y-flip vs auto_uv',
+      approx(r.originOffset.x, w.tx) && approx(r.originOffset.y, w.ty),
+      `got (${r.originOffset.x}, ${r.originOffset.y}) exp (${w.tx}, ${w.ty})`)
+    check('ref_yup: +ty moves DOWN',
+      resolveSRT({ srt_translateY: 10 }, RY).originOffset.y === 10)
+    // rotation parity mirrors vs auto_uv (numeric composition, no special case)
+    const ry = resolveSRT({ srt_rotate: 30, srt_scale: 1 }, RY)
+    const au = resolveSRT({ srt_rotate: 30, srt_scale: 1 }, { transforms: T })
+    check('ref_yup rotate handle mirrored vs auto_uv',
+      approx(ry.rotateHandleAngle, -au.rotateHandleAngle), `ry=${ry.rotateHandleAngle} au=${au.rotateHandleAngle}`)
+    check('ref_yup: dragRotate(handleAngle) round-trips θ',
+      ry.dragRotate(ry.rotateHandleAngle).srt_rotate === 30)
+  }
 }
 
 console.log('\n' + '='.repeat(60))
