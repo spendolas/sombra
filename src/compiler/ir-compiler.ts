@@ -261,44 +261,33 @@ export function generateNodeIR(
     outputs[outputPort.id] = `node_${sanitizedNodeId}_${outputPort.id}`
   })
 
-  // Framework SRT injection — build IRSpatialTransform if applicable, and the
-  // own-content "finished spot" coordinate exposed as ctx.spatialCoords.
+  // Framework SRT injection + the own-content coordinate (ctx.spatialCoords).
   let spatialTransform: IRSpatialTransform | undefined
   let spatialCoords: string | undefined
   if (definition.spatial && inputs.coords) {
-    const srtVar = `srt_${sanitizedNodeId}`
     const spatial = definition.spatial
-
-    spatialTransform = {
-      coordsVar: inputs.coords,
-      outputVar: srtVar,
+    // Shared SRT uniform wiring (world one-storage; the view is global — ir/srt.ts).
+    const srtUniforms = {
       scaleUniform: spatial.transforms.includes('scale') ? inputs.srt_scale : undefined,
       scaleXUniform: spatial.transforms.includes('scaleXY') ? inputs.srt_scaleX : undefined,
       scaleYUniform: spatial.transforms.includes('scaleXY') ? inputs.srt_scaleY : undefined,
       rotateUniform: spatial.transforms.includes('rotate') ? inputs.srt_rotate : undefined,
       translateXUniform: spatial.transforms.includes('translate') ? inputs.srt_translateX : undefined,
       translateYUniform: spatial.transforms.includes('translate') ? inputs.srt_translateY : undefined,
-      // ONE STORAGE: srt_translateSpace is a view/edit mode, never a shader
-      // semantic — the offset is always the world-frame value (ir/srt.ts).
     }
-
-    // Add standard uniforms needed by SRT
     collectedStandardUniforms.add('u_anchor')
-    // (rotate no longer needs u_resolution — rotation is now aspect-free)
     if (spatial.transforms.includes('translate')) {
       collectedStandardUniforms.add('u_dpr')
       collectedStandardUniforms.add('u_ref_size')
     }
 
-    // Replace coords input with the SRT output variable
-    inputs.coords = srtVar
-
-    // Own-content coordinate. Single-pass: `coords` IS auto_uv, so its SRT
-    // output (srtVar) is exactly the finished spot. Texture mode: `coords` was
-    // remapped to screen_uv for FBO sampling (line ~188), so build a SEPARATE
-    // SRT'd auto_uv — a node polling for its own position (warp's noise field)
-    // gets the transform from the single source (emitSRT), never hand-rolled.
     if (isTextureMode) {
+      // EFFECT IN PLACE (SRT design spec): the sample base (`coords`, remapped
+      // to screen_uv at ~line 188) is NOT transformed — the source is read in
+      // its own frame. SRT drives ONLY the own-content coordinate below (the
+      // effect's structure, e.g. warp's noise field). Move the source by
+      // putting SRT on the SOURCE node, not here. spatialTransform stays
+      // undefined so `coords` is left as the raw screen_uv sample base.
       const ownUvVar = `node_${sanitizedNodeId}_own_uv`
       preambleStatements.push(
         declare(ownUvVar, 'vec2', binary('+',
@@ -310,12 +299,16 @@ export function generateNodeIR(
       collectedStandardUniforms.add('u_resolution')
       collectedStandardUniforms.add('u_dpr')
       collectedStandardUniforms.add('u_ref_size')
-      const ownSrt: IRSpatialTransform = { ...spatialTransform, coordsVar: ownUvVar, outputVar: `srtown_${sanitizedNodeId}` }
+      const ownSrt: IRSpatialTransform = { coordsVar: ownUvVar, outputVar: `srtown_${sanitizedNodeId}`, ...srtUniforms }
       // emitSRT text (single source) in preamble; the WGSL assembler rewrites
       // bare uniform names globally, so raw() here is safe.
       preambleStatements.push(raw(emitSRT(ownSrt, 'glsl').join('\n  '), emitSRT(ownSrt, 'wgsl').join('\n  ')))
       spatialCoords = ownSrt.outputVar
     } else {
+      // Single-pass: `coords` IS auto_uv → SRT it; that IS the own content.
+      const srtVar = `srt_${sanitizedNodeId}`
+      spatialTransform = { coordsVar: inputs.coords, outputVar: srtVar, ...srtUniforms }
+      inputs.coords = srtVar
       spatialCoords = srtVar
     }
   }

@@ -551,10 +551,10 @@ export function generateNodeGlsl(
     }
   }
 
-  // Framework SRT injection — transforms coords input for spatial nodes
+  // Framework SRT injection + own-content coordinate (see ir-compiler for the
+  // full rationale — the two paths mirror each other).
   let spatialCoords: string | undefined
   if (definition.spatial && inputs.coords) {
-    const srtVar = `srt_${sanitizedNodeId}`
     const spatial = definition.spatial
     const hasScaleXY = spatial.transforms.includes('scaleXY')
     const hasTranslate = spatial.transforms.includes('translate')
@@ -562,35 +562,32 @@ export function generateNodeGlsl(
     uniforms.add('u_anchor')
     if (hasTranslate) { uniforms.add('u_dpr'); uniforms.add('u_ref_size') }
 
-    // Single source: op order lives in ir/srt.ts (shared with both IR backends).
-    const srt: IRSpatialTransform = {
-      coordsVar: inputs.coords,
-      outputVar: srtVar,
+    // Shared SRT uniform wiring. Single source: op order lives in ir/srt.ts.
+    const srtUniforms = {
       scaleUniform: spatial.transforms.includes('scale') ? inputs.srt_scale : undefined,
       scaleXUniform: hasScaleXY ? inputs.srt_scaleX : undefined,
       scaleYUniform: hasScaleXY ? inputs.srt_scaleY : undefined,
       rotateUniform: spatial.transforms.includes('rotate') ? inputs.srt_rotate : undefined,
       translateXUniform: hasTranslate ? inputs.srt_translateX : undefined,
       translateYUniform: hasTranslate ? inputs.srt_translateY : undefined,
-      // ONE STORAGE: srt_translateSpace is a view/edit mode, never a shader
-      // semantic — the offset is always the world-frame value (ir/srt.ts).
     }
-    preambleLines.push(...emitSRT(srt, 'glsl'))
 
-    // Replace coords input with transformed variable
-    inputs.coords = srtVar
-
-    // Own-content coordinate ("finished spot") — see ir-compiler for the full
-    // rationale. Single-pass: srtVar (coords IS auto_uv). Texture mode: coords
-    // was remapped to screen_uv, so build a separate SRT'd auto_uv.
     if (isTextureMode) {
+      // EFFECT IN PLACE: the sample base (`coords` = screen_uv) is NOT SRT'd —
+      // the source is read in its own frame; SRT drives only the own-content
+      // coordinate (the effect's structure). See ir-compiler + SRT spec.
       const ownUvVar = `node_${sanitizedNodeId}_own_uv`
-      uniforms.add('u_resolution'); uniforms.add('u_anchor'); uniforms.add('u_dpr'); uniforms.add('u_ref_size')
+      uniforms.add('u_resolution'); uniforms.add('u_dpr'); uniforms.add('u_ref_size')
       preambleLines.push(`vec2 ${ownUvVar} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * u_anchor) / (u_dpr * u_ref_size) + u_anchor;`)
-      const ownSrt: IRSpatialTransform = { ...srt, coordsVar: ownUvVar, outputVar: `srtown_${sanitizedNodeId}` }
+      const ownSrt: IRSpatialTransform = { coordsVar: ownUvVar, outputVar: `srtown_${sanitizedNodeId}`, ...srtUniforms }
       preambleLines.push(...emitSRT(ownSrt, 'glsl'))
       spatialCoords = ownSrt.outputVar
     } else {
+      // Single-pass: `coords` IS auto_uv → SRT it; that IS the own content.
+      const srtVar = `srt_${sanitizedNodeId}`
+      const srt: IRSpatialTransform = { coordsVar: inputs.coords, outputVar: srtVar, ...srtUniforms }
+      preambleLines.push(...emitSRT(srt, 'glsl'))
+      inputs.coords = srtVar
       spatialCoords = srtVar
     }
   }
