@@ -65,11 +65,12 @@ export function SrtGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetRef }
   const coordSpace: SRTCoordSpace =
     definition?.inputs?.find((i) => i.id === 'coords')?.default === 'screen_uv' ? 'screen_uv' : 'auto_uv'
   // Hand-rolled SRT dialects (see scripts/verify-srt-conformity.ts allowlist).
-  // reeded's three SRT copies have mixed parities; the gizmo tracks the RIB
-  // pattern space (patRef: ref units, y-flipped, node-frame storage) — the
-  // structure the user visually positions. Dies with the reeded migration.
+  // reeded, PIXEL-MEASURED 2026-08-21: rib space has STANDARD parity (+ty up,
+  // standard rotation) with node-frame translate storage → plain auto_uv +
+  // 'node-legacy' (which also compensates rotate/scale drags so the center
+  // doesn't orbit). Dies with the reeded migration.
   const HANDROLLED_DIALECTS: Record<string, { coordSpace: SRTCoordSpace; translateFrame: 'node-legacy'; transforms: ReadonlyArray<'scale' | 'scaleXY' | 'rotate' | 'translate'> }> = {
-    reeded_glass: { coordSpace: 'ref_yup', translateFrame: 'node-legacy', transforms: ['scale', 'rotate', 'translate'] },
+    reeded_glass: { coordSpace: 'auto_uv', translateFrame: 'node-legacy', transforms: ['scale', 'rotate', 'translate'] },
   }
   const dialect = selectedNode ? HANDROLLED_DIALECTS[selectedNode.data.type] : undefined
   const transforms = spatial?.transforms ?? dialect?.transforms
@@ -258,12 +259,12 @@ export function SrtGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetRef }
         )}
       </svg>
 
-      {/* Frame badge — which space the axes are in (QA aid) */}
+      {/* Node-title badge — whose transform this gizmo edits */}
       <div
-        className="absolute text-fg-dim bg-surface-raised/80 rounded-xs px-1 pointer-events-none"
+        className="absolute text-fg-dim bg-surface-raised/80 rounded-xs px-1 pointer-events-none whitespace-nowrap"
         style={{ left: cx + 10, top: cy + 10, fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase' }}
       >
-        {r.space}
+        {definition?.label ?? selectedNode?.data.type}
       </div>
 
       {/* Axis tip handles (constrained translate) */}

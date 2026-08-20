@@ -37,11 +37,12 @@ export interface Vec2 { x: number; y: number }
 /**
  * 'auto_uv': the coordinate contract (y-down, ref-sized, buffer px).
  * 'screen_uv': image's v_uv space (y-up, canvas-relative, per-axis units).
- * 'ref_yup': reeded's rib-pattern space (patRef) — ref-sized isotropic units
- *   like auto_uv but y-FLIPPED (+ty moves ribs DOWN); pair with translateFrame
- *   'node-legacy'. Dies with the reeded migration (spec step 5).
+ * (reeded pixel-measured 2026-08-21: its rib space has STANDARD parity —
+ *  +ty up, standard rotation — plus node-frame translate; so it's plain
+ *  'auto_uv' + translateFrame 'node-legacy'. A y-flipped 'ref_yup' space was
+ *  derived from patRef source-reading, shipped, and proven wrong on screen.)
  */
-export type SRTCoordSpace = 'auto_uv' | 'screen_uv' | 'ref_yup'
+export type SRTCoordSpace = 'auto_uv' | 'screen_uv'
 
 export interface SRTCanvasMetrics {
   /** Canvas CSS size. */
@@ -133,11 +134,6 @@ export function resolveSRT(params: Record<string, unknown>, opts: ResolveSRTOpti
     const uy = cssH / (k * REFERENCE_SIZE)
     toCss = (dtx, dty) => ({ x: dtx * ux, y: dty * uy })
     toParam = (dx, dy) => ({ x: dx / ux, y: dy / uy })
-  } else if (coordSpace === 'ref_yup') {
-    // Reeded rib space (patRef): auto_uv units, y-FLIPPED — +ty moves DOWN.
-    const unit = cssW / bufferW
-    toCss = (dtx, dty) => ({ x: dtx * unit, y: dty * unit })
-    toParam = (dx, dy) => ({ x: dx / unit, y: dy / unit })
   } else {
     // auto_uv: offsets land in buffer px, isotropic, y-down (+ty → up).
     const unit = cssW / bufferW
@@ -203,12 +199,23 @@ export function resolveSRT(params: Record<string, unknown>, opts: ResolveSRTOpti
   }
   const hd = rotHandleDirOf(rotate)
   const rotateHandleAngle = Math.atan2(hd.y, hd.x)
+  // In node-legacy storage, rotating/scaling would ORBIT the content (the
+  // world position S·R(−θ)·t changes with θ/s) — wonky under a gizmo. These
+  // drags therefore COMPENSATE the offsets to hold the world position fixed,
+  // matching how world-storage nodes feel (their center never moves).
+  const holdWorld = (newDeg: number, newSx: number, newSy: number): Record<string, number> => {
+    if (!legacy || (tx === 0 && ty === 0)) return {}
+    const w = paramsToWorld(tx, ty)
+    const n = worldOffsetToNode(w.x, w.y, newDeg, newSx, newSy)
+    return { srt_translateX: n.tx, srt_translateY: n.ty }
+  }
   const dragRotate = (cssAngleRad: number, snap15 = false) => {
     const v = toParam(Math.cos(cssAngleRad), Math.sin(cssAngleRad))
     // v is the node-X world step (c, s) direction (see rotHandleDirOf inverse)
     let deg = normDeg(Math.atan2(v.y, v.x) / deg2rad)
     if (snap15) deg = normDeg(Math.round(deg / 15) * 15)
-    return { srt_rotate: Math.round(deg) }
+    deg = Math.round(deg)
+    return { srt_rotate: deg, ...holdWorld(deg, sx, sy) }
   }
 
   const scaleMag = has.scaleXY ? (Math.abs(sx) + Math.abs(sy)) / 2 : sx
@@ -217,7 +224,8 @@ export function resolveSRT(params: Record<string, unknown>, opts: ResolveSRTOpti
     const v = Math.round(next * 100) / 100 // param step 0.01
     // scaleXY v0: the uniform handle writes both axes (per-axis handles are the
     // polished-gizmo pass).
-    return has.scaleXY ? { srt_scaleX: v, srt_scaleY: v } : { srt_scale: v }
+    const base: Record<string, number> = has.scaleXY ? { srt_scaleX: v, srt_scaleY: v } : { srt_scale: v }
+    return { ...base, ...holdWorld(rotate, v, v) }
   }
 
   return {

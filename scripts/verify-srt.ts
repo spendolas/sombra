@@ -375,25 +375,29 @@ console.log('\nH. resolveSRT — the gizmo API (all math encapsulated)')
     check('node-legacy ≠ world originOffset when rotated (mechanism-engaged)',
       !approx(r.originOffset.x, rw2.originOffset.x) || !approx(r.originOffset.y, rw2.originOffset.y))
   }
-  // 'ref_yup' (reeded rib space, patRef): auto_uv units but y-FLIPPED — the
-  // full chain toCss(nodeOffsetToWorld(t)) must reproduce the physical rib
-  // shift F·S·R(−θ)·(tx,−ty).
+  // node-legacy rotate/scale drags COMPENSATE the offsets so the gizmo center
+  // (the world position S·R(−θ)·t) stays put — node-frame storage would
+  // otherwise orbit the content under a rotate drag (the reeded "wonky/jumpy").
   {
-    const RY = { transforms: T, coordSpace: 'ref_yup' as const, translateFrame: 'node-legacy' as const }
-    const r = resolveSRT({ srt_translateX: 120, srt_translateY: 0, srt_rotate: 30, srt_scale: 2 }, RY)
-    const w = nodeOffsetToWorld(120, 0, 30, 2, 2) // param-convention world step
-    check('ref_yup: originOffset = (w.tx, +w.ty) — y-flip vs auto_uv',
-      approx(r.originOffset.x, w.tx) && approx(r.originOffset.y, w.ty),
-      `got (${r.originOffset.x}, ${r.originOffset.y}) exp (${w.tx}, ${w.ty})`)
-    check('ref_yup: +ty moves DOWN',
-      resolveSRT({ srt_translateY: 10 }, RY).originOffset.y === 10)
-    // rotation parity mirrors vs auto_uv (numeric composition, no special case)
-    const ry = resolveSRT({ srt_rotate: 30, srt_scale: 1 }, RY)
-    const au = resolveSRT({ srt_rotate: 30, srt_scale: 1 }, { transforms: T })
-    check('ref_yup rotate handle mirrored vs auto_uv',
-      approx(ry.rotateHandleAngle, -au.rotateHandleAngle), `ry=${ry.rotateHandleAngle} au=${au.rotateHandleAngle}`)
-    check('ref_yup: dragRotate(handleAngle) round-trips θ',
-      ry.dragRotate(ry.rotateHandleAngle).srt_rotate === 30)
+    const L = { transforms: T, translateFrame: 'node-legacy' as const }
+    const before = resolveSRT({ srt_translateX: 120, srt_translateY: 40, srt_rotate: 30, srt_scale: 2 }, L)
+    const w0 = { ...before.originOffset }
+    // rotate to 75° via the mapper; re-resolve with the patched params
+    const patch = before.dragRotate(-(75 * Math.PI / 180))
+    check('node-legacy dragRotate also rewrites offsets', 'srt_translateX' in patch && 'srt_translateY' in patch)
+    const after = resolveSRT({ srt_scale: 2, ...patch }, L)
+    check('node-legacy dragRotate holds the world position (no orbit)',
+      approx(after.originOffset.x, w0.x, 1e-4) && approx(after.originOffset.y, w0.y, 1e-4),
+      `before (${w0.x}, ${w0.y}) after (${after.originOffset.x}, ${after.originOffset.y})`)
+    const sPatch = before.dragScale(120, 40) // scale → 3
+    const afterS = resolveSRT({ srt_rotate: 30, ...sPatch }, L)
+    check('node-legacy dragScale holds the world position',
+      approx(afterS.originOffset.x, w0.x, 1e-4) && approx(afterS.originOffset.y, w0.y, 1e-4),
+      `after (${afterS.originOffset.x}, ${afterS.originOffset.y})`)
+    // world-storage nodes need no compensation — their rotate patch is rotate-only
+    const world = resolveSRT({ srt_translateX: 120, srt_translateY: 40, srt_rotate: 30, srt_scale: 2 }, { transforms: T })
+    check('world storage: dragRotate does NOT touch offsets',
+      !('srt_translateX' in world.dragRotate(0.3)))
   }
 }
 
