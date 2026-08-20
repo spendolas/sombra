@@ -25,6 +25,7 @@ import { PreviewPanel } from './components/PreviewPanel'
 import { FloatingPreview } from './components/FloatingPreview'
 import { FullWindowOverlay } from './components/FullWindowOverlay'
 import { PreviewGizmoOverlay } from './components/PreviewGizmoOverlay'
+import { SrtGizmoOverlay } from './components/SrtGizmoOverlay'
 import { CommandPalette } from './components/CommandPalette'
 import {
   ResizablePanelGroup,
@@ -636,6 +637,14 @@ function App() {
             node's gizmo (if any), tracking the live canvas rect across all
             three preview targets regardless of previewMode. */}
         <PreviewGizmoOverlay
+          dockTargetRef={dockTargetRef}
+          floatTargetRef={floatTargetRef}
+          fullTargetRef={fullTargetRef}
+        />
+
+        {/* SRT transform gizmo — plain v0 (QA the one-storage SRT model);
+            resolveSRT() owns all the math. Toggled from the preview toolbar. */}
+        <SrtGizmoOverlay
           dockTargetRef={dockTargetRef}
           floatTargetRef={floatTargetRef}
           fullTargetRef={fullTargetRef}

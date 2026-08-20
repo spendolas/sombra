@@ -14,6 +14,8 @@ export function PreviewToolbar({ className }: PreviewToolbarProps) {
   const setPreviewMode = useSettingsStore((s) => s.setPreviewMode)
   const setSplitDirection = useSettingsStore((s) => s.setSplitDirection)
   const toggleSplitSwapped = useSettingsStore((s) => s.toggleSplitSwapped)
+  const srtGizmo = useSettingsStore((s) => s.srtGizmo)
+  const toggleSrtGizmo = useSettingsStore((s) => s.toggleSrtGizmo)
 
   const isDockedH = previewMode === 'docked' && splitDirection === 'horizontal'
   const isDockedV = previewMode === 'docked' && splitDirection === 'vertical'
@@ -68,6 +70,12 @@ export function PreviewToolbar({ className }: PreviewToolbarProps) {
         />
       </div>
       <div className={ds.previewToolbar.root}>
+        <IconButton
+          icon="crosshair"
+          title="Transform gizmo"
+          className={srtGizmo ? active : inactive}
+          onClick={toggleSrtGizmo}
+        />
         <IconButton
           icon="scan"
           title="Full window (F)"

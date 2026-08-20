@@ -30,6 +30,7 @@ import type { NodeData } from '../src/nodes/types'
 import { ALL_NODES, initializeNodeLibrary } from '../src/nodes/index'
 import { migrateOffsetSpace, FRAMEWORK_SPATIAL_TRANSLATE_TYPES } from '../src/utils/srt-migration'
 import { importFromFile, exportToFile, encodeCompactHash, decodeCompactHash } from '../src/utils/sombra-file'
+import { resolveSRT } from '../src/compiler/ir/srt-resolve'
 import pako from 'pako'
 
 let failures = 0
@@ -256,6 +257,64 @@ console.log('\nG. file/share formats route through the migration (version-finger
       approx(p.srt_translateX as number, expW.tx) && approx(p.srt_translateY as number, expW.ty),
       `got (${p.srt_translateX}, ${p.srt_translateY}) exp (${expW.tx}, ${expW.ty})`)
     check("compact v1: stamped 'world'", p.srt_translateSpace === 'world')
+  }
+}
+
+console.log('\nH. resolveSRT — the gizmo API (all math encapsulated)')
+{
+  const T: ReadonlyArray<'scale' | 'rotate' | 'translate'> = ['scale', 'rotate', 'translate']
+  // world axes are the canvas axes (css y-down, +Y param = up = −y css)
+  {
+    const r = resolveSRT({ srt_translateSpace: 'world', srt_rotate: 30, srt_scale: 2 }, { transforms: T })
+    check('world axes are canvas axes regardless of rotate/scale',
+      r.axes.x.x === 1 && r.axes.x.y === 0 && r.axes.y.x === 0 && r.axes.y.y === -1)
+  }
+  // node axes: rotated content directions; must match the slider conversion math
+  {
+    const r = resolveSRT({ srt_translateSpace: 'node', srt_rotate: 30, srt_scale: 1 }, { transforms: T })
+    const w = nodeOffsetToWorld(1, 0, 30, 1, 1) // css dir = (tx, −ty)
+    const len = Math.hypot(w.tx, w.ty)
+    check('node X axis == normalized css direction of a node-frame +X offset',
+      approx(r.axes.x.x, w.tx / len) && approx(r.axes.x.y, -w.ty / len),
+      `axis (${r.axes.x.x}, ${r.axes.x.y}) conv (${w.tx / len}, ${-w.ty / len})`)
+    const rw = resolveSRT({ srt_translateSpace: 'world', srt_rotate: 30, srt_scale: 1 }, { transforms: T })
+    check('node axes ≠ world axes when rotated (mechanism-engaged)',
+      !approx(r.axes.x.x, rw.axes.x.x) || !approx(r.axes.x.y, rw.axes.x.y))
+  }
+  // originOffset: world offset (10,5) → css (10,−5) from the anchor point
+  {
+    const r = resolveSRT({ srt_translateX: 10, srt_translateY: 5 }, { transforms: T })
+    check('originOffset flips Y (params +Y = up, css y-down)', r.originOffset.x === 10 && r.originOffset.y === -5)
+  }
+  // free drag follows the cursor: css (3,−4) → world (+3, +4)
+  {
+    const r = resolveSRT({ srt_translateX: 10, srt_translateY: 5 }, { transforms: T })
+    const p = r.dragTranslate(3, -4, 'free')
+    check('free drag: css (3,−4) → params (13, 9)', p.srt_translateX === 13 && p.srt_translateY === 9,
+      `got (${p.srt_translateX}, ${p.srt_translateY})`)
+  }
+  // constrained node-X drag at rot 90°: node X ≈ css (0,−1); css (5,−10) projects to k=10 → up 10
+  {
+    const r = resolveSRT({ srt_translateX: 10, srt_translateY: 5, srt_rotate: 90, srt_scale: 1, srt_translateSpace: 'node' }, { transforms: T })
+    const p = r.dragTranslate(5, -10, 'x')
+    check('node-X constrained drag @ rot90 moves along the rotated axis only',
+      approx(p.srt_translateX, 10) && approx(p.srt_translateY, 15),
+      `got (${p.srt_translateX}, ${p.srt_translateY})`)
+  }
+  // rotate mapping: handle css angle −θ; drag −30° css → θ=30; Shift snaps 37→30
+  {
+    const r = resolveSRT({ srt_rotate: 30, srt_scale: 1 }, { transforms: T })
+    check('rotate handle sits at css angle −θ', approx(r.rotateHandleAngle, -30 * Math.PI / 180))
+    check('dragRotate(−30° css) → 30', r.dragRotate(-30 * Math.PI / 180).srt_rotate === 30)
+    check('dragRotate snap15: 37° → 30', r.dragRotate(-37 * Math.PI / 180, true).srt_rotate === 30)
+  }
+  // scale mapping: dist/base, clamped, step-rounded; scaleXY writes both axes
+  {
+    const r = resolveSRT({ srt_scale: 1 }, { transforms: T })
+    check('dragScale(80, 40) → 2', r.dragScale(80, 40).srt_scale === 2)
+    const rxy = resolveSRT({ srt_scaleX: 1, srt_scaleY: 1 }, { transforms: ['scaleXY', 'rotate', 'translate'] })
+    const p = rxy.dragScale(60, 40)
+    check('scaleXY: uniform handle writes both axes', p.srt_scaleX === 1.5 && p.srt_scaleY === 1.5)
   }
 }
 

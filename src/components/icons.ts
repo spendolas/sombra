@@ -14,6 +14,7 @@ export const icons = {
   code: createIcon('code', nodes.code),
   columns: createIcon('columns', nodes.columns),
   copy: createIcon('copy', nodes.copy),
+  crosshair: createIcon('crosshair', nodes.crosshair),
   download: createIcon('download', nodes.download),
   eye: createIcon('eye', nodes.eye),
   film: createIcon('film', nodes.film),
