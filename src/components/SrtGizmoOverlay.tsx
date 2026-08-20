@@ -64,14 +64,17 @@ export function SrtGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetRef }
   // canvas-relative screen_uv) — resolveSRT owns the difference.
   const coordSpace: SRTCoordSpace =
     definition?.inputs?.find((i) => i.id === 'coords')?.default === 'screen_uv' ? 'screen_uv' : 'auto_uv'
-  // FRAMEWORK-spatial nodes only. Hand-rolled SRT (reeded_glass) is NOT
-  // eligible: its three inline SRT copies have MIXED y-parities (the rib
-  // pattern space y-flips, the lens/coords copy doesn't), so no single mapping
-  // can make a gizmo track it faithfully — a lying gizmo is worse than none.
-  // reeded gets its gizmo when it migrates onto emitSRT (spec step 5); the
-  // resolver's 'node-legacy' translateFrame stays available for that migration.
-  const transforms = spatial?.transforms
-  const translateFrame = 'world' as const
+  // Hand-rolled SRT dialects (see scripts/verify-srt-conformity.ts allowlist).
+  // reeded's three SRT copies have mixed parities; the gizmo tracks the RIB
+  // pattern space (patRef: ref units, y-flipped, node-frame storage) — the
+  // structure the user visually positions. Dies with the reeded migration.
+  const HANDROLLED_DIALECTS: Record<string, { coordSpace: SRTCoordSpace; translateFrame: 'node-legacy'; transforms: ReadonlyArray<'scale' | 'scaleXY' | 'rotate' | 'translate'> }> = {
+    reeded_glass: { coordSpace: 'ref_yup', translateFrame: 'node-legacy', transforms: ['scale', 'rotate', 'translate'] },
+  }
+  const dialect = selectedNode ? HANDROLLED_DIALECTS[selectedNode.data.type] : undefined
+  const transforms = spatial?.transforms ?? dialect?.transforms
+  const translateFrame: 'world' | 'node-legacy' = spatial ? 'world' : (dialect?.translateFrame ?? 'world')
+  const effectiveCoordSpace: SRTCoordSpace = spatial ? coordSpace : (dialect?.coordSpace ?? coordSpace)
   // Skip nodes whose SRT params are parked hidden (gradient) — no controls, no gizmo.
   const srtHidden = definition?.params?.find((p) => p.id.startsWith('srt_'))?.hidden === true
   const active = gizmoOn && !!selectedNode && !!transforms && !srtHidden
@@ -163,7 +166,7 @@ export function SrtGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetRef }
       const view = useSettingsStore.getState().gizmoView
       const r: ResolvedSRT = resolveSRT(latestParams, {
         transforms,
-        coordSpace,
+        coordSpace: effectiveCoordSpace,
         translateFrame,
         metrics: { cssW: rect.width, cssH: rect.height, bufferW: cv?.width ?? rect.width },
         space: view === 'node' ? 'node' : 'world',
@@ -198,14 +201,14 @@ export function SrtGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetRef }
       window.removeEventListener('pointerup', onEnd)
       window.removeEventListener('pointercancel', onEnd)
     }
-  }, [dragging, selectedNode, transforms, translateFrame, coordSpace, outputAnchor, updateNodeData])
+  }, [dragging, selectedNode, transforms, translateFrame, effectiveCoordSpace, outputAnchor, updateNodeData])
 
   if (!active || !canvasRect || !transforms) return null
 
   const canvasEl = canvasElRef.current
   const r = resolveSRT(currentParams, {
     transforms,
-    coordSpace,
+    coordSpace: effectiveCoordSpace,
     translateFrame,
     metrics: { cssW: canvasRect.width, cssH: canvasRect.height, bufferW: canvasEl?.width ?? canvasRect.width },
     space: gizmoView === 'node' ? 'node' : 'world',

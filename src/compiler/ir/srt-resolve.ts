@@ -34,7 +34,14 @@ import type { TranslateSpace } from './types'
 
 export interface Vec2 { x: number; y: number }
 
-export type SRTCoordSpace = 'auto_uv' | 'screen_uv'
+/**
+ * 'auto_uv': the coordinate contract (y-down, ref-sized, buffer px).
+ * 'screen_uv': image's v_uv space (y-up, canvas-relative, per-axis units).
+ * 'ref_yup': reeded's rib-pattern space (patRef) — ref-sized isotropic units
+ *   like auto_uv but y-FLIPPED (+ty moves ribs DOWN); pair with translateFrame
+ *   'node-legacy'. Dies with the reeded migration (spec step 5).
+ */
+export type SRTCoordSpace = 'auto_uv' | 'screen_uv' | 'ref_yup'
 
 export interface SRTCanvasMetrics {
   /** Canvas CSS size. */
@@ -126,6 +133,11 @@ export function resolveSRT(params: Record<string, unknown>, opts: ResolveSRTOpti
     const uy = cssH / (k * REFERENCE_SIZE)
     toCss = (dtx, dty) => ({ x: dtx * ux, y: dty * uy })
     toParam = (dx, dy) => ({ x: dx / ux, y: dy / uy })
+  } else if (coordSpace === 'ref_yup') {
+    // Reeded rib space (patRef): auto_uv units, y-FLIPPED — +ty moves DOWN.
+    const unit = cssW / bufferW
+    toCss = (dtx, dty) => ({ x: dtx * unit, y: dty * unit })
+    toParam = (dx, dy) => ({ x: dx / unit, y: dy / unit })
   } else {
     // auto_uv: offsets land in buffer px, isotropic, y-down (+ty → up).
     const unit = cssW / bufferW
