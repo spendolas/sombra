@@ -30,7 +30,7 @@ export const checkerboardNode: NodeDefinition = {
   ],
 
   params: [
-    ...getSpatialParams({ transforms: ['scale', 'rotate', 'translate'] }),
+    ...getSpatialParams({ transforms: ['scale', 'rotate', 'translate'], exposeTranslateSpace: true }),
     {
       id: 'tileMode', label: 'Tile Mode', type: 'enum', default: 'cellSize',
       options: [

@@ -26,7 +26,7 @@ export const noiseNode: NodeDefinition = {
   ],
 
   params: [
-    ...getSpatialParams({ transforms: ['scale', 'translate'] }),
+    ...getSpatialParams({ transforms: ['scale', 'translate'], exposeTranslateSpace: true }),
     {
       id: 'noiseType', label: 'Type', type: 'enum', default: 'simplex',
       options: NOISE_TYPE_OPTIONS, updateMode: 'recompile',

@@ -18,6 +18,7 @@
  */
 import { emitSRT } from '../src/compiler/ir/srt'
 import type { IRSpatialTransform } from '../src/compiler/ir/types'
+import { ALL_NODES } from '../src/nodes/index'
 
 let failures = 0
 const check = (name: string, cond: boolean, detail = '') => {
@@ -85,6 +86,25 @@ console.log("\nC. 'local' byte-identical to the pre-refactor hand-written loweri
   const got = emitSRT(full('local'), 'wgsl')
   check('local WGSL matches the canonical (pre-refactor) lines', JSON.stringify(got) === JSON.stringify(expected),
     `\n    got: ${JSON.stringify(got)}\n    exp: ${JSON.stringify(expected)}`)
+}
+
+console.log('\nD. exposeTranslateSpace reaches node params')
+// The flag lives on the node's `spatial:` field, but params come from a SEPARATE
+// getSpatialParams({...}) call literal — the two drift trivially (they did: the
+// param was set on spatial: yet never passed to the call, so it never rendered).
+// This asserts the wiring end-to-end. Mechanism-engaged: drop the flag from any of
+// the 5 calls and this fails (verified — that was the shipped bug).
+{
+  const exposed = new Set(['noise', 'fbm', 'stripes', 'dots', 'checkerboard'])
+  for (const n of ALL_NODES) {
+    const has = n.params?.some((p) => p.id === 'srt_translateSpace') ?? false
+    if (exposed.has(n.type)) {
+      check(`${n.type}: Offset Space param present`, has,
+        'exposeTranslateSpace is on spatial: but not passed to the getSpatialParams() call')
+    } else if (has) {
+      check(`${n.type}: does not leak Offset Space param`, false, 'unexpected srt_translateSpace')
+    }
+  }
 }
 
 console.log('\n' + '='.repeat(60))
