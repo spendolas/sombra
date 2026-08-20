@@ -64,24 +64,14 @@ export function SrtGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetRef }
   // canvas-relative screen_uv) — resolveSRT owns the difference.
   const coordSpace: SRTCoordSpace =
     definition?.inputs?.find((i) => i.id === 'coords')?.default === 'screen_uv' ? 'screen_uv' : 'auto_uv'
-  // Hand-rolled SRT (reeded_glass): srt_* params without a spatial: config.
-  // Its shader still applies translate node-frame — resolveSRT's
-  // 'node-legacy' translateFrame maps the gizmo onto that reality. Dies when
-  // the reeded framework migration (spec step 5) lands.
-  const hasParam = (id: string) => !!definition?.params?.some((p) => p.id === id)
-  const handRolled = !spatial && hasParam('srt_translateX')
-  const transforms = useMemo<ReadonlyArray<'scale' | 'scaleXY' | 'rotate' | 'translate'> | undefined>(() => {
-    if (spatial) return spatial.transforms
-    if (!handRolled) return undefined
-    const t: Array<'scale' | 'scaleXY' | 'rotate' | 'translate'> = []
-    if (hasParam('srt_scale')) t.push('scale')
-    if (hasParam('srt_scaleX')) t.push('scaleXY')
-    if (hasParam('srt_rotate')) t.push('rotate')
-    t.push('translate')
-    return t
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spatial, handRolled, definition])
-  const translateFrame = spatial ? 'world' as const : 'node-legacy' as const
+  // FRAMEWORK-spatial nodes only. Hand-rolled SRT (reeded_glass) is NOT
+  // eligible: its three inline SRT copies have MIXED y-parities (the rib
+  // pattern space y-flips, the lens/coords copy doesn't), so no single mapping
+  // can make a gizmo track it faithfully — a lying gizmo is worse than none.
+  // reeded gets its gizmo when it migrates onto emitSRT (spec step 5); the
+  // resolver's 'node-legacy' translateFrame stays available for that migration.
+  const transforms = spatial?.transforms
+  const translateFrame = 'world' as const
   // Skip nodes whose SRT params are parked hidden (gradient) — no controls, no gizmo.
   const srtHidden = definition?.params?.find((p) => p.id.startsWith('srt_'))?.hidden === true
   const active = gizmoOn && !!selectedNode && !!transforms && !srtHidden
