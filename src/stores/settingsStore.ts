@@ -19,6 +19,7 @@ interface SettingsState {
   gridSize: number
   snapToGrid: boolean
   nodesPanelOpen: boolean  // Floaty Nodes palette overlay — persisted, default off
+  srtGizmo: boolean        // SRT transform gizmo over the preview — persisted, default on
 
   // Preview settings
   previewHeight: number  // Height of preview panel in pixels
@@ -46,6 +47,7 @@ interface SettingsState {
   setSnapToGrid: (snap: boolean) => void
   setNodesPanelOpen: (open: boolean) => void
   toggleNodesPanel: () => void
+  toggleSrtGizmo: () => void
   setPreviewHeight: (height: number) => void
   setAutoCompile: (auto: boolean) => void
   setCompileDebounceMs: (ms: number) => void
@@ -68,6 +70,7 @@ const DEFAULT_SETTINGS: Omit<SettingsState, keyof SettingsActions> = {
   gridSize: 16,
   snapToGrid: false,
   nodesPanelOpen: false,
+  srtGizmo: true,
   previewHeight: 256,  // 16rem
   autoCompile: true,
   compileDebounceMs: 100,
@@ -95,6 +98,7 @@ type SettingsActions = {
   setSnapToGrid: (snap: boolean) => void
   setNodesPanelOpen: (open: boolean) => void
   toggleNodesPanel: () => void
+  toggleSrtGizmo: () => void
   setPreviewHeight: (height: number) => void
   setAutoCompile: (auto: boolean) => void
   setCompileDebounceMs: (ms: number) => void
@@ -122,6 +126,7 @@ export const useSettingsStore = create<SettingsState>()(
       setSnapToGrid: (snap) => set({ snapToGrid: snap }),
       setNodesPanelOpen: (open) => set({ nodesPanelOpen: open }),
       toggleNodesPanel: () => set((s) => ({ nodesPanelOpen: !s.nodesPanelOpen })),
+      toggleSrtGizmo: () => set((s) => ({ srtGizmo: !s.srtGizmo })),
       setPreviewHeight: (height) => set({ previewHeight: height }),
       setAutoCompile: (auto) => set({ autoCompile: auto }),
       setCompileDebounceMs: (ms) => set({ compileDebounceMs: ms }),
