@@ -262,8 +262,13 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
     : definition.inputs
 
   // SRT (framework transform) params render in the Transform section below.
+  // NOT gated on `connectable`: non-connectable SRT params (e.g. the
+  // `srt_translateSpace` enum) must render here too — the bodyParams pass
+  // excludes everything `srt_`, so gating this on connectable dropped them from
+  // BOTH lists and they rendered nowhere. `isParamVisible` still hides
+  // `hidden:true` ones (gradient parks its SRT params that way).
   const srtParams = allParams.filter(
-    (p) => p.id.startsWith('srt_') && p.connectable && isParamVisible(p, currentValues, allParams)
+    (p) => p.id.startsWith('srt_') && isParamVisible(p, currentValues, allParams)
   )
 
   // Everything else renders inline in DECLARED ORDER, with a left handle on
@@ -477,24 +482,40 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
           <div className={cn(ds.shaderNode.paramDivider, "mt-xs pt-xs")}>
             <div className="px-sm pb-2xs text-fg-subtle" style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Transform</div>
             {srtParams.map((param) => {
-              const isConnected = connectedInputs.has(param.id)
+              const connectable = !!param.connectable
+              const isConnected = connectable && connectedInputs.has(param.id)
               const displayValue = (currentValues[param.id] as number) ?? (param.default as number)
+              // Control by type — mirrors bodyParams. Non-slider controls
+              // (enum dropdown) get the auto-height frame; the fixed-height
+              // innerFrame is tuned for sliders and clips a dropdown.
+              const isSlider = param.type !== 'enum' && param.type !== 'bool'
+              let control
+              if (param.type === 'enum' && param.options) {
+                control = (
+                  <EnumSelect param={param} value={(currentValues[param.id] as string) ?? (param.default as string)} onChange={(v) => handleParamChange(param.id, v)} />
+                )
+              } else if (param.type === 'bool') {
+                control = (
+                  <BoolCheckbox param={param} value={(currentValues[param.id] as boolean) ?? (param.default as boolean)} onChange={(v) => handleParamChange(param.id, v)} />
+                )
+              } else {
+                control = (
+                  <FloatSlider param={param} value={displayValue} onChange={(value) => handleParamChange(param.id, value)} disabled={isConnected} />
+                )
+              }
               return (
                 <div key={param.id} className={cn(ds.connectableParamRow.root, "nodrag nowheel")}>
-                  <BaseHandle
-                    type="target"
-                    position={Position.Left}
-                    id={param.id}
-                    handleColor={getPortColor(param.type)}
-                    connected={isConnected}
-                  />
-                  <div className={ds.connectableParamRow.innerFrame}>
-                    <FloatSlider
-                      param={param}
-                      value={displayValue}
-                      onChange={(value) => handleParamChange(param.id, value)}
-                      disabled={isConnected}
+                  {connectable && (
+                    <BaseHandle
+                      type="target"
+                      position={Position.Left}
+                      id={param.id}
+                      handleColor={getPortColor(param.type)}
+                      connected={isConnected}
                     />
+                  )}
+                  <div className={isSlider ? ds.connectableParamRow.innerFrame : "flex flex-col pl-handle-offset pr-xs gap-xs flex-1 min-w-0"}>
+                    {control}
                   </div>
                 </div>
               )
