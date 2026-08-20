@@ -15,6 +15,14 @@ SRT op-list (canonical order): [ subAnchor, scale, rotate, translate, addAnchor 
 - Each op reads its uniforms from the existing `getSpatialParams` set (`srt_scale/rotate/translateX/translateY`), unchanged.
 - One lowering function per backend consumes the op-list; **neither hand-writes the order.** `IRSpatialTransform` (`ir-compiler.ts:281`) becomes the carrier of the op-list + `translateSpace`, not just loose uniforms.
 
+## Effect-node SRT semantics (DECIDED 2026-08-20)
+A node's SRT transforms **only that node's own content coordinate** — a generator's pattern, or an effect's own structure (reeded's ribs/lens). It does **NOT** re-sample upstream sources through the new frame: **source reads happen in the source's own frame.** To move a source, put SRT on the source node (the previous step). Strict Photoshop adjustment-layer reading, not Smart-Object-with-filter.
+
+Consequences:
+- A **pure** resample effect (blur of a fixed source, no own structure) → its SRT is a **no-op**. Correct: you move the source, not the blur. So SRT is a per-node opt-in (generators + own-structure nodes), which is why `SpatialConfig`/`spatial:` is where a node declares it *has* transformable own-content at all.
+- **Architecture consequence:** the framework hands a spatial node **two** coordinates — `inputs.coords` (SRT'd, own-content frame, as today) **and a separate un-SRT'd source-sampling coordinate** (source/screen frame). Own content uses `coords`; **source texture reads use the un-SRT'd coord.** SRT is injected onto own-content coords only, never onto the source-sampling path.
+- This is exactly the coords-vs-source-read split behind the reeded frost/grain bug — formalising it here means the reeded migration (step 5) reads its source in the source frame and uses SRT'd coords only for ribs/grain.
+
 ## Consumer 1+2: shader lowering
 `lowerSpatialTransformToGLSL` / `...ToWGSL` iterate the op-list and emit only the per-op syntax (`vec2` vs `vec2f`, `uniforms.` prefix). Delete the legacy inline copy in `glsl-generator.ts:562-591` and route it through the same source. Result: changing the order — or fixing `translateSpace` — is a **one-place edit**.
 
