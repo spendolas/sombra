@@ -72,20 +72,13 @@ export const warpNode: NodeDefinition = {
     const noiseCoords = `dw_nc_${id}`
     const lines: string[] = []
 
-    // In texture mode, coords is v_uv (screen space) for correct FBO sampling.
-    // Compute auto_uv internally for aspect-correct noise evaluation,
-    // then apply SRT scale/translate so the noise pattern responds to sliders.
-    if (ctx.textureSamplers?.source) {
-      ctx.uniforms.add('u_resolution')
-      ctx.uniforms.add('u_dpr')
-      ctx.uniforms.add('u_ref_size')
-      ctx.uniforms.add('u_anchor')
-      lines.push(`vec2 ${noiseCoords} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * u_anchor) / (u_dpr * u_ref_size) + u_anchor;`)
-      lines.push(`${noiseCoords} = (${noiseCoords} - u_anchor) / vec2(${inputs.srt_scale}) - vec2(${inputs.srt_translateX}, -(${inputs.srt_translateY})) / (u_dpr * u_ref_size) + u_anchor;`)
-    } else {
-      // Single-pass: coords is already auto_uv
-      lines.push(`vec2 ${noiseCoords} = ${inputs.coords};`)
-    }
+    // Noise field coordinate = the framework's own-content "finished spot"
+    // (ctx.spatialCoords): SRT'd auto_uv, aspect-correct, from the single SRT
+    // source in BOTH single-pass and texture mode. (Was hand-rolled here — a
+    // second SRT copy that used node-frame order and diverged from single-pass
+    // at scale≠1; see the SRT design spec.) `inputs.coords` (the sample base)
+    // is untouched.
+    lines.push(`vec2 ${noiseCoords} = ${ctx.spatialCoords ?? inputs.coords};`)
 
     lines.push(
       `vec2 ${seedOff} = fract(vec2(${inputs.seed}) * vec2(12.9898, 78.233)) * 1000.0;`,
@@ -141,7 +134,6 @@ export const warpNode: NodeDefinition = {
     const prefix = ctx.outputs.warped
 
     const samplerName = ctx.textureSamplers?.source
-    const isTextureMode = !!samplerName
 
     const seedOff = `dw_soff_${id}`
     const sc = `dw_sc_${id}`
@@ -150,21 +142,12 @@ export const warpNode: NodeDefinition = {
 
     const stmts: IRStmt[] = []
 
-    // Noise coordinate computation
-    if (isTextureMode) {
-      // Texture mode: compute auto_uv from gl_FragCoord, then apply SRT
-      standardUniforms.add('u_resolution')
-      standardUniforms.add('u_dpr')
-      standardUniforms.add('u_ref_size')
-      standardUniforms.add('u_anchor')
-      stmts.push(
-        raw(`vec2 ${noiseCoords} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * u_anchor) / (u_dpr * u_ref_size) + u_anchor;`),
-        raw(`${noiseCoords} = (${noiseCoords} - u_anchor) / vec2(${ctx.inputs.srt_scale}) - vec2(${ctx.inputs.srt_translateX}, -(${ctx.inputs.srt_translateY})) / (u_dpr * u_ref_size) + u_anchor;`),
-      )
-    } else {
-      // Single-pass: coords is already auto_uv
-      stmts.push(declare(noiseCoords, 'vec2', variable(ctx.inputs.coords)))
-    }
+    // Noise field coordinate = the framework's own-content "finished spot"
+    // (ctx.spatialCoords): SRT'd auto_uv from the single SRT source in BOTH
+    // modes. (Was two hand-rolled raw() lines that re-derived auto_uv +
+    // node-frame SRT, diverging from single-pass at scale≠1 — see the SRT
+    // design spec.) `ctx.inputs.coords` (the sample base) is untouched.
+    stmts.push(declare(noiseCoords, 'vec2', variable(ctx.spatialCoords ?? ctx.inputs.coords)))
 
     // Seed offset
     stmts.push(

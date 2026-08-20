@@ -12,6 +12,7 @@ import type { Node, Edge } from '@xyflow/react'
 import type { NodeData, EdgeData, UniformSpec, PortType, NodeParameter } from '../nodes/types'
 import type { IRNodeOutput, IRContext, IRSpatialTransform } from './ir/types'
 import { raw, declare, binary, variable, fragCoord } from './ir/types'
+import { emitSRT } from './ir/srt'
 import { nodeRegistry } from '../nodes/registry'
 import { topologicalSort, hasCycles } from './topological-sort'
 import {
@@ -260,21 +261,10 @@ export function generateNodeIR(
     outputs[outputPort.id] = `node_${sanitizedNodeId}_${outputPort.id}`
   })
 
-  // Build IR context
-  const irContext: IRContext = {
-    nodeId: node.id,
-    isPreview,
-    inputs,
-    outputs,
-    params: node.data.params || {},
-    textureSamplers: Object.keys(textureSamplers).length > 0 ? textureSamplers : undefined,
-    // Always pass the set — nodes REGISTER their samplers into it. Gating on
-    // `size > 0` made registration impossible (first image node saw undefined).
-    imageSamplers,
-  }
-
-  // Framework SRT injection — build IRSpatialTransform if applicable
+  // Framework SRT injection — build IRSpatialTransform if applicable, and the
+  // own-content "finished spot" coordinate exposed as ctx.spatialCoords.
   let spatialTransform: IRSpatialTransform | undefined
+  let spatialCoords: string | undefined
   if (definition.spatial && inputs.coords) {
     const srtVar = `srt_${sanitizedNodeId}`
     const spatial = definition.spatial
@@ -301,7 +291,47 @@ export function generateNodeIR(
     }
 
     // Replace coords input with the SRT output variable
-    irContext.inputs.coords = srtVar
+    inputs.coords = srtVar
+
+    // Own-content coordinate. Single-pass: `coords` IS auto_uv, so its SRT
+    // output (srtVar) is exactly the finished spot. Texture mode: `coords` was
+    // remapped to screen_uv for FBO sampling (line ~188), so build a SEPARATE
+    // SRT'd auto_uv — a node polling for its own position (warp's noise field)
+    // gets the transform from the single source (emitSRT), never hand-rolled.
+    if (isTextureMode) {
+      const ownUvVar = `node_${sanitizedNodeId}_own_uv`
+      preambleStatements.push(
+        declare(ownUvVar, 'vec2', binary('+',
+          binary('/',
+            binary('-', fragCoord('yDown'), binary('*', variable('u_resolution'), variable('u_anchor'), 'vec2'), 'vec2'),
+            binary('*', variable('u_dpr'), variable('u_ref_size'), 'float'), 'vec2'),
+          variable('u_anchor'), 'vec2')),
+      )
+      collectedStandardUniforms.add('u_resolution')
+      collectedStandardUniforms.add('u_dpr')
+      collectedStandardUniforms.add('u_ref_size')
+      const ownSrt: IRSpatialTransform = { ...spatialTransform, coordsVar: ownUvVar, outputVar: `srtown_${sanitizedNodeId}` }
+      // emitSRT text (single source) in preamble; the WGSL assembler rewrites
+      // bare uniform names globally, so raw() here is safe.
+      preambleStatements.push(raw(emitSRT(ownSrt, 'glsl').join('\n  '), emitSRT(ownSrt, 'wgsl').join('\n  ')))
+      spatialCoords = ownSrt.outputVar
+    } else {
+      spatialCoords = srtVar
+    }
+  }
+
+  // Build IR context
+  const irContext: IRContext = {
+    nodeId: node.id,
+    isPreview,
+    inputs,
+    outputs,
+    params: node.data.params || {},
+    textureSamplers: Object.keys(textureSamplers).length > 0 ? textureSamplers : undefined,
+    // Always pass the set — nodes REGISTER their samplers into it. Gating on
+    // `size > 0` made registration impossible (first image node saw undefined).
+    imageSamplers,
+    spatialCoords,
   }
 
   // Call ir() function

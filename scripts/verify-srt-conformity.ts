@@ -30,19 +30,16 @@ initializeNodeLibrary()
 // deviation kinds → detector output
 type Deviation = 'no-spatial-config' | 'alien-coord-space' | 'body-consumes-srt' | 'hand-rolled-origin'
 
-/** The shrink-only allowlist. Kill order: warp → image → reeded (spec step 5). */
-const KNOWN_DEVIATIONS: Record<string, { allowed: Deviation[]; kill: string }> = {
+/** The shrink-only allowlist. Migration order: image → reeded (warp done
+ *  2026-08-21: consumes ctx.spatialCoords). Each entry names its migration. */
+const KNOWN_DEVIATIONS: Record<string, { allowed: Deviation[]; migration: string }> = {
   image: {
     allowed: ['alien-coord-space'],
-    kill: 'migrate image onto the y-down auto_uv coordinate contract',
-  },
-  warp: {
-    allowed: ['body-consumes-srt', 'hand-rolled-origin'],
-    kill: "delete warp's internal noise-coords SRT copy (texture mode also hand-rolls auto_uv); use the framework coord",
+    migration: 'migrate image onto the y-down auto_uv coordinate contract',
   },
   reeded_glass: {
     allowed: ['no-spatial-config', 'body-consumes-srt', 'hand-rolled-origin'],
-    kill: 'reeded framework migration (spec step 5): spatial: + emitSRT, delete 3 hand-rolls',
+    migration: 'reeded framework migration (spec step 5): spatial: + emitSRT, delete 3 hand-rolls',
   },
 }
 
@@ -138,7 +135,7 @@ for (const def of ALL_NODES) {
   const stale = [...allowed].filter((d) => !found.has(d))
   if (found.size || allowed.size) {
     rows.push(`  ${found.size ? '⚠' : ' '} ${def.type}: ${[...found].join(', ') || 'conforming'}${
-      KNOWN_DEVIATIONS[def.type] ? `  [allowed — kill: ${KNOWN_DEVIATIONS[def.type].kill}]` : ''}`)
+      KNOWN_DEVIATIONS[def.type] ? `  [allowed — migration: ${KNOWN_DEVIATIONS[def.type].migration}]` : ''}`)
   }
   for (const d of fresh) {
     console.log(`  [FAIL] ${def.type}: NEW SRT deviation '${d}' — nodes must consume the framework SRT (emitSRT + auto_uv). If migrating an old node, update KNOWN_DEVIATIONS with a kill plan.`)

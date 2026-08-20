@@ -83,6 +83,15 @@ export interface GLSLContext {
   functionRegistry: Map<string, string>    // Deduplicated shared functions (key -> GLSL code)
   textureSamplers?: Record<string, string> // portId → sampler2D uniform name (multi-pass)
   imageSamplers?: Set<string>              // Image node sampler2D uniform names
+  /**
+   * The node's own-content coordinate: `auto_uv` with the framework SRT applied
+   * ("finished spot"). Present for spatial nodes. A node that COMPUTES its own
+   * coordinates (e.g. warp's noise field) reads THIS instead of re-deriving the
+   * SRT transform — polling the single source (ir/srt.ts). Single-pass it equals
+   * the SRT'd `coords`; in texture mode (where `coords` is remapped to screen_uv
+   * for sampling) it is a separately-computed SRT'd auto_uv. Set by the compiler.
+   */
+  spatialCoords?: string
   /** True when compiling for a node mini-preview thumbnail (fixed 80×80, centre
    *  anchor). Nodes may render a canonical, placement-independent view — e.g. the
    *  gradient shows itself centred + fitted rather than at its pinned position. */
