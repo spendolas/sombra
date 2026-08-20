@@ -3,42 +3,55 @@
  * (docs/research/2026-08-20-srt-api-design-spec.md, Consumer 3).
  *
  * A pure query: node params in → structured transform data + drag mappers out.
- * ALL SRT math (frames, y-sign, rotation direction, world/node conversion)
- * lives HERE — a gizmo renderer draws at the returned positions and feeds
- * pointer deltas to the mappers; it must never contain its own trig. The same
- * conversions the Node-view sliders use (ir/srt.ts) back the mappers, so the
- * gizmo, the sliders, and the shader can never disagree.
+ * ALL SRT math (coord spaces, y-parity, rotation direction, world/node
+ * conversion, px↔css units) lives HERE — a gizmo renderer draws at the
+ * returned positions and feeds pointer deltas to the mappers; it must never
+ * contain its own trig. The same conversions the Node-view sliders use
+ * (ir/srt.ts) back the mappers, so the gizmo, the sliders, and the shader can
+ * never disagree.
  *
- * Coordinate conventions:
- * - Params: world-frame offsets, +Y = up (ONE STORAGE — see ir/srt.ts).
- * - Gizmo space: canvas CSS px, y-DOWN, relative to the canvas anchor point
- *   (the Fragment Output anchor at `canvasSize * anchorFraction`).
- * - A world offset of T px displaces content T px in the render BUFFER
- *   (auto_uv's u_dpr divisor cancels against the buffer's dpr·qualityScale),
- *   i.e. T × cssPerPx CSS px where cssPerPx = canvasRect.width / canvas.width.
- *   The caller measures that ratio off the live canvas and passes it in;
- *   originOffset and dragTranslate bake it, so the gizmo tracks the content
- *   1:1 on any dpr / adaptive-quality tier.
- * - `space` mirrors the node's Offset Space view param: it changes the AXES
- *   the gizmo shows/constrains to — never the stored values (one storage).
+ * COORD SPACES — the node's `coords` input default decides how offset params
+ * map to the screen, and the API owns both cases (nothing leaks to consumers):
+ * - 'auto_uv' (patterns): y-DOWN, isotropic, ref-sized. An offset of T px
+ *   displaces content T px in the render BUFFER → T·(cssW/bufferW) CSS px.
+ * - 'screen_uv' (image): v_uv is y-UP and canvas-relative, so the same shader
+ *   code lands differently: +ty moves content DOWN on screen (parity flip) and
+ *   units are per-axis canvas fractions — css = (tx·cssW, ty·cssH)/(u_dpr·REF)
+ *   with u_dpr measured as bufferW/cssW. Rotation is visually mirrored and
+ *   aspect-warped in this space (long-standing image behaviour — the fix is
+ *   migrating image onto the coordinate contract, spec follow-up); the mappers
+ *   here TRACK that reality so the gizmo stays glued to what renders.
  *
- * Rotation: the shader samples at R(θ)·S⁻¹·(c − t − a) + a, so visible content
- * transforms by S·R(−θ) — a node-frame +X offset displaces content along
- * css (sx·cosθ, −sy·sinθ). The axes below are exactly those directions.
+ * Everything reduces to two diagonal maps (paramDeltaToCss / cssDeltaToParam);
+ * axes, rotate handle, and all drag inversions derive from them numerically.
+ *
+ * `space` mirrors the GLOBAL coords-view switch: it changes the AXES the gizmo
+ * shows/constrains to — never the stored values (ONE STORAGE, see ir/srt.ts).
  */
 import { normalizeTranslateSpace, nodeOffsetToWorld } from './srt'
+import { REFERENCE_SIZE } from '../../renderer/constants'
 import type { TranslateSpace } from './types'
 
 export interface Vec2 { x: number; y: number }
+
+export type SRTCoordSpace = 'auto_uv' | 'screen_uv'
+
+export interface SRTCanvasMetrics {
+  /** Canvas CSS size. */
+  cssW: number
+  cssH: number
+  /** Canvas render-buffer width (canvas.width) — carries dpr × quality scale. */
+  bufferW: number
+}
 
 export interface ResolvedSRT {
   /** Resolved param values (world storage). */
   translate: Vec2
   rotate: number
   scale: Vec2
-  /** The node's Offset Space view mode (param or default). */
+  /** The coords-view frame in effect (global switch / legacy param / world). */
   space: TranslateSpace
-  /** Which transforms this node actually declares (drives which handles render). */
+  /** Which transforms this node declares (drives which handles render). */
   has: { translate: boolean; rotate: boolean; scale: boolean; scaleXY: boolean }
   /** Gizmo center, as a CSS-px offset (y-down) from the canvas anchor point. */
   originOffset: Vec2
@@ -48,10 +61,8 @@ export interface ResolvedSRT {
   rotateHandleAngle: number
   /** Uniform scale magnitude for placing the scale handle. */
   scaleMag: number
-  /**
-   * Map a pointer delta (CSS px, y-down) to a translate param patch.
-   * 'free' follows the cursor; 'x'/'y' constrain to the ACTIVE frame's axis.
-   */
+  /** Map a pointer delta (CSS px) to a translate patch. 'free' follows the
+   *  cursor; 'x'/'y' constrain to the ACTIVE frame's axis. */
   dragTranslate: (dxCss: number, dyCss: number, constraint: 'free' | 'x' | 'y') => Record<string, number>
   /** Map the cursor's CSS angle around the gizmo center to a rotate patch. */
   dragRotate: (cssAngleRad: number, snap15?: boolean) => Record<string, number>
@@ -62,16 +73,12 @@ export interface ResolvedSRT {
 export interface ResolveSRTOptions {
   /** The node's SpatialConfig transforms (which SRT ops exist). */
   transforms: ReadonlyArray<'scale' | 'scaleXY' | 'rotate' | 'translate'>
-  /**
-   * CSS px that one world-offset px displaces content on screen:
-   * canvasRect.width / canvas.width (buffer px). Default 1 (dpr-1, full-res).
-   */
-  cssPerPx?: number
-  /**
-   * The coords-view frame to resolve axes in. The app passes the GLOBAL
-   * switch (settingsStore.gizmoView); falls back to the node's stored
-   * srt_translateSpace (legacy saves), then 'world'.
-   */
+  /** The node's coords space (its `coords` input default). Default 'auto_uv'. */
+  coordSpace?: SRTCoordSpace
+  /** Live canvas measurements. Default 1/1/1 (unit css, dpr-1). */
+  metrics?: SRTCanvasMetrics
+  /** The coords-view frame (the GLOBAL switch). Falls back to the node's
+   *  stored srt_translateSpace (legacy saves), then 'world'. */
   space?: TranslateSpace
 }
 
@@ -94,23 +101,47 @@ export function resolveSRT(params: Record<string, unknown>, opts: ResolveSRTOpti
   const sx = has.scaleXY ? ((params.srt_scaleX as number) ?? 1) : ((params.srt_scale as number) ?? 1)
   const sy = has.scaleXY ? ((params.srt_scaleY as number) ?? 1) : ((params.srt_scale as number) ?? 1)
   const space = opts.space ?? normalizeTranslateSpace(params.srt_translateSpace)
-  const cssPerPx = opts.cssPerPx && Number.isFinite(opts.cssPerPx) && opts.cssPerPx > 0 ? opts.cssPerPx : 1
+  const coordSpace = opts.coordSpace ?? 'auto_uv'
+  const m = opts.metrics ?? { cssW: 1, cssH: 1, bufferW: 1 }
+  const safe = (v: number, fb: number) => (Number.isFinite(v) && v > 0 ? v : fb)
+  const cssW = safe(m.cssW, 1), cssH = safe(m.cssH, 1), bufferW = safe(m.bufferW, cssW)
 
-  const rad = rotate * deg2rad
-  const c = Math.cos(rad), s = Math.sin(rad)
-
-  // Node-frame axis directions in CSS (y-down): where a node-frame +X/+Y offset
-  // displaces content (from nodeOffsetToWorld: +X → css (sx·c, −sy·s),
-  // +Y → css (−sx·s, −sy·c)). Degenerate scale falls back to pure rotation.
-  const unit = (x: number, y: number, fx: number, fy: number): Vec2 => {
-    const len = Math.hypot(x, y)
-    return len > 1e-9 ? { x: x / len, y: y / len } : { x: fx, y: fy }
+  // The two primitives everything derives from — diagonal maps between a
+  // param-space offset delta (+Y semantics per space) and a CSS delta (y-down).
+  let toCss: (dtx: number, dty: number) => Vec2
+  let toParam: (dx: number, dy: number) => Vec2
+  if (coordSpace === 'screen_uv') {
+    // v_uv space: y-up, canvas-relative. u_dpr ≈ bufferW/cssW; tExpr divides
+    // by u_dpr·REF, then 1 uv unit spans the canvas per axis. +ty → DOWN.
+    const k = bufferW / cssW
+    const ux = cssW / (k * REFERENCE_SIZE)
+    const uy = cssH / (k * REFERENCE_SIZE)
+    toCss = (dtx, dty) => ({ x: dtx * ux, y: dty * uy })
+    toParam = (dx, dy) => ({ x: dx / ux, y: dy / uy })
+  } else {
+    // auto_uv: offsets land in buffer px, isotropic, y-down (+ty → up).
+    const unit = cssW / bufferW
+    toCss = (dtx, dty) => ({ x: dtx * unit, y: -dty * unit })
+    toParam = (dx, dy) => ({ x: dx / unit, y: -dy / unit })
   }
-  const nodeX = unit(sx * c, -sy * s, c, -s)
-  const nodeY = unit(-sx * s, -sy * c, -s, -c)
+
+  // Node-frame axis directions in CSS: where a node-frame +X/+Y offset step
+  // displaces content — the world-conversion of a unit node offset, mapped to
+  // css. Handles y-parity, aspect, and mirrored rotation with no special cases.
+  const axisDir = (nx: number, ny: number, fx: number, fy: number): Vec2 => {
+    const w = nodeOffsetToWorld(nx, ny, rotate, sx, sy)
+    const v = toCss(w.tx, w.ty)
+    const len = Math.hypot(v.x, v.y)
+    return len > 1e-9 ? { x: v.x / len, y: v.y / len } : { x: fx, y: fy }
+  }
+  const worldAxis = (nx: number, ny: number, fx: number, fy: number): Vec2 => {
+    const v = toCss(nx, ny)
+    const len = Math.hypot(v.x, v.y)
+    return len > 1e-9 ? { x: v.x / len, y: v.y / len } : { x: fx, y: fy }
+  }
   const axes = space === 'node'
-    ? { x: nodeX, y: nodeY }
-    : { x: { x: 1, y: 0 }, y: { x: 0, y: -1 } }
+    ? { x: axisDir(1, 0, 1, 0), y: axisDir(0, 1, 0, -1) }
+    : { x: worldAxis(1, 0, 1, 0), y: worldAxis(0, 1, 0, -1) }
 
   const dragTranslate = (dxCss: number, dyCss: number, constraint: 'free' | 'x' | 'y') => {
     let dx = dxCss, dy = dyCss
@@ -120,16 +151,23 @@ export function resolveSRT(params: Record<string, unknown>, opts: ResolveSRTOpti
       dx = a.x * k
       dy = a.y * k
     }
-    // CSS displacement (dx, dy) → offset px (÷cssPerPx so content tracks the
-    // cursor 1:1) → world params (+dx, −dy): +Y param = up.
-    return { srt_translateX: tx + dx / cssPerPx, srt_translateY: ty - dy / cssPerPx }
+    const d = toParam(dx, dy)
+    return { srt_translateX: tx + d.x, srt_translateY: ty + d.y }
   }
 
-  // Visible content rotation in CSS y-down is −θ (see header): the handle sits
-  // on the content's rotated X direction, and dragging maps back θ = −angle.
-  const rotateHandleAngle = -rad
+  // Rotate handle sits along the css direction of a unit node-X offset at the
+  // CURRENT rotation (scale-independent); dragRotate inverts via toParam, so
+  // parity and aspect warp cancel exactly (handle tracks the visible feature).
+  const rotHandleDirOf = (deg: number): Vec2 => {
+    const w = nodeOffsetToWorld(1, 0, deg, 1, 1)
+    return toCss(w.tx, w.ty)
+  }
+  const hd = rotHandleDirOf(rotate)
+  const rotateHandleAngle = Math.atan2(hd.y, hd.x)
   const dragRotate = (cssAngleRad: number, snap15 = false) => {
-    let deg = normDeg(-cssAngleRad / deg2rad)
+    const v = toParam(Math.cos(cssAngleRad), Math.sin(cssAngleRad))
+    // v is the node-X world step (c, s) direction (see rotHandleDirOf inverse)
+    let deg = normDeg(Math.atan2(v.y, v.x) / deg2rad)
     if (snap15) deg = normDeg(Math.round(deg / 15) * 15)
     return { srt_rotate: Math.round(deg) }
   }
@@ -149,7 +187,7 @@ export function resolveSRT(params: Record<string, unknown>, opts: ResolveSRTOpti
     scale: { x: sx, y: sy },
     space,
     has,
-    originOffset: { x: tx * cssPerPx, y: -ty * cssPerPx },
+    originOffset: toCss(tx, ty),
     axes,
     rotateHandleAngle,
     scaleMag,

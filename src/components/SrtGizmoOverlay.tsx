@@ -20,7 +20,7 @@ import { flushSync } from 'react-dom'
 import { useGraphStore } from '../stores/graphStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { nodeRegistry } from '../nodes/registry'
-import { resolveSRT, type ResolvedSRT } from '../compiler/ir/srt-resolve'
+import { resolveSRT, type ResolvedSRT, type SRTCoordSpace } from '../compiler/ir/srt-resolve'
 import type { Rect } from '../utils/gizmo-coords'
 import { moveCursor } from '../utils/cursors'
 import { anchorToVec2 } from '../nodes/output/fragment-output'
@@ -60,6 +60,10 @@ export function SrtGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetRef }
 
   const definition = selectedNode ? nodeRegistry.get(selectedNode.data.type) : undefined
   const spatial = definition?.spatial
+  // The node's coords space decides the px↔css mapping (image rides y-up,
+  // canvas-relative screen_uv) — resolveSRT owns the difference.
+  const coordSpace: SRTCoordSpace =
+    definition?.inputs?.find((i) => i.id === 'coords')?.default === 'screen_uv' ? 'screen_uv' : 'auto_uv'
   // Skip nodes whose SRT params are parked hidden (gradient) — no controls, no gizmo.
   const srtHidden = definition?.params?.find((p) => p.id.startsWith('srt_'))?.hidden === true
   const active = gizmoOn && !!selectedNode && !!spatial && !srtHidden
@@ -149,9 +153,13 @@ export function SrtGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetRef }
       // CSS px per world-offset px, measured off the live canvas (buffer px) —
       // tracks content across dpr and adaptive-quality buffer scaling.
       const cv = canvasElRef.current
-      const cssPerPx = cv && cv.width > 0 ? rect.width / cv.width : 1
       const view = useSettingsStore.getState().gizmoView
-      const r: ResolvedSRT = resolveSRT(latestParams, { transforms, cssPerPx, space: view === 'node' ? 'node' : 'world' })
+      const r: ResolvedSRT = resolveSRT(latestParams, {
+        transforms,
+        coordSpace,
+        metrics: { cssW: rect.width, cssH: rect.height, bufferW: cv?.width ?? rect.width },
+        space: view === 'node' ? 'node' : 'world',
+      })
       // Gizmo center in viewport px: canvas anchor point + world offset.
       const cx = rect.left + rect.width * outputAnchor[0] + r.originOffset.x
       const cy = rect.top + rect.height * outputAnchor[1] + r.originOffset.y
@@ -182,13 +190,17 @@ export function SrtGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetRef }
       window.removeEventListener('pointerup', onEnd)
       window.removeEventListener('pointercancel', onEnd)
     }
-  }, [dragging, selectedNode, spatial, outputAnchor, updateNodeData])
+  }, [dragging, selectedNode, spatial, coordSpace, outputAnchor, updateNodeData])
 
   if (!active || !canvasRect || !spatial) return null
 
   const canvasEl = canvasElRef.current
-  const cssPerPx = canvasEl && canvasEl.width > 0 ? canvasRect.width / canvasEl.width : 1
-  const r = resolveSRT(currentParams, { transforms: spatial.transforms, cssPerPx, space: gizmoView === 'node' ? 'node' : 'world' })
+  const r = resolveSRT(currentParams, {
+    transforms: spatial.transforms,
+    coordSpace,
+    metrics: { cssW: canvasRect.width, cssH: canvasRect.height, bufferW: canvasEl?.width ?? canvasRect.width },
+    space: gizmoView === 'node' ? 'node' : 'world',
+  })
   // Center within the overlay (overlay div is positioned at the canvas rect).
   const cx = canvasRect.width * outputAnchor[0] + r.originOffset.x
   const cy = canvasRect.height * outputAnchor[1] + r.originOffset.y
