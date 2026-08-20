@@ -34,7 +34,7 @@ import { initializeNodeLibrary } from '../src/nodes/index'
 import { nodeRegistry } from '../src/nodes/registry'
 import { compileGraph } from '../src/compiler/glsl-generator'
 import { baseNodeId, expandMultiPassNodes } from '../src/compiler/expand-passes'
-import { importFromFile } from '../src/utils/sombra-file'
+import { decodeSombraPackage, importFromFile } from '../src/utils/sombra-file'
 
 initializeNodeLibrary()
 
@@ -168,7 +168,7 @@ const paths = process.argv.slice(2)
 const graphs: Array<{ name: string; nodes: Node<NodeData>[]; edges: Edge<EdgeData>[] }> = []
 if (paths.length) {
   for (const p of paths) {
-    const g = importFromFile(JSON.parse(fs.readFileSync(p, 'utf8')))
+    const g = importFromFile(decodeSombraPackage(new Uint8Array(fs.readFileSync(p))))
     graphs.push({ name: p.split('/').pop() ?? p, nodes: g.nodes, edges: g.edges })
   }
 } else {
