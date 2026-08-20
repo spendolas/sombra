@@ -333,6 +333,15 @@ export interface IRContext {
    * Mirrors GLSLContext.imageSamplers.
    */
   readonly imageSamplers?: Set<string>
+  /**
+   * The node's own-content coordinate: `auto_uv` with the framework SRT applied
+   * ("finished spot"). Present for spatial nodes. A node that COMPUTES its own
+   * coordinates (e.g. warp's noise field) reads THIS instead of re-deriving the
+   * SRT transform — polling the single source (ir/srt.ts). Single-pass it equals
+   * the SRT'd `coords`; in texture mode (where `coords` is remapped to screen_uv
+   * for sampling) it is a separately-computed SRT'd auto_uv. Mirrors GLSLContext.
+   */
+  readonly spatialCoords?: string
 }
 
 // ---------------------------------------------------------------------------

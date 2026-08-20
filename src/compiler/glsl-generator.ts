@@ -552,6 +552,7 @@ export function generateNodeGlsl(
   }
 
   // Framework SRT injection — transforms coords input for spatial nodes
+  let spatialCoords: string | undefined
   if (definition.spatial && inputs.coords) {
     const srtVar = `srt_${sanitizedNodeId}`
     const spatial = definition.spatial
@@ -578,6 +579,20 @@ export function generateNodeGlsl(
 
     // Replace coords input with transformed variable
     inputs.coords = srtVar
+
+    // Own-content coordinate ("finished spot") — see ir-compiler for the full
+    // rationale. Single-pass: srtVar (coords IS auto_uv). Texture mode: coords
+    // was remapped to screen_uv, so build a separate SRT'd auto_uv.
+    if (isTextureMode) {
+      const ownUvVar = `node_${sanitizedNodeId}_own_uv`
+      uniforms.add('u_resolution'); uniforms.add('u_anchor'); uniforms.add('u_dpr'); uniforms.add('u_ref_size')
+      preambleLines.push(`vec2 ${ownUvVar} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * u_anchor) / (u_dpr * u_ref_size) + u_anchor;`)
+      const ownSrt: IRSpatialTransform = { ...srt, coordsVar: ownUvVar, outputVar: `srtown_${sanitizedNodeId}` }
+      preambleLines.push(...emitSRT(ownSrt, 'glsl'))
+      spatialCoords = ownSrt.outputVar
+    } else {
+      spatialCoords = srtVar
+    }
   }
 
   // Build output variable names
@@ -597,6 +612,7 @@ export function generateNodeGlsl(
     functionRegistry,
     textureSamplers: Object.keys(textureSamplers).length > 0 ? textureSamplers : undefined,
     imageSamplers,
+    spatialCoords,
     isPreview,
   }
 
