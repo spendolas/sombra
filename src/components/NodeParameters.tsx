@@ -204,6 +204,45 @@ export function EnumSelect({ param, value, onChange }: EnumSelectProps) {
   )
 }
 
+interface SegmentedControlProps {
+  param: NodeParameter
+  value: string
+  onChange: (value: string) => void
+}
+
+/**
+ * Segmented control for a small, fixed enum (2–3 options) where seeing all
+ * choices at once beats a dropdown — e.g. Offset Space (Screen | Local).
+ * Selected via `control: 'segmented'` on an enum param. Styling is fully
+ * DS-driven (ds.segmented, DB component seg:1) — indigo active segment,
+ * raised inactive, matching anchorGrid's active/hover treatment.
+ */
+export function SegmentedControl({ param, value, onChange }: SegmentedControlProps) {
+  return (
+    <div className={ds.segmented.root}>
+      <Label className={ds.segmented.label}>{param.label}</Label>
+      <div className={ds.segmented.group} role="radiogroup" aria-label={param.label}>
+        {param.options!.map((option) => {
+          const active = option.value === value
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              title={option.label}
+              onClick={() => onChange(option.value)}
+              className={active ? ds.segmented.segmentActive : ds.segmented.segment}
+            >
+              {option.label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 interface BoolCheckboxProps {
   param: NodeParameter
   value: boolean

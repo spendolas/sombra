@@ -2218,6 +2218,64 @@
           }
         }
       }
+    },
+    "seg:1": {
+      "name": "Segmented Control",
+      "type": "molecule",
+      "dsKey": "segmented",
+      "codeFile": "src/components/NodeParameters.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": null,
+          "layout": "vertical",
+          "gap": "sm",
+          "overflow": "hidden"
+        },
+        "label": {
+          "figmaNodeId": null,
+          "textStyle": "text-param",
+          "textColor": "fg-subtle"
+        },
+        "group": {
+          "figmaNodeId": null,
+          "layout": "horizontal",
+          "gap": "2xs"
+        },
+        "segment": {
+          "figmaNodeId": null,
+          "layout": "horizontal",
+          "align": "center",
+          "justify": "center",
+          "fill": "surface/raised",
+          "radius": "sm",
+          "textStyle": "text-param",
+          "textColor": "fg-dim",
+          "cursor": "pointer",
+          "transition": "colors",
+          "height": "select-h",
+          "hover": {
+            "fill": "highlight"
+          },
+          "extra": "flex-1"
+        },
+        "segmentActive": {
+          "figmaNodeId": null,
+          "layout": "horizontal",
+          "align": "center",
+          "justify": "center",
+          "fill": "indigo/default",
+          "radius": "sm",
+          "textStyle": "text-param",
+          "textColor": "fg",
+          "cursor": "pointer",
+          "transition": "colors",
+          "height": "select-h",
+          "hover": {
+            "fill": "indigo/hover"
+          },
+          "extra": "flex-1"
+        }
+      }
     }
   },
   "nodeTemplates": {

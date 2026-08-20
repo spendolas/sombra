@@ -197,6 +197,13 @@ export const ds = {
     channelValue: "rounded-sm text-mono-value text-fg text-right hover:bg-surface-elevated w-[58px] bg-transparent border border-transparent px-1.5 py-0.5 focus:outline-none focus:border-indigo focus:bg-surface-elevated [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none",
     menuItemIdle: "text-fg-dim hover:bg-surface-elevated hover:text-fg",
   },
+  segmented: {
+    root: "flex flex-col gap-sm overflow-hidden",
+    label: "text-param text-fg-subtle",
+    group: "flex flex-row gap-2xs",
+    segment: "flex flex-row items-center justify-center bg-surface-raised rounded-sm text-param text-fg-dim cursor-pointer transition-colors h-select-h hover:bg-highlight flex-1",
+    segmentActive: "flex flex-row items-center justify-center bg-indigo rounded-sm text-param text-fg cursor-pointer transition-colors h-select-h hover:bg-indigo-hover flex-1",
+  },
 } as const;
 
 export type DSComponent = keyof typeof ds;
