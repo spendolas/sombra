@@ -2,6 +2,14 @@
 
 **Date:** 2026-08-20 · **Status:** DESIGN (for sign-off before build) · Supersedes the SRT half of `2026-08-19-srt-gizmo-epic.md`. Prereq #1 (coordinates → `fragCoord()` construct) is **done** (`e26c690`).
 
+> **Naming (DECIDED 2026-08-20, supersedes 'screen'/'local' below):** the Offset
+> Space values are **`'world'` / `'node'`** — matching the gizmo's World/node
+> coordinate switch (one axis, one vocabulary). `world` = the fixed canvas frame
+> (was `screen`); `node` = the node's own scaled+rotated frame (was `local`).
+> Legacy stored values `'screen'`/`'local'` are normalized on read by
+> `normalizeTranslateSpace` (`src/compiler/ir/srt.ts`) — the ONE place the alias
+> mapping lives. Older mentions of screen/local in this doc read as world/node.
+
 ## Goal
 Make SRT a **single-source API**: one canonical definition that generates **three** consumers — GLSL lowering, WGSL lowering, and a **gizmo-facing query** — so a node (and a gizmo) gets identical, order-correct behaviour regardless of backend. Today the compose order is written 3× (`glsl-generator.ts:562-591`, `ir/glsl-backend.ts:197-228`, `ir/wgsl-backend.ts:552-585`) + reeded a 4th/5th; consistent only by hand, gated by nothing; reeded bypasses the framework entirely.
 
@@ -65,3 +73,37 @@ This is what lets a gizmo (a) place handles at the right screen position, (b) ma
 2. **`resolveSRT` return shape** — needs to match what the gizmo renderer will consume; the Mat3-vs-decomposed choice depends on the gizmo design. Firm this when the gizmo layer starts.
 3. **3D scope** — design the shape 3D-ready but build 2D only now? *Recommend yes.*
 4. **`translateSpace` granularity** — one per node, or per-transform? *Recommend per-node (one toggle) for now.*
+
+## Decision log — 2026-08-20 (post-build QA round)
+
+**DECIDED — naming: `world` / `node`.** See the note at the top. Param labels
+"World"/"Node", values `'world'`/`'node'`, default `world`, legacy
+`'screen'`/`'local'` normalized on read. Gate: `verify-srt.ts` section E asserts
+the alias mapping AND that legacy values emit byte-identically.
+
+**DECIDED — the toggle is continuity-preserving (navigation, not reinterpretation).**
+The user's core issue with the original toggle: it *reapplied* the stored offset
+under the new frame, making content jump. The use case is **navigating to a point
+by switching frames along the way** — so switching Offset Space must **convert**
+the offset into the new frame, leaving the render identical at the switch:
+`world→node: a' = R(θ)·a / s` · `node→world: a' = s·R(−θ)·a` (a = (tx, −ty)).
+Prototyped and verified live in `/srt-renderer-sandbox.html` (rot 30°, offset
+(120,0) → toggle → identical render, offset re-expressed to (104,−60)).
+
+**DECIDED — gizmo axes are for precision input.** "Rides with the frame" as a
+*storage* semantic is hostile to gizmos: users expect the node's rotation/scale
+axes as a **precision input orientation**, not as a coupling that moves content
+when Scale/Rotate later change.
+
+**OPEN — storage model (decide before step 4 ships beyond QA):**
+- **(a) Two shader semantics** (current build): `world` and `node` both exist in
+  the shader; the param toggle converts values on switch (continuity), and in
+  `node` mode a later Scale/Rotate change *does* move the offset (it rides).
+- **(b) Canonical world storage:** the shader keeps ONE translate semantic
+  (world); `srt_translateX/Y` always store the world offset; `node` exists only
+  as an **edit-time input orientation** (gizmo drag axes / slider mapping,
+  converted to world on write). Scale/Rotate then never move an existing offset.
+  Retires the shader `node` path entirely — strictly simpler engine.
+- Leaning (b) per the gizmo-axes decision, but (b) makes World/Node
+  indistinguishable from sliders alone (difference only appears with a gizmo or
+  axis-mapped inputs). Not yet confirmed by the user.

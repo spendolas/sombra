@@ -14,12 +14,12 @@ const offsetSpaceParam: NodeParameter = {
   id: 'srt_translateSpace',
   label: 'Offset Space',
   type: 'enum',
-  default: 'screen',
+  default: 'world',
   control: 'segmented',
   updateMode: 'recompile',
   options: [
-    { value: 'screen', label: 'Screen' },
-    { value: 'local', label: 'Local' },
+    { value: 'world', label: 'World' },
+    { value: 'node', label: 'Node' },
   ],
 }
 
@@ -53,7 +53,7 @@ function FakeSlider({ label, value }: { label: string; value: string }) {
 }
 
 export function SegmentedControlSandbox() {
-  const [space, setSpace] = useState('screen')
+  const [space, setSpace] = useState('world')
   const [wrap, setWrap] = useState('clamp')
 
   return (
