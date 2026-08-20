@@ -7,8 +7,9 @@ decodes the shader and drives the render loop. A small JS API (`Sombra.mount`)
 exposes every knob to the host page so the surrounding site can drive the shader.
 
 - **Two file types (distinct extensions):**
-  - **`.sombra`** — the **editor graph** (`{ sombra, nodes, edges }` JSON). What
-    the editor saves/opens; editable. Handled by `src/utils/sombra-file.ts`.
+  - **`.sombra`** — the **editor graph** (compressed binary package containing
+    `{ sombra, nodes, edges }`). What the editor saves/opens; editable after
+    decoding. Handled by `src/utils/sombra-file.ts`; legacy JSON remains readable.
   - **`.ombra`** — the **compiled shader** (this doc's artifact: deflated binary
     `SceneArtifact`, no graph). What the player renders; not editable. A `.ombra`
     is the *compiled output* of a `.sombra` and can't be turned back into one.
