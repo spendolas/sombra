@@ -315,17 +315,44 @@ console.log('\nH. resolveSRT — the gizmo API (all math encapsulated)')
     const p = rxy.dragScale(60, 40)
     check('scaleXY: uniform handle writes both axes', p.srt_scaleX === 1.5 && p.srt_scaleY === 1.5)
   }
-  // cssPerPx: offsets displace content in BUFFER px (auto_uv's u_dpr divisor),
-  // so on-screen CSS displacement = offset × rect/buffer. Retina (0.5):
-  // originOffset halves; a css drag doubles into params so content tracks 1:1.
+  // metrics (auto_uv): offsets displace content in BUFFER px (auto_uv's u_dpr
+  // divisor), so on-screen CSS displacement = offset × cssW/bufferW. Retina
+  // (0.5): originOffset halves; a css drag doubles into params (cursor 1:1).
   {
-    const r = resolveSRT({ srt_translateX: 10, srt_translateY: 5 }, { transforms: T, cssPerPx: 0.5 })
-    check('cssPerPx 0.5: originOffset halves', r.originOffset.x === 5 && r.originOffset.y === -2.5)
+    const metrics = { cssW: 100, cssH: 100, bufferW: 200 }
+    const r = resolveSRT({ srt_translateX: 10, srt_translateY: 5 }, { transforms: T, metrics })
+    check('auto_uv retina: originOffset halves', r.originOffset.x === 5 && r.originOffset.y === -2.5)
     const p = r.dragTranslate(3, -4, 'free')
-    check('cssPerPx 0.5: css drag (3,−4) → params (16, 13)', p.srt_translateX === 16 && p.srt_translateY === 13,
+    check('auto_uv retina: css drag (3,−4) → params (16, 13)', p.srt_translateX === 16 && p.srt_translateY === 13,
       `got (${p.srt_translateX}, ${p.srt_translateY})`)
-    const d = resolveSRT({ srt_translateX: 10 }, { transforms: T, cssPerPx: 0 })
-    check('degenerate cssPerPx falls back to 1', d.originOffset.x === 10)
+    const d = resolveSRT({ srt_translateX: 10 }, { transforms: T, metrics: { cssW: 0, cssH: 0, bufferW: 0 } })
+    check('degenerate metrics fall back to identity', d.originOffset.x === 10)
+  }
+  // screen_uv (image): y-up, canvas-relative space — the API owns the parity
+  // flip and per-axis units so the gizmo tracks what image actually renders.
+  {
+    const metrics = { cssW: 1024, cssH: 512, bufferW: 2048 } // k=2, ux=1, uy=0.5
+    const S = { transforms: T, coordSpace: 'screen_uv' as const, metrics }
+    const r = resolveSRT({ srt_translateX: 10, srt_translateY: 5 }, S)
+    check('screen_uv: +ty moves DOWN (parity flip vs auto_uv)',
+      r.originOffset.x === 10 && r.originOffset.y === 2.5, `got (${r.originOffset.x}, ${r.originOffset.y})`)
+    const p = r.dragTranslate(4, 6, 'free')
+    check('screen_uv: free drag round-trips per-axis units',
+      p.srt_translateX === 14 && p.srt_translateY === 17, `got (${p.srt_translateX}, ${p.srt_translateY})`)
+    // rotation parity is mirrored: same θ puts the handle at +θ-ish (vs −θ on
+    // auto_uv) — mechanism-engaged: the two spaces MUST differ.
+    const sq = { cssW: 512, cssH: 512, bufferW: 512 }
+    const rScr = resolveSRT({ srt_rotate: 30, srt_scale: 1 }, { transforms: T, coordSpace: 'screen_uv', metrics: sq })
+    const rAuto = resolveSRT({ srt_rotate: 30, srt_scale: 1 }, { transforms: T, metrics: sq })
+    check('screen_uv rotate handle mirrored vs auto_uv',
+      approx(rScr.rotateHandleAngle, 30 * Math.PI / 180) && approx(rAuto.rotateHandleAngle, -30 * Math.PI / 180),
+      `scr=${rScr.rotateHandleAngle} auto=${rAuto.rotateHandleAngle}`)
+    // dragRotate inverts the handle placement exactly — including aspect warp
+    const asp = { cssW: 1024, cssH: 512, bufferW: 1024 }
+    const rw = resolveSRT({ srt_rotate: 40, srt_scale: 1 }, { transforms: T, coordSpace: 'screen_uv', metrics: asp })
+    check('screen_uv: dragRotate(handleAngle) round-trips θ under aspect warp',
+      rw.dragRotate(rw.rotateHandleAngle).srt_rotate === 40,
+      `got ${rw.dragRotate(rw.rotateHandleAngle).srt_rotate}`)
   }
 }
 
