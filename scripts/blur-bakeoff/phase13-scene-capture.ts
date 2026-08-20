@@ -74,6 +74,7 @@ import { chromium, type Page } from 'playwright-core'
 
 import { encodePng } from './lib/png.ts'
 import type { Rgba8 } from './lib/image.ts'
+import { decodeSombraPackage } from '../../src/utils/sombra-file.ts'
 
 const REPO = process.cwd()
 const OUT = path.join(REPO, 'reports', 'blur-bakeoff', 'phase13')
@@ -1135,8 +1136,7 @@ async function main() {
   }
   if (arg('stage') === 'validate') return
 
-  const sceneText = fs.readFileSync(SCENE, 'utf8')
-  const scene = JSON.parse(sceneText) // importGraph needs an OBJECT, not the raw text
+  const scene = decodeSombraPackage(new Uint8Array(fs.readFileSync(SCENE)))
 
   const only = arg('only')?.split(',').map((s) => s.trim())
   const todo = VARIANTS.filter((v) => !only || only.includes(v.id))

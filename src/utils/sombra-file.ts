@@ -1,8 +1,10 @@
 /**
- * .sombra file format utilities — export, import, download, and open
+ * .sombra file format utilities — export, package, import, download, and open
  *
- * File format: { sombra: 1, nodes: [...], edges: [...] }
- * The `sombra` field is the file format version (distinct from GRAPH_SCHEMA_VERSION).
+ * Disk format: `SOMBRA\0` magic + package version byte + deflated JSON payload.
+ * Payload: { sombra: 2, nodes: [...], edges: [...] }
+ * The package version and `sombra` schema version are independent; both are
+ * distinct from GRAPH_SCHEMA_VERSION. Legacy plain-JSON files remain readable.
  */
 
 import pako from 'pako'
@@ -11,6 +13,12 @@ import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 
 export const SOMBRA_FILE_VERSION = 2
+export const SOMBRA_PACKAGE_VERSION = 1
+
+const SOMBRA_PACKAGE_MAGIC = new Uint8Array([
+  0x53, 0x4f, 0x4d, 0x42, 0x52, 0x41, 0x00, // `SOMBRA\0`
+])
+const SOMBRA_PACKAGE_HEADER_SIZE = SOMBRA_PACKAGE_MAGIC.length + 1
 
 export interface SombraFile {
   sombra: number
@@ -26,6 +34,60 @@ export function exportToFile(
   edges: Edge<EdgeData>[],
 ): SombraFile {
   return { sombra: SOMBRA_FILE_VERSION, nodes, edges }
+}
+
+function hasPackageMagic(bytes: Uint8Array): boolean {
+  return bytes.length >= SOMBRA_PACKAGE_MAGIC.length
+    && SOMBRA_PACKAGE_MAGIC.every((byte, index) => bytes[index] === byte)
+}
+
+/** Encode an editable graph as the binary on-disk `.sombra` package. */
+export function encodeSombraPackage(file: SombraFile): Uint8Array {
+  const json = new TextEncoder().encode(JSON.stringify(file))
+  const payload = pako.deflate(json)
+  const packaged = new Uint8Array(SOMBRA_PACKAGE_HEADER_SIZE + payload.length)
+  packaged.set(SOMBRA_PACKAGE_MAGIC)
+  packaged[SOMBRA_PACKAGE_MAGIC.length] = SOMBRA_PACKAGE_VERSION
+  packaged.set(payload, SOMBRA_PACKAGE_HEADER_SIZE)
+  return packaged
+}
+
+/**
+ * Decode a binary `.sombra` package. Plain UTF-8 JSON is accepted as a legacy
+ * fallback so every file saved before the package layer remains importable.
+ */
+export function decodeSombraPackage(data: ArrayBuffer | Uint8Array): unknown {
+  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data)
+
+  if (hasPackageMagic(bytes)) {
+    if (bytes.length < SOMBRA_PACKAGE_HEADER_SIZE) {
+      throw new Error('Invalid .sombra package: truncated header')
+    }
+    const packageVersion = bytes[SOMBRA_PACKAGE_MAGIC.length]
+    if (packageVersion !== SOMBRA_PACKAGE_VERSION) {
+      throw new Error(
+        `Unsupported .sombra package version: ${packageVersion} (max supported: ${SOMBRA_PACKAGE_VERSION})`,
+      )
+    }
+    if (bytes.length === SOMBRA_PACKAGE_HEADER_SIZE) {
+      throw new Error('Invalid .sombra package: missing payload')
+    }
+
+    try {
+      const json = pako.inflate(bytes.subarray(SOMBRA_PACKAGE_HEADER_SIZE), { to: 'string' })
+      return JSON.parse(json)
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      throw new Error(`Invalid .sombra package payload: ${detail}`)
+    }
+  }
+
+  try {
+    const json = new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+    return JSON.parse(json)
+  } catch {
+    throw new Error('Invalid file: expected a .sombra package or JSON document')
+  }
 }
 
 /**
@@ -258,8 +320,8 @@ export function downloadSombraFile(
   file: SombraFile,
   filename = 'graph.sombra',
 ): void {
-  const blob = new Blob([JSON.stringify(file, null, 2)], {
-    type: 'application/json',
+  const blob = new Blob([encodeSombraPackage(file)], {
+    type: 'application/octet-stream',
   })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -271,10 +333,6 @@ export function downloadSombraFile(
   URL.revokeObjectURL(url)
 }
 
-/**
- * Open a file picker and read a .sombra/.json file.
- * Returns the parsed JSON content.
- */
 /**
  * Compress a graph into a URL-safe base64url string (legacy full format).
  */
@@ -489,6 +547,10 @@ export function decodeCompactHash(hash: string): {
   return { nodes, edges }
 }
 
+/**
+ * Open a file picker and read a binary .sombra package or legacy JSON file.
+ * Returns the decoded payload object.
+ */
 export function openSombraFile(): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const input = document.createElement('input')
@@ -515,14 +577,18 @@ export function openSombraFile(): Promise<unknown> {
       const reader = new FileReader()
       reader.onload = () => {
         try {
-          const json = JSON.parse(reader.result as string)
-          finish({ value: json })
-        } catch {
-          finish({ error: new Error('Failed to parse file as JSON') })
+          if (!(reader.result instanceof ArrayBuffer)) {
+            throw new Error('Failed to read file as binary data')
+          }
+          finish({ value: decodeSombraPackage(reader.result) })
+        } catch (error) {
+          finish({
+            error: error instanceof Error ? error : new Error('Failed to decode file'),
+          })
         }
       }
       reader.onerror = () => finish({ error: new Error('Failed to read file') })
-      reader.readAsText(file)
+      reader.readAsArrayBuffer(file)
     })
 
     // Handle cancel (no file selected)
