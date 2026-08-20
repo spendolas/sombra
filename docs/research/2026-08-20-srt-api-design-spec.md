@@ -95,15 +95,25 @@ Prototyped and verified live in `/srt-renderer-sandbox.html` (rot 30°, offset
 axes as a **precision input orientation**, not as a coupling that moves content
 when Scale/Rotate later change.
 
-**OPEN — storage model (decide before step 4 ships beyond QA):**
-- **(a) Two shader semantics** (current build): `world` and `node` both exist in
-  the shader; the param toggle converts values on switch (continuity), and in
-  `node` mode a later Scale/Rotate change *does* move the offset (it rides).
-- **(b) Canonical world storage:** the shader keeps ONE translate semantic
-  (world); `srt_translateX/Y` always store the world offset; `node` exists only
-  as an **edit-time input orientation** (gizmo drag axes / slider mapping,
-  converted to world on write). Scale/Rotate then never move an existing offset.
-  Retires the shader `node` path entirely — strictly simpler engine.
-- Leaning (b) per the gizmo-axes decision, but (b) makes World/Node
-  indistinguishable from sliders alone (difference only appears with a gizmo or
-  axis-mapped inputs). Not yet confirmed by the user.
+**DECIDED — ONE STORAGE (option b): "one storage — the toggle is just a way to
+interpret all coords."** The shader keeps ONE translate semantic (world);
+`srt_translateX/Y` always store the world offset; Scale/Rotate never move an
+existing offset; toggling never changes the render. `node` is a VIEW/edit
+mode: the offset sliders (ShaderNode) — and later the gizmo axes — display and
+edit the offset along the node's rotated+scaled frame, converting to world on
+write (`worldOffsetToNode`/`nodeOffsetToWorld` in `ir/srt.ts`). The shader
+`node` path is retired; `IRSpatialTransform` no longer carries `translateSpace`.
+
+**Migration** (`src/utils/srt-migration.ts`, hooked beside `dedupeNodeIds`):
+pre-one-storage saves convert offsets `t_world = S·R(−θ)·t_node` so they render
+identically. The missing-key case is ambiguous for non-exposed spatial nodes,
+so mode is caller-supplied: `.sombra` files / imports / share URLs = `'convert'`
+(main-era, node semantics); localStorage persist = `'stamp-only'` (the working
+graph already rendered under world semantics on this branch — keep what the
+user has been seeing). Explicit `'local'` always converts (unambiguous), view
+preserved as `node`. Gated end-to-end in `verify-srt` section F, including a
+registry-drift check on the migrating-type list.
+
+**Follow-up noted (not this change):** warp hand-rolls a second SRT copy onto
+its internal noise coords (node-frame math, `warp.ts:84/162`) — now divergent
+from its framework-injected coords. Fold into the reeded migration (step 5).

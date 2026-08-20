@@ -12,7 +12,6 @@ import type { Node, Edge } from '@xyflow/react'
 import type { NodeData, EdgeData, UniformSpec, PortType, NodeParameter } from '../nodes/types'
 import type { IRNodeOutput, IRContext, IRSpatialTransform } from './ir/types'
 import { raw, declare, binary, variable, fragCoord } from './ir/types'
-import { normalizeTranslateSpace } from './ir/srt'
 import { nodeRegistry } from '../nodes/registry'
 import { topologicalSort, hasCycles } from './topological-sort'
 import {
@@ -289,10 +288,8 @@ export function generateNodeIR(
       rotateUniform: spatial.transforms.includes('rotate') ? inputs.srt_rotate : undefined,
       translateXUniform: spatial.transforms.includes('translate') ? inputs.srt_translateX : undefined,
       translateYUniform: spatial.transforms.includes('translate') ? inputs.srt_translateY : undefined,
-      // Default 'world' (Offset is a constant canvas nudge, independent of
-      // scale/rotate); a node that exposes the param can switch to 'node'.
-      // normalizeTranslateSpace also maps legacy 'screen'/'local' saves.
-      translateSpace: normalizeTranslateSpace(node.data.params?.srt_translateSpace),
+      // ONE STORAGE: srt_translateSpace is a view/edit mode, never a shader
+      // semantic — the offset is always the world-frame value (ir/srt.ts).
     }
 
     // Add standard uniforms needed by SRT

@@ -10,6 +10,7 @@ import { applyNodeChanges, applyEdgeChanges } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { dedupeNodeIds } from '../utils/node-id'
+import { migrateOffsetSpace } from '../utils/srt-migration'
 import { anchorToVec2 } from '../nodes/output/fragment-output'
 import { REFERENCE_SIZE } from '../renderer/constants'
 import { previewCanvasSize } from '../utils/preview-canvas-size'
@@ -379,8 +380,14 @@ export const useGraphStore = create<GraphState>()(
         if (repaired.repaired > 0) {
           console.warn(`[graph] loadGraph: reassigned ${repaired.repaired} duplicate node id(s)`)
         }
+        // One-storage Offset Space: convert pre-one-storage offsets to the
+        // world frame so old saves render identically (srt-migration.ts).
+        const spaceMigrated = migrateOffsetSpace(repaired.nodes, 'convert')
+        if (spaceMigrated.migrated > 0) {
+          console.warn(`[graph] loadGraph: migrated Offset Space storage on ${spaceMigrated.migrated} node(s)`)
+        }
         set({
-          nodes: repaired.nodes,
+          nodes: spaceMigrated.nodes,
           edges: repaired.edges,
           selectedNodeIds: [],
           selectedEdgeIds: [],
@@ -464,6 +471,14 @@ export const useGraphStore = create<GraphState>()(
           }
           state.nodes = repaired.nodes
           state.edges = repaired.edges
+          // One-storage Offset Space: stamp-only for localStorage — the working
+          // graph has rendered under world semantics on this branch already, so
+          // values are kept and only the view marker is stamped.
+          const spaceMigrated = migrateOffsetSpace(state.nodes, 'stamp-only')
+          if (spaceMigrated.migrated > 0) {
+            console.warn(`[graph] migrate: migrated Offset Space storage on ${spaceMigrated.migrated} node(s)`)
+          }
+          state.nodes = spaceMigrated.nodes
         }
         return state
       },

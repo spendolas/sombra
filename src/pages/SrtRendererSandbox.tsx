@@ -6,8 +6,9 @@
  * compiler and renders it with the real createShaderRenderer (WebGPU, WebGL2
  * fallback) — the same path viewer.ts uses. The Transform controls (real
  * FloatSlider + SegmentedControl) drive srt_* params; every change recompiles
- * and re-renders. Toggle Offset Space World↔Node with Scale/Offset set and
- * watch the actual shader output change.
+ * and re-renders. ONE STORAGE: offsets always store the world value; the
+ * Offset Space toggle only re-interprets the offset sliders (Node view edits
+ * along the node's rotated+scaled axes) — toggling must NOT change the render.
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -17,33 +18,17 @@ import { compileGraphIR } from '@/compiler/ir-compiler'
 import { createShaderRenderer } from '@/renderer/create-renderer'
 import { anchorToVec2 } from '@/nodes/output/fragment-output'
 import { FloatSlider, SegmentedControl } from '@/components/NodeParameters'
+import { worldOffsetToNode, nodeOffsetToWorld } from '@/compiler/ir/srt'
 import type { NodeData, EdgeData, PortType, NodeParameter } from '@/nodes/types'
 import type { ShaderRenderer } from '@/renderer/types'
 
+// ONE STORAGE: tx/ty always hold the WORLD offset (exactly what the params
+// store in the real editor). The Offset Space toggle is a VIEW — in 'node'
+// view the offset sliders show/edit the offset along the node's rotated+scaled
+// axes via worldOffsetToNode/nodeOffsetToWorld (ir/srt.ts). Toggling never
+// changes the render; only the numbers re-express.
 interface Params { scale: number; rotate: number; tx: number; ty: number; space: string }
 const INITIAL: Params = { scale: 2, rotate: 0, tx: 120, ty: 0, space: 'world' }
-
-/**
- * Continuity-preserving frame switch. Toggling Offset Space should NOT move the
- * content — it re-expresses the offset in the new frame so the render is
- * identical at the switch, then you keep navigating in the new frame's axes.
- * With a = (tx, -ty): world→node a' = R(θ)a/scale; node→world a' = scale·R(-θ)a.
- */
-function convertOffset(from: string, to: string, tx: number, ty: number, rotateDeg: number, scale: number): { tx: number; ty: number } {
-  if (from === to || scale === 0) return { tx, ty }
-  const rad = (rotateDeg * Math.PI) / 180
-  const c = Math.cos(rad), s = Math.sin(rad)
-  const ax = tx, ay = -ty
-  let bx: number, by: number
-  if (from === 'world' && to === 'node') {
-    bx = (ax * c - ay * s) / scale
-    by = (ax * s + ay * c) / scale
-  } else {
-    bx = scale * (ax * c + ay * s)
-    by = scale * (-ax * s + ay * c)
-  }
-  return { tx: Math.round(bx), ty: Math.round(-by) }
-}
 
 const scaleParam: NodeParameter = { id: 'srt_scale', label: 'Scale', type: 'float', default: 1, min: 0.25, max: 4, step: 0.01, updateMode: 'uniform' }
 const rotateParam: NodeParameter = { id: 'srt_rotate', label: 'Rotate', type: 'float', default: 0, min: -180, max: 180, step: 1, updateMode: 'uniform' }
@@ -132,11 +117,23 @@ export function SrtRendererSandbox() {
     rendererRef.current.notifyChange()
   }, [p, ready])
 
+  // Node view: sliders show/edit along the node's axes; storage stays world.
+  const nodeView = p.space === 'node'
+  const viewOffsets = nodeView ? worldOffsetToNode(p.tx, p.ty, p.rotate, p.scale, p.scale) : { tx: p.tx, ty: p.ty }
+  const setOffsetFromView = (axis: 'x' | 'y', value: number) => {
+    if (!nodeView) { setP((s) => ({ ...s, [axis === 'x' ? 'tx' : 'ty']: value })); return }
+    const w = nodeOffsetToWorld(
+      axis === 'x' ? value : viewOffsets.tx,
+      axis === 'y' ? value : viewOffsets.ty,
+      p.rotate, p.scale, p.scale,
+    )
+    setP((s) => ({ ...s, tx: w.tx, ty: w.ty }))
+  }
+
   const caption = (() => {
-    const scaled = Math.abs(p.scale - 1) > 0.01, rotated = Math.abs(p.rotate) > 0.5, offset = p.tx !== 0 || p.ty !== 0
-    if (!offset) return 'Add an Offset — with none, World and Node are identical.'
-    if (!scaled && !rotated) return 'At Scale 1× / Rotate 0° the modes match. Push Scale or Rotate, then toggle.'
-    return 'Toggle Offset Space: World keeps the offset a constant canvas nudge; Node rides the node’s scaled/rotated frame.'
+    const scaled = Math.abs(p.scale - 1) > 0.01, rotated = Math.abs(p.rotate) > 0.5
+    if (!scaled && !rotated) return 'At Scale 1× / Rotate 0° both views read the same. Push Scale or Rotate, then toggle.'
+    return 'One storage: toggling never moves the content — the numbers re-express. In Node view a drag moves along the node’s rotated/scaled axes.'
   })()
 
   return (
@@ -147,7 +144,7 @@ export function SrtRendererSandbox() {
           SRT Offset Space — live renderer
           <span className="ml-2 align-middle text-[10px] tracking-wider uppercase font-bold text-indigo-hover border border-indigo px-1.5 py-0.5 rounded-full">{backend || '…'}</span>
         </h1>
-        <p className="text-fg-subtle mt-1 max-w-[64ch]">A real checkerboard → Fragment Output graph, compiled by the real compiler and drawn by the real renderer. The controls drive <code className="text-fg-dim">srt_*</code>; each change recompiles and redraws. Not a re-implementation — this is the engine.</p>
+        <p className="text-fg-subtle mt-1 max-w-[64ch]">A real checkerboard → Fragment Output graph, compiled by the real compiler and drawn by the real renderer. The controls drive <code className="text-fg-dim">srt_*</code> (one world storage; Node view re-interprets the offset sliders along the node’s axes). Not a re-implementation — this is the engine.</p>
 
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_300px] gap-2xl mt-2xl items-start">
           <div>
@@ -167,15 +164,12 @@ export function SrtRendererSandbox() {
             <div className="flex flex-col gap-md p-md">
               <FloatSlider param={scaleParam} value={p.scale} onChange={(v) => setP((s) => ({ ...s, scale: v }))} />
               <FloatSlider param={rotateParam} value={p.rotate} onChange={(v) => setP((s) => ({ ...s, rotate: v }))} />
-              <FloatSlider param={txParam} value={p.tx} onChange={(v) => setP((s) => ({ ...s, tx: v }))} />
-              <FloatSlider param={tyParam} value={p.ty} onChange={(v) => setP((s) => ({ ...s, ty: v }))} />
+              <FloatSlider param={txParam} value={viewOffsets.tx} onChange={(v) => setOffsetFromView('x', v)} />
+              <FloatSlider param={tyParam} value={viewOffsets.ty} onChange={(v) => setOffsetFromView('y', v)} />
               <div className="border-t border-edge-subtle pt-md">
-                <SegmentedControl param={spaceParam} value={p.space} onChange={(v) => setP((s) => {
-                  // Continuity-preserving: convert the offset into the new frame
-                  // so the content does NOT jump — the switch is a navigation aid.
-                  const conv = convertOffset(s.space, v, s.tx, s.ty, s.rotate, s.scale)
-                  return { ...s, space: v, tx: conv.tx, ty: conv.ty }
-                })} />
+                {/* One storage: the toggle only switches the VIEW — no value
+                    rewrite, and the render must not change on switch. */}
+                <SegmentedControl param={spaceParam} value={p.space} onChange={(v) => setP((s) => ({ ...s, space: v }))} />
               </div>
             </div>
           </div>
