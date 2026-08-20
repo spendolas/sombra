@@ -67,6 +67,12 @@ export interface ResolveSRTOptions {
    * canvasRect.width / canvas.width (buffer px). Default 1 (dpr-1, full-res).
    */
   cssPerPx?: number
+  /**
+   * The coords-view frame to resolve axes in. The app passes the GLOBAL
+   * switch (settingsStore.gizmoView); falls back to the node's stored
+   * srt_translateSpace (legacy saves), then 'world'.
+   */
+  space?: TranslateSpace
 }
 
 const deg2rad = Math.PI / 180
@@ -87,7 +93,7 @@ export function resolveSRT(params: Record<string, unknown>, opts: ResolveSRTOpti
   const rotate = has.rotate ? ((params.srt_rotate as number) ?? 0) : 0
   const sx = has.scaleXY ? ((params.srt_scaleX as number) ?? 1) : ((params.srt_scale as number) ?? 1)
   const sy = has.scaleXY ? ((params.srt_scaleY as number) ?? 1) : ((params.srt_scale as number) ?? 1)
-  const space = normalizeTranslateSpace(params.srt_translateSpace)
+  const space = opts.space ?? normalizeTranslateSpace(params.srt_translateSpace)
   const cssPerPx = opts.cssPerPx && Number.isFinite(opts.cssPerPx) && opts.cssPerPx > 0 ? opts.cssPerPx : 1
 
   const rad = rotate * deg2rad

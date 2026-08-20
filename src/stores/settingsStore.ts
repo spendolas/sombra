@@ -19,7 +19,9 @@ interface SettingsState {
   gridSize: number
   snapToGrid: boolean
   nodesPanelOpen: boolean  // Floaty Nodes palette overlay — persisted, default off
-  srtGizmo: boolean        // SRT transform gizmo over the preview — persisted, default on
+  // Global coords-view switch: 'off' = no gizmo; 'world'/'node' = gizmo shown,
+  // axes + offset-slider display interpreted in that frame. Persisted.
+  gizmoView: 'off' | 'world' | 'node'
 
   // Preview settings
   previewHeight: number  // Height of preview panel in pixels
@@ -47,7 +49,7 @@ interface SettingsState {
   setSnapToGrid: (snap: boolean) => void
   setNodesPanelOpen: (open: boolean) => void
   toggleNodesPanel: () => void
-  toggleSrtGizmo: () => void
+  setGizmoView: (view: 'off' | 'world' | 'node') => void
   setPreviewHeight: (height: number) => void
   setAutoCompile: (auto: boolean) => void
   setCompileDebounceMs: (ms: number) => void
@@ -70,7 +72,7 @@ const DEFAULT_SETTINGS: Omit<SettingsState, keyof SettingsActions> = {
   gridSize: 16,
   snapToGrid: false,
   nodesPanelOpen: false,
-  srtGizmo: true,
+  gizmoView: 'world',
   previewHeight: 256,  // 16rem
   autoCompile: true,
   compileDebounceMs: 100,
@@ -98,7 +100,7 @@ type SettingsActions = {
   setSnapToGrid: (snap: boolean) => void
   setNodesPanelOpen: (open: boolean) => void
   toggleNodesPanel: () => void
-  toggleSrtGizmo: () => void
+  setGizmoView: (view: 'off' | 'world' | 'node') => void
   setPreviewHeight: (height: number) => void
   setAutoCompile: (auto: boolean) => void
   setCompileDebounceMs: (ms: number) => void
@@ -126,7 +128,7 @@ export const useSettingsStore = create<SettingsState>()(
       setSnapToGrid: (snap) => set({ snapToGrid: snap }),
       setNodesPanelOpen: (open) => set({ nodesPanelOpen: open }),
       toggleNodesPanel: () => set((s) => ({ nodesPanelOpen: !s.nodesPanelOpen })),
-      toggleSrtGizmo: () => set((s) => ({ srtGizmo: !s.srtGizmo })),
+      setGizmoView: (view) => set({ gizmoView: view }),
       setPreviewHeight: (height) => set({ previewHeight: height }),
       setAutoCompile: (auto) => set({ autoCompile: auto }),
       setCompileDebounceMs: (ms) => set({ compileDebounceMs: ms }),

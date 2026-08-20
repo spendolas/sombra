@@ -13,7 +13,7 @@ export const fbmNode: NodeDefinition = {
   label: 'FBM',
   category: 'Noise',
   description: 'Multi-octave fractal noise with selectable noise type and fractal mode',
-  spatial: { transforms: ['scale', 'translate'], exposeTranslateSpace: true } satisfies SpatialConfig,
+  spatial: { transforms: ['scale', 'translate'] } satisfies SpatialConfig,
 
   inputs: [
     { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },
@@ -25,7 +25,7 @@ export const fbmNode: NodeDefinition = {
   ],
 
   params: [
-    ...getSpatialParams({ transforms: ['scale', 'translate'], exposeTranslateSpace: true }),
+    ...getSpatialParams({ transforms: ['scale', 'translate'] }),
     {
       id: 'noiseType', label: 'Noise Type', type: 'enum', default: 'simplex',
       options: NOISE_TYPE_OPTIONS, updateMode: 'recompile',
