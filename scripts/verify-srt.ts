@@ -316,6 +316,18 @@ console.log('\nH. resolveSRT — the gizmo API (all math encapsulated)')
     const p = rxy.dragScale(60, 40)
     check('scaleXY: uniform handle writes both axes', p.srt_scaleX === 1.5 && p.srt_scaleY === 1.5)
   }
+  // cssPerPx: offsets displace content in BUFFER px (auto_uv's u_dpr divisor),
+  // so on-screen CSS displacement = offset × rect/buffer. Retina (0.5):
+  // originOffset halves; a css drag doubles into params so content tracks 1:1.
+  {
+    const r = resolveSRT({ srt_translateX: 10, srt_translateY: 5 }, { transforms: T, cssPerPx: 0.5 })
+    check('cssPerPx 0.5: originOffset halves', r.originOffset.x === 5 && r.originOffset.y === -2.5)
+    const p = r.dragTranslate(3, -4, 'free')
+    check('cssPerPx 0.5: css drag (3,−4) → params (16, 13)', p.srt_translateX === 16 && p.srt_translateY === 13,
+      `got (${p.srt_translateX}, ${p.srt_translateY})`)
+    const d = resolveSRT({ srt_translateX: 10 }, { transforms: T, cssPerPx: 0 })
+    check('degenerate cssPerPx falls back to 1', d.originOffset.x === 10)
+  }
 }
 
 console.log('\n' + '='.repeat(60))
