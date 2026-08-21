@@ -41,11 +41,22 @@ type Deviation = 'no-spatial-config' | 'alien-coord-space' | 'body-consumes-srt'
 
 /** The shrink-only allowlist. Migrations done: warp (2026-08-21, consumes
  *  ctx.spatialCoords); image (2026-08-21, coords=auto_uv + px-fit so rotation
- *  is aspect-true). reeded_glass is the last holdout. */
+ *  is aspect-true). reeded_glass is the last entry — and now an ACCEPTED one:
+ *  the op-order drift hazard this gate exists to prevent is gone (below). */
 const KNOWN_DEVIATIONS: Record<string, { allowed: Deviation[]; migration: string }> = {
   reeded_glass: {
     allowed: ['no-spatial-config', 'body-consumes-srt', 'hand-rolled-origin'],
-    migration: 'reeded framework migration (spec step 5): spatial: + emitSRT, delete 3 hand-rolls',
+    // ACCEPTED (2026-08-21): reeded now routes ALL THREE of its coordinate
+    // bases through the single SRT source (emitSRT, parameterised via
+    // SRTBasisOptions) — see reededSRTBases + scripts/verify-reeded-parity-gpu.ts
+    // (byte-identical, both backends, tx/rotate/combined). The op-order lives in
+    // ONE place, so the drift hazard this gate guards is eliminated. It stays
+    // LISTED (not framework-injected) on purpose: its optics need three bespoke
+    // bases (y-up rib pattern, per-axis aspect-conjugated screen) and a
+    // NODE-order translate; framework injection would force ONE world-order
+    // basis and visibly shift the ribs at translate≠0. So these markers are
+    // "consumes emitSRT with node-order + its own y-down origin", not hand-rolled.
+    migration: 'ACCEPTED — routes through emitSRT (drift-free); framework injection would change the look',
   },
 }
 
@@ -175,7 +186,7 @@ const IR_FRAGCOORD_BASELINE: Record<string, string> = {
   blur: 'single-emitter raw(emit(glsl),emit(wgsl)) — safe, cannot drift; fragCoord() migration optional',
   kawase_blur: 'single-emitter raw — safe; fragCoord() migration optional',
   pyramid_blur: 'single-emitter raw — safe; fragCoord() migration optional',
-  reeded_glass: 'hand-rolled — removed by the reeded SRT migration (spec step 5)',
+  reeded_glass: 'fragCoord() construct for rg_auv (raw auto_uv origin, needed by the coords output + the y-up rib basis) — single-source, cannot drift',
 }
 const IR_FRAG_RE = /gl_FragCoord|in\.position/
 const fragRows: string[] = []

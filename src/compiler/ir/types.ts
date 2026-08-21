@@ -251,6 +251,39 @@ export interface IRFunction {
 // ---------------------------------------------------------------------------
 
 /** Framework-managed coordinate transform emitted before node statements. */
+/**
+ * Coordinate-basis options for emitSRT. Every field defaults to the CANONICAL
+ * framework basis (y-down auto_uv, isotropic, +anchor, ref-formula translate,
+ * world order) so omitting `basis` reproduces the framework lowering byte-for-
+ * byte — this is what keeps every conforming node unchanged. The non-default
+ * combinations exist for nodes whose optics are authored in a different frame
+ * (reeded_glass: a y-up rib-pattern basis + a per-axis aspect-conjugated screen
+ * basis). Parameterising them here keeps the op-order in ONE place instead of
+ * hand-rolled per node — see docs/research/2026-08-20-srt-api-design-spec.md.
+ */
+export interface SRTBasisOptions {
+  /** Use the screen-space anchor `(u_anchor.x, 1 - u_anchor.y)` instead of
+   *  `u_anchor` for the subAnchor point (v_uv is y-up, so the anchor's Y flips).
+   *  Default false. The vec constructor is emitted backend-aware (vec2/vec2f). */
+  readonly screenAnchor?: boolean
+  /** Negate Y right after subAnchor (a y-up pattern basis). Default false. */
+  readonly flipY?: boolean
+  /** Aspect-conjugate the rotation (.x *= asp; rotate; .x /= asp) for per-axis
+   *  screen space. Requires `asp`. Default false (isotropic — ref space). */
+  readonly aspectConjugate?: boolean
+  /** Aspect expression for aspectConjugate (e.g. 'u_resolution.x/u_resolution.y'). */
+  readonly asp?: string
+  /** Translate scale formula. 'ref' = /(u_dpr*u_ref_size) (isotropic ref space);
+   *  'screen' = *u_dpr/u_resolution (per-axis screen space). Default 'ref'. */
+  readonly translateFormula?: 'ref' | 'screen'
+  /** Op order. 'world' = translate first, before subAnchor (canonical — one
+   *  semantic). 'node' = translate after rotate. Default 'world'. */
+  readonly translateOrder?: 'world' | 'node'
+  /** Re-add u_anchor at the end. Default true. A pattern basis that stays
+   *  anchor-relative (reeded's rib outputs) sets false. */
+  readonly anchorAdd?: boolean
+}
+
 export interface IRSpatialTransform {
   /** Input coords variable name */
   readonly coordsVar: string
@@ -268,6 +301,8 @@ export interface IRSpatialTransform {
   readonly translateXUniform?: string
   /** Translate Y uniform name (if translate enabled) */
   readonly translateYUniform?: string
+  /** Non-canonical basis options (default = canonical framework basis). */
+  readonly basis?: SRTBasisOptions
 }
 
 /**
