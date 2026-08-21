@@ -386,7 +386,6 @@ export function FlowCanvas({
             title: 'Could not import images',
             detail: 'Sombra could not decode the dropped image file or files.',
             confirmLabel: 'Dismiss',
-            tone: 'error',
           })
         }
       },
@@ -396,7 +395,6 @@ export function FlowCanvas({
             ...projectReplacementPrompt(filename),
             confirmLabel: 'Open project',
             cancelLabel: 'Cancel',
-            tone: 'warning',
           }),
           readFile: (file) => {
             setFileDropState({
@@ -428,7 +426,6 @@ export function FlowCanvas({
         title: 'Could not import file',
         detail: error instanceof Error ? error.message : 'Sombra could not import the dropped file.',
         confirmLabel: 'Dismiss',
-        tone: 'error',
       })
     } finally {
       fileDropBusy.current = false

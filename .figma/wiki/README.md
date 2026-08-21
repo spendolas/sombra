@@ -17,14 +17,14 @@ V2 was rebuilt from scratch using a **code-driven approach**: every Figma compon
 
 ---
 
-## Parity Score: 39/39 ✅
+## Parity Score: 40/40 ✅
 
 | Level | Total | ✅ Match | Notes |
 |---|---|---|---|
 | Tokens | 5 collections + 11 text styles | All | 40 variables + 11 text styles, dark mode only |
 | Atoms | 7 | 7 | Handle, Separator, Category Header, Palette Item, Plus Minus Button, Node Header, Node Footer |
 | Molecules | 12 | 12 | Labeled Handle, Float Slider (SombraSlider), Enum Select, Anchor Grid, Color Input, Connectable Param Row, Preview Toolbar, Zoom Bar, Gradient Editor, Random Display, MiniMap, Graph Toolbar |
-| Organisms | 5 | 5 | Node Card, Node Palette, Properties Panel, Floating Preview, Full Window Overlay |
+| Organisms | 6 | 6 | Node Card, Node Palette, Properties Panel, Floating Preview, Full Window Overlay, File Drop Dialog |
 | Templates | 23 | 23 | All node types (Bayer Dither removed, Domain Warp → Warp UV, Pixel Grid → Dither) |
 | Scenes | 5 | 5 | All preview modes |
 
@@ -76,6 +76,7 @@ V2 was rebuilt from scratch using a **code-driven approach**: every Figma compon
 | [properties-panel.md](organisms/properties-panel.md) | `106:485` | 2 | PropertiesPanel.tsx | ✅ |
 | [floating-preview.md](organisms/floating-preview.md) | `106:498` | — | FloatingPreview.tsx | ✅ |
 | [full-window-overlay.md](organisms/full-window-overlay.md) | `106:511` | — | FullWindowOverlay.tsx | ✅ |
+| [file-drop-dialog.md](organisms/file-drop-dialog.md) | `901:2118` | Confirm / notice | FileDropOverlay.tsx | ✅ |
 
 ### Templates
 | Page | Description | Parity |
@@ -116,6 +117,7 @@ The 18 component mappings below are documented for reference but not activated i
 | Properties Panel | `PropertiesPanel` | `src/components/PropertiesPanel.tsx` |
 | Floating Preview | `FloatingPreview` | `src/components/FloatingPreview.tsx` |
 | Full Window Overlay | `FullWindowOverlay` | `src/components/FullWindowOverlay.tsx` |
+| File Drop Dialog | `FileDropDialog` | `src/components/FileDropOverlay.tsx` |
 | Graph Toolbar | `GraphToolbar` | `src/components/GraphToolbar.tsx` |
 
 ---
@@ -163,9 +165,9 @@ Foundations (tokens, typography)
         ├── Labeled Handle, Float Slider, Enum Select, Color Input
         ├── Connectable Param Row, Preview Toolbar, Graph Toolbar
         ├── Zoom Bar, Gradient Editor, Random Display, MiniMap
-        └── Organisms (5 components)
+        └── Organisms (6 components)
             ├── Node Card, Node Palette, Properties Panel
-            ├── Floating Preview, Full Window Overlay
+            ├── Floating Preview, Full Window Overlay, File Drop Dialog
             └── Templates (23 node types)
                 └── Scenes (5 app layouts)
 ```

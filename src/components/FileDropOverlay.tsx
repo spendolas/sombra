@@ -14,7 +14,6 @@ export interface FileDropDialogState {
   detail: string
   confirmLabel: string
   cancelLabel?: string
-  tone: 'warning' | 'error'
 }
 
 export function FileDropOverlay({ state }: { state: FileDropOverlayState }) {
@@ -92,32 +91,28 @@ export function FileDropDialog({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onResolve])
 
-  const Icon = state.tone === 'warning' ? icons.folderOpen : icons.triangleAlert
-  const toneClass = state.tone === 'warning' ? 'text-warning' : 'text-error'
-
   return createPortal(
     <div
-      className={cn(ds.fullWindowOverlay.root, 'items-center justify-center')}
+      className={ds.fileDropDialog.root}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onResolve(false)
       }}
     >
       <div
-        className={cn(ds.propertiesPanel.nodeInfo, 'mx-2xl')}
+        className={ds.fileDropDialog.panel}
         role="dialog"
         aria-modal="true"
         aria-labelledby="file-drop-dialog-title"
         aria-describedby="file-drop-dialog-detail"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <Icon className={cn('size-icon-md', toneClass)} />
-        <div id="file-drop-dialog-title" className={ds.propertiesPanel.nodeTitle}>
+        <div id="file-drop-dialog-title" className={ds.fileDropDialog.title}>
           {state.title}
         </div>
-        <div id="file-drop-dialog-detail" className={ds.propertiesPanel.description}>
+        <div id="file-drop-dialog-detail" className={ds.fileDropDialog.detail}>
           {state.detail}
         </div>
-        <div className="flex items-center justify-end gap-md">
+        <div className={ds.fileDropDialog.actions}>
           {state.cancelLabel && (
             <button className={ds.button.textGhost} onClick={() => onResolve(false)}>
               {state.cancelLabel}
@@ -125,7 +120,7 @@ export function FileDropDialog({
           )}
           <button
             ref={confirmRef}
-            className={cn(ds.button.textGhost, toneClass)}
+            className={ds.button.textGhost}
             onClick={() => onResolve(true)}
           >
             {state.confirmLabel}

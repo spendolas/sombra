@@ -15,6 +15,13 @@ export const ds = {
   fullWindowOverlay: {
     root: "flex flex-col bg-overlay-scrim fixed z-50 overflow-hidden inset-0",
   },
+  fileDropDialog: {
+    root: "flex flex-col items-center justify-center bg-overlay-scrim fixed z-50 overflow-hidden inset-0",
+    panel: "flex flex-col bg-surface-raised rounded-md border border-edge p-lg gap-md overflow-hidden",
+    title: "text-node-title text-fg",
+    detail: "text-description text-fg-dim",
+    actions: "flex flex-row items-center justify-end gap-md overflow-hidden",
+  },
   nodePalette: {
     root: "flex flex-col bg-surface-alt p-xl gap-xs overflow-hidden",
     categoryGroup: "flex flex-col gap-lg",
