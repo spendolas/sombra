@@ -580,8 +580,8 @@ export function ImageUploader({ nodeId, data }: {
             </svg>
           </div>
 
-          <div className="flex flex-row items-center gap-sm">
-            <span className="text-body text-fg-dim truncate flex-1" title={imageName}>
+          <div className="flex flex-row items-center gap-sm min-w-0">
+            <span className="text-body text-fg-dim truncate flex-1 min-w-0" title={imageName}>
               {imageName || 'Image'}
             </span>
             <button
