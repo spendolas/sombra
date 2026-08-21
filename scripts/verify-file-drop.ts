@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { initializeNodeLibrary } from '../src/nodes'
 import {
   classifyDropFiles,
+  dropEffectForClassification,
   type DropFormatDefinition,
 } from '../src/utils/file-drop'
 import {
@@ -79,6 +80,20 @@ check(
 check(
   'browser-protected unknown names stay unresolved rather than falsely rejected',
   classifyDropFiles([{ name: '', type: 'application/octet-stream' }]).status === 'unresolved',
+)
+const protectedProject = classifyDropFiles([{ name: '', type: 'application/octet-stream' }])
+check(
+  'unresolved files remain droppable so release can expose the .sombra extension',
+  dropEffectForClassification(protectedProject) === 'copy',
+)
+check(
+  'explicitly unsupported files retain a rejected drop effect',
+  dropEffectForClassification(classifyDropFiles([{ name: 'notes.txt', type: 'text/plain' }])) === 'none',
+)
+const mimeProject = classifyDropFiles([{ name: '', type: 'application/x-sombra' }])
+check(
+  'Sombra MIME type identifies projects before filename release when preserved',
+  mimeProject.status === 'accepted' && mimeProject.format.id === 'sombra-project',
 )
 
 console.log('\nB. New-format extension point')

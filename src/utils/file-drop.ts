@@ -2,6 +2,7 @@ import {
   SUPPORTED_IMAGE_EXTENSIONS,
   SUPPORTED_IMAGE_MIME_TYPES,
 } from './process-image'
+import { SOMBRA_FILE_EXTENSION, SOMBRA_FILE_MIME_TYPE } from './file-type-constants'
 
 export interface DropFileDescriptor {
   name: string
@@ -47,8 +48,8 @@ export const FILE_DROP_FORMATS = [
     id: 'sombra-project',
     operation: 'replace',
     multiple: false,
-    extensions: ['.sombra'],
-    mimeTypes: [],
+    extensions: [SOMBRA_FILE_EXTENSION],
+    mimeTypes: [SOMBRA_FILE_MIME_TYPE],
     overlay: {
       icon: 'folderOpen',
       tone: 'warning',
@@ -144,4 +145,13 @@ export function dropClassificationKey(classification: DropClassification): strin
     return `${classification.status}:${classification.format.id}:${classification.fileCount}`
   }
   return `${classification.status}:${classification.fileCount}:${classification.reason}`
+}
+
+/** Unknown filenames must remain droppable so they can be classified at release. */
+export function dropEffectForClassification(
+  classification: DropClassification,
+): 'copy' | 'none' {
+  return classification.status === 'accepted' || classification.status === 'unresolved'
+    ? 'copy'
+    : 'none'
 }

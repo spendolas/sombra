@@ -11,6 +11,7 @@ import pako from 'pako'
 import type { Node, Edge } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
+import { SOMBRA_FILE_MIME_TYPE } from './file-type-constants'
 
 export const SOMBRA_FILE_VERSION = 2
 export const SOMBRA_PACKAGE_VERSION = 1
@@ -340,7 +341,7 @@ export function downloadSombraFile(
   filename = 'graph.sombra',
 ): void {
   const blob = new Blob([encodeSombraPackage(file)], {
-    type: 'application/octet-stream',
+    type: SOMBRA_FILE_MIME_TYPE,
   })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
