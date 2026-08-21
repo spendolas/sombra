@@ -352,7 +352,7 @@ Dagre-based auto-layout for node positioning (`src/utils/layout.ts`, dependency:
 
 ### Delivered Features
 
-- **`.sombra` file format** — versioned JSON envelope (`{ sombra: 1, nodes, edges }`), validates structure + node types on import
+- **`.sombra` file format** — self-identifying compressed binary package (`SOMBRA\0` header + deflated versioned graph payload), with legacy JSON import compatibility; validates structure + node types on import
 - **GraphToolbar** — floating pill at top-left of canvas with Download (save), FolderOpen (open), and Share icon buttons
 - **`loadGraph()` store action** — undoable graph replacement (pushes previous state to undo stack)
 - **Viewer page** — standalone page decodes compressed graph from URL hash, compiles, uploads uniforms, applies quality tier, conditionally animates

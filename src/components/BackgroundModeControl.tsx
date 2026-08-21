@@ -68,14 +68,16 @@ export function BackgroundModeControl({ className }: BackgroundModeControlProps)
   const previewBackground = useSettingsStore((s) => s.previewBackground)
   const setPreviewBackground = useSettingsStore((s) => s.setPreviewBackground)
   const previewMode = useSettingsStore((s) => s.previewMode)
+  const fragmentShader = useCompilerStore((s) => s.fragmentShader)
   const outputHasAlpha = useCompilerStore((s) => s.outputHasAlpha)
 
   const active = ds.button.ghostActive
   const inactive = ds.button.ghost
 
-  // Fully-opaque output → checker/solid/see-through are all no-ops; hide the
-  // whole switcher rather than offer a choice that does nothing.
-  if (!outputHasAlpha) return null
+  // No compiled shader means the DVD placeholder owns the preview; fully opaque
+  // output means every background mode is a no-op. Hide the switcher in both
+  // cases rather than offer controls that cannot affect what is visible.
+  if (!fragmentShader || !outputHasAlpha) return null
 
   // Highlight the mode actually in effect: see-through collapses to checker where
   // it isn't available (docked/fullwindow), and the eye button is hidden there.

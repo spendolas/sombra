@@ -36,14 +36,13 @@ const NodePreview = memo(({ nodeId }: { nodeId: string }) => {
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas || !bitmap) return
+    if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     ctx.clearRect(0, 0, PREVIEW_SIZE, PREVIEW_SIZE)
-    ctx.drawImage(bitmap, 0, 0)
+    if (bitmap) ctx.drawImage(bitmap, 0, 0)
   }, [bitmap])
 
-  if (!bitmap) return null
   return (
     <canvas
       ref={canvasRef}

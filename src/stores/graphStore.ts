@@ -65,6 +65,8 @@ interface GraphState {
   onEdgesChange: OnEdgesChange<Edge<EdgeData>>
 
   addNode: (node: Node<NodeData>) => void
+  /** Add a batch as one undoable operation (used by multi-image file drops). */
+  addNodes: (nodes: Node<NodeData>[]) => void
   removeNode: (nodeId: string) => void
   /** Atomic multi-element delete (node + connected edges = ONE history entry). */
   removeElements: (nodeIds: string[], edgeIds: string[]) => void
@@ -100,6 +102,13 @@ function snapshot(state: GraphState): HistoryEntry {
 function pushHistory(past: HistoryEntry[], entry: HistoryEntry): HistoryEntry[] {
   const next = [...past, entry]
   return next.length > MAX_HISTORY ? next.slice(next.length - MAX_HISTORY) : next
+}
+
+/** React Flow owns this DOM measurement. Restoring it makes a freshly mounted
+ * graph look initialized before its node elements have actually been measured. */
+function withoutPersistedMeasurement(node: Node<NodeData>): Node<NodeData> {
+  const { measured: _measured, ...rest } = node
+  return rest
 }
 
 /**
@@ -192,6 +201,20 @@ export const useGraphStore = create<GraphState>()(
         const past = pushHistory(state._past, snapshot(state))
         set({
           nodes: [...state.nodes, node],
+          _past: past,
+          _future: [],
+          _lastActionKey: null,
+          canUndo: true,
+          canRedo: false,
+        })
+      },
+
+      addNodes: (nodes) => {
+        if (nodes.length === 0) return
+        const state = get()
+        const past = pushHistory(state._past, snapshot(state))
+        set({
+          nodes: [...state.nodes, ...nodes],
           _past: past,
           _future: [],
           _lastActionKey: null,
@@ -491,7 +514,8 @@ export const useGraphStore = create<GraphState>()(
         // image past the budget is stripped, dropped on reload as before.
         const IMAGE_PERSIST_BUDGET = 2_000_000 // data-URL chars (~4MB UTF-16)
         let used = 0
-        const nodes = state.nodes.map((n) => {
+        const nodes = state.nodes.map((persistedNode) => {
+          const n = withoutPersistedMeasurement(persistedNode)
           const imageData = n.data.params?.imageData
           if (typeof imageData !== 'string' || imageData.length === 0) return n
           if (used + imageData.length <= IMAGE_PERSIST_BUDGET) {
@@ -502,6 +526,17 @@ export const useGraphStore = create<GraphState>()(
           return { ...n, data: { ...n.data, params: restParams } }
         })
         return { nodes, edges: state.edges }
+      },
+      // Existing localStorage entries already contain React Flow's `measured`
+      // field. Strip it during hydration as well as from all future writes so
+      // useNodesInitialized reflects the current DOM, not a previous session.
+      merge: (persisted, current) => {
+        const saved = persisted as Partial<GraphState>
+        return {
+          ...current,
+          ...saved,
+          nodes: (saved.nodes ?? current.nodes).map(withoutPersistedMeasurement),
+        }
       },
     }
   )

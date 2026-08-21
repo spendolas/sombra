@@ -31,7 +31,7 @@ import type { NodeData, EdgeData, NodeDefinition } from '../../src/nodes/types'
 import { compileGraph } from '../../src/compiler/glsl-generator'
 import { compileGraphIR } from '../../src/compiler/ir-compiler'
 import { areTypesCompatible } from '../../src/nodes/type-coercion'
-import { importFromFile } from '../../src/utils/sombra-file'
+import { decodeSombraPackage, importFromFile } from '../../src/utils/sombra-file'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const REPORT_DIR = path.join(ROOT, 'reports/self-validate')
@@ -395,8 +395,8 @@ function checkFixtures() {
   for (const f of files) {
     const name = `fixture:${f}`
     try {
-      const json = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'))
-      const { nodes, edges } = importFromFile(json)
+      const payload = decodeSombraPackage(new Uint8Array(fs.readFileSync(path.join(dir, f))))
+      const { nodes, edges } = importFromFile(payload)
       const plan = compileGraph(nodes, edges)
       if (!plan.success) { fail('fixtures', name, `GLSL compile failed: ${plan.errors.map((e) => e.message).join('; ')}`); continue }
       for (const pass of plan.passes) checkGlslContract(name, pass.fragmentShader)
