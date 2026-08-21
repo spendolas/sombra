@@ -25,12 +25,17 @@ import {
 } from '@/utils/file-drop'
 import { normalizeGraphImages } from '@/utils/process-image'
 import { importFromFile, readSombraFile } from '@/utils/sombra-file'
-import { confirmProjectReplacement, importDroppedImageNodes } from '@/utils/file-drop-import'
+import {
+  confirmProjectReplacement,
+  importDroppedImageNodes,
+  importDroppedProject,
+} from '@/utils/file-drop-import'
 
 const EDGE_TYPES = { typed: TypedEdge } as const
 
 function isFileTransfer(dataTransfer: DataTransfer): boolean {
-  return Array.from(dataTransfer.types).includes('Files')
+  return dataTransfer.files.length > 0
+    || Array.from(dataTransfer.types).some((type) => type.toLowerCase() === 'files')
     || Array.from(dataTransfer.items).some((item) => item.kind === 'file')
 }
 
@@ -317,12 +322,15 @@ export function FlowCanvas({
   }, [])
 
   const onFileDrop = useCallback(async (event: React.DragEvent) => {
-    if (!isFileTransfer(event.dataTransfer) || fileDropBusy.current) return
+    if (fileDropBusy.current) return
+    const files = filesFromDataTransfer(event.dataTransfer)
+    // Some Safari drops expose FileList but omit the conventional `Files`
+    // transfer type, so the populated list is authoritative at drop time.
+    if (!isFileTransfer(event.dataTransfer) && files.length === 0) return
     event.preventDefault()
 
     fileDragDepth.current = 0
     fileDropPreviewKey.current = ''
-    const files = filesFromDataTransfer(event.dataTransfer)
     const classification = classifyDropFiles(files.map((file) => ({ name: file.name, type: file.type })))
     if (classification.status !== 'accepted') {
       setFileDropState(null)
@@ -351,13 +359,14 @@ export function FlowCanvas({
         }
       },
       'sombra-project': async () => {
-        const payload = await readSombraFile(files[0])
-        const imported = importFromFile(payload)
-        const confirmed = confirmProjectReplacement(files[0].name)
-        if (!confirmed) return
-
-        const normalized = await normalizeGraphImages(imported.nodes)
-        loadGraph(normalized, imported.edges)
+        const opened = await importDroppedProject(files[0], {
+          confirmReplacement: confirmProjectReplacement,
+          readFile: readSombraFile,
+          validate: importFromFile,
+          normalizeImages: normalizeGraphImages,
+          loadGraph,
+        })
+        if (!opened) return
         requestAnimationFrame(() => requestAnimationFrame(() => {
           void fitView({
             padding: getFitViewPadding(useSettingsStore.getState().nodesPanelOpen),
