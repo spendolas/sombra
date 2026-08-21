@@ -3,6 +3,7 @@ import type { EdgeData, NodeData } from '@/nodes/types'
 import { nodeRegistry } from '@/nodes/registry'
 import { makeNodeId } from '@/utils/node-id'
 import { processImageFile, type ProcessedImage } from '@/utils/process-image'
+import { extractSombraThumbnail, type SombraThumbnail } from '@/utils/sombra-file'
 
 export interface NamedDropFile {
   name: string
@@ -24,7 +25,7 @@ interface DroppedProjectGraph {
 }
 
 export interface DroppedProjectImportDependencies<FileType extends NamedDropFile> {
-  confirmReplacement: (filename: string) => boolean | Promise<boolean>
+  confirmReplacement: (preview: { filename: string; thumbnail: SombraThumbnail | null }) => boolean | Promise<boolean>
   readFile: (file: FileType) => Promise<unknown>
   validate: (payload: unknown) => DroppedProjectGraph
   normalizeImages: (nodes: Node<NodeData>[]) => Promise<Node<NodeData>[]>
@@ -100,17 +101,18 @@ export function projectReplacementPrompt(filename: string): { title: string; det
 }
 
 /**
- * Confirm before reading, then decode, validate, normalize, and replace. The
- * confirmation dependency may be an in-app asynchronous dialog.
+ * Read, decode, validate, then confirm replacement before normalizing and
+ * replacing the current graph. The confirmation dependency may be an in-app
+ * asynchronous dialog.
  */
 export async function importDroppedProject<FileType extends NamedDropFile>(
   file: FileType,
   dependencies: DroppedProjectImportDependencies<FileType>,
 ): Promise<boolean> {
-  if (!await dependencies.confirmReplacement(file.name)) return false
-
   const payload = await dependencies.readFile(file)
   const imported = dependencies.validate(payload)
+  const thumbnail = extractSombraThumbnail(payload)
+  if (!await dependencies.confirmReplacement({ filename: file.name, thumbnail })) return false
   const normalized = await dependencies.normalizeImages(imported.nodes)
   dependencies.loadGraph(normalized, imported.edges)
   return true

@@ -2,7 +2,7 @@
  * .sombra file format utilities — export, package, import, download, and open
  *
  * Disk format: `SOMBRA\0` magic + package version byte + deflated JSON payload.
- * Payload: { sombra: 2, nodes: [...], edges: [...] }
+ * Payload: { sombra: 3, nodes: [...], edges: [...], thumbnail?: {...}, appBuildId?: string }
  * The package version and `sombra` schema version are independent; both are
  * distinct from GRAPH_SCHEMA_VERSION. Legacy plain-JSON files remain readable.
  */
@@ -12,8 +12,10 @@ import type { Node, Edge } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { SOMBRA_FILE_MIME_TYPE } from './file-type-constants'
+import type { ShaderThumbnail } from '../renderer/capture-thumbnail'
+import { SOMBRA_APP_BUILD_ID } from '../generated/build-info'
 
-export const SOMBRA_FILE_VERSION = 2
+export const SOMBRA_FILE_VERSION = 3
 export const SOMBRA_PACKAGE_VERSION = 1
 
 const SOMBRA_PACKAGE_MAGIC = new Uint8Array([
@@ -25,7 +27,11 @@ export interface SombraFile {
   sombra: number
   nodes: Node<NodeData>[]
   edges: Edge<EdgeData>[]
+  thumbnail?: SombraThumbnail
+  appBuildId?: string
 }
+
+export type SombraThumbnail = ShaderThumbnail
 
 /**
  * Wrap nodes/edges in a versioned .sombra envelope.
@@ -33,8 +39,44 @@ export interface SombraFile {
 export function exportToFile(
   nodes: Node<NodeData>[],
   edges: Edge<EdgeData>[],
+  thumbnail?: SombraThumbnail,
 ): SombraFile {
-  return { sombra: SOMBRA_FILE_VERSION, nodes, edges }
+  return thumbnail
+    ? {
+        sombra: SOMBRA_FILE_VERSION,
+        nodes,
+        edges,
+        thumbnail,
+        appBuildId: SOMBRA_APP_BUILD_ID,
+      }
+    : {
+        sombra: SOMBRA_FILE_VERSION,
+        nodes,
+        edges,
+        appBuildId: SOMBRA_APP_BUILD_ID,
+      }
+}
+
+/** Extract a thumbnail from a decoded .sombra payload, if present and valid. */
+export function extractSombraThumbnail(payload: unknown): SombraThumbnail | null {
+  if (!payload || typeof payload !== 'object') return null
+  const thumbnail = (payload as Record<string, unknown>).thumbnail
+  if (!thumbnail || typeof thumbnail !== 'object') return null
+
+  const thumb = thumbnail as Record<string, unknown>
+  if (typeof thumb.dataUrl !== 'string' || typeof thumb.mimeType !== 'string') return null
+  if (!thumb.dataUrl.startsWith('data:')) return null
+  return {
+    mimeType: thumb.mimeType,
+    dataUrl: thumb.dataUrl,
+  }
+}
+
+/** Extract the build id embedded in a decoded .sombra payload, if present. */
+export function extractSombraBuildId(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object') return null
+  const buildId = (payload as Record<string, unknown>).appBuildId
+  return typeof buildId === 'string' && buildId.length > 0 ? buildId : null
 }
 
 function hasPackageMagic(bytes: Uint8Array): boolean {
@@ -216,6 +258,7 @@ function migrateV1ToV2(nodes: Node<NodeData>[]): Node<NodeData>[] {
 export function importFromFile(json: unknown): {
   nodes: Node<NodeData>[]
   edges: Edge<EdgeData>[]
+  appBuildId: string | null
 } {
   if (!json || typeof json !== 'object') {
     throw new Error('Invalid file: expected a JSON object')
@@ -293,7 +336,6 @@ export function importFromFile(json: unknown): {
 
   let nodes = obj.nodes as Node<NodeData>[]
   const edges = obj.edges as Edge<EdgeData>[]
-
   // v1 → v2 migration: scale convention flip + SRT param remapping
   const fileVersion = typeof obj.sombra === 'number' ? obj.sombra : 1
   if (fileVersion < 2) {
@@ -330,7 +372,7 @@ export function importFromFile(json: unknown): {
     return srcOk && tgtOk
   })
 
-  return { nodes, edges: validEdges }
+  return { nodes, edges: validEdges, appBuildId: extractSombraBuildId(obj) }
 }
 
 /**
@@ -569,9 +611,9 @@ export function decodeCompactHash(hash: string): {
 
 /**
  * Open a file picker and read a binary .sombra package or legacy JSON file.
- * Returns the decoded payload object.
+ * Returns the selected file name and decoded payload.
  */
-export function openSombraFile(): Promise<unknown> {
+export function openSombraFile(): Promise<{ name: string; payload: unknown }> {
   return new Promise((resolve, reject) => {
     const input = document.createElement('input')
     input.type = 'file'
@@ -579,7 +621,7 @@ export function openSombraFile(): Promise<unknown> {
     input.hidden = true
 
     let settled = false
-    const finish = (result: { value: unknown } | { error: Error }) => {
+    const finish = (result: { value: { name: string; payload: unknown } } | { error: Error }) => {
       if (settled) return
       settled = true
       input.remove()
@@ -595,7 +637,7 @@ export function openSombraFile(): Promise<unknown> {
       }
 
       void readSombraFile(file).then(
-        (value) => finish({ value }),
+        (value) => finish({ value: { name: file.name, payload: value } }),
         (error: unknown) => finish({
           error: error instanceof Error ? error : new Error('Failed to decode file'),
         }),
