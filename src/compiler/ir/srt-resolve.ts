@@ -37,14 +37,14 @@ export interface Vec2 { x: number; y: number }
 /**
  * 'auto_uv': the coordinate contract (y-down, ref-sized, buffer px).
  * 'screen_uv': image's v_uv space (y-up, canvas-relative, per-axis units).
- * 'screen_px': reeded's rib (colour) space — SAME PARITY as auto_uv (+ty up,
- *  pixel-measured twice), so the Y is negated identically; do NOT +dty or the
- *  gizmo flips. It differs only in SCALE: the shader offset
- *  vec2(tx,-ty)·u_dpr/u_resolution is a DPR-INDEPENDENT 1:1 CSS-px displacement,
- *  where auto_uv maps 1/dpr. The two coincide only at dpr=1 — which is why reeded
- *  was filed 'auto_uv' (measured on a dpr=1 display, so the ×dpr error never
- *  showed); on retina the auto_uv gizmo lagged the ribs by exactly dpr. (A
- *  y-flipped 'ref_yup' space was also tried and proven wrong.)
+ * 'screen_px': reeded's rib (colour) space — SCREEN parity (+ty DOWN, Copy 3
+ *  samples v_uv), Y NOT negated; USER-CONFIRMED by dragging the live gizmo (X
+ *  follows cursor, +ty moves ribs down → drag-up gives −ty → ribs up). SCALE:
+ *  the shader offset vec2(tx,-ty)·u_dpr/u_resolution is a DPR/ASPECT-INDEPENDENT
+ *  1:1 CSS-px displacement, where auto_uv maps 1/dpr. reeded was long mis-filed
+ *  as 'auto_uv': the two coincide in SCALE only at dpr=1 (the original measuring
+ *  display), so the ×dpr retina lag never showed. (A 'ref_yup' variant was also
+ *  tried and proven wrong.)
  */
 export type SRTCoordSpace = 'auto_uv' | 'screen_uv' | 'screen_px'
 
@@ -131,14 +131,15 @@ export function resolveSRT(params: Record<string, unknown>, opts: ResolveSRTOpti
   let toCss: (dtx: number, dty: number) => Vec2
   let toParam: (dx: number, dy: number) => Vec2
   if (coordSpace === 'screen_px') {
-    // reeded's rib space. PARITY = auto_uv (+ty UP): pixel-measured twice —
-    // dragging +ty shifts the ribs' row-profile up — so the Y is NEGATED exactly
-    // like auto_uv (do NOT +dty; that flips the gizmo). What differs from auto_uv
-    // is only the SCALE: the shader offset vec2(tx,-ty)·u_dpr/u_resolution works
-    // out to a 1:1 CSS-px displacement, independent of dpr/aspect, where auto_uv
-    // would (wrongly, for reeded) map it as 1/dpr — the retina misalignment.
-    toCss = (dtx, dty) => ({ x: dtx, y: -dty })
-    toParam = (dx, dy) => ({ x: dx, y: -dy })
+    // reeded's rib space. USER-CONFIRMED by dragging the live gizmo: X follows
+    // the cursor, and +srt_translateY moves the ribs DOWN (screen parity — Copy 3
+    // samples in v_uv), so Y is NOT negated: drag up → −ty → ribs up. (An earlier
+    // row-profile measurement read +ty-up but sampled the wrong axis; the drag
+    // test wins.) SCALE: the shader offset vec2(tx,-ty)·u_dpr/u_resolution is a
+    // 1:1 CSS-px displacement, dpr/aspect-independent — auto_uv's 1/dpr is the
+    // retina misalignment this space fixes.
+    toCss = (dtx, dty) => ({ x: dtx, y: dty })
+    toParam = (dx, dy) => ({ x: dx, y: dy })
   } else if (coordSpace === 'screen_uv') {
     // v_uv space: y-up, canvas-relative. u_dpr ≈ bufferW/cssW; tExpr divides
     // by u_dpr·REF, then 1 uv unit spans the canvas per axis. +ty → DOWN.
