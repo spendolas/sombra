@@ -39,7 +39,10 @@ export const imageNode: NodeDefinition = {
   spatial: { transforms: ['scale', 'rotate', 'translate'] } satisfies SpatialConfig,
 
   inputs: [
-    { id: 'coords', label: 'Coords', type: 'vec2', default: 'screen_uv' },
+    // auto_uv (isotropic, ref-sized) — the framework SRTs this before the node.
+    // Isotropic space is what lets rotation stay aspect-true (a rotated circle
+    // stays a circle); the old screen_uv space rotated anisotropically → shear.
+    { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },
   ],
 
   outputs: [
@@ -77,27 +80,28 @@ export const imageNode: NodeDefinition = {
 
     if (hasImage) {
       ctx.uniforms.add('u_resolution')
+      ctx.uniforms.add('u_anchor')
+      ctx.uniforms.add('u_dpr')
+      ctx.uniforms.add('u_ref_size')
 
-      // inputs.coords is already SRT-transformed (centered, scaled, rotated, translated)
+      // inputs.coords is SRT-transformed AUTO_UV — isotropic. Fit is px-based and
+      // applied AFTER the isotropic SRT, so contain/cover preserve the image
+      // aspect at any rotation (a rotated circle stays a circle; the old
+      // screen_uv path rotated in an anisotropic space and sheared it). imgDisp
+      // is the image's on-canvas pixel size; texUV = SRT'd physical offset /
+      // imgDisp. Y is negated because auto_uv is y-down and the texture is y-up.
       const fitUV = `img_uv_${sanitizedId}`
-      lines.push(`float img_ratio_${sanitizedId} = ${inputs.imageAspect} / (u_resolution.x / u_resolution.y);`)
-      lines.push(`vec2 ${fitUV} = ${inputs.coords};`)
-
+      const ac = `img_ac_${sanitizedId}`, dh = `img_dh_${sanitizedId}`, dw = `img_dw_${sanitizedId}`
+      lines.push(`float ${ac} = u_resolution.x / u_resolution.y;`)
       if (fitMode === 'contain') {
-        // Contain: entire image visible, letterbox where needed
-        lines.push(`if (img_ratio_${sanitizedId} > 1.0) {`)
-        lines.push(`  ${fitUV}.y = (${inputs.coords}.y - 0.5) * img_ratio_${sanitizedId} + 0.5;`)
-        lines.push(`} else {`)
-        lines.push(`  ${fitUV}.x = (${inputs.coords}.x - 0.5) / img_ratio_${sanitizedId} + 0.5;`)
-        lines.push(`}`)
+        lines.push(`float ${dh} = (${inputs.imageAspect} > ${ac}) ? (u_resolution.x / ${inputs.imageAspect}) : u_resolution.y;`)
       } else {
-        // Cover: fill canvas, crop where needed
-        lines.push(`if (img_ratio_${sanitizedId} > 1.0) {`)
-        lines.push(`  ${fitUV}.x = (${inputs.coords}.x - 0.5) / img_ratio_${sanitizedId} + 0.5;`)
-        lines.push(`} else {`)
-        lines.push(`  ${fitUV}.y = (${inputs.coords}.y - 0.5) * img_ratio_${sanitizedId} + 0.5;`)
-        lines.push(`}`)
+        lines.push(`float ${dh} = (${inputs.imageAspect} > ${ac}) ? u_resolution.y : (u_resolution.x / ${inputs.imageAspect});`)
       }
+      lines.push(`float ${dw} = ${dh} * ${inputs.imageAspect};`)
+      lines.push(`vec2 ${fitUV} = vec2(0.0);`)
+      lines.push(`${fitUV}.x = (${inputs.coords}.x - u_anchor.x) * (u_dpr * u_ref_size) / ${dw} + 0.5;`)
+      lines.push(`${fitUV}.y = -(${inputs.coords}.y - u_anchor.y) * (u_dpr * u_ref_size) / ${dh} + 0.5;`)
 
       const sampleVar = `node_${sanitizedId}_sample`
       if (fitMode === 'contain') {
@@ -140,40 +144,33 @@ export const imageNode: NodeDefinition = {
       // `textureSample(s_tex, s_samp, uv)` on WGSL, and `ternary` already lowers to
       // `select()` on WGSL — which is what the removed hand-written arms spelled out.
       const fitUV = `img_uv_${sanitizedId}`
-      const ratio = `img_ratio_${sanitizedId}`
+      const ac = `img_ac_${sanitizedId}`
+      const dh = `img_dh_${sanitizedId}`
+      const dw = `img_dw_${sanitizedId}`
       const sampleVar = `node_${sanitizedId}_sample`
       const insideVar = `img_inside_${sanitizedId}`
       const coords = ctx.inputs.coords
       const aspect = ctx.inputs.imageAspect
 
-      stmts.push(
-        raw(
-          `float ${ratio} = ${aspect} / (u_resolution.x / u_resolution.y);`,
-        ),
-        raw(
-          `vec2 ${fitUV} = ${coords};`,
-        ),
-      )
+      // px-based fit AFTER the isotropic auto_uv SRT (see glsl() for why this
+      // keeps rotation aspect-true). Single-arg raw() is mechanically translated
+      // to WGSL (wgsl-backend.ts) — same shape both backends, cannot drift.
+      const dhLine = fitMode === 'contain'
+        ? `float ${dh} = (${aspect} > ${ac}) ? (u_resolution.x / ${aspect}) : u_resolution.y;`
+        : `float ${dh} = (${aspect} > ${ac}) ? u_resolution.y : (u_resolution.x / ${aspect});`
+      stmts.push(raw(
+        `float ${ac} = u_resolution.x / u_resolution.y;
+  ${dhLine}
+  float ${dw} = ${dh} * ${aspect};
+  vec2 ${fitUV} = vec2(0.0);
+  ${fitUV}.x = (${coords}.x - u_anchor.x) * (u_dpr * u_ref_size) / ${dw} + 0.5;
+  ${fitUV}.y = -(${coords}.y - u_anchor.y) * (u_dpr * u_ref_size) / ${dh} + 0.5;`,
+      ))
 
       if (fitMode === 'contain') {
-        stmts.push(raw(
-          `if (${ratio} > 1.0) {
-    ${fitUV}.y = (${coords}.y - 0.5) * ${ratio} + 0.5;
-  } else {
-    ${fitUV}.x = (${coords}.x - 0.5) / ${ratio} + 0.5;
-  }`,
-        ))
-
-        // Clamp to image bounds — black outside.
-        //
-        // Structured, and deliberately in the sample-then-select shape for BOTH backends
-        // rather than GLSL's branch-then-sample. WGSL forbids `textureSample` under
-        // non-uniform control flow, so it has to sample unconditionally; and in GLSL the
-        // two forms are identical, because `clamp` is a no-op whenever the fragment is
-        // inside and the select discards the sample whenever it is not.
-        //
-        // `ternary` lowers to `(c ? a : b)` on GLSL and `select(b, a, c)` on WGSL, which is
-        // exactly what the old hand-written WGSL arm spelled out by hand.
+        // Clamp to image bounds — black outside. Sample-then-select for BOTH
+        // backends: WGSL forbids textureSample under non-uniform control flow, so
+        // sample unconditionally; ternary lowers to (c?a:b) / select(b,a,c).
         const inBounds = (comp: 'x' | 'y') => binary('&&',
           binary('>=', variable(`${fitUV}.${comp}`), literal('float', 0.0), 'bool'),
           binary('<=', variable(`${fitUV}.${comp}`), literal('float', 1.0), 'bool'), 'bool')
@@ -189,14 +186,6 @@ export const imageNode: NodeDefinition = {
         )
       } else {
         // Cover
-        stmts.push(raw(
-          `if (${ratio} > 1.0) {
-    ${fitUV}.x = (${coords}.x - 0.5) / ${ratio} + 0.5;
-  } else {
-    ${fitUV}.y = (${coords}.y - 0.5) * ${ratio} + 0.5;
-  }`,
-        ))
-
         stmts.push(declare(sampleVar, 'vec4', textureSample(samplerName, clampUV(fitUV), 'vec4')))
       }
 
@@ -219,7 +208,9 @@ export const imageNode: NodeDefinition = {
     return {
       statements: stmts,
       uniforms: [],
-      standardUniforms: hasImage ? new Set(['u_resolution']) : new Set(),
+      standardUniforms: hasImage
+        ? new Set(['u_resolution', 'u_anchor', 'u_dpr', 'u_ref_size'])
+        : new Set(),
     }
   },
 }
