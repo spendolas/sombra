@@ -849,17 +849,20 @@
           "overflow": "hidden"
         },
         "preview": {
+          "figmaNodeId": "904:306",
           "layout": "horizontal",
           "fill": "surface/default",
           "radius": "sm",
           "overflow": "hidden"
         },
         "content": {
+          "figmaNodeId": "904:308",
           "layout": "vertical",
           "justify": "between",
           "gap": "md"
         },
         "textGroup": {
+          "figmaNodeId": "904:309",
           "layout": "vertical",
           "gap": "sm"
         },
