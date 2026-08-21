@@ -161,6 +161,7 @@ Figma: Node Palette → <NodePalette />  (auto-reads from nodeRegistry)
 Figma: Properties Panel → <PropertiesPanel />  (reads selected node from store)
 Figma: Floating Preview → <FloatingPreview targetRef={ref} />
 Figma: Full Window Overlay → <FullWindowOverlay targetRef={ref} />
+Figma: File Drop Dialog    → <FileDropDialog state={state} onResolve={fn} />
 ```
 
 ---
@@ -196,6 +197,7 @@ Complete mapping of every Figma component to its React source:
 | Properties Panel | `106:485` | `src/components/PropertiesPanel.tsx` | `PropertiesPanel` |
 | Floating Preview | `106:498` | `src/components/FloatingPreview.tsx` | `FloatingPreview` |
 | Full Window Overlay | `106:511` | `src/components/FullWindowOverlay.tsx` | `FullWindowOverlay` |
+| File Drop Dialog | `901:2118` | `src/components/FileDropOverlay.tsx` | `FileDropDialog` |
 
 ---
 

@@ -210,6 +210,7 @@ check('cancelling a project drop leaves the file unread and graph untouched',
 
 console.log('\nE. React Flow event interception')
 const flowCanvasSource = readFileSync(new URL('../src/components/FlowCanvas.tsx', import.meta.url), 'utf8')
+const fileDropOverlaySource = readFileSync(new URL('../src/components/FileDropOverlay.tsx', import.meta.url), 'utf8')
 check(
   'file router intercepts drops during capture before React Flow handles them',
   flowCanvasSource.includes('onDropCapture={(event) => { void onFileDrop(event) }}'),
@@ -223,6 +224,11 @@ check(
   !flowCanvasSource.includes('window.alert')
     && !flowCanvasSource.includes('window.confirm')
     && !readFileSync(new URL('../src/utils/file-drop-import.ts', import.meta.url), 'utf8').includes('window.confirm'),
+)
+check(
+  'file dialog consumes every registered generated DS part',
+  ['root', 'panel', 'title', 'detail', 'actions']
+    .every((part) => fileDropOverlaySource.includes(`ds.fileDropDialog.${part}`)),
 )
 
 console.log('\n' + '='.repeat(60))
