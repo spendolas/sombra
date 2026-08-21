@@ -7,7 +7,7 @@
  * This guarantees the overlay matches the preview.
  */
 
-import { useRef, useCallback, useMemo, useState, useEffect, useId } from 'react'
+import { useRef, useCallback, useMemo, useState, useEffect } from 'react'
 import { useGraphStore } from '@/stores/graphStore'
 import { usePreviewStore } from '@/stores/previewStore'
 import { ds } from '@/generated/ds'
@@ -36,73 +36,58 @@ interface DragState {
 type Pt = [number, number]
 
 // ---------------------------------------------------------------------------
-// Forward transform: v_uv → image UV (matches GLSL exactly)
+// Model B overlay geometry — the thumbnail IS the canvas viewport (a fixed
+// rectangle at the canvas aspect); the image transforms INSIDE it, exactly as
+// the shader renders. Rotation stays clean (right angles preserved) and the
+// image tracks the live output, unlike the old crop-region model where a
+// rotated non-square viewport drew the visible region as a skewed parallelogram.
 // ---------------------------------------------------------------------------
 
 /**
- * Map a canvas-space UV point through the shader's SRT + fit/fill chain.
- * Returns the image-space UV where the texture is sampled.
+ * imageToScreen — image-UV → screen_uv (v_uv, y-up, 0..1 over the canvas).
  *
- * Replicates the framework SRT single source (ir/srt.ts `emitSRT`) in image's
- * `screen_uv` space + image.ts lines 70-87 (fit/fill). This MUST track emitSRT
- * exactly — a stale hand-copy (the previous one cited glsl-generator's
- * pre-emitSRT SRT: node-order, aspect-conjugated rotation, /canvasW translate)
- * makes the crop overlay diverge from where the shader actually places the
- * image. u_anchor is the default (0.5); a non-default Fragment Output anchor is
- * not modelled here (quick-fix scope).
+ * The EXACT inverse of the shader's sample chain px_fit(emitSRT(auto_uv))
+ * (ir/srt.ts `emitSRT` + image.ts px-based fit). auto_uv is isotropic, so the
+ * image quad stays a clean rotated rectangle; drawn on the canvas-aspect thumb
+ * (a uniform scaling of the canvas) it displays clean. u_anchor is the default
+ * (0.5); a non-default Fragment Output anchor is not modelled here.
  */
-function canvasToImageUV(
-  uv: Pt,
+function imageToScreen(
+  iuv: Pt,
   scale: number, rotateDeg: number,
   translateX: number, translateY: number,
   canvasW: number, canvasH: number,
   imageAspect: number, fitMode: string,
 ): Pt {
-  const aspect = canvasW / canvasH
   const rad = rotateDeg * 0.01745329
-  // Translate denominator: emitSRT divides the pixel offset by (u_dpr·u_ref_size).
-  // u_ref_size = REFERENCE_SIZE (512); u_dpr in screen_uv = bufferW/cssW, which
-  // (mainCanvasSize is floor(css·min(dpr,2))) reduces to the capped dpr — the
-  // same `k` resolveSRT() uses, so this overlay and the preview gizmo agree.
-  const k = Math.min(window.devicePixelRatio || 1, 2)
-  const tDen = k * REFERENCE_SIZE
+  const tDen = Math.min(window.devicePixelRatio || 1, 2) * REFERENCE_SIZE // u_dpr·u_ref_size
+  const anchor = 0.5
+  const A_c = canvasW / canvasH
+  // imgDisp = the image's on-canvas pixel size (must match image.ts).
+  const dh = fitMode === 'contain'
+    ? (imageAspect > A_c ? canvasW / imageAspect : canvasH)
+    : (imageAspect > A_c ? canvasH : canvasW / imageAspect)
+  const dw = dh * imageAspect
 
-  // emitSRT world order (ir/srt.ts): translate → subAnchor → scale → rotate
-  // (ISOTROPIC — no aspect conjugation) → addAnchor.
-  // 1. translate, world frame first: coords − vec2(tX, −tY)/(u_dpr·u_ref_size).
-  let sx = uv[0] - translateX / tDen
-  let sy = uv[1] + translateY / tDen // −(−tY) ⇒ +tY
-  // 2. subAnchor (u_anchor = 0.5).
-  sx -= 0.5
-  sy -= 0.5
-  // 3. scale (isotropic).
-  sx /= scale
-  sy /= scale
-  // 4. rotate (isotropic — screen_uv rotated with no aspect term, matching emitSRT).
-  const cr = Math.cos(rad), sr = Math.sin(rad)
-  const rx = sx * cr - sy * sr
-  const ry = sx * sr + sy * cr
-  sx = rx
-  sy = ry
-  // 5. addAnchor.
-  sx += 0.5
-  sy += 0.5
+  // 1. fit⁻¹: texUV → SRT'd auto_uv c (y negated — auto_uv y-down vs texture y-up).
+  const cx = (iuv[0] - 0.5) * dw / tDen + anchor
+  const cy = -(iuv[1] - 0.5) * dh / tDen + anchor
 
-  // Fit/Fill (image.ts)
-  const ratio = imageAspect / aspect
-  let imgX = sx, imgY = sy
-  if (fitMode === 'contain') {
-    if (ratio > 1) imgY = (sy - 0.5) * ratio + 0.5
-    else           imgX = (sx - 0.5) / ratio + 0.5
-  } else {
-    if (ratio > 1) imgX = (sx - 0.5) / ratio + 0.5
-    else           imgY = (sy - 0.5) * ratio + 0.5
-  }
-  return [imgX, imgY]
+  // 2. emitSRT⁻¹ (world order): un-anchor, R(−θ), un-scale, re-add world translate.
+  const dx = cx - anchor, dy = cy - anchor
+  const c = Math.cos(rad), s = Math.sin(rad)
+  const ax = (dx * c + dy * s) * scale + anchor + translateX / tDen
+  const ay = (-dx * s + dy * c) * scale + anchor - translateY / tDen
+
+  // 3. auto_uv → screen_uv (v_uv, y-up). auto_uv is isotropic (÷tDen both axes);
+  //    screen_uv is canvas-normalised (÷res per axis) — the y-flip undoes auto_uv's.
+  const sux = (ax - anchor) * tDen / canvasW + anchor
+  const suy = 1 - anchor - (ay - anchor) * tDen / canvasH
+  return [sux, suy]
 }
 
-/** Map all 4 canvas corners to image-space, then to thumbnail pixel coords. */
-function computePolygon(
+/** The image's 4 corners (image-UV) → thumbnail px (screen_uv y-up → y-down). */
+function computeImageQuad(
   scale: number, rotateDeg: number,
   translateX: number, translateY: number,
   canvasW: number, canvasH: number,
@@ -110,13 +95,43 @@ function computePolygon(
   thumbW: number, thumbH: number,
 ): Pt[] {
   const corners: Pt[] = [[0,0], [1,0], [1,1], [0,1]]
-  return corners.map(uv => {
-    const [ix, iy] = canvasToImageUV(
-      uv, scale, rotateDeg, translateX, translateY,
+  return corners.map(iuv => {
+    const [sx, sy] = imageToScreen(
+      iuv, scale, rotateDeg, translateX, translateY,
       canvasW, canvasH, imageAspect, fitMode,
     )
-    return [ix * thumbW, (1 - iy) * thumbH] as Pt
+    return [sx * thumbW, (1 - sy) * thumbH] as Pt
   })
+}
+
+/**
+ * CSS `matrix(a,b,c,d,e,f)` that places an <img> (sized thumbW×thumbH,
+ * transform-origin 0 0) into computeImageQuad. The img's own box px (X,Y) maps
+ * to image-UV (X/thumbW, 1−Y/thumbH); image-UV → thumb px is affine (fit⁻¹ and
+ * emitSRT⁻¹ are both affine), so it is solved exactly from 3 corners.
+ */
+function computeImageMatrix(
+  scale: number, rotateDeg: number,
+  translateX: number, translateY: number,
+  canvasW: number, canvasH: number,
+  imageAspect: number, fitMode: string,
+  thumbW: number, thumbH: number,
+): [number, number, number, number, number, number] {
+  const P = (iuv: Pt): Pt => {
+    const [sx, sy] = imageToScreen(
+      iuv, scale, rotateDeg, translateX, translateY,
+      canvasW, canvasH, imageAspect, fitMode,
+    )
+    return [sx * thumbW, (1 - sy) * thumbH]
+  }
+  const [e, f] = P([0, 1])   // img box (0,0)
+  const [t1x, t1y] = P([1, 1])   // img box (thumbW,0)
+  const [t3x, t3y] = P([0, 0])   // img box (0,thumbH)
+  return [
+    (t1x - e) / thumbW, (t1y - f) / thumbW,
+    (t3x - e) / thumbH, (t3y - f) / thumbH,
+    e, f,
+  ]
 }
 
 // ---------------------------------------------------------------------------
@@ -276,7 +291,6 @@ export function ImageUploader({ nodeId, data }: {
   // it out from under the cursor and silently drops pointer capture — binding
   // move/up on the element would then miss the release and strand the drag.
   const [dragging, setDragging] = useState(false)
-  const maskId = useId().replace(/:/g, '_')
 
   const imageData = data.imageData as string | undefined
   const imageName = data.imageName as string | undefined
@@ -304,9 +318,18 @@ export function ImageUploader({ nodeId, data }: {
 
   const tw = thumbSize[0], th = thumbSize[1]
 
-  // Polygon: 4 canvas corners mapped to thumbnail pixel coords
+  // Model B: the image's 4 corners in thumbnail px (the movable element), plus
+  // the CSS affine matrix that lays the <img> into that quad. Handles/hit-tests
+  // run on this image quad; the viewport frame is the fixed thumbnail border.
   const polygon = useMemo(
-    () => computePolygon(
+    () => computeImageQuad(
+      scale, rotateDeg, offsetX, offsetY,
+      canvasW, canvasH, imageAspect, fitMode, tw, th,
+    ),
+    [scale, rotateDeg, offsetX, offsetY, canvasW, canvasH, imageAspect, fitMode, tw, th],
+  )
+  const imageMatrix = useMemo(
+    () => computeImageMatrix(
       scale, rotateDeg, offsetX, offsetY,
       canvasW, canvasH, imageAspect, fitMode, tw, th,
     ),
@@ -348,32 +371,9 @@ export function ImageUploader({ nodeId, data }: {
     }
 
     if (hit.mode === 'scale') {
-      const vi = hit.vertexIdx ?? 0
-      const cornerUVs: Pt[] = [[0,0], [1,0], [1,1], [0,1]]
-
-      if (e.altKey) {
-        // Alt: center anchor
-        state.anchorX = polyCenter[0]
-        state.anchorY = polyCenter[1]
-        state.anchorU = 0.5
-        state.anchorV = 0.5
-      } else if (hit.isEdge) {
-        // Edge drag: anchor = midpoint of opposite edge
-        const oppA = (vi + 2) % 4, oppB = (vi + 3) % 4
-        state.anchorX = (polygon[oppA][0] + polygon[oppB][0]) / 2
-        state.anchorY = (polygon[oppA][1] + polygon[oppB][1]) / 2
-        state.anchorU = (cornerUVs[oppA][0] + cornerUVs[oppB][0]) / 2
-        state.anchorV = (cornerUVs[oppA][1] + cornerUVs[oppB][1]) / 2
-      } else {
-        // Corner drag: anchor = opposite corner
-        const oppIdx = (vi + 2) % 4
-        state.anchorX = polygon[oppIdx][0]
-        state.anchorY = polygon[oppIdx][1]
-        state.anchorU = cornerUVs[oppIdx][0]
-        state.anchorV = cornerUVs[oppIdx][1]
-      }
-
-      state.startDist = Math.hypot(sx - state.anchorX, sy - state.anchorY)
+      // Model B scales the image about its centre (shader scales about u_anchor
+      // 0.5); startDist is the cursor's distance from that centre.
+      state.startDist = Math.hypot(sx - polyCenter[0], sy - polyCenter[1])
     }
 
     if (hit.mode === 'rotate') {
@@ -401,33 +401,22 @@ export function ImageUploader({ nodeId, data }: {
     if (!drag) return
     const [sx, sy] = clientToSvg(clientX, clientY)
 
+    void altKey
+
     if (drag.mode === 'offset') {
-      // Client pixel delta → thumbnail pixel delta → image UV delta → invert fit/fill → offset
+      // Model B: the image moves in screen space. World translate is ADDITIVE in
+      // screen (emitSRT⁻¹: screenX += tX/tDen, screenY −= tY/tDen), so a screen_uv
+      // delta maps straight to the offset — no fit inversion, scale/rotate-free.
       const svg = svgRef.current
       if (!svg) return
       const r = svg.getBoundingClientRect()
-      const dThumbX = (clientX - drag.startClientX) / r.width * tw
-      const dThumbY = (clientY - drag.startClientY) / r.height * th
-
-      let dImgU = dThumbX / tw
-      let dImgV = -dThumbY / th
-
-      // Invert fit/fill scaling
-      const ratio = imageAspect / (canvasW / canvasH)
-      if (fitMode === 'contain') {
-        if (ratio > 1) dImgV /= ratio; else dImgU *= ratio
-      } else {
-        if (ratio > 1) dImgU *= ratio; else dImgV /= ratio
-      }
-
-      // Invert SRT translate: emitSRT does coords -= vec2(tX, -tY)/(u_dpr·u_ref_size).
-      // Denominator MUST match canvasToImageUV (tDen = k·REFERENCE_SIZE) so drag and
-      // the crop polygon stay mutually consistent AND both track the shader — the old
-      // /canvasW pair tracked each other but lied against the render.
-      const k = Math.min(window.devicePixelRatio || 1, 2)
-      const tDen = k * REFERENCE_SIZE
-      const newTX = drag.startOffsetX - dImgU * tDen
-      const newTY = drag.startOffsetY + dImgV * tDen
+      // Via imageToScreen, d(screen_uv.x)/d(tX) = 1/canvasW and
+      // d(screen_uv.y)/d(tY) = 1/canvasH, so a screen_uv delta maps to the
+      // offset by ×canvasW/×canvasH (Y flips: client y-down → screen y-up).
+      const dSux = (clientX - drag.startClientX) / r.width
+      const dClientYFrac = (clientY - drag.startClientY) / r.height
+      const newTX = drag.startOffsetX + dSux * canvasW
+      const newTY = drag.startOffsetY - dClientYFrac * canvasH
 
       const maxX = imageWidth / 2, maxY = imageHeight / 2
       updateNodeData(nodeId, {
@@ -440,36 +429,29 @@ export function ImageUploader({ nodeId, data }: {
     }
 
     if (drag.mode === 'scale') {
-      const dist = Math.hypot(sx - drag.anchorX, sy - drag.anchorY)
+      // Scale about the image centre (shader scales about u_anchor 0.5): the image
+      // quad's size is ∝ srt_scale, so the cursor's distance-from-centre ratio is
+      // the scale ratio. World offset is scale-invariant → left untouched.
+      const dist = Math.hypot(sx - drag.centerX, sy - drag.centerY)
       if (drag.startDist > 0.1) {
-        const ratio = dist / drag.startDist
-        let newScale = Math.max(0.01, drag.startScale / ratio)
+        let newScale = Math.max(0.05, drag.startScale * (dist / drag.startDist))
         newScale = Math.round(newScale * 100) / 100
-        const params: Record<string, unknown> = { ...dataRef.current, srt_scale: newScale }
-
-        // Under emitSRT's world-order the offset is scale-INVARIANT and scale is
-        // taken about u_anchor (0.5) — so the shader-true behaviour is scale
-        // about centre with the world offset untouched. The old anchor-corner
-        // hold was a node-order derivation (translate applied post-scale) and
-        // now fights the world-order crop polygon, so it is gone. Restoring the
-        // corner-hold nicety = routing this drag through resolveSRT.dragScale
-        // (its holdWorld already does it) in the daytime gizmo-migration pass.
-        void altKey
-
-        updateNodeData(nodeId, { params })
+        updateNodeData(nodeId, { params: { ...dataRef.current, srt_scale: newScale } })
       }
     }
 
     if (drag.mode === 'rotate') {
+      // Displayed handle angle = srt_rotate + const (imageToScreen rotates the
+      // image by θ in thumb space), so the cursor angle delta maps 1:1 to rotate.
       const angle = Math.atan2(sy - drag.centerY, sx - drag.centerX) * 180 / Math.PI
-      let newRotate = drag.startRotate - (angle - drag.startAngle)
+      let newRotate = drag.startRotate + (angle - drag.startAngle)
       while (newRotate > 180) newRotate -= 360
       while (newRotate < -180) newRotate += 360
       updateNodeData(nodeId, {
         params: { ...dataRef.current, srt_rotate: Math.round(newRotate) },
       })
     }
-  }, [clientToSvg, tw, th, canvasW, canvasH, imageAspect, fitMode, imageWidth, imageHeight, nodeId, updateNodeData])
+  }, [clientToSvg, canvasW, canvasH, imageWidth, imageHeight, nodeId, updateNodeData])
 
   // Drag lifetime: bind move/up/cancel on `window` so the release is caught
   // wherever the cursor lands — even after the gizmo has slid out from under it.
@@ -540,9 +522,26 @@ export function ImageUploader({ nodeId, data }: {
           <div
             ref={thumbRef}
             className={ds.imageViewportOverlay.root}
-            style={{ aspectRatio: imageAspect, width: '100%', maxWidth: '100%' }}
+            style={{
+              aspectRatio: canvasW && canvasH ? canvasW / canvasH : imageAspect,
+              width: '100%', maxWidth: '100%', overflow: 'hidden',
+            }}
           >
-            <img src={imageData} alt={imageName || 'Uploaded image'} className="absolute inset-0 w-full h-full" />
+            {/* Model B: the fixed viewport IS this box (canvas aspect); the image
+                is placed inside it by the affine matrix, exactly as the shader
+                renders — so rotation stays clean and it tracks the live output. */}
+            <img
+              src={imageData}
+              alt={imageName || 'Uploaded image'}
+              draggable={false}
+              className="absolute top-0 left-0 select-none"
+              style={{
+                width: tw, height: th,
+                transformOrigin: '0 0',
+                transform: `matrix(${imageMatrix.join(',')})`,
+                pointerEvents: 'none',
+              }}
+            />
             <svg
               ref={svgRef}
               className="absolute inset-0 w-full h-full overflow-hidden touch-none"
@@ -551,25 +550,24 @@ export function ImageUploader({ nodeId, data }: {
               onPointerDown={handlePointerDown}
               onPointerMove={handleHoverMove}
             >
-              <defs>
-                <mask id={`vp-${maskId}`}>
-                  <rect x="0" y="0" width={tw} height={th} fill="white" />
-                  <polygon points={pointsStr} fill="black" />
-                </mask>
-              </defs>
-              <rect
-                x="0" y="0" width={tw} height={th}
-                fill="var(--surface)" opacity="0.7"
-                mask={`url(#vp-${maskId})`}
-                style={{ pointerEvents: 'none' }}
-              />
+              {/* Image-bounds outline (the movable element). */}
               <polygon
                 points={pointsStr}
                 fill="transparent" stroke="var(--indigo)" strokeWidth="1"
                 vectorEffect="non-scaling-stroke"
                 style={{ pointerEvents: 'none' }}
               />
-              {/* Diamond marker at top-left corner (index 3 = TL in v_uv space) */}
+              {/* Corner handles. */}
+              {polygon.map((p, i) => (
+                <rect
+                  key={i}
+                  x={p[0] - 3} y={p[1] - 3} width={6} height={6}
+                  fill="var(--surface)" stroke="var(--indigo)" strokeWidth="1"
+                  vectorEffect="non-scaling-stroke"
+                  style={{ pointerEvents: 'none' }}
+                />
+              ))}
+              {/* Orientation marker at the image top-left corner (index 3). */}
               <rect
                 x={polygon[3][0] - 3} y={polygon[3][1] - 3}
                 width={6} height={6}
