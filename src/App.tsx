@@ -217,46 +217,11 @@ function App() {
   const nodeTypes = NODE_TYPES
 
   const captureThumbnail = useCallback(async (): Promise<string | null> => {
-    const deadline = performance.now() + 1500
-    while (performance.now() < deadline) {
-      const last = lastCompileResultRef.current
-      const previewRenderer = previewRendererRef.current
-      if (previewRenderer && last?.success && last.fragmentShader) {
-        const toUniformUploads = (uniforms?: Array<{ name: string; value: number | number[] }>) =>
-          (uniforms ?? []).map(({ name, value }) => ({ name, value }))
-
-        const bitmap = last.passes && last.passes.length > 1
-          ? await previewRenderer.renderMultiPassPreview(
-              last.passes.map((pass) => ({
-                fragmentShader: pass.fragmentShader,
-                uniforms: toUniformUploads(pass.userUniforms),
-                inputTextures: pass.inputTextures,
-                resolution: pass.resolution,
-              })),
-            )
-          : await previewRenderer.renderPreview(
-              last.fragmentShader,
-              toUniformUploads(last.userUniforms),
-            )
-        if (bitmap) {
-          const thumbCanvas = document.createElement('canvas')
-          thumbCanvas.width = bitmap.width
-          thumbCanvas.height = bitmap.height
-          const ctx = thumbCanvas.getContext('2d')
-          if (ctx) {
-            ctx.drawImage(bitmap, 0, 0)
-            bitmap.close()
-            return thumbCanvas.toDataURL('image/webp', 0.82)
-          }
-          bitmap.close()
-        }
-        return null
-      }
-
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-    }
-
-    return null
+    // Grab the live main-canvas preview directly — the canvas IS the shader the
+    // user sees. This is synchronous and rAF-free, unlike the earlier
+    // preview-re-render loop which stalled in a backgrounded tab (rAF throttled)
+    // and depended on the preview renderer + a fresh compile being ready.
+    return rendererRef.current?.captureThumbnail() ?? null
   }, [])
 
   // Load default graph only when no persisted graph exists
