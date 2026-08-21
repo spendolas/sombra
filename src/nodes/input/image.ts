@@ -79,29 +79,47 @@ export const imageNode: NodeDefinition = {
     const lines: string[] = []
 
     if (hasImage) {
-      ctx.uniforms.add('u_resolution')
-      ctx.uniforms.add('u_anchor')
-      ctx.uniforms.add('u_dpr')
-      ctx.uniforms.add('u_ref_size')
-
-      // inputs.coords is SRT-transformed AUTO_UV — isotropic. Fit is px-based and
-      // applied AFTER the isotropic SRT, so contain/cover preserve the image
-      // aspect at any rotation (a rotated circle stays a circle; the old
-      // screen_uv path rotated in an anisotropic space and sheared it). imgDisp
-      // is the image's on-canvas pixel size; texUV = SRT'd physical offset /
-      // imgDisp. Y is negated because auto_uv is y-down and the texture is y-up.
       const fitUV = `img_uv_${sanitizedId}`
-      const ac = `img_ac_${sanitizedId}`, dh = `img_dh_${sanitizedId}`, dw = `img_dw_${sanitizedId}`
-      lines.push(`float ${ac} = u_resolution.x / u_resolution.y;`)
-      if (fitMode === 'contain') {
-        lines.push(`float ${dh} = (${inputs.imageAspect} > ${ac}) ? (u_resolution.x / ${inputs.imageAspect}) : u_resolution.y;`)
+      const ratio = `img_ratio_${sanitizedId}`
+
+      if (ctx.isPreview) {
+        // Node thumbnail: a stable, SRT-INDEPENDENT identifier — the image fit
+        // into the square 80×80 preview from raw v_uv (upright, centred),
+        // ignoring the SRT'd coords so the thumb does not jump/rotate while you
+        // edit. Mirrors gradient.ts's isPreview branch. Preview is square, so the
+        // fit ratio is just imageAspect. (v_uv.y-0.5) keeps it upright — same
+        // orientation the main branch produces (auto_uv.y ≈ 1 - v_uv.y).
+        lines.push(`float ${ratio} = ${inputs.imageAspect};`)
+        lines.push(`vec2 ${fitUV} = v_uv;`)
+        if (fitMode === 'contain') {
+          lines.push(`if (${ratio} > 1.0) { ${fitUV}.y = (v_uv.y - 0.5) * ${ratio} + 0.5; } else { ${fitUV}.x = (v_uv.x - 0.5) / ${ratio} + 0.5; }`)
+        } else {
+          lines.push(`if (${ratio} > 1.0) { ${fitUV}.x = (v_uv.x - 0.5) / ${ratio} + 0.5; } else { ${fitUV}.y = (v_uv.y - 0.5) * ${ratio} + 0.5; }`)
+        }
       } else {
-        lines.push(`float ${dh} = (${inputs.imageAspect} > ${ac}) ? u_resolution.y : (u_resolution.x / ${inputs.imageAspect});`)
+        ctx.uniforms.add('u_resolution')
+        ctx.uniforms.add('u_anchor')
+        ctx.uniforms.add('u_dpr')
+        ctx.uniforms.add('u_ref_size')
+
+        // inputs.coords is SRT-transformed AUTO_UV — isotropic. Fit is px-based and
+        // applied AFTER the isotropic SRT, so contain/cover preserve the image
+        // aspect at any rotation (a rotated circle stays a circle; the old
+        // screen_uv path rotated in an anisotropic space and sheared it). imgDisp
+        // is the image's on-canvas pixel size; texUV = SRT'd physical offset /
+        // imgDisp. Y is negated because auto_uv is y-down and the texture is y-up.
+        const ac = `img_ac_${sanitizedId}`, dh = `img_dh_${sanitizedId}`, dw = `img_dw_${sanitizedId}`
+        lines.push(`float ${ac} = u_resolution.x / u_resolution.y;`)
+        if (fitMode === 'contain') {
+          lines.push(`float ${dh} = (${inputs.imageAspect} > ${ac}) ? (u_resolution.x / ${inputs.imageAspect}) : u_resolution.y;`)
+        } else {
+          lines.push(`float ${dh} = (${inputs.imageAspect} > ${ac}) ? u_resolution.y : (u_resolution.x / ${inputs.imageAspect});`)
+        }
+        lines.push(`float ${dw} = ${dh} * ${inputs.imageAspect};`)
+        lines.push(`vec2 ${fitUV} = vec2(0.0);`)
+        lines.push(`${fitUV}.x = (${inputs.coords}.x - u_anchor.x) * (u_dpr * u_ref_size) / ${dw} + 0.5;`)
+        lines.push(`${fitUV}.y = -(${inputs.coords}.y - u_anchor.y) * (u_dpr * u_ref_size) / ${dh} + 0.5;`)
       }
-      lines.push(`float ${dw} = ${dh} * ${inputs.imageAspect};`)
-      lines.push(`vec2 ${fitUV} = vec2(0.0);`)
-      lines.push(`${fitUV}.x = (${inputs.coords}.x - u_anchor.x) * (u_dpr * u_ref_size) / ${dw} + 0.5;`)
-      lines.push(`${fitUV}.y = -(${inputs.coords}.y - u_anchor.y) * (u_dpr * u_ref_size) / ${dh} + 0.5;`)
 
       const sampleVar = `node_${sanitizedId}_sample`
       if (fitMode === 'contain') {
@@ -144,28 +162,43 @@ export const imageNode: NodeDefinition = {
       // `textureSample(s_tex, s_samp, uv)` on WGSL, and `ternary` already lowers to
       // `select()` on WGSL — which is what the removed hand-written arms spelled out.
       const fitUV = `img_uv_${sanitizedId}`
-      const ac = `img_ac_${sanitizedId}`
-      const dh = `img_dh_${sanitizedId}`
-      const dw = `img_dw_${sanitizedId}`
+      const ratio = `img_ratio_${sanitizedId}`
       const sampleVar = `node_${sanitizedId}_sample`
       const insideVar = `img_inside_${sanitizedId}`
-      const coords = ctx.inputs.coords
       const aspect = ctx.inputs.imageAspect
 
-      // px-based fit AFTER the isotropic auto_uv SRT (see glsl() for why this
-      // keeps rotation aspect-true). Single-arg raw() is mechanically translated
-      // to WGSL (wgsl-backend.ts) — same shape both backends, cannot drift.
-      const dhLine = fitMode === 'contain'
-        ? `float ${dh} = (${aspect} > ${ac}) ? (u_resolution.x / ${aspect}) : u_resolution.y;`
-        : `float ${dh} = (${aspect} > ${ac}) ? u_resolution.y : (u_resolution.x / ${aspect});`
-      stmts.push(raw(
-        `float ${ac} = u_resolution.x / u_resolution.y;
+      // Single-arg raw() is mechanically translated to WGSL (wgsl-backend.ts) —
+      // same shape both backends, cannot drift. `v_uv` is a bare identifier so it
+      // passes through translation unchanged and is in scope on both backends.
+      if (ctx.isPreview) {
+        // Canonical SRT-INDEPENDENT thumbnail (see glsl()): image fit into the
+        // square 80×80 preview from raw v_uv, upright + centred, ignoring the
+        // SRT'd coords so it stays put while editing. Mirrors gradient.ts.
+        const branch = fitMode === 'contain'
+          ? `if (${ratio} > 1.0) { ${fitUV}.y = (v_uv.y - 0.5) * ${ratio} + 0.5; } else { ${fitUV}.x = (v_uv.x - 0.5) / ${ratio} + 0.5; }`
+          : `if (${ratio} > 1.0) { ${fitUV}.x = (v_uv.x - 0.5) / ${ratio} + 0.5; } else { ${fitUV}.y = (v_uv.y - 0.5) * ${ratio} + 0.5; }`
+        stmts.push(raw(
+          `float ${ratio} = ${aspect};
+  vec2 ${fitUV} = v_uv;
+  ${branch}`,
+        ))
+      } else {
+        const coords = ctx.inputs.coords
+        const ac = `img_ac_${sanitizedId}`, dh = `img_dh_${sanitizedId}`, dw = `img_dw_${sanitizedId}`
+        // px-based fit AFTER the isotropic auto_uv SRT (see glsl() for why this
+        // keeps rotation aspect-true).
+        const dhLine = fitMode === 'contain'
+          ? `float ${dh} = (${aspect} > ${ac}) ? (u_resolution.x / ${aspect}) : u_resolution.y;`
+          : `float ${dh} = (${aspect} > ${ac}) ? u_resolution.y : (u_resolution.x / ${aspect});`
+        stmts.push(raw(
+          `float ${ac} = u_resolution.x / u_resolution.y;
   ${dhLine}
   float ${dw} = ${dh} * ${aspect};
   vec2 ${fitUV} = vec2(0.0);
   ${fitUV}.x = (${coords}.x - u_anchor.x) * (u_dpr * u_ref_size) / ${dw} + 0.5;
   ${fitUV}.y = -(${coords}.y - u_anchor.y) * (u_dpr * u_ref_size) / ${dh} + 0.5;`,
-      ))
+        ))
+      }
 
       if (fitMode === 'contain') {
         // Clamp to image bounds — black outside. Sample-then-select for BOTH
@@ -208,7 +241,9 @@ export const imageNode: NodeDefinition = {
     return {
       statements: stmts,
       uniforms: [],
-      standardUniforms: hasImage
+      // Preview branch is v_uv-based → needs none of these; the framework SRT
+      // preamble still declares what it uses.
+      standardUniforms: (hasImage && !ctx.isPreview)
         ? new Set(['u_resolution', 'u_anchor', 'u_dpr', 'u_ref_size'])
         : new Set(),
     }
