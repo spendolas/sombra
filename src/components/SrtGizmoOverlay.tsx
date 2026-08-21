@@ -66,11 +66,12 @@ export function SrtGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetRef }
     definition?.inputs?.find((i) => i.id === 'coords')?.default === 'screen_uv' ? 'screen_uv' : 'auto_uv'
   // Hand-rolled SRT dialects (see scripts/verify-srt-conformity.ts allowlist).
   // reeded: its rib (colour) space translates the effect by a DPR-INDEPENDENT
-  // 1:1 CSS px (shader: vec2(tx,-ty)·u_dpr/u_resolution) → coordSpace 'screen_px'.
-  // It was previously filed as 'auto_uv', but that only matches at dpr=1 (the
-  // original measurement display); on a retina display the auto_uv gizmo lagged
-  // the ribs by exactly dpr. Still node-frame translate storage → 'node-legacy'
-  // (compensates rotate/scale drags so the centre doesn't orbit).
+  // 1:1 CSS px (shader: vec2(tx,-ty)·u_dpr/u_resolution) with SCREEN parity
+  // (+ty down) → coordSpace 'screen_px' (see resolveSRT; directions user-verified
+  // by dragging). Previously filed 'auto_uv', which matches only at dpr=1 (the
+  // original measuring display) — on retina the gizmo lagged the ribs by dpr.
+  // Still node-frame translate storage → 'node-legacy' (compensates rotate/scale
+  // drags so the centre doesn't orbit).
   const HANDROLLED_DIALECTS: Record<string, { coordSpace: SRTCoordSpace; translateFrame: 'node-legacy'; transforms: ReadonlyArray<'scale' | 'scaleXY' | 'rotate' | 'translate'> }> = {
     reeded_glass: { coordSpace: 'screen_px', translateFrame: 'node-legacy', transforms: ['scale', 'rotate', 'translate'] },
   }
