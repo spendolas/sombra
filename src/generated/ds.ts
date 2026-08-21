@@ -22,8 +22,8 @@ export const ds = {
   },
   fileDropDialog: {
     root: "flex flex-col items-center justify-center bg-overlay-scrim fixed z-50 overflow-hidden inset-0",
-    panel: "flex flex-row bg-surface-raised rounded-md border border-edge p-lg gap-lg overflow-hidden",
-    preview: "flex flex-row bg-surface rounded-md border border-edge-subtle overflow-hidden",
+    panel: "flex flex-row bg-surface-raised rounded-md p-lg gap-lg overflow-hidden",
+    preview: "flex flex-row bg-surface rounded-sm overflow-hidden",
     content: "flex flex-col justify-between gap-md",
     textGroup: "flex flex-col gap-sm",
     title: "text-node-title text-fg",

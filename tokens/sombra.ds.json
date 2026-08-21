@@ -843,10 +843,6 @@
           "figmaNodeId": "901:2119",
           "layout": "horizontal",
           "fill": "surface/raised",
-          "stroke": {
-            "color": "edge/default",
-            "weight": 1
-          },
           "radius": "md",
           "padding": "lg",
           "gap": "lg",
@@ -855,11 +851,7 @@
         "preview": {
           "layout": "horizontal",
           "fill": "surface/default",
-          "stroke": {
-            "color": "edge/subtle",
-            "weight": 1
-          },
-          "radius": "md",
+          "radius": "sm",
           "overflow": "hidden"
         },
         "content": {
