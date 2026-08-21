@@ -8,8 +8,8 @@ import {
 } from '../src/utils/file-drop'
 import {
   buildDroppedImageNodes,
-  confirmProjectReplacement,
   importDroppedProject,
+  projectReplacementPrompt,
 } from '../src/utils/file-drop-import'
 
 initializeNodeLibrary()
@@ -158,17 +158,12 @@ check('multi-image placement fans out from the drop point',
 check('created Image nodes receive distinct IDs', built.nodes[0].id !== built.nodes[1].id)
 
 console.log('\nD. Project replacement confirmation')
-let confirmationMessage = ''
-const confirmed = confirmProjectReplacement('favorite.sombra', (message) => {
-  confirmationMessage = message
-  return false
-})
-check('cancel result is preserved', confirmed === false)
-check('confirmation names the project', confirmationMessage.includes('favorite.sombra'))
+const replacementPrompt = projectReplacementPrompt('favorite.sombra')
+check('confirmation names the project', replacementPrompt.title.includes('favorite.sombra'))
 check('confirmation explains close/replace and undo semantics',
-  confirmationMessage.includes('close the current project')
-  && confirmationMessage.includes('replace the canvas')
-  && confirmationMessage.includes('undo'),
+  replacementPrompt.detail.includes('close the current project')
+  && replacementPrompt.detail.includes('replace the canvas')
+  && replacementPrompt.detail.includes('undo'),
 )
 
 const importEvents: string[] = []
@@ -222,6 +217,12 @@ check(
 check(
   'file drop interception prevents React Flow from consuming the event',
   /const onFileDrop[\s\S]*?event\.preventDefault\(\)\s*event\.stopPropagation\(\)/.test(flowCanvasSource),
+)
+check(
+  'drop workflow contains no browser-native alert or confirmation modal',
+  !flowCanvasSource.includes('window.alert')
+    && !flowCanvasSource.includes('window.confirm')
+    && !readFileSync(new URL('../src/utils/file-drop-import.ts', import.meta.url), 'utf8').includes('window.confirm'),
 )
 
 console.log('\n' + '='.repeat(60))

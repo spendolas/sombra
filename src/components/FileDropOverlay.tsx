@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { ds } from '@/generated/ds'
 import { cn } from '@/lib/utils'
 import { icons } from '@/components/icons'
@@ -6,6 +8,14 @@ import type { DropClassification, FileDropFormat } from '@/utils/file-drop'
 export type FileDropOverlayState =
   | { kind: 'preview'; classification: DropClassification }
   | { kind: 'busy'; format: FileDropFormat; fileCount: number }
+
+export interface FileDropDialogState {
+  title: string
+  detail: string
+  confirmLabel: string
+  cancelLabel?: string
+  tone: 'warning' | 'error'
+}
 
 export function FileDropOverlay({ state }: { state: FileDropOverlayState }) {
   let title: string
@@ -59,5 +69,70 @@ export function FileDropOverlay({ state }: { state: FileDropOverlayState }) {
         <div className={ds.propertiesPanel.description}>{detail}</div>
       </div>
     </div>
+  )
+}
+
+export function FileDropDialog({
+  state,
+  onResolve,
+}: {
+  state: FileDropDialogState
+  onResolve: (confirmed: boolean) => void
+}) {
+  const confirmRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    confirmRef.current?.focus()
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      onResolve(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onResolve])
+
+  const Icon = state.tone === 'warning' ? icons.folderOpen : icons.triangleAlert
+  const toneClass = state.tone === 'warning' ? 'text-warning' : 'text-error'
+
+  return createPortal(
+    <div
+      className={cn(ds.fullWindowOverlay.root, 'items-center justify-center')}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onResolve(false)
+      }}
+    >
+      <div
+        className={cn(ds.propertiesPanel.nodeInfo, 'mx-2xl')}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="file-drop-dialog-title"
+        aria-describedby="file-drop-dialog-detail"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <Icon className={cn('size-icon-md', toneClass)} />
+        <div id="file-drop-dialog-title" className={ds.propertiesPanel.nodeTitle}>
+          {state.title}
+        </div>
+        <div id="file-drop-dialog-detail" className={ds.propertiesPanel.description}>
+          {state.detail}
+        </div>
+        <div className="flex items-center justify-end gap-md">
+          {state.cancelLabel && (
+            <button className={ds.button.textGhost} onClick={() => onResolve(false)}>
+              {state.cancelLabel}
+            </button>
+          )}
+          <button
+            ref={confirmRef}
+            className={cn(ds.button.textGhost, toneClass)}
+            onClick={() => onResolve(true)}
+          >
+            {state.confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body,
   )
 }

@@ -24,7 +24,7 @@ interface DroppedProjectGraph {
 }
 
 export interface DroppedProjectImportDependencies<FileType extends NamedDropFile> {
-  confirmReplacement: (filename: string) => boolean
+  confirmReplacement: (filename: string) => boolean | Promise<boolean>
   readFile: (file: FileType) => Promise<unknown>
   validate: (payload: unknown) => DroppedProjectGraph
   normalizeImages: (nodes: Node<NodeData>[]) => Promise<Node<NodeData>[]>
@@ -92,25 +92,22 @@ export function importDroppedImageNodes(files: readonly File[], origin: DropPosi
   return buildDroppedImageNodes(files, origin, processImageFile)
 }
 
-export function confirmProjectReplacement(
-  filename: string,
-  confirm: (message: string) => boolean = (message) => window.confirm(message),
-): boolean {
-  return confirm(
-    `Open “${filename}”?\n\nThis will close the current project and replace the canvas. You can undo afterward.`,
-  )
+export function projectReplacementPrompt(filename: string): { title: string; detail: string } {
+  return {
+    title: `Open “${filename}”?`,
+    detail: 'This will close the current project and replace the canvas. You can undo afterward.',
+  }
 }
 
 /**
- * Confirm synchronously while the drop still has browser user activation, then
- * decode, validate, normalize, and replace. Keeping the confirmation before the
- * first await avoids Chrome/Safari suppressing a delayed modal dialog.
+ * Confirm before reading, then decode, validate, normalize, and replace. The
+ * confirmation dependency may be an in-app asynchronous dialog.
  */
 export async function importDroppedProject<FileType extends NamedDropFile>(
   file: FileType,
   dependencies: DroppedProjectImportDependencies<FileType>,
 ): Promise<boolean> {
-  if (!dependencies.confirmReplacement(file.name)) return false
+  if (!await dependencies.confirmReplacement(file.name)) return false
 
   const payload = await dependencies.readFile(file)
   const imported = dependencies.validate(payload)

@@ -17,6 +17,11 @@ its own node and the whole batch is one undo step. Project drops use the package
 and legacy `.sombra` reader. Cancellation, invalid input, or failed confirmation
 leaves the current graph untouched.
 
+Project confirmation and import errors use the in-app `FileDropDialog`. It
+composes the generated Full Window Overlay, Node Info, button, typography, icon,
+and color-token primitives so behavior and appearance do not depend on native
+browser alert/confirmation UI.
+
 Browsers may temporarily hide filenames for security while a drag is in progress.
 Image MIME types can still be identified; an opaque `.sombra` file shows the
 neutral “Inspect dropped files” overlay until the browser exposes its filename.
