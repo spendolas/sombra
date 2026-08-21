@@ -42,10 +42,9 @@ type Deviation = 'no-spatial-config' | 'alien-coord-space' | 'body-consumes-srt'
 /** The shrink-only allowlist. Migration order: image → reeded (warp done
  *  2026-08-21: consumes ctx.spatialCoords). Each entry names its migration. */
 const KNOWN_DEVIATIONS: Record<string, { allowed: Deviation[]; migration: string }> = {
-  image: {
-    allowed: ['alien-coord-space'],
-    migration: 'migrate image onto the y-down auto_uv coordinate contract',
-  },
+  // image migrated 2026-08-21: coords default → auto_uv (SRT applied in the
+  // isotropic frame like every other node; y-flipped for the texture-sample
+  // convention). Off the ratchet.
   reeded_glass: {
     allowed: ['no-spatial-config', 'body-consumes-srt', 'hand-rolled-origin'],
     migration: 'reeded framework migration (spec step 5): spatial: + emitSRT, delete 3 hand-rolls',
