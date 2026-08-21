@@ -2,8 +2,8 @@
  * FlowCanvas - React Flow canvas with drag-and-drop support
  */
 
-import { useCallback, useEffect, useRef } from 'react'
-import { ReactFlow, Background, MiniMap, useReactFlow } from '@xyflow/react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { ReactFlow, Background, MiniMap, useNodesInitialized, useReactFlow } from '@xyflow/react'
 import type { Node, Edge, NodeTypes, OnNodesChange, OnEdgesChange, OnReconnect, Connection, IsValidConnection } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
@@ -16,8 +16,59 @@ import { getFitViewPadding } from '@/components/nodes-panel-layout'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { TypedEdge } from './TypedEdge'
 import { ds } from '@/generated/ds'
+import {
+  FileDropDialog,
+  FileDropOverlay,
+  type FileDropDialogState,
+  type FileDropOverlayState,
+} from '@/components/FileDropOverlay'
+import {
+  classifyDropFiles,
+  dropClassificationKey,
+  dropEffectForClassification,
+  type DropFileDescriptor,
+  type FileDropFormatId,
+} from '@/utils/file-drop'
+import { normalizeGraphImages } from '@/utils/process-image'
+import { importFromFile, readSombraFile } from '@/utils/sombra-file'
+import {
+  importDroppedImageNodes,
+  importDroppedProject,
+  projectReplacementPrompt,
+} from '@/utils/file-drop-import'
 
 const EDGE_TYPES = { typed: TypedEdge } as const
+
+function isFileTransfer(dataTransfer: DataTransfer): boolean {
+  return dataTransfer.files.length > 0
+    || Array.from(dataTransfer.types).some((type) => type.toLowerCase() === 'files')
+    || Array.from(dataTransfer.items).some((item) => item.kind === 'file')
+}
+
+function filesFromDataTransfer(dataTransfer: DataTransfer): File[] {
+  const files = Array.from(dataTransfer.files)
+  if (files.length > 0) return files
+  return Array.from(dataTransfer.items)
+    .filter((item) => item.kind === 'file')
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => file !== null)
+}
+
+function descriptorsFromDataTransfer(dataTransfer: DataTransfer): DropFileDescriptor[] {
+  const files = filesFromDataTransfer(dataTransfer)
+  if (files.length > 0) return files.map((file) => ({ name: file.name, type: file.type }))
+  return Array.from(dataTransfer.items)
+    .filter((item) => item.kind === 'file')
+    .map((item) => ({ name: '', type: item.type }))
+}
+
+function defaultParamsFor(nodeType: string): Record<string, unknown> {
+  const params: Record<string, unknown> = {}
+  for (const param of nodeRegistry.get(nodeType)?.params ?? []) {
+    if (param.default !== undefined) params[param.id] = param.default
+  }
+  return params
+}
 
 interface FlowCanvasProps {
   nodes: Node<NodeData>[]
@@ -38,11 +89,29 @@ export function FlowCanvas({
   onConnect,
   onAddNode,
 }: FlowCanvasProps) {
-  const { screenToFlowPosition, fitView, getViewport, setViewport } = useReactFlow()
+  const { screenToFlowPosition, fitView, getViewport, setViewport, viewportInitialized } = useReactFlow()
+  const nodesInitialized = useNodesInitialized()
+  const [fileDropState, setFileDropState] = useState<FileDropOverlayState | null>(null)
+  const [fileDropDialog, setFileDropDialog] = useState<FileDropDialogState | null>(null)
+  const fileDragDepth = useRef(0)
+  const fileDropPreviewKey = useRef('')
+  const fileDropBusy = useRef(false)
+  const fileDropDialogResolver = useRef<((confirmed: boolean) => void) | null>(null)
 
-  const onInit = useCallback(() => {
-    setTimeout(() => fitView({ padding: getFitViewPadding(useSettingsStore.getState().nodesPanelOpen), duration: 200 }), 50)
-  }, [fitView])
+  const requestFileDropDialog = useCallback((state: FileDropDialogState) => {
+    fileDropDialogResolver.current?.(false)
+    return new Promise<boolean>((resolve) => {
+      fileDropDialogResolver.current = resolve
+      setFileDropDialog(state)
+    })
+  }, [])
+
+  const resolveFileDropDialog = useCallback((confirmed: boolean) => {
+    const resolve = fileDropDialogResolver.current
+    fileDropDialogResolver.current = null
+    setFileDropDialog(null)
+    resolve?.(confirmed)
+  }, [])
 
   // Keep the canvas CENTRE fixed when the flow area resizes (panel drags, preview
   // dock, window resize). React Flow leaves the viewport transform untouched on
@@ -51,6 +120,43 @@ export function FlowCanvas({
   // is in screen pixels, which is exactly the viewport translation's space.
   const wrapperRef = useRef<HTMLDivElement>(null)
   const prevSize = useRef<{ w: number; h: number } | null>(null)
+  const initialFitStarted = useRef(false)
+  const initialFitComplete = useRef(false)
+
+  // Frame the restored graph only after React Flow has measured the actual node
+  // DOM. A fixed delay races persisted `measured` metadata, node mounting, and
+  // the resizable panel's first layout. Two animation frames let that layout
+  // commit before fitView reads the canvas dimensions. While this runs, the
+  // resize observer below records size changes but must not adjust the viewport
+  // that fitView is actively calculating.
+  useEffect(() => {
+    if (!viewportInitialized || !nodesInitialized || nodes.length === 0 || initialFitStarted.current) return
+
+    let cancelled = false
+    let secondFrame = 0
+    const firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => {
+        if (cancelled || initialFitStarted.current) return
+        initialFitStarted.current = true
+        void fitView({
+          padding: getFitViewPadding(useSettingsStore.getState().nodesPanelOpen),
+          duration: 200,
+        }).then(() => {
+          if (cancelled) return
+          const rect = wrapperRef.current?.getBoundingClientRect()
+          if (rect) prevSize.current = { w: rect.width, h: rect.height }
+          initialFitComplete.current = true
+        })
+      })
+    })
+
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(firstFrame)
+      cancelAnimationFrame(secondFrame)
+    }
+  }, [fitView, nodes.length, nodesInitialized, viewportInitialized])
+
   useEffect(() => {
     const el = wrapperRef.current
     if (!el) return
@@ -61,6 +167,7 @@ export function FlowCanvas({
       // First callback establishes the baseline; also skip zero-size blips (a
       // panel momentarily collapsing) so re-showing doesn't shift by a full pane.
       if (!prev || !prev.w || !prev.h || !width || !height) return
+      if (!initialFitComplete.current) return
       const dw = width - prev.w
       const dh = height - prev.h
       if (dw === 0 && dh === 0) return
@@ -78,6 +185,8 @@ export function FlowCanvas({
 
   const replaceEdge = useGraphStore((s) => s.replaceEdge)
   const removeElements = useGraphStore((s) => s.removeElements)
+  const addNodes = useGraphStore((s) => s.addNodes)
+  const loadGraph = useGraphStore((s) => s.loadGraph)
 
   // Intercept deletion: React Flow's default flow emits node removes and
   // connected-edge removes as separate change events, producing TWO history
@@ -170,12 +279,12 @@ export function FlowCanvas({
     [nodes]
   )
 
-  const onDragOver = useCallback((event: React.DragEvent) => {
+  const onNodeDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
   }, [])
 
-  const onDrop = useCallback(
+  const onNodeDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault()
 
@@ -187,24 +296,13 @@ export function FlowCanvas({
         y: event.clientY,
       })
 
-      // Build default params from node definition
-      const def = nodeRegistry.get(nodeType)
-      const defaultParams: Record<string, unknown> = {}
-      if (def?.params) {
-        for (const p of def.params) {
-          if (p.default !== undefined) {
-            defaultParams[p.id] = p.default
-          }
-        }
-      }
-
       const newNode: Node<NodeData> = {
         id: makeNodeId(nodeType),
         type: 'shaderNode',
         position,
         data: {
           type: nodeType,
-          params: defaultParams,
+          params: defaultParamsFor(nodeType),
         },
       }
 
@@ -213,8 +311,137 @@ export function FlowCanvas({
     [screenToFlowPosition, onAddNode]
   )
 
+  const updateFileDropPreview = useCallback((dataTransfer: DataTransfer) => {
+    const classification = classifyDropFiles(descriptorsFromDataTransfer(dataTransfer))
+    const key = dropClassificationKey(classification)
+    if (key !== fileDropPreviewKey.current) {
+      fileDropPreviewKey.current = key
+      setFileDropState({ kind: 'preview', classification })
+    }
+    return classification
+  }, [])
+
+  const onFileDragEnter = useCallback((event: React.DragEvent) => {
+    if (!isFileTransfer(event.dataTransfer) || fileDropBusy.current) return
+    event.preventDefault()
+    event.stopPropagation()
+    fileDragDepth.current += 1
+    updateFileDropPreview(event.dataTransfer)
+  }, [updateFileDropPreview])
+
+  const onFileDragOver = useCallback((event: React.DragEvent) => {
+    if (!isFileTransfer(event.dataTransfer) || fileDropBusy.current) return
+    event.preventDefault()
+    event.stopPropagation()
+    const classification = updateFileDropPreview(event.dataTransfer)
+    event.dataTransfer.dropEffect = dropEffectForClassification(classification)
+  }, [updateFileDropPreview])
+
+  const onFileDragLeave = useCallback((event: React.DragEvent) => {
+    if (!isFileTransfer(event.dataTransfer) || fileDropBusy.current) return
+    event.stopPropagation()
+    fileDragDepth.current = Math.max(0, fileDragDepth.current - 1)
+    if (fileDragDepth.current === 0) {
+      fileDropPreviewKey.current = ''
+      setFileDropState(null)
+    }
+  }, [])
+
+  const onFileDrop = useCallback(async (event: React.DragEvent) => {
+    if (fileDropBusy.current) return
+    const files = filesFromDataTransfer(event.dataTransfer)
+    // Some Safari drops expose FileList but omit the conventional `Files`
+    // transfer type, so the populated list is authoritative at drop time.
+    if (!isFileTransfer(event.dataTransfer) && files.length === 0) return
+    event.preventDefault()
+    event.stopPropagation()
+
+    fileDragDepth.current = 0
+    fileDropPreviewKey.current = ''
+    const classification = classifyDropFiles(files.map((file) => ({ name: file.name, type: file.type })))
+    if (classification.status !== 'accepted') {
+      setFileDropState(null)
+      return
+    }
+
+    const position = screenToFlowPosition({ x: event.clientX, y: event.clientY })
+    fileDropBusy.current = true
+
+    const handlers: Record<FileDropFormatId, () => Promise<void>> = {
+      image: async () => {
+        setFileDropState({
+          kind: 'busy',
+          format: classification.format,
+          fileCount: classification.fileCount,
+        })
+        // Sequential processing inside the importer caps peak bitmap/canvas
+        // memory when several camera-sized images arrive together.
+        const { nodes: imported, failures } = await importDroppedImageNodes(files, position)
+        addNodes(imported)
+        for (const failure of failures) {
+          console.error(`[Sombra] Failed to import image "${failure.file.name}":`, failure.error)
+        }
+        if (failures.length > 0 && imported.length === 0) {
+          void requestFileDropDialog({
+            title: 'Could not import images',
+            detail: 'Sombra could not decode the dropped image file or files.',
+            confirmLabel: 'Dismiss',
+          })
+        }
+      },
+      'sombra-project': async () => {
+        const opened = await importDroppedProject(files[0], {
+          confirmReplacement: (filename) => requestFileDropDialog({
+            ...projectReplacementPrompt(filename),
+            confirmLabel: 'Open project',
+            cancelLabel: 'Cancel',
+          }),
+          readFile: (file) => {
+            setFileDropState({
+              kind: 'busy',
+              format: classification.format,
+              fileCount: classification.fileCount,
+            })
+            return readSombraFile(file)
+          },
+          validate: importFromFile,
+          normalizeImages: normalizeGraphImages,
+          loadGraph,
+        })
+        if (!opened) return
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          void fitView({
+            padding: getFitViewPadding(useSettingsStore.getState().nodesPanelOpen),
+            duration: 300,
+          })
+        }))
+      },
+    }
+
+    try {
+      await handlers[classification.format.id]()
+    } catch (error) {
+      console.error('[Sombra] Failed to import dropped file:', error)
+      void requestFileDropDialog({
+        title: 'Could not import file',
+        detail: error instanceof Error ? error.message : 'Sombra could not import the dropped file.',
+        confirmLabel: 'Dismiss',
+      })
+    } finally {
+      fileDropBusy.current = false
+      setFileDropState(null)
+    }
+  }, [addNodes, fitView, loadGraph, requestFileDropDialog, screenToFlowPosition])
+
   return (
-    <div ref={wrapperRef} style={{ width: '100%', height: '100%' }}>
+    <div
+      ref={wrapperRef}
+      className="relative w-full h-full"
+      onDragEnterCapture={onFileDragEnter}
+      onDragOverCapture={onFileDragOver}
+      onDragLeaveCapture={onFileDragLeave}
+      onDropCapture={(event) => { void onFileDrop(event) }}
+    >
     <ReactFlow
       nodes={nodes}
       edges={edges}
@@ -230,12 +457,11 @@ export function FlowCanvas({
       onReconnectEnd={onReconnectEnd}
       isValidConnection={isValidConnection as IsValidConnection<Edge<EdgeData>>}
       connectionRadius={20}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
+      onDragOver={onNodeDragOver}
+      onDrop={onNodeDrop}
       defaultViewport={{ x: 0, y: 0, zoom: 1 }}
       minZoom={0.1}
       maxZoom={4}
-      onInit={onInit}
       proOptions={{ hideAttribution: true }}
       style={{ width: '100%', height: '100%', backgroundColor: 'var(--surface)' }}
     >
@@ -258,6 +484,8 @@ export function FlowCanvas({
         zoomable
       />
     </ReactFlow>
+    {fileDropState && <FileDropOverlay state={fileDropState} />}
+    {fileDropDialog && <FileDropDialog state={fileDropDialog} onResolve={resolveFileDropDialog} />}
     </div>
   )
 }

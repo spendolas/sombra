@@ -1,3 +1,7 @@
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
 @layer third-party;
 @import "tailwindcss";
 @import "@xyflow/react/dist/style.css" layer(third-party);
@@ -304,6 +308,11 @@ html, body, #root {
 @utility text-port-type {                  /* port-row/type: 11px, Regular */
   font-size: 11px;
   font-weight: 400;
+  line-height: 1.5;
+}
+@utility text-action {                     /* label/action: 12px, Medium */
+  font-size: 12px;
+  font-weight: 500;
   line-height: 1.5;
 }
   /* === GENERATED:END utilities === */

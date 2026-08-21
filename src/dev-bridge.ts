@@ -214,8 +214,8 @@ function compile(): ReturnType<typeof compileGraph> {
 }
 
 /**
- * Snapshot current graph as a versioned .sombra JSON object.
- * Returns { sombra: 1, nodes: [...], edges: [...] }
+ * Snapshot current graph as the versioned payload object stored in a .sombra package.
+ * Returns { sombra: 2, nodes: [...], edges: [...] }
  */
 function exportGraph() {
   const { nodes, edges } = useGraphStore.getState()
@@ -224,7 +224,7 @@ function exportGraph() {
 
 /**
  * Load a graph from a snapshot or .sombra file (replaces current graph).
- * Accepts both versioned { sombra: 1, nodes, edges } and bare { nodes, edges }.
+ * Accepts both versioned { sombra: 2, nodes, edges } and bare { nodes, edges }.
  */
 function importGraph(graph: unknown): void {
   const { nodes, edges } = importFromFile(graph)
@@ -350,7 +350,7 @@ function help() {
     },
     exportGraph: {
       signature: 'exportGraph() → { sombra, nodes, edges }',
-      description: 'Snapshot the current graph as a versioned .sombra JSON',
+      description: 'Snapshot the current graph as a versioned .sombra payload object',
     },
     importGraph: {
       signature: 'importGraph({ sombra?, nodes, edges })',

@@ -29,7 +29,7 @@ If `window.__sombra` is `undefined`, the page hasn't finished loading or the bri
 | Clear graph | `sombra.clearGraph()` |
 | Describe current graph | `sombra.describeGraph()` |
 | Get compiled shader | `sombra.getFragmentShader()` |
-| Export graph (.sombra) | `sombra.exportGraph()` → `{ sombra: 1, nodes, edges }` |
+| Export graph payload | `sombra.exportGraph()` → `{ sombra: 2, nodes, edges }` |
 | Import graph (.sombra) | `sombra.importGraph({sombra?, nodes, edges})` |
 | Manual compile | `sombra.compile()` |
 | Share URL for current graph | `sombra.shareGraph()` |
@@ -135,11 +135,11 @@ Returns the current compiled fragment shader source string (or `null`).
 
 ### `sombra.exportGraph() → SombraFile`
 
-Returns the current graph as a versioned `.sombra` JSON object:
+Returns the current graph as the versioned payload object used inside a `.sombra` package:
 
 ```js
 {
-  sombra: 1,           // file format version
+  sombra: 2,           // payload schema version
   nodes: [...],        // React Flow node array
   edges: [...]         // React Flow edge array
 }
@@ -151,7 +151,7 @@ Replaces the current graph from a `.sombra` file or bare snapshot. Accepts both 
 
 ```js
 // Versioned .sombra format
-sombra.importGraph({ sombra: 1, nodes: [...], edges: [...] })
+sombra.importGraph({ sombra: 2, nodes: [...], edges: [...] })
 
 // Bare format (backward compatible)
 sombra.importGraph({ nodes: [...], edges: [...] })
@@ -182,6 +182,7 @@ has no bridge accessor for them today.
 |---|---|
 | `undo()` / `redo()` | Param edits are undoable (coalesced per node within a sliding 800ms window); deletes are atomic (node + connected edges = one entry) |
 | `removeElements(nodeIds, edgeIds)` | Atomic multi-delete — one history entry |
+| `addNodes(nodes)` | Atomic multi-add — one history entry (used by multi-image file drops) |
 | `replaceEdge(oldEdgeId, newEdge)` | Atomic reconnect (enforces single-wire-per-input) |
 | `updateNodeData(id, {params})` | What `setParams` calls under the hood |
 
@@ -222,22 +223,37 @@ It waits for `window.__embedHandle`, samples the first canvas for non-black pixe
 
 ## `.sombra` File Format
 
-Sombra graphs are saved as `.sombra` files — JSON with a version envelope:
+Sombra graphs are saved as compressed binary `.sombra` packages. The on-disk
+container is self-identifying and has this layout:
+
+| Bytes | Meaning |
+|---|---|
+| `0..6` | ASCII magic `SOMBRA\0` |
+| `7` | Package/container version (`1`) |
+| `8..` | Deflated UTF-8 JSON payload |
+
+Inflating the payload produces the editable, versioned graph envelope:
 
 ```json
 {
-  "sombra": 1,
+  "sombra": 2,
   "nodes": [...],
   "edges": [...]
 }
 ```
 
-- **`sombra`** — file format version (integer). Distinct from `GRAPH_SCHEMA_VERSION` used for localStorage.
+- **Package version** — version of the binary/compression container. Independent from the payload schema.
+- **`sombra`** — payload schema version (integer). Distinct from the package version and `GRAPH_SCHEMA_VERSION` used for localStorage.
 - **`nodes` / `edges`** — same shape as React Flow's node/edge arrays (position, data, handles, etc.)
 - **Settings are NOT included** — preview mode, split sizes, etc. are UI preferences, not graph content.
-- **File extension:** `.sombra` (also accepts `.json` for convenience)
+- **File extension:** `.sombra`. Legacy plain-JSON `.sombra` files and `.json` files remain importable.
 
 The **GraphToolbar** in the top-left of the canvas provides Save (download) and Open (upload) buttons for `.sombra` files.
+
+The canvas also accepts typed file drops: supported images append Image nodes after
+the shared downscaler runs, while one `.sombra` file validates and asks for
+confirmation before replacing the graph. The format registry and extension steps
+are documented in [`docs/file-drop-formats.md`](docs/file-drop-formats.md).
 
 ---
 

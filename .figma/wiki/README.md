@@ -17,14 +17,14 @@ V2 was rebuilt from scratch using a **code-driven approach**: every Figma compon
 
 ---
 
-## Parity Score: 39/39 ✅
+## Parity Score: 41/41 ✅
 
 | Level | Total | ✅ Match | Notes |
 |---|---|---|---|
-| Tokens | 5 collections + 11 text styles | All | 40 variables + 11 text styles, dark mode only |
-| Atoms | 7 | 7 | Handle, Separator, Category Header, Palette Item, Plus Minus Button, Node Header, Node Footer |
+| Tokens | 5 collections + 12 text styles | All | 40 variables + 12 text styles, dark mode only |
+| Atoms | 8 | 8 | Handle, Separator, Category Header, Palette Item, Plus Minus Button, Node Header, Node Footer, Action Button |
 | Molecules | 12 | 12 | Labeled Handle, Float Slider (SombraSlider), Enum Select, Anchor Grid, Color Input, Connectable Param Row, Preview Toolbar, Zoom Bar, Gradient Editor, Random Display, MiniMap, Graph Toolbar |
-| Organisms | 5 | 5 | Node Card, Node Palette, Properties Panel, Floating Preview, Full Window Overlay |
+| Organisms | 6 | 6 | Node Card, Node Palette, Properties Panel, Floating Preview, Full Window Overlay, File Drop Dialog |
 | Templates | 23 | 23 | All node types (Bayer Dither removed, Domain Warp → Warp UV, Pixel Grid → Dither) |
 | Scenes | 5 | 5 | All preview modes |
 
@@ -39,7 +39,7 @@ V2 was rebuilt from scratch using a **code-driven approach**: every Figma compon
 | [spacing.md](tokens/spacing.md) | 6 spacing tokens (xs→2xl) | ✅ 6/6 |
 | [radius.md](tokens/radius.md) | 4 radius tokens (sm/md/lg/full) | ✅ 4/4 |
 | [sizes.md](tokens/sizes.md) | 9 size tokens (handle→track-h) | ✅ 9/9 |
-| [typography.md](tokens/typography.md) | 11 text styles (heading/body/label/mono/port-row) | ✅ 11/11 |
+| [typography.md](tokens/typography.md) | 12 text styles (heading/body/label/mono/port-row) | ✅ 12/12 |
 
 ### Atoms
 | Page | Figma ID | Variants | Code File | Parity |
@@ -51,6 +51,7 @@ V2 was rebuilt from scratch using a **code-driven approach**: every Figma compon
 | [plus-minus-button.md](atoms/plus-minus-button.md) | `106:108` | 4 | ShaderNode.tsx (inline) | ✅ |
 | [node-header.md](atoms/node-header.md) | `111:488` | — | base-node.tsx (BaseNodeHeader) | ✅ |
 | [node-footer.md](atoms/node-footer.md) | `111:491` | — | base-node.tsx (BaseNodeFooter) | ✅ |
+| [action-button.md](atoms/action-button.md) | `901:2134` | 3 | ActionButton.tsx | ✅ |
 
 ### Molecules
 | Page | Figma ID | Variants | Code File | Parity |
@@ -76,6 +77,7 @@ V2 was rebuilt from scratch using a **code-driven approach**: every Figma compon
 | [properties-panel.md](organisms/properties-panel.md) | `106:485` | 2 | PropertiesPanel.tsx | ✅ |
 | [floating-preview.md](organisms/floating-preview.md) | `106:498` | — | FloatingPreview.tsx | ✅ |
 | [full-window-overlay.md](organisms/full-window-overlay.md) | `106:511` | — | FullWindowOverlay.tsx | ✅ |
+| [file-drop-dialog.md](organisms/file-drop-dialog.md) | `901:2118` | Confirm / notice | FileDropOverlay.tsx | ✅ |
 
 ### Templates
 | Page | Description | Parity |
@@ -93,7 +95,7 @@ V2 was rebuilt from scratch using a **code-driven approach**: every Figma compon
 
 **Status:** Skipped — the Figma file is connected to the **Fantasy-Interactive** GitHub org, but `spendolas/sombra` is on a personal GitHub account. Code Connect can't bridge across orgs.
 
-The 18 component mappings below are documented for reference but not activated in Figma (org mismatch):
+The component mappings below are documented for reference but not activated in Figma (org mismatch):
 
 | Figma Component | React Component | File |
 |---|---|---|
@@ -101,6 +103,7 @@ The 18 component mappings below are documented for reference but not activated i
 | Separator | `Separator` | `src/components/ui/separator.tsx` |
 | Node Header | `BaseNodeHeader` | `src/components/base-node.tsx` |
 | Node Footer | `BaseNodeFooter` | `src/components/base-node.tsx` |
+| Action Button | `ActionButton` | `src/components/ActionButton.tsx` |
 | Labeled Handle | `LabeledHandle` | `src/components/labeled-handle.tsx` |
 | Float Slider | `FloatSlider` | `src/components/NodeParameters.tsx` |
 | Enum Select | `EnumSelect` | `src/components/NodeParameters.tsx` |
@@ -116,6 +119,7 @@ The 18 component mappings below are documented for reference but not activated i
 | Properties Panel | `PropertiesPanel` | `src/components/PropertiesPanel.tsx` |
 | Floating Preview | `FloatingPreview` | `src/components/FloatingPreview.tsx` |
 | Full Window Overlay | `FullWindowOverlay` | `src/components/FullWindowOverlay.tsx` |
+| File Drop Dialog | `FileDropDialog` | `src/components/FileDropOverlay.tsx` |
 | Graph Toolbar | `GraphToolbar` | `src/components/GraphToolbar.tsx` |
 
 ---
@@ -147,8 +151,9 @@ The 18 component mappings below are documented for reference but not activated i
 | mono/value | `S:9d5974b4…` | 12px | Regular | 0 | ORIGINAL | 150% |
 | mono/id | `S:1181640d…` | 10px | Regular | 0 | ORIGINAL | 150% |
 | port-row/type | `S:3b18697f…` | 11px | Regular | 0 | ORIGINAL | 150% |
+| label/action | `S:8c53b289…` | 12px | Medium | 0 | ORIGINAL | 150% |
 
-**Total:** 11 text styles, 86 TEXT nodes bound (0 unbound)
+**Total:** 12 text styles
 
 ---
 
@@ -156,16 +161,16 @@ The 18 component mappings below are documented for reference but not activated i
 
 ```
 Foundations (tokens, typography)
-└── Atoms (7 components)
+└── Atoms (8 components)
     ├── Handle, Separator, Palette Item, PlusMinus Button, Category Header
-    ├── Node Header, Node Footer
+    ├── Node Header, Node Footer, Action Button
     └── Molecules (11 components)
         ├── Labeled Handle, Float Slider, Enum Select, Color Input
         ├── Connectable Param Row, Preview Toolbar, Graph Toolbar
         ├── Zoom Bar, Gradient Editor, Random Display, MiniMap
-        └── Organisms (5 components)
+        └── Organisms (6 components)
             ├── Node Card, Node Palette, Properties Panel
-            ├── Floating Preview, Full Window Overlay
+            ├── Floating Preview, Full Window Overlay, File Drop Dialog
             └── Templates (23 node types)
                 └── Scenes (5 app layouts)
 ```
