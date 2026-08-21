@@ -164,14 +164,15 @@ export function resolveSRT(params: Record<string, unknown>, opts: ResolveSRTOpti
     const len = Math.hypot(v.x, v.y)
     return len > 1e-9 ? { x: v.x / len, y: v.y / len } : { x: fx, y: fy }
   }
-  const worldAxis = (nx: number, ny: number, fx: number, fy: number): Vec2 => {
-    const v = toCss(nx, ny)
-    const len = Math.hypot(v.x, v.y)
-    return len > 1e-9 ? { x: v.x / len, y: v.y / len } : { x: fx, y: fy }
-  }
+  // World frame = the CANVAS axes: X right, Y up (css y-down → up is -y), the
+  // same for every node. Deriving these from toCss followed the +param direction
+  // instead, so a +ty-down node (screen_px/screen_uv) drew its Y axis pointing
+  // DOWN — inconsistent with the +ty-up nodes and reading as "flipped". The drag
+  // is unaffected (dragTranslate projects onto the axis and toParam carries the
+  // sign; the projection is axis-sign-independent), so this is visual-only.
   const axes = space === 'node'
     ? { x: axisDir(1, 0, 1, 0), y: axisDir(0, 1, 0, -1) }
-    : { x: worldAxis(1, 0, 1, 0), y: worldAxis(0, 1, 0, -1) }
+    : { x: { x: 1, y: 0 }, y: { x: 0, y: -1 } }
 
   // Stored-offset meaning: in 'node-legacy' (hand-rolled reeded SRT) the
   // params are node-frame, so the content-visible world step is
