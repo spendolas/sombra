@@ -2,7 +2,7 @@
  * ShaderNode - Visual component for shader nodes on the canvas
  */
 
-import { memo, useCallback, useMemo, useRef, useEffect } from 'react'
+import { memo, useCallback, useMemo, useRef, useEffect, useState } from 'react'
 import { Position, useEdges, type NodeProps } from '@xyflow/react'
 import { matchesShowWhen, type NodeData, type NodeParameter } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
@@ -16,6 +16,7 @@ import { BaseNode, BaseNodeHeader, BaseNodeHeaderTitle, BaseNodeContent } from '
 import { LabeledHandle } from '@/components/labeled-handle'
 import { BaseHandle } from '@/components/base-handle'
 import { IconButton } from '@/components/IconButton'
+import { icons } from '@/components/icons'
 import { RgbaColorPicker, type Rgba } from '@/components/RgbaColorPicker'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { cn } from '@/lib/utils'
@@ -146,6 +147,11 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   // Compile errors attributed to this node (before early return — hook order)
   const allErrors = useCompilerStore((s) => s.errors)
   const nodeErrors = useMemo(() => allErrors.filter((e) => e.nodeId === id), [allErrors, id])
+
+  // Transform (framework SRT) section is collapsed by default now that the
+  // on-preview gizmo is the primary way to place a node — the in-node sliders
+  // are the fallback. Per-node, session-local.
+  const [transformOpen, setTransformOpen] = useState(false)
 
   // Determine if preview should show via upstream graph traversal.
   // BFS backward: if ANY always-visual node exists upstream, show preview.
@@ -525,8 +531,22 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
         {/* Framework SRT transform params */}
         {srtParams.length > 0 && (
           <div className={cn(ds.shaderNode.paramDivider, "mt-xs pt-xs")}>
-            <div className="px-sm pb-2xs text-fg-subtle" style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Transform</div>
-            {srtParams.map((param) => {
+            <button
+              type="button"
+              onClick={() => setTransformOpen((o) => !o)}
+              aria-expanded={transformOpen}
+              className="nodrag flex items-center gap-2xs w-full px-sm pb-2xs text-fg-subtle hover:text-fg-dim transition-colors cursor-pointer"
+              style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+            >
+              <span
+                className="inline-flex transition-transform"
+                style={{ transform: transformOpen ? 'none' : 'rotate(-90deg)' }}
+              >
+                <icons.chevronDown className="size-icon-sm" />
+              </span>
+              Transform
+            </button>
+            {transformOpen && srtParams.map((param) => {
               const connectable = !!param.connectable
               const isConnected = connectable && connectedInputs.has(param.id)
               const displayValue = (currentValues[param.id] as number) ?? (param.default as number)
