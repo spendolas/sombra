@@ -211,6 +211,8 @@ check('cancelling a project drop leaves the file unread and graph untouched',
 console.log('\nE. React Flow event interception')
 const flowCanvasSource = readFileSync(new URL('../src/components/FlowCanvas.tsx', import.meta.url), 'utf8')
 const fileDropOverlaySource = readFileSync(new URL('../src/components/FileDropOverlay.tsx', import.meta.url), 'utf8')
+const actionButtonClassSource = readFileSync(new URL('../src/components/action-button-class.ts', import.meta.url), 'utf8')
+const exportModalSource = readFileSync(new URL('../src/export/ExportModal.tsx', import.meta.url), 'utf8')
 check(
   'file router intercepts drops during capture before React Flow handles them',
   flowCanvasSource.includes('onDropCapture={(event) => { void onFileDrop(event) }}'),
@@ -229,6 +231,17 @@ check(
   'file dialog consumes every registered generated DS part',
   ['root', 'panel', 'title', 'detail', 'actions']
     .every((part) => fileDropOverlaySource.includes(`ds.fileDropDialog.${part}`)),
+)
+check(
+  'file dialog and video export share the registered Action Button component',
+  fileDropOverlaySource.includes('<ActionButton')
+    && exportModalSource.includes('<ActionButton')
+    && exportModalSource.includes("actionButtonClass('primary')"),
+)
+check(
+  'Action Button resolves enabled and disabled variants through generated DS parts',
+  ['secondary', 'primary', 'primaryDisabled']
+    .every((part) => actionButtonClassSource.includes(`ds.actionButton.${part}`)),
 )
 
 console.log('\n' + '='.repeat(60))

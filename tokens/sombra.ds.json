@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "lastSync": "2026-08-21T01:11:10.000Z",
+  "lastSync": "2026-08-21T01:17:46.000Z",
   "figmaFileKey": "gq5i0l617YkXy0GzAZPtqz",
   "colors": {
     "VariableID:106:3": {
@@ -616,6 +616,15 @@
         "fontWeight": 400,
         "lineHeight": 1.5
       }
+    },
+    "S:8c53b28931614cd41e251e35fc3008bb7ad2c143,": {
+      "figmaName": "label/action",
+      "utility": "text-action",
+      "properties": {
+        "fontSize": "12px",
+        "fontWeight": 500,
+        "lineHeight": 1.5
+      }
     }
   },
   "components": {
@@ -739,6 +748,71 @@
           "z": 50,
           "layout": "vertical",
           "overflow": "hidden"
+        }
+      }
+    },
+    "901:2134": {
+      "name": "Action Button",
+      "type": "atom",
+      "dsKey": "actionButton",
+      "codeFile": "src/components/ActionButton.tsx",
+      "parts": {
+        "secondary": {
+          "figmaNodeId": "901:2128",
+          "layout": "horizontal",
+          "align": "center",
+          "justify": "center",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "radius": "sm",
+          "padding": {
+            "x": "lg",
+            "y": "xs"
+          },
+          "textStyle": "text-action",
+          "textColor": "fg-dim",
+          "cursor": "pointer",
+          "transition": "colors",
+          "hover": {
+            "fill": "interactive/hover",
+            "textColor": "fg"
+          }
+        },
+        "primary": {
+          "figmaNodeId": "901:2130",
+          "layout": "horizontal",
+          "align": "center",
+          "justify": "center",
+          "fill": "indigo/default",
+          "radius": "sm",
+          "padding": {
+            "x": "lg",
+            "y": "xs"
+          },
+          "textStyle": "text-action",
+          "textColor": "fg",
+          "cursor": "pointer",
+          "transition": "colors",
+          "hover": {
+            "fill": "indigo/hover"
+          }
+        },
+        "primaryDisabled": {
+          "figmaNodeId": "901:2132",
+          "layout": "horizontal",
+          "align": "center",
+          "justify": "center",
+          "fill": "surface/raised",
+          "radius": "sm",
+          "padding": {
+            "x": "lg",
+            "y": "xs"
+          },
+          "textStyle": "text-action",
+          "textColor": "fg-muted",
+          "cursor": "not-allowed"
         }
       }
     },

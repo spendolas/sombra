@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { ds } from '@/generated/ds'
 import { cn } from '@/lib/utils'
 import { icons } from '@/components/icons'
+import { ActionButton } from '@/components/ActionButton'
 import type { DropClassification, FileDropFormat } from '@/utils/file-drop'
 
 export type FileDropOverlayState =
@@ -114,17 +115,17 @@ export function FileDropDialog({
         </div>
         <div className={ds.fileDropDialog.actions}>
           {state.cancelLabel && (
-            <button className={ds.button.textGhost} onClick={() => onResolve(false)}>
+            <ActionButton onClick={() => onResolve(false)}>
               {state.cancelLabel}
-            </button>
+            </ActionButton>
           )}
-          <button
+          <ActionButton
             ref={confirmRef}
-            className={ds.button.textGhost}
+            variant="primary"
             onClick={() => onResolve(true)}
           >
             {state.confirmLabel}
-          </button>
+          </ActionButton>
         </div>
       </div>
     </div>,

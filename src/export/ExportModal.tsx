@@ -20,6 +20,8 @@ import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
 import { RgbaColorPicker, type Rgba } from '@/components/RgbaColorPicker'
+import { ActionButton } from '@/components/ActionButton'
+import { actionButtonClass } from '@/components/action-button-class'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { icons } from '@/components/icons'
 import { previewCanvasSize } from '@/utils/preview-canvas-size'
@@ -127,14 +129,6 @@ const SEG_ON = 'bg-indigo text-fg'
 const SEG_OFF = 'bg-surface-raised text-fg-dim hover:bg-highlight'
 const CARD_ON = 'bg-indigo text-fg'
 const CARD_OFF = 'bg-surface-raised text-fg-dim hover:bg-highlight'
-// Footer / action buttons.
-const BTN =
-  'inline-flex items-center justify-center rounded-sm border border-edge px-lg py-xs text-body font-medium text-fg-dim transition-colors hover:bg-hover hover:text-fg'
-const BTN_PRIMARY =
-  'inline-flex items-center justify-center rounded-sm bg-indigo px-lg py-xs text-body font-medium text-fg transition-colors hover:bg-indigo-hover'
-const BTN_PRIMARY_OFF =
-  'inline-flex cursor-not-allowed items-center justify-center rounded-sm bg-surface-raised px-lg py-xs text-body font-medium text-fg-muted'
-
 // ── small internal segmented control ───────────────────────────────────────
 function Seg({
   options,
@@ -1023,9 +1017,9 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                       <span>{pct}%</span>
                     </div>
                     <div className="mt-md text-right">
-                      <button type="button" className={BTN} onClick={() => abortRef.current?.abort()}>
+                      <ActionButton onClick={() => abortRef.current?.abort()}>
                         Cancel
-                      </button>
+                      </ActionButton>
                     </div>
                   </div>
                 )}
@@ -1039,10 +1033,10 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                       {done.filename} · {done.sizeLabel}
                     </div>
                     <div className="mt-md flex justify-end gap-sm">
-                      <button type="button" className={BTN} onClick={resetDone}>
+                      <ActionButton onClick={resetDone}>
                         Close
-                      </button>
-                      <a href={done.url} download={done.filename} className={BTN_PRIMARY}>
+                      </ActionButton>
+                      <a href={done.url} download={done.filename} className={actionButtonClass('primary')}>
                         Download
                       </a>
                     </div>
@@ -1065,18 +1059,17 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                 <span>~{estTime}</span>
               </div>
               <div className="flex flex-none gap-sm">
-                <button type="button" className={BTN} onClick={onClose}>
+                <ActionButton onClick={onClose}>
                   Cancel
-                </button>
-                <button
-                  type="button"
+                </ActionButton>
+                <ActionButton
+                  variant="primary"
                   disabled={!canExport}
                   onClick={startExport}
                   title={gateNote ?? undefined}
-                  className={canExport ? BTN_PRIMARY : BTN_PRIMARY_OFF}
                 >
                   Export
-                </button>
+                </ActionButton>
               </div>
             </div>
           )}

@@ -1,7 +1,7 @@
 # Typography
 
-**Figma:** 11 local text styles (heading/*, body/*, label/*, mono/*, port-row/*)
-**Font Family:** Inter (Regular, Semi Bold)
+**Figma:** 12 local text styles (heading/*, body/*, label/*, mono/*, port-row/*)
+**Font Family:** Inter (Regular, Medium, Semi Bold)
 **Code Location:** Tailwind utility classes in component files
 **Base Defaults:** `font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif` · `line-height: 1.5` · `font-weight: 400` (set in `src/index.css` `:root`)
 
@@ -20,12 +20,13 @@
 | 9 | `mono/value` | 12px | Regular (400) | 0 | none | 150% | `font-mono text-xs tabular-nums` | ✅ |
 | 10 | `mono/id` | 10px | Regular (400) | 0 | none | 150% | `text-[10px] font-mono` | ✅ |
 | 11 | `port-row/type` | 11px | Regular (400) | 0 | none | 150% | `text-[11px]` | ✅ |
+| 12 | `label/action` | 12px | Medium (500) | 0 | none | 150% | `text-action` | ✅ |
 
 ## Typography Hierarchy
 
 1. **Headings** (Semi Bold) — Node titles, section headers, category headers
 2. **Body** (Regular) — Default labels, descriptions, handle port labels
-3. **Labels** (Regular, small) — Parameter labels, category meta, hints
+3. **Labels** (Regular or Medium) — Parameter labels, category meta, hints, actions
 4. **Mono** (Regular, semantic) — Numeric values, IDs, port types
 5. **Port Row** (Regular, 11px) — Properties Panel input/output rows
 
@@ -44,6 +45,7 @@
 | `mono/value` | Zoom Bar percentage, Random Display value |
 | `mono/id` | Properties Panel node ID |
 | `port-row/type` | Properties Panel input/output port type labels |
+| `label/action` | Action Button labels in export and file-drop dialogs |
 
 ## Figma Style IDs
 
@@ -60,6 +62,7 @@
 | mono/value | `S:9d5974b42e594da7c6af1dddcd76fa67ac64e3d7,` |
 | mono/id | `S:1181640d2c3fd5f4a7bc505ecd6f710e0ce5b517,` |
 | port-row/type | `S:3b18697fb26ac85ea535f18904098a0fcde17d2c,` |
+| label/action | `S:8c53b28931614cd41e251e35fc3008bb7ad2c143,` |
 
 ## Notes
 
@@ -68,6 +71,6 @@
 - The 13px font size comes from `.react-flow__node { font-size: 13px }` in `src/index.css`. All Labeled Handle text nodes inherit this size. In Figma, this is represented by the `body/handle` text style.
 - `body/description` uses a relaxed line height (162.5% = Tailwind `leading-relaxed`) for better readability in multi-line descriptions.
 - Letter spacing values use pixel units for precision: `tracking-wider` (0.05em) = 0.6px at 12px / 0.5px at 10px. `tracking-wide` (0.025em) = 0.25px at 10px.
-- All 86 TEXT nodes across 22 components are bound to text styles. Zero unbound text nodes.
+- Action Button labels use the Medium weight `label/action` style.
 
-## Parity: ✅ All 11 text styles match
+## Parity: ✅ All 12 text styles match

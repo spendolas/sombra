@@ -306,6 +306,11 @@ html, body, #root {
   font-weight: 400;
   line-height: 1.5;
 }
+@utility text-action {                     /* label/action: 12px, Medium */
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+}
   /* === GENERATED:END utilities === */
 
 @layer base {

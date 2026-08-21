@@ -15,6 +15,11 @@ export const ds = {
   fullWindowOverlay: {
     root: "flex flex-col bg-overlay-scrim fixed z-50 overflow-hidden inset-0",
   },
+  actionButton: {
+    secondary: "flex flex-row items-center justify-center rounded-sm border border-edge px-lg py-xs text-action text-fg-dim cursor-pointer transition-colors hover:bg-hover hover:text-fg",
+    primary: "flex flex-row items-center justify-center bg-indigo rounded-sm px-lg py-xs text-action text-fg cursor-pointer transition-colors hover:bg-indigo-hover",
+    primaryDisabled: "flex flex-row items-center justify-center bg-surface-raised rounded-sm px-lg py-xs text-action text-fg-muted cursor-not-allowed",
+  },
   fileDropDialog: {
     root: "flex flex-col items-center justify-center bg-overlay-scrim fixed z-50 overflow-hidden inset-0",
     panel: "flex flex-col bg-surface-raised rounded-md border border-edge p-lg gap-md overflow-hidden",
