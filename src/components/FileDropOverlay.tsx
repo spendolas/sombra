@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { ds } from '@/generated/ds'
 import { cn } from '@/lib/utils'
@@ -81,14 +81,25 @@ export function FileDropDialog({
   state: FileDropDialogState
   onResolve: (confirmed: boolean) => void
 }) {
-  const confirmRef = useRef<HTMLButtonElement>(null)
-
   useEffect(() => {
-    confirmRef.current?.focus()
+    // Match the export modal: don't auto-focus the confirm button. A programmatic
+    // focus draws the browser's default focus ring (the file-picker flow leaves the
+    // page in a non-pointer modality, so focus-visible fires almost every time).
+    // Enter still confirms and Esc cancels via a window-level handler, so neither
+    // needs a focused button — and thus no ring on open.
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      event.preventDefault()
-      onResolve(false)
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onResolve(false)
+        return
+      }
+      if (event.key === 'Enter') {
+        // If the user has Tabbed onto a button (e.g. Cancel), let it handle its
+        // own Enter rather than forcing confirm.
+        if (document.activeElement instanceof HTMLButtonElement) return
+        event.preventDefault()
+        onResolve(true)
+      }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
@@ -137,7 +148,6 @@ export function FileDropDialog({
               </ActionButton>
             )}
             <ActionButton
-              ref={confirmRef}
               variant="primary"
               onClick={() => onResolve(true)}
             >
