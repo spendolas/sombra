@@ -36,6 +36,11 @@ export const imageNode: NodeDefinition = {
   label: 'Image',
   category: 'Input',
   description: 'Upload an image file to use as a texture',
+  // Temporary: the node mini-preview thumbnail is hidden for now — it wasn't
+  // pulling its weight on the SRT track. The crop preview (ImageUploader) and
+  // the isPreview canonical branch below stay in place, so dropping this flag
+  // restores a stable, SRT-independent thumbnail.
+  hidePreview: true,
   spatial: { transforms: ['scale', 'rotate', 'translate'] } satisfies SpatialConfig,
 
   inputs: [
