@@ -20,7 +20,10 @@ leaves the current graph untouched.
 Project confirmation and import errors use the in-app `FileDropDialog`. It
 composes the generated Full Window Overlay, Node Info, button, typography, icon,
 and color-token primitives so behavior and appearance do not depend on native
-browser alert/confirmation UI.
+browser alert/confirmation UI. When a `.sombra` package includes an embedded
+thumbnail, the dialog shows that static preview before replacement.
+Saved `.sombra` packages also carry the app build id that wrote them, so a file
+can be tied back to the exact editor build that produced it.
 
 Browsers may temporarily hide filenames for security while a drag is in progress.
 Image MIME types can still be identified; an opaque `.sombra` file shows the

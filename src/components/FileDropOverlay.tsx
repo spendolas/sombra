@@ -15,6 +15,8 @@ export interface FileDropDialogState {
   detail: string
   confirmLabel: string
   cancelLabel?: string
+  thumbnailSrc?: string
+  thumbnailAlt?: string
 }
 
 export function FileDropOverlay({ state }: { state: FileDropOverlayState }) {
@@ -107,6 +109,16 @@ export function FileDropDialog({
         aria-describedby="file-drop-dialog-detail"
         onMouseDown={(event) => event.stopPropagation()}
       >
+        {state.thumbnailSrc && (
+          <div className={cn(ds.propertiesPanel.nodeInfo, 'w-full max-w-[32rem] overflow-hidden')}>
+            <img
+              src={state.thumbnailSrc}
+              alt={state.thumbnailAlt ?? 'Shader preview'}
+              className="block w-full max-h-56 object-contain"
+              draggable={false}
+            />
+          </div>
+        )}
         <div id="file-drop-dialog-title" className={ds.fileDropDialog.title}>
           {state.title}
         </div>

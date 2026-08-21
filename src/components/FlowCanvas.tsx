@@ -391,10 +391,12 @@ export function FlowCanvas({
       },
       'sombra-project': async () => {
         const opened = await importDroppedProject(files[0], {
-          confirmReplacement: (filename) => requestFileDropDialog({
+          confirmReplacement: ({ filename, thumbnail }) => requestFileDropDialog({
             ...projectReplacementPrompt(filename),
             confirmLabel: 'Open project',
             cancelLabel: 'Cancel',
+            thumbnailSrc: thumbnail?.dataUrl,
+            thumbnailAlt: thumbnail ? `Preview of ${filename}` : undefined,
           }),
           readFile: (file) => {
             setFileDropState({

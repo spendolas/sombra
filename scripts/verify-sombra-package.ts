@@ -9,8 +9,10 @@ import {
   decodeSombraPackage,
   encodeSombraPackage,
   exportToFile,
+  extractSombraThumbnail,
   importFromFile,
 } from '../src/utils/sombra-file'
+import { SOMBRA_APP_BUILD_ID } from '../src/generated/build-info'
 import { initializeNodeLibrary } from '../src/nodes'
 import { createDefaultGraph } from '../src/utils/test-graph'
 
@@ -64,6 +66,8 @@ check('binary package round-trips losslessly', JSON.stringify(decoded) === json)
 const imported = importFromFile(decoded)
 check('decoded package engages graph validation/import', imported.nodes.length === graph.nodes.length)
 check('decoded package preserves graph edges', imported.edges.length === graph.edges.length)
+check('package records the current app build id', file.appBuildId === SOMBRA_APP_BUILD_ID)
+check('decoded package preserves the app build id', (decoded as { appBuildId?: string }).appBuildId === SOMBRA_APP_BUILD_ID)
 
 console.log('\nC. Backward compatibility')
 check(
@@ -114,6 +118,28 @@ checkThrows(
   'unrecognized binary input is rejected',
   () => decodeSombraPackage(new Uint8Array([0, 1, 2, 3, 4])),
   /expected a \.sombra package or JSON document/,
+)
+
+console.log('\nE. Embedded thumbnail')
+const thumb = { mimeType: 'image/webp', dataUrl: 'data:image/webp;base64,UklGRhoAAABXRUJQ' }
+const withThumb = exportToFile(graph.nodes, graph.edges, thumb)
+const decodedThumb = decodeSombraPackage(encodeSombraPackage(withThumb))
+const extracted = extractSombraThumbnail(decodedThumb)
+// Non-vacuous: the data URL travels JSON → deflate → inflate → JSON → extract.
+check(
+  'thumbnail survives encode → decode → extract',
+  extracted?.dataUrl === thumb.dataUrl && extracted?.mimeType === thumb.mimeType,
+)
+check('a thumbnail-less export omits the field', !('thumbnail' in file))
+check('a file without a thumbnail extracts null (backward-compat)', extractSombraThumbnail(decoded) === null)
+// Reject invalid thumbnails — proves extract validates, not passes through.
+check(
+  'non-data: URL thumbnail is rejected',
+  extractSombraThumbnail({ thumbnail: { mimeType: 'image/png', dataUrl: 'https://example.com/x.png' } }) === null,
+)
+check(
+  'thumbnail missing mimeType is rejected',
+  extractSombraThumbnail({ thumbnail: { dataUrl: 'data:image/png;base64,AA' } }) === null,
 )
 
 console.log('\n' + '='.repeat(60))

@@ -17,6 +17,14 @@ import type { NodeData, EdgeData, PortType } from './nodes/types'
 import type { Node, Edge } from '@xyflow/react'
 import { exportToFile, importFromFile, encodeCompactHash } from './utils/sombra-file'
 
+let captureThumbnailImpl: (() => Promise<string | null>) | null = null
+
+export function setCaptureThumbnailImpl(
+  impl: (() => Promise<string | null>) | null,
+): void {
+  captureThumbnailImpl = impl
+}
+
 /* ------------------------------------------------------------------ */
 /*  Helper: unique ID generator                                       */
 /* ------------------------------------------------------------------ */
@@ -215,7 +223,7 @@ function compile(): ReturnType<typeof compileGraph> {
 
 /**
  * Snapshot current graph as the versioned payload object stored in a .sombra package.
- * Returns { sombra: 2, nodes: [...], edges: [...] }
+ * Returns { sombra: 3, nodes: [...], edges: [...], appBuildId: string }
  */
 function exportGraph() {
   const { nodes, edges } = useGraphStore.getState()
@@ -224,7 +232,7 @@ function exportGraph() {
 
 /**
  * Load a graph from a snapshot or .sombra file (replaces current graph).
- * Accepts both versioned { sombra: 2, nodes, edges } and bare { nodes, edges }.
+ * Accepts both versioned { sombra: 3, nodes, edges } and bare { nodes, edges }.
  */
 function importGraph(graph: unknown): void {
   const { nodes, edges } = importFromFile(graph)
@@ -862,6 +870,7 @@ export function installDevBridge(): void {
     describeNode,
     describeGraph,
     getFragmentShader,
+    captureThumbnail: async () => captureThumbnailImpl?.() ?? null,
     help,
 
     // Raw store access (for advanced use)
