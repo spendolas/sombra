@@ -14,6 +14,24 @@
  */
 export const MAX_IMPORT_EDGE = 4096
 
+/** Shared by file inputs and canvas drop classification so support cannot drift. */
+export const SUPPORTED_IMAGE_MIME_TYPES = [
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+] as const
+
+export const SUPPORTED_IMAGE_EXTENSIONS = [
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.webp',
+  '.gif',
+] as const
+
+export const ACCEPTED_IMAGE_TYPES = SUPPORTED_IMAGE_MIME_TYPES.join(',')
+
 /**
  * A data URL below this is left untouched on load — small enough not to matter,
  * and re-encoding would only risk quality for no real size win.

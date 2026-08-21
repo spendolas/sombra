@@ -2,7 +2,7 @@
  * FlowCanvas - React Flow canvas with drag-and-drop support
  */
 
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ReactFlow, Background, MiniMap, useNodesInitialized, useReactFlow } from '@xyflow/react'
 import type { Node, Edge, NodeTypes, OnNodesChange, OnEdgesChange, OnReconnect, Connection, IsValidConnection } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
@@ -16,8 +16,48 @@ import { getFitViewPadding } from '@/components/nodes-panel-layout'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { TypedEdge } from './TypedEdge'
 import { ds } from '@/generated/ds'
+import { FileDropOverlay, type FileDropOverlayState } from '@/components/FileDropOverlay'
+import {
+  classifyDropFiles,
+  dropClassificationKey,
+  type DropFileDescriptor,
+  type FileDropFormatId,
+} from '@/utils/file-drop'
+import { normalizeGraphImages } from '@/utils/process-image'
+import { importFromFile, readSombraFile } from '@/utils/sombra-file'
+import { confirmProjectReplacement, importDroppedImageNodes } from '@/utils/file-drop-import'
 
 const EDGE_TYPES = { typed: TypedEdge } as const
+
+function isFileTransfer(dataTransfer: DataTransfer): boolean {
+  return Array.from(dataTransfer.types).includes('Files')
+    || Array.from(dataTransfer.items).some((item) => item.kind === 'file')
+}
+
+function filesFromDataTransfer(dataTransfer: DataTransfer): File[] {
+  const files = Array.from(dataTransfer.files)
+  if (files.length > 0) return files
+  return Array.from(dataTransfer.items)
+    .filter((item) => item.kind === 'file')
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => file !== null)
+}
+
+function descriptorsFromDataTransfer(dataTransfer: DataTransfer): DropFileDescriptor[] {
+  const files = filesFromDataTransfer(dataTransfer)
+  if (files.length > 0) return files.map((file) => ({ name: file.name, type: file.type }))
+  return Array.from(dataTransfer.items)
+    .filter((item) => item.kind === 'file')
+    .map((item) => ({ name: '', type: item.type }))
+}
+
+function defaultParamsFor(nodeType: string): Record<string, unknown> {
+  const params: Record<string, unknown> = {}
+  for (const param of nodeRegistry.get(nodeType)?.params ?? []) {
+    if (param.default !== undefined) params[param.id] = param.default
+  }
+  return params
+}
 
 interface FlowCanvasProps {
   nodes: Node<NodeData>[]
@@ -40,6 +80,10 @@ export function FlowCanvas({
 }: FlowCanvasProps) {
   const { screenToFlowPosition, fitView, getViewport, setViewport, viewportInitialized } = useReactFlow()
   const nodesInitialized = useNodesInitialized()
+  const [fileDropState, setFileDropState] = useState<FileDropOverlayState | null>(null)
+  const fileDragDepth = useRef(0)
+  const fileDropPreviewKey = useRef('')
+  const fileDropBusy = useRef(false)
 
   // Keep the canvas CENTRE fixed when the flow area resizes (panel drags, preview
   // dock, window resize). React Flow leaves the viewport transform untouched on
@@ -113,6 +157,8 @@ export function FlowCanvas({
 
   const replaceEdge = useGraphStore((s) => s.replaceEdge)
   const removeElements = useGraphStore((s) => s.removeElements)
+  const addNodes = useGraphStore((s) => s.addNodes)
+  const loadGraph = useGraphStore((s) => s.loadGraph)
 
   // Intercept deletion: React Flow's default flow emits node removes and
   // connected-edge removes as separate change events, producing TWO history
@@ -205,12 +251,12 @@ export function FlowCanvas({
     [nodes]
   )
 
-  const onDragOver = useCallback((event: React.DragEvent) => {
+  const onNodeDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault()
     event.dataTransfer.dropEffect = 'move'
   }, [])
 
-  const onDrop = useCallback(
+  const onNodeDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault()
 
@@ -222,24 +268,13 @@ export function FlowCanvas({
         y: event.clientY,
       })
 
-      // Build default params from node definition
-      const def = nodeRegistry.get(nodeType)
-      const defaultParams: Record<string, unknown> = {}
-      if (def?.params) {
-        for (const p of def.params) {
-          if (p.default !== undefined) {
-            defaultParams[p.id] = p.default
-          }
-        }
-      }
-
       const newNode: Node<NodeData> = {
         id: makeNodeId(nodeType),
         type: 'shaderNode',
         position,
         data: {
           type: nodeType,
-          params: defaultParams,
+          params: defaultParamsFor(nodeType),
         },
       }
 
@@ -248,8 +283,110 @@ export function FlowCanvas({
     [screenToFlowPosition, onAddNode]
   )
 
+  const updateFileDropPreview = useCallback((dataTransfer: DataTransfer) => {
+    const classification = classifyDropFiles(descriptorsFromDataTransfer(dataTransfer))
+    const key = dropClassificationKey(classification)
+    if (key !== fileDropPreviewKey.current) {
+      fileDropPreviewKey.current = key
+      setFileDropState({ kind: 'preview', classification })
+    }
+    return classification
+  }, [])
+
+  const onFileDragEnter = useCallback((event: React.DragEvent) => {
+    if (!isFileTransfer(event.dataTransfer) || fileDropBusy.current) return
+    event.preventDefault()
+    fileDragDepth.current += 1
+    updateFileDropPreview(event.dataTransfer)
+  }, [updateFileDropPreview])
+
+  const onFileDragOver = useCallback((event: React.DragEvent) => {
+    if (!isFileTransfer(event.dataTransfer) || fileDropBusy.current) return
+    event.preventDefault()
+    const classification = updateFileDropPreview(event.dataTransfer)
+    event.dataTransfer.dropEffect = classification.status === 'accepted' ? 'copy' : 'none'
+  }, [updateFileDropPreview])
+
+  const onFileDragLeave = useCallback((event: React.DragEvent) => {
+    if (!isFileTransfer(event.dataTransfer) || fileDropBusy.current) return
+    fileDragDepth.current = Math.max(0, fileDragDepth.current - 1)
+    if (fileDragDepth.current === 0) {
+      fileDropPreviewKey.current = ''
+      setFileDropState(null)
+    }
+  }, [])
+
+  const onFileDrop = useCallback(async (event: React.DragEvent) => {
+    if (!isFileTransfer(event.dataTransfer) || fileDropBusy.current) return
+    event.preventDefault()
+
+    fileDragDepth.current = 0
+    fileDropPreviewKey.current = ''
+    const files = filesFromDataTransfer(event.dataTransfer)
+    const classification = classifyDropFiles(files.map((file) => ({ name: file.name, type: file.type })))
+    if (classification.status !== 'accepted') {
+      setFileDropState(null)
+      return
+    }
+
+    const position = screenToFlowPosition({ x: event.clientX, y: event.clientY })
+    fileDropBusy.current = true
+    setFileDropState({
+      kind: 'busy',
+      format: classification.format,
+      fileCount: classification.fileCount,
+    })
+
+    const handlers: Record<FileDropFormatId, () => Promise<void>> = {
+      image: async () => {
+        // Sequential processing inside the importer caps peak bitmap/canvas
+        // memory when several camera-sized images arrive together.
+        const { nodes: imported, failures } = await importDroppedImageNodes(files, position)
+        addNodes(imported)
+        for (const failure of failures) {
+          console.error(`[Sombra] Failed to import image "${failure.file.name}":`, failure.error)
+        }
+        if (failures.length > 0 && imported.length === 0) {
+          window.alert('Sombra could not decode the dropped image file(s).')
+        }
+      },
+      'sombra-project': async () => {
+        const payload = await readSombraFile(files[0])
+        const imported = importFromFile(payload)
+        const confirmed = confirmProjectReplacement(files[0].name)
+        if (!confirmed) return
+
+        const normalized = await normalizeGraphImages(imported.nodes)
+        loadGraph(normalized, imported.edges)
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          void fitView({
+            padding: getFitViewPadding(useSettingsStore.getState().nodesPanelOpen),
+            duration: 300,
+          })
+        }))
+      },
+    }
+
+    try {
+      await handlers[classification.format.id]()
+    } catch (error) {
+      console.error('[Sombra] Failed to import dropped file:', error)
+      window.alert(error instanceof Error ? error.message : 'Sombra could not import the dropped file.')
+    } finally {
+      fileDropBusy.current = false
+      setFileDropState(null)
+    }
+  }, [addNodes, fitView, loadGraph, screenToFlowPosition])
+
   return (
-    <div ref={wrapperRef} style={{ width: '100%', height: '100%' }}>
+    <div
+      ref={wrapperRef}
+      className="relative w-full h-full"
+      onDragEnter={onFileDragEnter}
+      onDragOver={onFileDragOver}
+      onDragLeave={onFileDragLeave}
+      onDrop={(event) => { void onFileDrop(event) }}
+    >
     <ReactFlow
       nodes={nodes}
       edges={edges}
@@ -265,8 +402,8 @@ export function FlowCanvas({
       onReconnectEnd={onReconnectEnd}
       isValidConnection={isValidConnection as IsValidConnection<Edge<EdgeData>>}
       connectionRadius={20}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
+      onDragOver={onNodeDragOver}
+      onDrop={onNodeDrop}
       defaultViewport={{ x: 0, y: 0, zoom: 1 }}
       minZoom={0.1}
       maxZoom={4}
@@ -292,6 +429,7 @@ export function FlowCanvas({
         zoomable
       />
     </ReactFlow>
+    {fileDropState && <FileDropOverlay state={fileDropState} />}
     </div>
   )
 }
