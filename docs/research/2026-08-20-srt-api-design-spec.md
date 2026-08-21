@@ -257,3 +257,18 @@ renders black". That was WRONG — a test artifact. noise and fbm expose only a
 checkerboard/gradient/`noise.value` all warp fine. No compiler bug; no fix
 needed. (A forced-invalid boundary edge does yield a malformed pass — defensive
 handling is a possible hardening, but not user-reachable through the UI.)
+
+## SRT roster update — 2026-08-21 (Opus 4.8)
+
+- **image migration: DONE** — coords `auto_uv` + px-based fit; rotation no longer
+  shears (was screen_uv/anisotropic). image is now SRT-conforming (off the
+  ratchet; reeded is the last holdout). Node mini-preview thumbnail hidden for
+  now (`hidePreview: true`); the `isPreview` canonical branch is parked so it can
+  return stable. In-node crop preview (ImageUploader) retained.
+- **Node Transform section: collapsible, collapsed by default (DONE)** —
+  `ShaderNode.tsx`. With the on-preview gizmo now primary, the in-node SRT
+  sliders are a fallback; the framework Transform section collapses (per-node,
+  session-local). Reduces node clutter across all spatial nodes.
+- **Remaining:** reeded_glass migration (steps 1–2 mechanical; step 3 = design
+  call on Copies 2 & 3, needs sign-off). Optional: gizmo scaleXY handles; DS
+  Figma mirror of the coords-view SegmentedControl + crosshair/globe/box icons.
