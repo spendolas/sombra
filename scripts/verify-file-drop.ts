@@ -1,4 +1,5 @@
 /** File-drop classification, extensibility, and image-import mechanism checks. */
+import { readFileSync } from 'node:fs'
 import { initializeNodeLibrary } from '../src/nodes'
 import {
   classifyDropFiles,
@@ -195,6 +196,17 @@ const cancelledProject = await importDroppedProject(projectFile, {
 })
 check('cancelling a project drop leaves the file unread and graph untouched',
   cancelledProject === false && cancelledReadCount === 0,
+)
+
+console.log('\nE. React Flow event interception')
+const flowCanvasSource = readFileSync(new URL('../src/components/FlowCanvas.tsx', import.meta.url), 'utf8')
+check(
+  'file router intercepts drops during capture before React Flow handles them',
+  flowCanvasSource.includes('onDropCapture={(event) => { void onFileDrop(event) }}'),
+)
+check(
+  'file drop interception prevents React Flow from consuming the event',
+  /const onFileDrop[\s\S]*?event\.preventDefault\(\)\s*event\.stopPropagation\(\)/.test(flowCanvasSource),
 )
 
 console.log('\n' + '='.repeat(60))

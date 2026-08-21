@@ -301,6 +301,7 @@ export function FlowCanvas({
   const onFileDragEnter = useCallback((event: React.DragEvent) => {
     if (!isFileTransfer(event.dataTransfer) || fileDropBusy.current) return
     event.preventDefault()
+    event.stopPropagation()
     fileDragDepth.current += 1
     updateFileDropPreview(event.dataTransfer)
   }, [updateFileDropPreview])
@@ -308,12 +309,14 @@ export function FlowCanvas({
   const onFileDragOver = useCallback((event: React.DragEvent) => {
     if (!isFileTransfer(event.dataTransfer) || fileDropBusy.current) return
     event.preventDefault()
+    event.stopPropagation()
     const classification = updateFileDropPreview(event.dataTransfer)
     event.dataTransfer.dropEffect = classification.status === 'accepted' ? 'copy' : 'none'
   }, [updateFileDropPreview])
 
   const onFileDragLeave = useCallback((event: React.DragEvent) => {
     if (!isFileTransfer(event.dataTransfer) || fileDropBusy.current) return
+    event.stopPropagation()
     fileDragDepth.current = Math.max(0, fileDragDepth.current - 1)
     if (fileDragDepth.current === 0) {
       fileDropPreviewKey.current = ''
@@ -328,6 +331,7 @@ export function FlowCanvas({
     // transfer type, so the populated list is authoritative at drop time.
     if (!isFileTransfer(event.dataTransfer) && files.length === 0) return
     event.preventDefault()
+    event.stopPropagation()
 
     fileDragDepth.current = 0
     fileDropPreviewKey.current = ''
@@ -391,10 +395,10 @@ export function FlowCanvas({
     <div
       ref={wrapperRef}
       className="relative w-full h-full"
-      onDragEnter={onFileDragEnter}
-      onDragOver={onFileDragOver}
-      onDragLeave={onFileDragLeave}
-      onDrop={(event) => { void onFileDrop(event) }}
+      onDragEnterCapture={onFileDragEnter}
+      onDragOverCapture={onFileDragOver}
+      onDragLeaveCapture={onFileDragLeave}
+      onDropCapture={(event) => { void onFileDrop(event) }}
     >
     <ReactFlow
       nodes={nodes}
