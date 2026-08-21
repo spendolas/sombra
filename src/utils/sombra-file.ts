@@ -11,6 +11,7 @@ import pako from 'pako'
 import type { Node, Edge } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
+import { SOMBRA_FILE_MIME_TYPE } from './file-type-constants'
 
 export const SOMBRA_FILE_VERSION = 2
 export const SOMBRA_PACKAGE_VERSION = 1
@@ -88,6 +89,25 @@ export function decodeSombraPackage(data: ArrayBuffer | Uint8Array): unknown {
   } catch {
     throw new Error('Invalid file: expected a .sombra package or JSON document')
   }
+}
+
+/** Read and decode a packaged or legacy JSON `.sombra` file. */
+export function readSombraFile(file: Blob): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        if (!(reader.result instanceof ArrayBuffer)) {
+          throw new Error('Failed to read file as binary data')
+        }
+        resolve(decodeSombraPackage(reader.result))
+      } catch (error) {
+        reject(error instanceof Error ? error : new Error('Failed to decode file'))
+      }
+    }
+    reader.onerror = () => reject(new Error('Failed to read file'))
+    reader.readAsArrayBuffer(file)
+  })
 }
 
 /**
@@ -321,7 +341,7 @@ export function downloadSombraFile(
   filename = 'graph.sombra',
 ): void {
   const blob = new Blob([encodeSombraPackage(file)], {
-    type: 'application/octet-stream',
+    type: SOMBRA_FILE_MIME_TYPE,
   })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -574,21 +594,12 @@ export function openSombraFile(): Promise<unknown> {
         return
       }
 
-      const reader = new FileReader()
-      reader.onload = () => {
-        try {
-          if (!(reader.result instanceof ArrayBuffer)) {
-            throw new Error('Failed to read file as binary data')
-          }
-          finish({ value: decodeSombraPackage(reader.result) })
-        } catch (error) {
-          finish({
-            error: error instanceof Error ? error : new Error('Failed to decode file'),
-          })
-        }
-      }
-      reader.onerror = () => finish({ error: new Error('Failed to read file') })
-      reader.readAsArrayBuffer(file)
+      void readSombraFile(file).then(
+        (value) => finish({ value }),
+        (error: unknown) => finish({
+          error: error instanceof Error ? error : new Error('Failed to decode file'),
+        }),
+      )
     })
 
     // Handle cancel (no file selected)
