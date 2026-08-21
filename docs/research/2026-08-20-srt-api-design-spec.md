@@ -190,3 +190,58 @@ own-content coordinate and computes freely; it never re-derives the transform:
 The remaining migrations (image, reeded) follow this exact pattern: consume
 ctx.spatialCoords for own structure, sample sources in their own frame, delete
 the hand-rolls. The conformity auditor reaches 0 when they do.
+
+## Reeded migration — execution-ready plan (recon 2026-08-21) — SUPERVISED
+
+image done (auto_uv). reeded is the last ratchet holdout and is NOT a mechanical
+migration — do it with eyes on the pixels. Reconnaissance (full report in the
+session log) found:
+
+**Good news:** reeded's source read is ALREADY un-SRT'd (`gl_FragCoord/u_viewport`
++ lens delta) — "effect in place" is already satisfied; nothing to relocate.
+All three SRT copies are STRUCTURAL, and both codegen paths agree (a shared
+`Basis`/emitter abstraction keeps glsl()/ir() in sync — do not let them drift).
+
+**The three hand-rolled SRT copies (all NODE-frame order: subAnchor→÷scale→rotate→−translate→+anchor):**
+- **Copy 1 — `rg_coords`** (grain + frost cell SEED): SRT'd auto_uv, y-DOWN,
+  isotropic. glsl 927/934-939, ir 1224-1232. Depends on `rg_auv` (auto_uv, glsl
+  926 / ir 1214-1220 via fragCoord('yDown')).
+- **Copy 2 — `rg_pat_ref`** (ribs → `coords` OUTPUT): y-UP, anchor-relative, NO
+  +anchor, isotropic. glsl 957-960, ir 1244-1249.
+- **Copy 3 — `rg_srt_scr`** (ribs → `color` OUTPUT): per-axis SCREEN uv from
+  v_uv, y-UP, WITH aspect conjugation (`.x *= asp` around rotate), translate in
+  screen formula (`* u_dpr / u_resolution`). glsl 1005-1016, ir 1291-1298.
+
+**Why it's not mechanical:** `emitSRT` is one canonical basis (y-down, isotropic,
++anchor, ref-formula translate, world order). Copies 2 & 3 need y-up / no-anchor
+/ aspect-conjugation / screen-formula-translate / node-order — 5+ options that
+would bloat the single source, OR route them world-order = a visible shift of
+the PRIMARY look at translate≠0. Both need a design call + sign-off.
+
+**Frost & grain (must stay pixel-identical):** both seed off Copy 1
+(`coordsVar`), the frozen-ref y-down coord (glsl 1099/1130, ir 1438/1493). At
+translate=0 (default, where every frost/grain screenshot lives) Copy 1 ==
+`ctx.spatialCoords` exactly. The Box–Muller grain, reedPcg, FROST_TAPS Vogel
+spiral, linear-light premultiplied accumulate, dither are untouched by SRT.
+
+**Recommended staged migration (each pixel-verified, both backends, at
+translate=0 FIRST for byte-equality then non-zero to characterise):**
+1. Add `spatial: { transforms: ['scale','rotate','translate'] }` + a
+   `coords` input (default 'auto_uv') so `ctx.spatialCoords` activates.
+2. Copy 1 → `ctx.spatialCoords` (pixel-identical at translate=0). Keep `rg_auv`
+   (framework doesn't expose raw pre-SRT auto_uv; needed by the `coords` output +
+   Copy 2). Extend `utils/srt-migration.ts` to convert reeded's saved offsets
+   (`t_world = S·R(−θ)·t_node`) + add it to the migrating-type list. Delete the
+   `reeded_glass` `node-legacy` entry in `SrtGizmoOverlay.tsx` (auto-selects
+   'world' once spatial: is declared).
+3. Copies 2 & 3: the design call — either (a) an `emitSRT` options extension
+   (yParity / anchorAdd / aspectConjugate / translateFormula / translateOrder,
+   all defaulting to current so gate C stays byte-identical) routed for these two
+   bases, or (b) a reeded-basis redesign that unifies them onto the framework.
+   Either way the ribs may shift at translate≠0 — sign-off required.
+
+**Probes** (checkerboard/solid are BAD through refraction): a smooth luminance
+ramp along the displacement axis (X for vertical ribs) for structure; large-scale
+value/simplex noise for frost/grain. frost=0 for the exact-equality gate (frost
+has a known ~51-code bilinear backend divergence); enable frost only for the
+qualitative pass.
