@@ -39,11 +39,7 @@ export const imageNode: NodeDefinition = {
   spatial: { transforms: ['scale', 'rotate', 'translate'] } satisfies SpatialConfig,
 
   inputs: [
-    // auto_uv (y-down, isotropic, ref-sized) so SRT is applied in the same
-    // frame as every other spatial node — rotation is a true angle, not the
-    // aspect-warped/mirrored one screen_uv produced. Mapped to a [0,1] sample
-    // UV below (with the y-flip that keeps the image upright).
-    { id: 'coords', label: 'Coords', type: 'vec2', default: 'auto_uv' },
+    { id: 'coords', label: 'Coords', type: 'vec2', default: 'screen_uv' },
   ],
 
   outputs: [
@@ -82,28 +78,24 @@ export const imageNode: NodeDefinition = {
     if (hasImage) {
       ctx.uniforms.add('u_resolution')
 
-      // inputs.coords is SRT-transformed auto_uv (y-DOWN, isotropic). Flip Y to
-      // the y-up texture-sampling convention so the image renders upright — the
-      // rest of the fit-mode/sampling math is unchanged from the screen_uv era.
-      const cf = `img_cf_${sanitizedId}`
-      lines.push(`vec2 ${cf} = vec2(${inputs.coords}.x, 1.0 - ${inputs.coords}.y);`)
+      // inputs.coords is already SRT-transformed (centered, scaled, rotated, translated)
       const fitUV = `img_uv_${sanitizedId}`
       lines.push(`float img_ratio_${sanitizedId} = ${inputs.imageAspect} / (u_resolution.x / u_resolution.y);`)
-      lines.push(`vec2 ${fitUV} = ${cf};`)
+      lines.push(`vec2 ${fitUV} = ${inputs.coords};`)
 
       if (fitMode === 'contain') {
         // Contain: entire image visible, letterbox where needed
         lines.push(`if (img_ratio_${sanitizedId} > 1.0) {`)
-        lines.push(`  ${fitUV}.y = (${cf}.y - 0.5) * img_ratio_${sanitizedId} + 0.5;`)
+        lines.push(`  ${fitUV}.y = (${inputs.coords}.y - 0.5) * img_ratio_${sanitizedId} + 0.5;`)
         lines.push(`} else {`)
-        lines.push(`  ${fitUV}.x = (${cf}.x - 0.5) / img_ratio_${sanitizedId} + 0.5;`)
+        lines.push(`  ${fitUV}.x = (${inputs.coords}.x - 0.5) / img_ratio_${sanitizedId} + 0.5;`)
         lines.push(`}`)
       } else {
         // Cover: fill canvas, crop where needed
         lines.push(`if (img_ratio_${sanitizedId} > 1.0) {`)
-        lines.push(`  ${fitUV}.x = (${cf}.x - 0.5) / img_ratio_${sanitizedId} + 0.5;`)
+        lines.push(`  ${fitUV}.x = (${inputs.coords}.x - 0.5) / img_ratio_${sanitizedId} + 0.5;`)
         lines.push(`} else {`)
-        lines.push(`  ${fitUV}.y = (${cf}.y - 0.5) * img_ratio_${sanitizedId} + 0.5;`)
+        lines.push(`  ${fitUV}.y = (${inputs.coords}.y - 0.5) * img_ratio_${sanitizedId} + 0.5;`)
         lines.push(`}`)
       }
 
@@ -151,24 +143,17 @@ export const imageNode: NodeDefinition = {
       const ratio = `img_ratio_${sanitizedId}`
       const sampleVar = `node_${sanitizedId}_sample`
       const insideVar = `img_inside_${sanitizedId}`
-      const cf = `img_cf_${sanitizedId}`
-      const srtCoords = ctx.inputs.coords
+      const coords = ctx.inputs.coords
       const aspect = ctx.inputs.imageAspect
 
       stmts.push(
         raw(
           `float ${ratio} = ${aspect} / (u_resolution.x / u_resolution.y);`,
         ),
-        // Flip Y: inputs.coords is SRT'd auto_uv (y-DOWN); the texture sample
-        // convention is y-UP. Keeps the image upright (matches the screen_uv era).
         raw(
-          `vec2 ${cf} = vec2(${srtCoords}.x, 1.0 - ${srtCoords}.y);`,
-        ),
-        raw(
-          `vec2 ${fitUV} = ${cf};`,
+          `vec2 ${fitUV} = ${coords};`,
         ),
       )
-      const coords = cf
 
       if (fitMode === 'contain') {
         stmts.push(raw(
