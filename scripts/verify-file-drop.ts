@@ -7,6 +7,7 @@ import {
 import {
   buildDroppedImageNodes,
   confirmProjectReplacement,
+  importDroppedProject,
 } from '../src/utils/file-drop-import'
 
 initializeNodeLibrary()
@@ -152,6 +153,48 @@ check('confirmation explains close/replace and undo semantics',
   confirmationMessage.includes('close the current project')
   && confirmationMessage.includes('replace the canvas')
   && confirmationMessage.includes('undo'),
+)
+
+const importEvents: string[] = []
+const projectFile = { name: 'favorite.sombra' }
+const importedProject = await importDroppedProject(projectFile, {
+  confirmReplacement: (filename) => {
+    importEvents.push(`confirm:${filename}`)
+    return true
+  },
+  readFile: async () => {
+    importEvents.push('read')
+    return { nodes: [], edges: [] }
+  },
+  validate: (payload) => {
+    importEvents.push('validate')
+    return payload as { nodes: []; edges: [] }
+  },
+  normalizeImages: async (nodes) => {
+    importEvents.push('normalize')
+    return nodes
+  },
+  loadGraph: () => { importEvents.push('load') },
+})
+check('project drop completes the replacement pipeline', importedProject === true)
+check(
+  'project confirmation runs before the first async file read',
+  importEvents.join('|') === 'confirm:favorite.sombra|read|validate|normalize|load',
+)
+
+let cancelledReadCount = 0
+const cancelledProject = await importDroppedProject(projectFile, {
+  confirmReplacement: () => false,
+  readFile: async () => {
+    cancelledReadCount++
+    return { nodes: [], edges: [] }
+  },
+  validate: () => ({ nodes: [], edges: [] }),
+  normalizeImages: async (nodes) => nodes,
+  loadGraph: () => undefined,
+})
+check('cancelling a project drop leaves the file unread and graph untouched',
+  cancelledProject === false && cancelledReadCount === 0,
 )
 
 console.log('\n' + '='.repeat(60))

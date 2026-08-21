@@ -1,5 +1,5 @@
-import type { Node } from '@xyflow/react'
-import type { NodeData } from '@/nodes/types'
+import type { Edge, Node } from '@xyflow/react'
+import type { EdgeData, NodeData } from '@/nodes/types'
 import { nodeRegistry } from '@/nodes/registry'
 import { makeNodeId } from '@/utils/node-id'
 import { processImageFile, type ProcessedImage } from '@/utils/process-image'
@@ -16,6 +16,19 @@ export interface DropPosition {
 export interface ImageImportFailure<FileType extends NamedDropFile = NamedDropFile> {
   file: FileType
   error: unknown
+}
+
+interface DroppedProjectGraph {
+  nodes: Node<NodeData>[]
+  edges: Edge<EdgeData>[]
+}
+
+export interface DroppedProjectImportDependencies<FileType extends NamedDropFile> {
+  confirmReplacement: (filename: string) => boolean
+  readFile: (file: FileType) => Promise<unknown>
+  validate: (payload: unknown) => DroppedProjectGraph
+  normalizeImages: (nodes: Node<NodeData>[]) => Promise<Node<NodeData>[]>
+  loadGraph: (nodes: Node<NodeData>[], edges: Edge<EdgeData>[]) => void
 }
 
 function imageDefaultParams(): Record<string, unknown> {
@@ -86,4 +99,22 @@ export function confirmProjectReplacement(
   return confirm(
     `Open “${filename}”?\n\nThis will close the current project and replace the canvas. You can undo afterward.`,
   )
+}
+
+/**
+ * Confirm synchronously while the drop still has browser user activation, then
+ * decode, validate, normalize, and replace. Keeping the confirmation before the
+ * first await avoids Chrome/Safari suppressing a delayed modal dialog.
+ */
+export async function importDroppedProject<FileType extends NamedDropFile>(
+  file: FileType,
+  dependencies: DroppedProjectImportDependencies<FileType>,
+): Promise<boolean> {
+  if (!dependencies.confirmReplacement(file.name)) return false
+
+  const payload = await dependencies.readFile(file)
+  const imported = dependencies.validate(payload)
+  const normalized = await dependencies.normalizeImages(imported.nodes)
+  dependencies.loadGraph(normalized, imported.edges)
+  return true
 }
