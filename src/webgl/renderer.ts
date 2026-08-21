@@ -6,6 +6,7 @@
  */
 
 import { REFERENCE_SIZE as SHARED_REFERENCE_SIZE } from '../renderer/constants'
+import { captureCanvasThumbnail } from '../renderer/capture-thumbnail'
 import type { RenderPlan } from '../compiler/glsl-generator'
 import type { UniformSpec } from '../nodes/types'
 import type { ShaderRenderer, QualityTier } from '../renderer/types'
@@ -831,6 +832,14 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
     } else {
       this.renderSinglePass(displayWidth, displayHeight, dpr, time)
     }
+  }
+
+  captureThumbnail(): string | null {
+    // The WebGL2 context has no preserveDrawingBuffer, so the drawing buffer is
+    // valid only within the tick that drew it. Render and read back in the same
+    // synchronous call — otherwise the readback lands on a cleared (black) buffer.
+    this.render()
+    return captureCanvasThumbnail(this.canvas)?.dataUrl ?? null
   }
 
   /** [P1] Single-pass render — identical to pre-Phase-6 behavior. */

@@ -169,13 +169,20 @@ check('confirmation explains close/replace and undo semantics',
 const importEvents: string[] = []
 const projectFile = { name: 'favorite.sombra' }
 const importedProject = await importDroppedProject(projectFile, {
-  confirmReplacement: (filename) => {
-    importEvents.push(`confirm:${filename}`)
+  confirmReplacement: ({ filename, thumbnail }) => {
+    importEvents.push(`confirm:${filename}:${thumbnail?.dataUrl ?? 'none'}`)
     return true
   },
   readFile: async () => {
     importEvents.push('read')
-    return { nodes: [], edges: [] }
+    return {
+      nodes: [],
+      edges: [],
+      thumbnail: {
+        mimeType: 'image/webp',
+        dataUrl: 'data:image/webp;base64,preview',
+      },
+    }
   },
   validate: (payload) => {
     importEvents.push('validate')
@@ -189,8 +196,8 @@ const importedProject = await importDroppedProject(projectFile, {
 })
 check('project drop completes the replacement pipeline', importedProject === true)
 check(
-  'project confirmation runs before the first async file read',
-  importEvents.join('|') === 'confirm:favorite.sombra|read|validate|normalize|load',
+  'project preview is read and validated before the confirmation dialog opens',
+  importEvents.join('|') === 'read|validate|confirm:favorite.sombra:data:image/webp;base64,preview|normalize|load',
 )
 
 let cancelledReadCount = 0
@@ -204,8 +211,8 @@ const cancelledProject = await importDroppedProject(projectFile, {
   normalizeImages: async (nodes) => nodes,
   loadGraph: () => undefined,
 })
-check('cancelling a project drop leaves the file unread and graph untouched',
-  cancelledProject === false && cancelledReadCount === 0,
+check('cancelling a project drop still reads the file once but leaves the graph untouched',
+  cancelledProject === false && cancelledReadCount === 1,
 )
 
 console.log('\nE. React Flow event interception')

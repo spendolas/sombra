@@ -52,6 +52,12 @@ export interface ShaderRenderer {
   /** Render a frame. Computes time/resolution/DPR internally. */
   render(): void
 
+  /**
+   * Capture the current canvas as a compact static thumbnail data URL.
+   * Intended for embedding into `.sombra` files and confirmation dialogs.
+   */
+  captureThumbnail(): string | null
+
   /** Clear canvas to black (used on compile failure). */
   clear(): void
 

@@ -841,16 +841,30 @@
         },
         "panel": {
           "figmaNodeId": "901:2119",
-          "layout": "vertical",
+          "layout": "horizontal",
           "fill": "surface/raised",
-          "stroke": {
-            "color": "edge/default",
-            "weight": 1
-          },
           "radius": "md",
           "padding": "lg",
-          "gap": "md",
+          "gap": "lg",
           "overflow": "hidden"
+        },
+        "preview": {
+          "figmaNodeId": "904:306",
+          "layout": "horizontal",
+          "fill": "surface/default",
+          "radius": "sm",
+          "overflow": "hidden"
+        },
+        "content": {
+          "figmaNodeId": "904:308",
+          "layout": "vertical",
+          "justify": "between",
+          "gap": "md"
+        },
+        "textGroup": {
+          "figmaNodeId": "904:309",
+          "layout": "vertical",
+          "gap": "sm"
         },
         "title": {
           "figmaNodeId": "901:2120",
