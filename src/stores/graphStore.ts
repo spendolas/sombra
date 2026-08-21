@@ -64,6 +64,8 @@ interface GraphState {
   onEdgesChange: OnEdgesChange<Edge<EdgeData>>
 
   addNode: (node: Node<NodeData>) => void
+  /** Add a batch as one undoable operation (used by multi-image file drops). */
+  addNodes: (nodes: Node<NodeData>[]) => void
   removeNode: (nodeId: string) => void
   /** Atomic multi-element delete (node + connected edges = ONE history entry). */
   removeElements: (nodeIds: string[], edgeIds: string[]) => void
@@ -198,6 +200,20 @@ export const useGraphStore = create<GraphState>()(
         const past = pushHistory(state._past, snapshot(state))
         set({
           nodes: [...state.nodes, node],
+          _past: past,
+          _future: [],
+          _lastActionKey: null,
+          canUndo: true,
+          canRedo: false,
+        })
+      },
+
+      addNodes: (nodes) => {
+        if (nodes.length === 0) return
+        const state = get()
+        const past = pushHistory(state._past, snapshot(state))
+        set({
+          nodes: [...state.nodes, ...nodes],
           _past: past,
           _future: [],
           _lastActionKey: null,

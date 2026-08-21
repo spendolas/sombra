@@ -90,6 +90,25 @@ export function decodeSombraPackage(data: ArrayBuffer | Uint8Array): unknown {
   }
 }
 
+/** Read and decode a packaged or legacy JSON `.sombra` file. */
+export function readSombraFile(file: Blob): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      try {
+        if (!(reader.result instanceof ArrayBuffer)) {
+          throw new Error('Failed to read file as binary data')
+        }
+        resolve(decodeSombraPackage(reader.result))
+      } catch (error) {
+        reject(error instanceof Error ? error : new Error('Failed to decode file'))
+      }
+    }
+    reader.onerror = () => reject(new Error('Failed to read file'))
+    reader.readAsArrayBuffer(file)
+  })
+}
+
 /**
  * v1 → v2 migration: invert scale values (new convention: coords /= scale)
  * and remap old param IDs to _srt_* framework params.
@@ -574,21 +593,12 @@ export function openSombraFile(): Promise<unknown> {
         return
       }
 
-      const reader = new FileReader()
-      reader.onload = () => {
-        try {
-          if (!(reader.result instanceof ArrayBuffer)) {
-            throw new Error('Failed to read file as binary data')
-          }
-          finish({ value: decodeSombraPackage(reader.result) })
-        } catch (error) {
-          finish({
-            error: error instanceof Error ? error : new Error('Failed to decode file'),
-          })
-        }
-      }
-      reader.onerror = () => finish({ error: new Error('Failed to read file') })
-      reader.readAsArrayBuffer(file)
+      void readSombraFile(file).then(
+        (value) => finish({ value }),
+        (error: unknown) => finish({
+          error: error instanceof Error ? error : new Error('Failed to decode file'),
+        }),
+      )
     })
 
     // Handle cancel (no file selected)
