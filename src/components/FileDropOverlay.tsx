@@ -110,34 +110,40 @@ export function FileDropDialog({
         onMouseDown={(event) => event.stopPropagation()}
       >
         {state.thumbnailSrc && (
-          <div className={cn(ds.propertiesPanel.nodeInfo, 'w-full max-w-[32rem] overflow-hidden')}>
+          // flex-none keeps the preview at its natural width; max-h/object-contain/w-auto
+          // are not expressible as DS parts — tracked in .claude/ds-queue.md.
+          <div className={cn(ds.fileDropDialog.preview, 'flex-none')}>
             <img
               src={state.thumbnailSrc}
               alt={state.thumbnailAlt ?? 'Shader preview'}
-              className="block w-full max-h-56 object-contain"
+              className="block max-h-[200px] w-auto object-contain"
               draggable={false}
             />
           </div>
         )}
-        <div id="file-drop-dialog-title" className={ds.fileDropDialog.title}>
-          {state.title}
-        </div>
-        <div id="file-drop-dialog-detail" className={ds.fileDropDialog.detail}>
-          {state.detail}
-        </div>
-        <div className={ds.fileDropDialog.actions}>
-          {state.cancelLabel && (
-            <ActionButton onClick={() => onResolve(false)}>
-              {state.cancelLabel}
+        <div className={cn(ds.fileDropDialog.content, 'max-w-[18rem]')}>
+          <div className={ds.fileDropDialog.textGroup}>
+            <div id="file-drop-dialog-title" className={ds.fileDropDialog.title}>
+              {state.title}
+            </div>
+            <div id="file-drop-dialog-detail" className={ds.fileDropDialog.detail}>
+              {state.detail}
+            </div>
+          </div>
+          <div className={ds.fileDropDialog.actions}>
+            {state.cancelLabel && (
+              <ActionButton onClick={() => onResolve(false)}>
+                {state.cancelLabel}
+              </ActionButton>
+            )}
+            <ActionButton
+              ref={confirmRef}
+              variant="primary"
+              onClick={() => onResolve(true)}
+            >
+              {state.confirmLabel}
             </ActionButton>
-          )}
-          <ActionButton
-            ref={confirmRef}
-            variant="primary"
-            onClick={() => onResolve(true)}
-          >
-            {state.confirmLabel}
-          </ActionButton>
+          </div>
         </div>
       </div>
     </div>,
