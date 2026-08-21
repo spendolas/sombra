@@ -1006,6 +1006,9 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
   }
 
   captureThumbnail(): string | null {
+    // Render and read back in the same tick: the swapchain texture is only
+    // sampleable before it is presented, so a stale grab reads an empty surface.
+    this.render()
     return captureCanvasThumbnail(this.canvas)?.dataUrl ?? null
   }
 

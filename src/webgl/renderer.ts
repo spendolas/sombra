@@ -835,6 +835,10 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
   }
 
   captureThumbnail(): string | null {
+    // The WebGL2 context has no preserveDrawingBuffer, so the drawing buffer is
+    // valid only within the tick that drew it. Render and read back in the same
+    // synchronous call — otherwise the readback lands on a cleared (black) buffer.
+    this.render()
     return captureCanvasThumbnail(this.canvas)?.dataUrl ?? null
   }
 

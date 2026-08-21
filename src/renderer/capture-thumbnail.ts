@@ -3,7 +3,10 @@
  * embedding into a `.sombra` file or showing in a confirmation dialog.
  */
 
-const DEFAULT_MAX_EDGE = 256
+// 512 (not 256): the open dialog shows the thumbnail up to ~224 CSS px, which is
+// ~448 device px on a retina display — 256 upscaled into that reads soft/blocky.
+// 512 keeps it crisp there while staying a small embed (~15 KB webp).
+const DEFAULT_MAX_EDGE = 512
 const FALLBACK_MIME_TYPE = 'image/png'
 
 export interface ShaderThumbnail {
@@ -30,6 +33,11 @@ export function captureCanvasThumbnail(
 
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
+  // Shaders in see-through background mode render with alpha < 1; without an
+  // opaque backing the thumbnail composites over the dialog's dark ground and
+  // reads as near-black. Flatten onto the editor surface colour first.
+  ctx.fillStyle = '#0f0f1a'
+  ctx.fillRect(0, 0, width, height)
   try {
     ctx.drawImage(source, 0, 0, width, height)
   } catch {
