@@ -348,7 +348,13 @@ function generateUtilities(): string {
 function describeTextStyle(props: Record<string, string | number>): string {
   const parts: string[] = []
   parts.push(String(props.fontSize))
-  parts.push(Number(props.fontWeight) >= 600 ? 'SemiBold' : 'Regular')
+  parts.push(
+    Number(props.fontWeight) >= 600
+      ? 'SemiBold'
+      : Number(props.fontWeight) >= 500
+        ? 'Medium'
+        : 'Regular',
+  )
   if (props.letterSpacing) parts.push(`${props.letterSpacing} ls`)
   if (props.textTransform === 'uppercase') parts.push('UPPER')
   if (props.fontFamily) parts.push('mono')

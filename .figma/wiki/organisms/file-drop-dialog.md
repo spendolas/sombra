@@ -23,7 +23,7 @@ project replacement cancellable and import errors dismissible.
 
 - Full-window scrim root, centered in both axes.
 - Raised panel with title, detail, and right-aligned actions.
-- Actions compose the existing Text Ghost Button variant from the Button atom.
+- Actions compose the shared Action Button atom.
 - Cancel is optional; confirmation uses Open project and notices use Dismiss.
 
 ## Token bindings
@@ -35,7 +35,7 @@ project replacement cancellable and import errors dismissible.
 | Title | `heading/node-title`, `fg/default` | `ds.fileDropDialog.title` |
 | Detail | `body/description`, `fg/dim` | `ds.fileDropDialog.detail` |
 | Actions | `spacing/md` | `ds.fileDropDialog.actions` |
-| Buttons | Existing Button / Text Ghost atom | `ds.button.textGhost` |
+| Buttons | Action Button secondary / primary variants | `<ActionButton />` |
 
 Every visual part is variable- or text-style-bound in Figma. The 720×450 Figma
 component size is only a reference viewport; code uses the audited fixed/inset

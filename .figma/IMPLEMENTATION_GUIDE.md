@@ -137,6 +137,7 @@ When the Figma design uses a known component, use the corresponding React compon
 ```
 Figma: Handle → <BaseHandle handleColor={getPortColor(type)} connected={bool} />
 Figma: Separator → <Separator />  (from src/components/ui/separator.tsx)
+Figma: Action Button → <ActionButton variant="secondary|primary" disabled={bool} />
 ```
 
 ### Molecules
@@ -178,6 +179,7 @@ Complete mapping of every Figma component to its React source:
 | Category Header | `106:92` | `src/components/NodePalette.tsx` | (inline `<h3>`) |
 | Palette Item | `106:95` | `src/components/NodePalette.tsx` | (inline) |
 | PlusMinus Button | `106:108` | `src/components/ShaderNode.tsx` | (inline) |
+| Action Button | `901:2134` | `src/components/ActionButton.tsx` | `ActionButton` |
 
 ### Molecules (V2 IDs)
 | Figma Component | Node ID | Source File | React Component |
