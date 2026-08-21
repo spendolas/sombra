@@ -9,7 +9,7 @@ before the user releases the files.
 | Format | Detection | Multiplicity | Operation |
 |---|---|---:|---|
 | Image | PNG, JPEG, WebP, or GIF MIME/extension | Many | Append one Image node per successfully processed file |
-| Sombra project | `.sombra` extension | One | Decode and validate, confirm replacement, then load the project |
+| Sombra project | `.sombra` extension or `application/x-sombra` MIME | One | Decode and validate, confirm replacement, then load the project |
 
 Image drops use the same `processImageFile()` path as the Image node picker. Files
 are processed sequentially to cap peak bitmap memory; every successful result gets
@@ -20,6 +20,9 @@ leaves the current graph untouched.
 Browsers may temporarily hide filenames for security while a drag is in progress.
 Image MIME types can still be identified; an opaque `.sombra` file shows the
 neutral “Inspect dropped files” overlay until the browser exposes its filename.
+That unresolved drag remains droppable so Sombra can classify it at release.
+Sombra downloads use `application/x-sombra`, but operating systems do not always
+preserve that browser MIME metadata when the file is later dragged from disk.
 
 ## Adding a supported format
 

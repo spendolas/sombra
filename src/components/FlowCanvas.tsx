@@ -20,6 +20,7 @@ import { FileDropOverlay, type FileDropOverlayState } from '@/components/FileDro
 import {
   classifyDropFiles,
   dropClassificationKey,
+  dropEffectForClassification,
   type DropFileDescriptor,
   type FileDropFormatId,
 } from '@/utils/file-drop'
@@ -311,7 +312,7 @@ export function FlowCanvas({
     event.preventDefault()
     event.stopPropagation()
     const classification = updateFileDropPreview(event.dataTransfer)
-    event.dataTransfer.dropEffect = classification.status === 'accepted' ? 'copy' : 'none'
+    event.dataTransfer.dropEffect = dropEffectForClassification(classification)
   }, [updateFileDropPreview])
 
   const onFileDragLeave = useCallback((event: React.DragEvent) => {
