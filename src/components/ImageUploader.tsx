@@ -441,10 +441,11 @@ export function ImageUploader({ nodeId, data }: {
     }
 
     if (drag.mode === 'rotate') {
-      // Displayed handle angle = srt_rotate + const (imageToScreen rotates the
-      // image by θ in thumb space), so the cursor angle delta maps 1:1 to rotate.
+      // auto_uv is y-down and imageToScreen flips Y (screen_uv y-up), so the
+      // displayed handle angle runs OPPOSITE to srt_rotate — the cursor angle
+      // delta is subtracted so the image follows the drag.
       const angle = Math.atan2(sy - drag.centerY, sx - drag.centerX) * 180 / Math.PI
-      let newRotate = drag.startRotate + (angle - drag.startAngle)
+      let newRotate = drag.startRotate - (angle - drag.startAngle)
       while (newRotate > 180) newRotate -= 360
       while (newRotate < -180) newRotate += 360
       updateNodeData(nodeId, {
