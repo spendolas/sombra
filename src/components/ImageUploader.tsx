@@ -13,6 +13,7 @@ import { usePreviewStore } from '@/stores/previewStore'
 import { ds } from '@/generated/ds'
 import { svgCursor, moveCursor } from '@/utils/cursors'
 import { processImageFile } from '@/utils/process-image'
+import { REFERENCE_SIZE } from '@/renderer/constants'
 
 const ACCEPTED_TYPES = 'image/png,image/jpeg,image/webp,image/gif'
 const CORNER_ZONE = 8
@@ -42,8 +43,13 @@ type Pt = [number, number]
  * Map a canvas-space UV point through the shader's SRT + fit/fill chain.
  * Returns the image-space UV where the texture is sampled.
  *
- * Replicates glsl-generator.ts lines 479-509 (SRT)
- *         + image.ts lines 70-87 (fit/fill)
+ * Replicates the framework SRT single source (ir/srt.ts `emitSRT`) in image's
+ * `screen_uv` space + image.ts lines 70-87 (fit/fill). This MUST track emitSRT
+ * exactly — a stale hand-copy (the previous one cited glsl-generator's
+ * pre-emitSRT SRT: node-order, aspect-conjugated rotation, /canvasW translate)
+ * makes the crop overlay diverge from where the shader actually places the
+ * image. u_anchor is the default (0.5); a non-default Fragment Output anchor is
+ * not modelled here (quick-fix scope).
  */
 function canvasToImageUV(
   uv: Pt,
@@ -54,22 +60,31 @@ function canvasToImageUV(
 ): Pt {
   const aspect = canvasW / canvasH
   const rad = rotateDeg * 0.01745329
+  // Translate denominator: emitSRT divides the pixel offset by (u_dpr·u_ref_size).
+  // u_ref_size = REFERENCE_SIZE (512); u_dpr in screen_uv = bufferW/cssW, which
+  // (mainCanvasSize is floor(css·min(dpr,2))) reduces to the capped dpr — the
+  // same `k` resolveSRT() uses, so this overlay and the preview gizmo agree.
+  const k = Math.min(window.devicePixelRatio || 1, 2)
+  const tDen = k * REFERENCE_SIZE
 
-  // SRT chain (glsl-generator.ts)
-  let sx = uv[0] - 0.5
-  let sy = uv[1] - 0.5
+  // emitSRT world order (ir/srt.ts): translate → subAnchor → scale → rotate
+  // (ISOTROPIC — no aspect conjugation) → addAnchor.
+  // 1. translate, world frame first: coords − vec2(tX, −tY)/(u_dpr·u_ref_size).
+  let sx = uv[0] - translateX / tDen
+  let sy = uv[1] + translateY / tDen // −(−tY) ⇒ +tY
+  // 2. subAnchor (u_anchor = 0.5).
+  sx -= 0.5
+  sy -= 0.5
+  // 3. scale (isotropic).
   sx /= scale
   sy /= scale
-  // Aspect-corrected rotation
-  sx *= aspect
+  // 4. rotate (isotropic — screen_uv rotated with no aspect term, matching emitSRT).
   const cr = Math.cos(rad), sr = Math.sin(rad)
   const rx = sx * cr - sy * sr
   const ry = sx * sr + sy * cr
-  sx = rx / aspect
+  sx = rx
   sy = ry
-  // Translate (note: GLSL does -= vec2(tX, -tY) / resolution)
-  sx -= translateX / canvasW
-  sy -= (-translateY) / canvasH
+  // 5. addAnchor.
   sx += 0.5
   sy += 0.5
 
@@ -405,10 +420,14 @@ export function ImageUploader({ nodeId, data }: {
         if (ratio > 1) dImgU *= ratio; else dImgV /= ratio
       }
 
-      // Invert SRT translate: shader does srt -= vec2(tX, -tY)/res
-      // So moving the viewport right in image space = decreasing tX
-      const newTX = drag.startOffsetX - dImgU * canvasW
-      const newTY = drag.startOffsetY + dImgV * canvasH
+      // Invert SRT translate: emitSRT does coords -= vec2(tX, -tY)/(u_dpr·u_ref_size).
+      // Denominator MUST match canvasToImageUV (tDen = k·REFERENCE_SIZE) so drag and
+      // the crop polygon stay mutually consistent AND both track the shader — the old
+      // /canvasW pair tracked each other but lied against the render.
+      const k = Math.min(window.devicePixelRatio || 1, 2)
+      const tDen = k * REFERENCE_SIZE
+      const newTX = drag.startOffsetX - dImgU * tDen
+      const newTY = drag.startOffsetY + dImgV * tDen
 
       const maxX = imageWidth / 2, maxY = imageHeight / 2
       updateNodeData(nodeId, {
@@ -428,18 +447,14 @@ export function ImageUploader({ nodeId, data }: {
         newScale = Math.round(newScale * 100) / 100
         const params: Record<string, unknown> = { ...dataRef.current, srt_scale: newScale }
 
-        // Anchor compensation: exact SRT derivation keeps anchor corner fixed
-        if (!altKey) {
-          const u = drag.anchorU, v = drag.anchorV
-          const aspect = canvasW / canvasH
-          const rad = drag.startRotate * 0.01745329
-          const c = Math.cos(rad), s = Math.sin(rad)
-          const Kx = (u - 0.5) * c - (v - 0.5) * s / aspect
-          const Ky = (u - 0.5) * aspect * s + (v - 0.5) * c
-          const dInvS = 1 / newScale - 1 / drag.startScale
-          params.srt_translateX = Math.round(drag.startOffsetX + Kx * canvasW * dInvS)
-          params.srt_translateY = Math.round(drag.startOffsetY + Ky * canvasH * (-dInvS))
-        }
+        // Under emitSRT's world-order the offset is scale-INVARIANT and scale is
+        // taken about u_anchor (0.5) — so the shader-true behaviour is scale
+        // about centre with the world offset untouched. The old anchor-corner
+        // hold was a node-order derivation (translate applied post-scale) and
+        // now fights the world-order crop polygon, so it is gone. Restoring the
+        // corner-hold nicety = routing this drag through resolveSRT.dragScale
+        // (its holdWorld already does it) in the daytime gizmo-migration pass.
+        void altKey
 
         updateNodeData(nodeId, { params })
       }
