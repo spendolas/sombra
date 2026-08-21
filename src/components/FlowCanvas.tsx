@@ -16,7 +16,12 @@ import { getFitViewPadding } from '@/components/nodes-panel-layout'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { TypedEdge } from './TypedEdge'
 import { ds } from '@/generated/ds'
-import { FileDropOverlay, type FileDropOverlayState } from '@/components/FileDropOverlay'
+import {
+  FileDropDialog,
+  FileDropOverlay,
+  type FileDropDialogState,
+  type FileDropOverlayState,
+} from '@/components/FileDropOverlay'
 import {
   classifyDropFiles,
   dropClassificationKey,
@@ -27,9 +32,9 @@ import {
 import { normalizeGraphImages } from '@/utils/process-image'
 import { importFromFile, readSombraFile } from '@/utils/sombra-file'
 import {
-  confirmProjectReplacement,
   importDroppedImageNodes,
   importDroppedProject,
+  projectReplacementPrompt,
 } from '@/utils/file-drop-import'
 
 const EDGE_TYPES = { typed: TypedEdge } as const
@@ -87,9 +92,26 @@ export function FlowCanvas({
   const { screenToFlowPosition, fitView, getViewport, setViewport, viewportInitialized } = useReactFlow()
   const nodesInitialized = useNodesInitialized()
   const [fileDropState, setFileDropState] = useState<FileDropOverlayState | null>(null)
+  const [fileDropDialog, setFileDropDialog] = useState<FileDropDialogState | null>(null)
   const fileDragDepth = useRef(0)
   const fileDropPreviewKey = useRef('')
   const fileDropBusy = useRef(false)
+  const fileDropDialogResolver = useRef<((confirmed: boolean) => void) | null>(null)
+
+  const requestFileDropDialog = useCallback((state: FileDropDialogState) => {
+    fileDropDialogResolver.current?.(false)
+    return new Promise<boolean>((resolve) => {
+      fileDropDialogResolver.current = resolve
+      setFileDropDialog(state)
+    })
+  }, [])
+
+  const resolveFileDropDialog = useCallback((confirmed: boolean) => {
+    const resolve = fileDropDialogResolver.current
+    fileDropDialogResolver.current = null
+    setFileDropDialog(null)
+    resolve?.(confirmed)
+  }, [])
 
   // Keep the canvas CENTRE fixed when the flow area resizes (panel drags, preview
   // dock, window resize). React Flow leaves the viewport transform untouched on
@@ -344,14 +366,14 @@ export function FlowCanvas({
 
     const position = screenToFlowPosition({ x: event.clientX, y: event.clientY })
     fileDropBusy.current = true
-    setFileDropState({
-      kind: 'busy',
-      format: classification.format,
-      fileCount: classification.fileCount,
-    })
 
     const handlers: Record<FileDropFormatId, () => Promise<void>> = {
       image: async () => {
+        setFileDropState({
+          kind: 'busy',
+          format: classification.format,
+          fileCount: classification.fileCount,
+        })
         // Sequential processing inside the importer caps peak bitmap/canvas
         // memory when several camera-sized images arrive together.
         const { nodes: imported, failures } = await importDroppedImageNodes(files, position)
@@ -360,13 +382,30 @@ export function FlowCanvas({
           console.error(`[Sombra] Failed to import image "${failure.file.name}":`, failure.error)
         }
         if (failures.length > 0 && imported.length === 0) {
-          window.alert('Sombra could not decode the dropped image file(s).')
+          void requestFileDropDialog({
+            title: 'Could not import images',
+            detail: 'Sombra could not decode the dropped image file or files.',
+            confirmLabel: 'Dismiss',
+            tone: 'error',
+          })
         }
       },
       'sombra-project': async () => {
         const opened = await importDroppedProject(files[0], {
-          confirmReplacement: confirmProjectReplacement,
-          readFile: readSombraFile,
+          confirmReplacement: (filename) => requestFileDropDialog({
+            ...projectReplacementPrompt(filename),
+            confirmLabel: 'Open project',
+            cancelLabel: 'Cancel',
+            tone: 'warning',
+          }),
+          readFile: (file) => {
+            setFileDropState({
+              kind: 'busy',
+              format: classification.format,
+              fileCount: classification.fileCount,
+            })
+            return readSombraFile(file)
+          },
           validate: importFromFile,
           normalizeImages: normalizeGraphImages,
           loadGraph,
@@ -385,12 +424,17 @@ export function FlowCanvas({
       await handlers[classification.format.id]()
     } catch (error) {
       console.error('[Sombra] Failed to import dropped file:', error)
-      window.alert(error instanceof Error ? error.message : 'Sombra could not import the dropped file.')
+      void requestFileDropDialog({
+        title: 'Could not import file',
+        detail: error instanceof Error ? error.message : 'Sombra could not import the dropped file.',
+        confirmLabel: 'Dismiss',
+        tone: 'error',
+      })
     } finally {
       fileDropBusy.current = false
       setFileDropState(null)
     }
-  }, [addNodes, fitView, loadGraph, screenToFlowPosition])
+  }, [addNodes, fitView, loadGraph, requestFileDropDialog, screenToFlowPosition])
 
   return (
     <div
@@ -444,6 +488,7 @@ export function FlowCanvas({
       />
     </ReactFlow>
     {fileDropState && <FileDropOverlay state={fileDropState} />}
+    {fileDropDialog && <FileDropDialog state={fileDropDialog} onResolve={resolveFileDropDialog} />}
     </div>
   )
 }
