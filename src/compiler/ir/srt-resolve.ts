@@ -37,13 +37,14 @@ export interface Vec2 { x: number; y: number }
 /**
  * 'auto_uv': the coordinate contract (y-down, ref-sized, buffer px).
  * 'screen_uv': image's v_uv space (y-up, canvas-relative, per-axis units).
- * 'screen_px': reeded's rib (colour) space — the shader translates the ribs by
- *  vec2(tx,-ty)·u_dpr/u_resolution, which works out to a DPR-INDEPENDENT 1:1 CSS
- *  px displacement (+ty up). It matches 'auto_uv' only at dpr=1 — which is why
- *  reeded was previously (mis)filed as 'auto_uv' + node-legacy: the pixel
- *  measurement was done on a dpr=1 display, so the ×dpr error never showed. On a
- *  retina display the auto_uv gizmo lags the ribs by exactly dpr. (A y-flipped
- *  'ref_yup' space was also tried from patRef source-reading and proven wrong.)
+ * 'screen_px': reeded's rib (colour) space — SAME PARITY as auto_uv (+ty up,
+ *  pixel-measured twice), so the Y is negated identically; do NOT +dty or the
+ *  gizmo flips. It differs only in SCALE: the shader offset
+ *  vec2(tx,-ty)·u_dpr/u_resolution is a DPR-INDEPENDENT 1:1 CSS-px displacement,
+ *  where auto_uv maps 1/dpr. The two coincide only at dpr=1 — which is why reeded
+ *  was filed 'auto_uv' (measured on a dpr=1 display, so the ×dpr error never
+ *  showed); on retina the auto_uv gizmo lagged the ribs by exactly dpr. (A
+ *  y-flipped 'ref_yup' space was also tried and proven wrong.)
  */
 export type SRTCoordSpace = 'auto_uv' | 'screen_uv' | 'screen_px'
 
@@ -130,9 +131,12 @@ export function resolveSRT(params: Record<string, unknown>, opts: ResolveSRTOpti
   let toCss: (dtx: number, dty: number) => Vec2
   let toParam: (dx: number, dy: number) => Vec2
   if (coordSpace === 'screen_px') {
-    // reeded's rib space: the shader offset vec2(tx,-ty)·u_dpr/u_resolution
-    // reduces to a 1:1 CSS-px displacement, y-up, independent of dpr and aspect.
-    // (auto_uv would map it as 1/dpr — the retina misalignment.)
+    // reeded's rib space. PARITY = auto_uv (+ty UP): pixel-measured twice —
+    // dragging +ty shifts the ribs' row-profile up — so the Y is NEGATED exactly
+    // like auto_uv (do NOT +dty; that flips the gizmo). What differs from auto_uv
+    // is only the SCALE: the shader offset vec2(tx,-ty)·u_dpr/u_resolution works
+    // out to a 1:1 CSS-px displacement, independent of dpr/aspect, where auto_uv
+    // would (wrongly, for reeded) map it as 1/dpr — the retina misalignment.
     toCss = (dtx, dty) => ({ x: dtx, y: -dty })
     toParam = (dx, dy) => ({ x: dx, y: -dy })
   } else if (coordSpace === 'screen_uv') {
