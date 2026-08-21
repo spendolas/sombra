@@ -12,6 +12,7 @@
  */
 
 import { REFERENCE_SIZE as SHARED_REFERENCE_SIZE } from '../renderer/constants'
+import { captureCanvasThumbnail } from '../renderer/capture-thumbnail'
 import type { RenderPlan } from '../compiler/glsl-generator'
 import type { ShaderRenderer, QualityTier } from '../renderer/types'
 import type { UniformBufferLayout, TextureBinding } from '../compiler/ir/wgsl-assembler'
@@ -1002,6 +1003,13 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
 
     // After the real frame, probe the output's alpha if pending (throttled).
     this.maybeProbeAlpha(time)
+  }
+
+  captureThumbnail(): string | null {
+    // Render and read back in the same tick: the swapchain texture is only
+    // sampleable before it is presented, so a stale grab reads an empty surface.
+    this.render()
+    return captureCanvasThumbnail(this.canvas)?.dataUrl ?? null
   }
 
   private renderSinglePass(w: number, h: number, dpr: number, time: number): void {

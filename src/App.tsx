@@ -17,6 +17,7 @@ import { createDefaultGraph } from './utils/test-graph'
 import { nodeRegistry } from './nodes/registry'
 import { ShaderNode } from './components/ShaderNode'
 import { anchorToVec2 } from './nodes/output/fragment-output'
+import { setCaptureThumbnailImpl } from './dev-bridge'
 
 // Module-level constant — prevents React Flow from remounting all nodes on re-render
 const NODE_TYPES = { shaderNode: ShaderNode } as const
@@ -216,6 +217,14 @@ function App() {
 
   const nodeTypes = NODE_TYPES
 
+  const captureThumbnail = useCallback(async (): Promise<string | null> => {
+    // Grab the live main-canvas preview directly — the canvas IS the shader the
+    // user sees. This is synchronous and rAF-free, unlike the earlier
+    // preview-re-render loop which stalled in a backgrounded tab (rAF throttled)
+    // and depended on the preview renderer + a fresh compile being ready.
+    return rendererRef.current?.captureThumbnail() ?? null
+  }, [])
+
   // Load default graph only when no persisted graph exists
   useEffect(() => {
     if (nodes.length === 0) {
@@ -260,6 +269,7 @@ function App() {
       // for automation — e.g. exercising device-loss recovery)
       const sombra = (window as unknown as Record<string, unknown>).__sombra as Record<string, unknown> | undefined
       if (sombra) sombra.renderer = r
+      setCaptureThumbnailImpl(captureThumbnail)
 
       // Recovery: fires after the renderer rebuilt itself on a fresh
       // device/context — replay the plan, re-upload images, rebuild previews.
@@ -291,8 +301,9 @@ function App() {
       disposed = true
       renderer?.dispose()
       rendererRef.current = null
+      setCaptureThumbnailImpl(null)
     }
-  }, [])
+  }, [captureThumbnail])
 
   // Initialize preview scheduler for per-node thumbnails
   // Waits for the main renderer so we can share its GPUDevice when available.
