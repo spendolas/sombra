@@ -12,9 +12,8 @@ import { useGraphStore } from '@/stores/graphStore'
 import { usePreviewStore } from '@/stores/previewStore'
 import { ds } from '@/generated/ds'
 import { svgCursor, moveCursor } from '@/utils/cursors'
-import { processImageFile } from '@/utils/process-image'
+import { ACCEPTED_IMAGE_TYPES, processImageFile } from '@/utils/process-image'
 
-const ACCEPTED_TYPES = 'image/png,image/jpeg,image/webp,image/gif'
 const CORNER_ZONE = 8
 const EDGE_ZONE = 6
 const ROTATE_ZONE = 20
@@ -518,7 +517,7 @@ export function ImageUploader({ nodeId, data }: {
 
   return (
     <div className="flex flex-col gap-y-md nodrag nowheel min-w-0 max-w-full overflow-hidden">
-      <input ref={fileInputRef} type="file" accept={ACCEPTED_TYPES} onChange={handleFileChange} className="hidden" />
+      <input ref={fileInputRef} type="file" accept={ACCEPTED_IMAGE_TYPES} onChange={handleFileChange} className="hidden" />
 
       {imageData ? (
         <>

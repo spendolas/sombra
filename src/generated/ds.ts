@@ -15,6 +15,18 @@ export const ds = {
   fullWindowOverlay: {
     root: "flex flex-col bg-overlay-scrim fixed z-50 overflow-hidden inset-0",
   },
+  actionButton: {
+    secondary: "flex flex-row items-center justify-center rounded-sm border border-edge px-lg py-xs text-action text-fg-dim cursor-pointer transition-colors hover:bg-hover hover:text-fg",
+    primary: "flex flex-row items-center justify-center bg-indigo rounded-sm px-lg py-xs text-action text-fg cursor-pointer transition-colors hover:bg-indigo-hover",
+    primaryDisabled: "flex flex-row items-center justify-center bg-surface-raised rounded-sm px-lg py-xs text-action text-fg-muted cursor-not-allowed",
+  },
+  fileDropDialog: {
+    root: "flex flex-col items-center justify-center bg-overlay-scrim fixed z-50 overflow-hidden inset-0",
+    panel: "flex flex-col bg-surface-raised rounded-md border border-edge p-lg gap-md overflow-hidden",
+    title: "text-node-title text-fg",
+    detail: "text-description text-fg-dim",
+    actions: "flex flex-row items-center justify-end gap-md overflow-hidden",
+  },
   nodePalette: {
     root: "flex flex-col bg-surface-alt p-xl gap-xs overflow-hidden",
     categoryGroup: "flex flex-col gap-lg",

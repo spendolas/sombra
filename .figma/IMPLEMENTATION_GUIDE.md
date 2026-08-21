@@ -137,6 +137,7 @@ When the Figma design uses a known component, use the corresponding React compon
 ```
 Figma: Handle → <BaseHandle handleColor={getPortColor(type)} connected={bool} />
 Figma: Separator → <Separator />  (from src/components/ui/separator.tsx)
+Figma: Action Button → <ActionButton variant="secondary|primary" disabled={bool} />
 ```
 
 ### Molecules
@@ -161,6 +162,7 @@ Figma: Node Palette → <NodePalette />  (auto-reads from nodeRegistry)
 Figma: Properties Panel → <PropertiesPanel />  (reads selected node from store)
 Figma: Floating Preview → <FloatingPreview targetRef={ref} />
 Figma: Full Window Overlay → <FullWindowOverlay targetRef={ref} />
+Figma: File Drop Dialog    → <FileDropDialog state={state} onResolve={fn} />
 ```
 
 ---
@@ -177,6 +179,7 @@ Complete mapping of every Figma component to its React source:
 | Category Header | `106:92` | `src/components/NodePalette.tsx` | (inline `<h3>`) |
 | Palette Item | `106:95` | `src/components/NodePalette.tsx` | (inline) |
 | PlusMinus Button | `106:108` | `src/components/ShaderNode.tsx` | (inline) |
+| Action Button | `901:2134` | `src/components/ActionButton.tsx` | `ActionButton` |
 
 ### Molecules (V2 IDs)
 | Figma Component | Node ID | Source File | React Component |
@@ -196,6 +199,7 @@ Complete mapping of every Figma component to its React source:
 | Properties Panel | `106:485` | `src/components/PropertiesPanel.tsx` | `PropertiesPanel` |
 | Floating Preview | `106:498` | `src/components/FloatingPreview.tsx` | `FloatingPreview` |
 | Full Window Overlay | `106:511` | `src/components/FullWindowOverlay.tsx` | `FullWindowOverlay` |
+| File Drop Dialog | `901:2118` | `src/components/FileDropOverlay.tsx` | `FileDropDialog` |
 
 ---
 

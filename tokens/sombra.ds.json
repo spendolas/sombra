@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "lastSync": "2026-08-16T22:26:44.695Z",
+  "lastSync": "2026-08-21T01:17:46.000Z",
   "figmaFileKey": "gq5i0l617YkXy0GzAZPtqz",
   "colors": {
     "VariableID:106:3": {
@@ -616,6 +616,15 @@
         "fontWeight": 400,
         "lineHeight": 1.5
       }
+    },
+    "S:8c53b28931614cd41e251e35fc3008bb7ad2c143,": {
+      "figmaName": "label/action",
+      "utility": "text-action",
+      "properties": {
+        "fontSize": "12px",
+        "fontWeight": 500,
+        "lineHeight": 1.5
+      }
     }
   },
   "components": {
@@ -738,6 +747,127 @@
           "inset": "0",
           "z": 50,
           "layout": "vertical",
+          "overflow": "hidden"
+        }
+      }
+    },
+    "901:2134": {
+      "name": "Action Button",
+      "type": "atom",
+      "dsKey": "actionButton",
+      "codeFile": "src/components/ActionButton.tsx",
+      "parts": {
+        "secondary": {
+          "figmaNodeId": "901:2128",
+          "layout": "horizontal",
+          "align": "center",
+          "justify": "center",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "radius": "sm",
+          "padding": {
+            "x": "lg",
+            "y": "xs"
+          },
+          "textStyle": "text-action",
+          "textColor": "fg-dim",
+          "cursor": "pointer",
+          "transition": "colors",
+          "hover": {
+            "fill": "interactive/hover",
+            "textColor": "fg"
+          }
+        },
+        "primary": {
+          "figmaNodeId": "901:2130",
+          "layout": "horizontal",
+          "align": "center",
+          "justify": "center",
+          "fill": "indigo/default",
+          "radius": "sm",
+          "padding": {
+            "x": "lg",
+            "y": "xs"
+          },
+          "textStyle": "text-action",
+          "textColor": "fg",
+          "cursor": "pointer",
+          "transition": "colors",
+          "hover": {
+            "fill": "indigo/hover"
+          }
+        },
+        "primaryDisabled": {
+          "figmaNodeId": "901:2132",
+          "layout": "horizontal",
+          "align": "center",
+          "justify": "center",
+          "fill": "surface/raised",
+          "radius": "sm",
+          "padding": {
+            "x": "lg",
+            "y": "xs"
+          },
+          "textStyle": "text-action",
+          "textColor": "fg-muted",
+          "cursor": "not-allowed"
+        }
+      }
+    },
+    "901:2118": {
+      "name": "File Drop Dialog",
+      "type": "organism",
+      "dsKey": "fileDropDialog",
+      "codeFile": "src/components/FileDropOverlay.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "901:2118",
+          "layout": "vertical",
+          "fill": "overlay/scrim",
+          "align": "center",
+          "justify": "center",
+          "position": "fixed",
+          "inset": "0",
+          "z": 50,
+          "overflow": "hidden",
+          "auditIgnore": [
+            "width.mode",
+            "width.px",
+            "height.mode",
+            "height.px"
+          ]
+        },
+        "panel": {
+          "figmaNodeId": "901:2119",
+          "layout": "vertical",
+          "fill": "surface/raised",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "radius": "md",
+          "padding": "lg",
+          "gap": "md",
+          "overflow": "hidden"
+        },
+        "title": {
+          "figmaNodeId": "901:2120",
+          "textStyle": "text-node-title",
+          "textColor": "fg"
+        },
+        "detail": {
+          "figmaNodeId": "901:2121",
+          "textStyle": "text-description",
+          "textColor": "fg-dim"
+        },
+        "actions": {
+          "figmaNodeId": "901:2122",
+          "layout": "horizontal",
+          "align": "center",
+          "justify": "end",
+          "gap": "md",
           "overflow": "hidden"
         }
       }

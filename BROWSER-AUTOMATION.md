@@ -182,6 +182,7 @@ has no bridge accessor for them today.
 |---|---|
 | `undo()` / `redo()` | Param edits are undoable (coalesced per node within a sliding 800ms window); deletes are atomic (node + connected edges = one entry) |
 | `removeElements(nodeIds, edgeIds)` | Atomic multi-delete — one history entry |
+| `addNodes(nodes)` | Atomic multi-add — one history entry (used by multi-image file drops) |
 | `replaceEdge(oldEdgeId, newEdge)` | Atomic reconnect (enforces single-wire-per-input) |
 | `updateNodeData(id, {params})` | What `setParams` calls under the hood |
 
@@ -248,6 +249,11 @@ Inflating the payload produces the editable, versioned graph envelope:
 - **File extension:** `.sombra`. Legacy plain-JSON `.sombra` files and `.json` files remain importable.
 
 The **GraphToolbar** in the top-left of the canvas provides Save (download) and Open (upload) buttons for `.sombra` files.
+
+The canvas also accepts typed file drops: supported images append Image nodes after
+the shared downscaler runs, while one `.sombra` file validates and asks for
+confirmation before replacing the graph. The format registry and extension steps
+are documented in [`docs/file-drop-formats.md`](docs/file-drop-formats.md).
 
 ---
 
