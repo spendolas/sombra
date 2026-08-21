@@ -272,3 +272,30 @@ handling is a possible hardening, but not user-reachable through the UI.)
 - **Remaining:** reeded_glass migration (steps 1–2 mechanical; step 3 = design
   call on Copies 2 & 3, needs sign-off). Optional: gizmo scaleXY handles; DS
   Figma mirror of the coords-view SegmentedControl + crosshair/globe/box icons.
+
+## reeded migration — DONE via emitSRT parameterization (2026-08-21, Opus 4.8)
+
+Chose the "parameterize emitSRT" path. `SRTBasisOptions` added to emitSRT
+(screenAnchor / flipY / aspectConjugate+asp / translateFormula / translateOrder /
+anchorAdd), all defaulting to the canonical framework lowering — verify:srt gate C
+byte-pin holds, the 44 conforming nodes are untouched. reeded's three copies now
+come from `reededSRTBases()` → emitSRT (IR path = single-emitter raw split, so
+hand-written two-arg raw stays 0). **Op-order is single-sourced; drift hazard gone.**
+
+VERIFIED byte-identical on real GPU, both backends, via the new
+`scripts/verify-reeded-parity-gpu.ts` (frost=0 gate; ramp→reeded): tx=0 / tx=120 /
+rotate=30 / rotate=30+tx=120 all match pre-refactor digests. Zero pixel change.
+
+**Tension surfaced (decision for the record):** "off the ratchet" and "no look
+change" are INCOMPATIBLE for reeded. Full conformity means framework injection
+(spatial: + ctx.spatialCoords) = ONE world-order canonical basis, but reeded needs
+three bespoke bases + a node-order translate; forcing the canonical basis shifts
+the ribs at translate≠0 and changes the primary look. So reeded stays LISTED on
+the conformity ratchet as an ACCEPTED (not pending) deviation — the thing the
+ratchet actually guards (duplicated/hand-rolled op-order) is eliminated. To go
+fully off the ratchet later, accept a rib shift at translate≠0 and framework-inject.
+
+**SRT track status: effectively complete.** All 45 nodes route SRT op-order
+through the single source. Remaining optional: gizmo scaleXY handles; Figma DS
+mirror of the coords-view SegmentedControl + icons. Branch feat/srt-api unmerged
+(QA pending).
