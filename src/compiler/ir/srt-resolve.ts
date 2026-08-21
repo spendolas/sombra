@@ -170,8 +170,14 @@ export function resolveSRT(params: Record<string, unknown>, opts: ResolveSRTOpti
   // DOWN — inconsistent with the +ty-up nodes and reading as "flipped". The drag
   // is unaffected (dragTranslate projects onto the axis and toParam carries the
   // sign; the projection is axis-sign-independent), so this is visual-only.
+  // Node frame: X tracks the node's rotation (axisDir, confirmed correct). Draw Y
+  // as the UP-side perpendicular of X, not axisDir(0,1) — which followed the +ty
+  // direction and pointed DOWN for +ty-down nodes (the same flip as world). It's
+  // the same axis LINE, just drawn toward up; constrained drag is unchanged
+  // (projection onto a line is sign-independent). World frame = canvas axes.
+  const nodeX = axisDir(1, 0, 1, 0)
   const axes = space === 'node'
-    ? { x: axisDir(1, 0, 1, 0), y: axisDir(0, 1, 0, -1) }
+    ? { x: nodeX, y: { x: nodeX.y, y: -nodeX.x } }
     : { x: { x: 1, y: 0 }, y: { x: 0, y: -1 } }
 
   // Stored-offset meaning: in 'node-legacy' (hand-rolled reeded SRT) the
