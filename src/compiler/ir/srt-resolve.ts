@@ -37,12 +37,15 @@ export interface Vec2 { x: number; y: number }
 /**
  * 'auto_uv': the coordinate contract (y-down, ref-sized, buffer px).
  * 'screen_uv': image's v_uv space (y-up, canvas-relative, per-axis units).
- * (reeded pixel-measured 2026-08-21: its rib space has STANDARD parity —
- *  +ty up, standard rotation — plus node-frame translate; so it's plain
- *  'auto_uv' + translateFrame 'node-legacy'. A y-flipped 'ref_yup' space was
- *  derived from patRef source-reading, shipped, and proven wrong on screen.)
+ * 'screen_px': reeded's rib (colour) space — the shader translates the ribs by
+ *  vec2(tx,-ty)·u_dpr/u_resolution, which works out to a DPR-INDEPENDENT 1:1 CSS
+ *  px displacement (+ty up). It matches 'auto_uv' only at dpr=1 — which is why
+ *  reeded was previously (mis)filed as 'auto_uv' + node-legacy: the pixel
+ *  measurement was done on a dpr=1 display, so the ×dpr error never showed. On a
+ *  retina display the auto_uv gizmo lags the ribs by exactly dpr. (A y-flipped
+ *  'ref_yup' space was also tried from patRef source-reading and proven wrong.)
  */
-export type SRTCoordSpace = 'auto_uv' | 'screen_uv'
+export type SRTCoordSpace = 'auto_uv' | 'screen_uv' | 'screen_px'
 
 export interface SRTCanvasMetrics {
   /** Canvas CSS size. */
@@ -126,7 +129,13 @@ export function resolveSRT(params: Record<string, unknown>, opts: ResolveSRTOpti
   // param-space offset delta (+Y semantics per space) and a CSS delta (y-down).
   let toCss: (dtx: number, dty: number) => Vec2
   let toParam: (dx: number, dy: number) => Vec2
-  if (coordSpace === 'screen_uv') {
+  if (coordSpace === 'screen_px') {
+    // reeded's rib space: the shader offset vec2(tx,-ty)·u_dpr/u_resolution
+    // reduces to a 1:1 CSS-px displacement, y-up, independent of dpr and aspect.
+    // (auto_uv would map it as 1/dpr — the retina misalignment.)
+    toCss = (dtx, dty) => ({ x: dtx, y: -dty })
+    toParam = (dx, dy) => ({ x: dx, y: -dy })
+  } else if (coordSpace === 'screen_uv') {
     // v_uv space: y-up, canvas-relative. u_dpr ≈ bufferW/cssW; tExpr divides
     // by u_dpr·REF, then 1 uv unit spans the canvas per axis. +ty → DOWN.
     const k = bufferW / cssW
