@@ -272,12 +272,9 @@ async function figmaGet(path: string): Promise<unknown> {
 function buildGripSerializeScript(nodeIds: string[]): string {
   return `
 const IDS = ${JSON.stringify(nodeIds)}
-const want = new Set(IDS)
 const found = {}
-figma.root.findAll((n) => {
-  if (want.has(n.id)) found[n.id] = n
-  return false
-})
+const resolved = await Promise.all(IDS.map(async (id) => [id, await figma.getNodeByIdAsync(id)]))
+for (const [id, node] of resolved) found[id] = node
 
 function g(fn) { try { return fn() } catch (e) { return undefined } }
 function num(v) { return typeof v === 'number' ? v : undefined }
