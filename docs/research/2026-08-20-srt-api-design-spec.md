@@ -245,3 +245,15 @@ ramp along the displacement axis (X for vertical ribs) for structure; large-scal
 value/simplex noise for frost/grain. frost=0 for the exact-equality gate (frost
 has a known ~51-code bilinear backend divergence); enable frost only for the
 qualitative pass.
+
+## Correction 2026-08-21 — the "noise→warp black" was NOT a bug
+
+Commit f151e89's message flagged a "pre-existing bug: noise→warp(texture)
+renders black". That was WRONG — a test artifact. noise and fbm expose only a
+`value` output (no `color` port); the bridge probe forced an invalid
+`noise.color → warp.source` edge (the UI blocks it — React Flow logs
+"Couldn't create edge for source handle 'color'"). With a valid edge
+(`noise.value → warp`, or noise→color_ramp→warp) warp renders correctly.
+checkerboard/gradient/`noise.value` all warp fine. No compiler bug; no fix
+needed. (A forced-invalid boundary edge does yield a malformed pass — defensive
+handling is a possible hardening, but not user-reachable through the UI.)
