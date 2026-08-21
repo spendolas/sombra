@@ -18,8 +18,9 @@ import type { NodeDefinition, GLSLContext } from '../types'
 import { addFunction, getSpatialParams } from '../types'
 import { registerNoiseType, resolveNoiseFn, getIRNoiseFunctions } from '../noise/noise-functions'
 import { COLOR_GLSL_HELPERS, COLOR_IR_HELPERS } from '../shared/color-space'
-import type { IRContext, IRFunction, IRNodeOutput, IRStmt } from '../../compiler/ir/types'
+import type { IRContext, IRFunction, IRNodeOutput, IRStmt, IRSpatialTransform } from '../../compiler/ir/types'
 import { variable, declare, assign, binary, call, construct, literal, raw, ifStmt, textureSample, fragCoord, framebufferY } from '../../compiler/ir/types'
+import { emitSRT } from '../../compiler/ir/srt'
 
 const RIB_TYPE_OPTIONS = [
   { value: 'straight', label: 'Straight' },
@@ -784,6 +785,47 @@ function emitSeamGeometry(o: {
   }
 }
 
+/**
+ * reeded's THREE coordinate bases, all routed through the single SRT source
+ * (`emitSRT`) rather than hand-rolled per copy. Byte-identical to the previous
+ * inline math — pinned by scripts/verify-reeded-parity-gpu.ts on both backends.
+ * Only the coordinate LOWERING lives here; the rib optics still read rad/asp/
+ * scale from the Basis objects. All three keep reeded's original NODE-order
+ * translate (a mid-frame offset moves the glass, not the world frame), so the
+ * look is unchanged at any offset — this was a pure structural unification, not
+ * a reframe. Shared by glsl() and ir() so the two backends cannot drift.
+ */
+function reededSRTBases(
+  inp: Record<string, string>,
+  autoUv: string,
+) {
+  const common = {
+    scaleUniform: inp.srt_scale, rotateUniform: inp.srt_rotate,
+    translateXUniform: inp.srt_translateX, translateYUniform: inp.srt_translateY,
+  }
+  return {
+    // Copy 1 — grain + frost seed: canonical y-down isotropic ref basis.
+    seed: (outputVar: string): IRSpatialTransform => ({
+      ...common, coordsVar: autoUv, outputVar, basis: { translateOrder: 'node' },
+    }),
+    // Copy 2 — ribs → `coords` output: y-UP pattern basis, stays anchor-relative.
+    pat: (outputVar: string): IRSpatialTransform => ({
+      ...common, coordsVar: autoUv, outputVar,
+      basis: { flipY: true, anchorAdd: false, translateOrder: 'node' },
+    }),
+    // Copy 3 — ribs → `color`: per-axis SCREEN basis (v_uv, y-up), aspect-
+    // conjugated rotation, screen-formula translate, stays anchor-relative.
+    scr: (outputVar: string, aspScr: string): IRSpatialTransform => ({
+      ...common, coordsVar: 'v_uv', outputVar,
+      basis: {
+        screenAnchor: true,
+        aspectConjugate: true, asp: aspScr,
+        translateFormula: 'screen', translateOrder: 'node', anchorAdd: false,
+      },
+    }),
+  }
+}
+
 export const reededGlassNode: NodeDefinition = {
   type: 'reeded_glass',
   label: 'Reeded Glass',
@@ -924,19 +966,16 @@ export const reededGlassNode: NodeDefinition = {
     const autoUv = `rg_auv_${id}`
     const coordsVar = `rg_coords_${id}`
     lines.push(`vec2 ${autoUv} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * u_anchor) / (u_dpr * u_ref_size) + u_anchor;`)
-    lines.push(`vec2 ${coordsVar} = ${autoUv};`)
-    // SRT the PATTERN basis: center → scale → rotate → translate → re-center.
-    // No aspect conjugation here: ref space is already isotropic (one unit is
-    // u_dpr * u_ref_size device px on BOTH axes), so conjugating — as this path
-    // used to — makes the rotation non-rigid and skews the rib angle on a
-    // non-square canvas. The screen path needs it because v_uv is per-axis.
+    // radRef feeds the rib OPTICS (refBasis.rad, patRef optics). The coordinate
+    // lowering itself now routes through the single SRT source (emitSRT) instead
+    // of a hand-rolled copy — see reededSRTBases. No aspect conjugation on the
+    // ref basis: it is isotropic (u_dpr*u_ref_size on both axes), so a plain
+    // rotation stays rigid; the screen basis conjugates because v_uv is per-axis.
     const radRef = `rg_rad_ref_${id}`
-    lines.push(`${coordsVar} -= u_anchor;`)
-    lines.push(`${coordsVar} /= vec2(${inputs.srt_scale});`)
     lines.push(`float ${radRef} = ${inputs.srt_rotate} * 0.01745329;`)
-    lines.push(`${coordsVar} = vec2(${coordsVar}.x * cos(${radRef}) - ${coordsVar}.y * sin(${radRef}), ${coordsVar}.x * sin(${radRef}) + ${coordsVar}.y * cos(${radRef}));`)
-    lines.push(`${coordsVar} -= vec2(${inputs.srt_translateX}, -(${inputs.srt_translateY})) / (u_dpr * u_ref_size);`)
-    lines.push(`${coordsVar} += u_anchor;`)
+    const bases = reededSRTBases(inputs, autoUv)
+    // Copy 1 — grain + frost seed (canonical ref basis, node-order translate).
+    lines.push(...emitSRT(bases.seed(coordsVar), 'glsl'))
 
     const ampRef = `rg_amp_ref_${id}`
     const wlRef = `rg_wl_ref_${id}`
@@ -954,10 +993,8 @@ export const reededGlassNode: NodeDefinition = {
     // orientation, exactly as srtScr is. No aspect conjugation: ref space is
     // isotropic.
     const patRef = `rg_pat_ref_${id}`
-    lines.push(`vec2 ${patRef} = vec2(${autoUv}.x - u_anchor.x, -(${autoUv}.y - u_anchor.y));`)
-    lines.push(`${patRef} /= vec2(${inputs.srt_scale});`)
-    lines.push(`${patRef} = vec2(${patRef}.x * cos(${radRef}) - ${patRef}.y * sin(${radRef}), ${patRef}.x * sin(${radRef}) + ${patRef}.y * cos(${radRef}));`)
-    lines.push(`${patRef} -= vec2(${inputs.srt_translateX}, -(${inputs.srt_translateY})) / (u_dpr * u_ref_size);`)
+    // Copy 2 — ribs → `coords` output (y-up pattern basis, anchor-relative).
+    lines.push(...emitSRT(bases.pat(patRef), 'glsl'))
 
     const refBasis: Basis = {
       point: patRef,
@@ -1002,18 +1039,15 @@ export const reededGlassNode: NodeDefinition = {
     if (samplerName) {
       // Apply SRT to screen UV coords for rib pattern
       const srtScr = `rg_srt_scr_${id}`
-      lines.push(`vec2 ${srtScr} = v_uv - vec2(u_anchor.x, 1.0 - u_anchor.y);`)
-      lines.push(`${srtScr} /= vec2(${inputs.srt_scale});`)
-      // Rotate with aspect correction
+      // aspScr + radScr feed the rib OPTICS (scrBasis). The coordinate lowering
+      // is the single SRT source (emitSRT) with the per-axis screen basis:
+      // aspect-conjugated rotation + screen-formula node-order translate.
       const aspScr = `rg_asp_scr_${id}`
       const radScr = `rg_rad_scr_${id}`
       lines.push(`float ${aspScr} = u_resolution.x / u_resolution.y;`)
       lines.push(`float ${radScr} = ${inputs.srt_rotate} * 0.01745329;`)
-      lines.push(`${srtScr}.x *= ${aspScr};`)
-      lines.push(`${srtScr} = vec2(${srtScr}.x * cos(${radScr}) - ${srtScr}.y * sin(${radScr}), ${srtScr}.x * sin(${radScr}) + ${srtScr}.y * cos(${radScr}));`)
-      lines.push(`${srtScr}.x /= ${aspScr};`)
-      // Translate in screen UV (pixels → screen UV)
-      lines.push(`${srtScr} -= vec2(${inputs.srt_translateX}, -(${inputs.srt_translateY})) * u_dpr / u_resolution;`)
+      // Copy 3 — ribs → `color` (per-axis screen basis).
+      lines.push(...emitSRT(bases.scr(srtScr, aspScr), 'glsl'))
 
       const mainScr = isVert ? `${srtScr}.x` : `${srtScr}.y`
       const resMain = isVert ? 'u_resolution.x' : 'u_resolution.y'
@@ -1218,18 +1252,16 @@ export const reededGlassNode: NodeDefinition = {
             binary('*', variable('u_resolution'), variable('u_anchor'), 'vec2'), 'vec2'),
           binary('*', variable('u_dpr'), variable('u_ref_size'), 'float'), 'vec2'),
         variable('u_anchor'), 'vec2')))
+    // radRef feeds the rib OPTICS (refBasis.rad); the coordinate lowering routes
+    // through the single SRT source. `emitSrt` is a single-emitter raw split
+    // (glsl + wgsl from ONE emitter — emitSRT — so they cannot drift).
     const radRef = `rg_rad_ref_${id}`
-    // No aspect conjugation: ref space is isotropic, so conjugating would make the
-    // rotate non-rigid and skew the rib angle on a non-square canvas.
-    stmts.push(raw(
-      `vec2 ${coordsVar} = ${autoUv};\n` +
-      `  ${coordsVar} -= u_anchor;\n` +
-      `  ${coordsVar} /= vec2(${ctx.inputs.srt_scale});\n` +
-      `  float ${radRef} = ${ctx.inputs.srt_rotate} * 0.01745329;\n` +
-      `  ${coordsVar} = vec2(${coordsVar}.x * cos(${radRef}) - ${coordsVar}.y * sin(${radRef}), ${coordsVar}.x * sin(${radRef}) + ${coordsVar}.y * cos(${radRef}));\n` +
-      `  ${coordsVar} -= vec2(${ctx.inputs.srt_translateX}, -(${ctx.inputs.srt_translateY})) / (u_dpr * u_ref_size);\n` +
-      `  ${coordsVar} += u_anchor;`,
-    ))
+    stmts.push(raw(`float ${radRef} = ${ctx.inputs.srt_rotate} * 0.01745329;`))
+    const bases = reededSRTBases(ctx.inputs, autoUv)
+    const emitSrt = (srt: IRSpatialTransform) =>
+      raw(emitSRT(srt, 'glsl').join('\n  '), emitSRT(srt, 'wgsl').join('\n  '))
+    // Copy 1 — grain + frost seed (canonical ref basis, node-order translate).
+    stmts.push(emitSrt(bases.seed(coordsVar)))
 
     const ampRef = `rg_amp_ref_${id}`
     const wlRef = `rg_wl_ref_${id}`
@@ -1241,12 +1273,8 @@ export const reededGlassNode: NodeDefinition = {
 
     // Same orientation as the colour path — see the glsl() comment.
     const patRef = `rg_pat_ref_${id}`
-    stmts.push(raw(
-      `vec2 ${patRef} = vec2(${autoUv}.x - u_anchor.x, -(${autoUv}.y - u_anchor.y));\n` +
-      `  ${patRef} /= vec2(${ctx.inputs.srt_scale});\n` +
-      `  ${patRef} = vec2(${patRef}.x * cos(${radRef}) - ${patRef}.y * sin(${radRef}), ${patRef}.x * sin(${radRef}) + ${patRef}.y * cos(${radRef}));\n` +
-      `  ${patRef} -= vec2(${ctx.inputs.srt_translateX}, -(${ctx.inputs.srt_translateY})) / (u_dpr * u_ref_size);`,
-    ))
+    // Copy 2 — ribs → `coords` output (y-up pattern basis, anchor-relative).
+    stmts.push(emitSrt(bases.pat(patRef)))
 
     const refBasis: Basis = {
       point: patRef,
@@ -1288,14 +1316,12 @@ export const reededGlassNode: NodeDefinition = {
     if (samplerName) {
       // Apply SRT to screen UV coords for rib pattern
       const srtScr = `rg_srt_scr_${id}`
-      stmts.push(raw(`vec2 ${srtScr} = v_uv - vec2(u_anchor.x, 1.0 - u_anchor.y);`))
-      stmts.push(raw(`${srtScr} /= vec2(${ctx.inputs.srt_scale});`))
-      stmts.push(raw(`float rg_asp_scr_${id} = u_resolution.x / u_resolution.y;`))
+      const aspScr = `rg_asp_scr_${id}`
+      // aspScr + radScr feed the rib OPTICS (scrBasis); coordinate lowering via emitSRT.
+      stmts.push(raw(`float ${aspScr} = u_resolution.x / u_resolution.y;`))
       stmts.push(raw(`float rg_rad_scr_${id} = ${ctx.inputs.srt_rotate} * 0.01745329;`))
-      stmts.push(raw(`${srtScr}.x *= rg_asp_scr_${id};`))
-      stmts.push(raw(`${srtScr} = vec2(${srtScr}.x * cos(rg_rad_scr_${id}) - ${srtScr}.y * sin(rg_rad_scr_${id}), ${srtScr}.x * sin(rg_rad_scr_${id}) + ${srtScr}.y * cos(rg_rad_scr_${id}));`))
-      stmts.push(raw(`${srtScr}.x /= rg_asp_scr_${id};`))
-      stmts.push(raw(`${srtScr} -= vec2(${ctx.inputs.srt_translateX}, -(${ctx.inputs.srt_translateY})) * u_dpr / u_resolution;`))
+      // Copy 3 — ribs → `color` (per-axis screen basis).
+      stmts.push(emitSrt(bases.scr(srtScr, aspScr)))
 
       const mainScr = isVert ? `${srtScr}.x` : `${srtScr}.y`
       const warpedMainScr = `rg_wm_scr_${id}`

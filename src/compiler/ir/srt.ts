@@ -81,21 +81,38 @@ export function emitSRT(srt: IRSpatialTransform, lang: 'glsl' | 'wgsl'): string[
   const v2 = w ? 'vec2f' : 'vec2'
   const declV = w ? `var ${v}: vec2f =` : `vec2 ${v} =`
   const letF = (n: string) => (w ? `let ${n}: f32 =` : `float ${n} =`)
+
+  // Basis options — every default reproduces the CANONICAL lowering exactly, so
+  // omitting `basis` is byte-identical to before (verify:srt gate C byte-pins it).
+  const b = srt.basis ?? {}
+  const subAnchor = b.screenAnchor ? `${w ? 'vec2f' : 'vec2'}(u_anchor.x, 1.0 - u_anchor.y)` : 'u_anchor'
+  const flipY = b.flipY === true
+  const conj = b.aspectConjugate === true
+  const asp = b.asp
+  const tOrder = b.translateOrder ?? 'world'
+  const anchorAdd = b.anchorAdd !== false
+
   const hasTranslate = !!(srt.translateXUniform && srt.translateYUniform)
-  // Pixel Offset → frozen-ref UV. Y negated so +Offset Y reads as "up".
+  // Pixel Offset → UV. Y negated so +Offset Y reads as "up". 'ref' = isotropic
+  // frozen-ref units; 'screen' = per-axis screen units (reeded's colour basis).
   const tExpr = hasTranslate
-    ? `${v2}(${srt.translateXUniform}, -(${srt.translateYUniform})) / (u_dpr * u_ref_size)`
+    ? (b.translateFormula === 'screen'
+        ? `${v2}(${srt.translateXUniform}, -(${srt.translateYUniform})) * u_dpr / u_resolution`
+        : `${v2}(${srt.translateXUniform}, -(${srt.translateYUniform})) / (u_dpr * u_ref_size)`)
     : null
 
   const lines: string[] = []
 
-  // 1. Start from coords, translate applied in the world frame (before the
-  //    anchor/scale/rotate block) — the one and only translate semantic.
-  if (tExpr) {
+  // 1. Opening. WORLD order folds translate into the opening decl (the canonical
+  //    one-semantic path). NODE order (and the no-translate case) subAnchors only
+  //    here and applies translate after rotate. flipY negates Y for a y-up basis.
+  if (tOrder === 'world' && tExpr) {
     lines.push(`${declV} ${srt.coordsVar} - ${tExpr};`)
-    lines.push(`${v} -= u_anchor;`)
+    lines.push(`${v} -= ${subAnchor};`)
+  } else if (flipY) {
+    lines.push(`${declV} ${v2}(${srt.coordsVar}.x - ${subAnchor}.x, -(${srt.coordsVar}.y - ${subAnchor}.y));`)
   } else {
-    lines.push(`${declV} ${srt.coordsVar} - u_anchor;`)
+    lines.push(`${declV} ${srt.coordsVar} - ${subAnchor};`)
   }
 
   // 2. Scale (coords /= scale, so scale=2 → content twice as large).
@@ -105,16 +122,23 @@ export function emitSRT(srt: IRSpatialTransform, lang: 'glsl' | 'wgsl'): string[
     lines.push(`${v} /= ${v2}(${srt.scaleXUniform}, ${srt.scaleYUniform});`)
   }
 
-  // 3. Rotate. coords are isotropic (auto_uv divides both axes by the frozen
-  //    u_ref_size), so a plain rotation is resolution-independent. Degrees.
+  // 3. Rotate. Isotropic (canonical ref space, resolution-independent) or, for
+  //    per-axis screen space, aspect-conjugated so the rotation stays rigid.
   if (srt.rotateUniform) {
     const rad = `${v}_rad`, c = `${v}_c`, s = `${v}_s`
     lines.push(`${letF(rad)} ${srt.rotateUniform} * 0.01745329;`)
     lines.push(`${letF(c)} cos(${rad}); ${letF(s)} sin(${rad});`)
+    if (conj) lines.push(`${v}.x *= ${asp};`)
     lines.push(`${v} = ${v2}(${v}.x * ${c} - ${v}.y * ${s}, ${v}.x * ${s} + ${v}.y * ${c});`)
+    if (conj) lines.push(`${v}.x /= ${asp};`)
   }
 
-  // 4. Back to anchor-relative.
-  lines.push(`${v} += u_anchor;`)
+  // 4. NODE-order translate lands here, after rotate.
+  if (tOrder === 'node' && tExpr) {
+    lines.push(`${v} -= ${tExpr};`)
+  }
+
+  // 5. Back to anchor-relative (unless the basis stays anchor-relative).
+  if (anchorAdd) lines.push(`${v} += u_anchor;`)
   return lines
 }
