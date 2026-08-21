@@ -841,7 +841,7 @@
         },
         "panel": {
           "figmaNodeId": "901:2119",
-          "layout": "vertical",
+          "layout": "horizontal",
           "fill": "surface/raised",
           "stroke": {
             "color": "edge/default",
@@ -849,8 +849,27 @@
           },
           "radius": "md",
           "padding": "lg",
-          "gap": "md",
+          "gap": "lg",
           "overflow": "hidden"
+        },
+        "preview": {
+          "layout": "horizontal",
+          "fill": "surface/default",
+          "stroke": {
+            "color": "edge/subtle",
+            "weight": 1
+          },
+          "radius": "md",
+          "overflow": "hidden"
+        },
+        "content": {
+          "layout": "vertical",
+          "justify": "between",
+          "gap": "md"
+        },
+        "textGroup": {
+          "layout": "vertical",
+          "gap": "sm"
         },
         "title": {
           "figmaNodeId": "901:2120",
