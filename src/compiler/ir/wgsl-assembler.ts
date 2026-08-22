@@ -90,6 +90,8 @@ function computeUniformLayout(
     fields.push({ name: 'u_resolution', wgslType: 'vec2f', size: 8, align: 8 })
   if (standardUniforms.has('u_dpr'))
     fields.push({ name: 'u_dpr', wgslType: 'f32', size: 4, align: 4 })
+  if (standardUniforms.has('u_frame_scale'))
+    fields.push({ name: 'u_frame_scale', wgslType: 'f32', size: 4, align: 4 })
   if (standardUniforms.has('u_ref_size'))
     fields.push({ name: 'u_ref_size', wgslType: 'f32', size: 4, align: 4 })
   if (standardUniforms.has('u_anchor'))

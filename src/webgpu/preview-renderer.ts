@@ -488,6 +488,7 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
     set('u_resolution', tw, th)
     set('u_ref_size', REFERENCE_SIZE)
     set('u_dpr', tdpr)
+    set('u_frame_scale', tdpr)
     set('u_viewport', tw, th)
     set('u_mouse', 0, 0)
     set('u_anchor', 0.5, 0.5)
