@@ -43,7 +43,7 @@ export const pixelateNode: NodeDefinition = {
     const { inputs, outputs, uniforms } = ctx
     uniforms.add('u_viewport')
     uniforms.add('u_resolution')
-    uniforms.add('u_dpr')
+    uniforms.add('u_frame_scale')
     uniforms.add('u_ref_size')
     uniforms.add('u_anchor')
     const id = ctx.nodeId.replace(/-/g, '_')
@@ -52,17 +52,17 @@ export const pixelateNode: NodeDefinition = {
 
     // Grid in pixel space, centered on canvas center
     lines.push(`vec2 pxl_centered_${id} = gl_FragCoord.xy - u_resolution * u_anchor;`)
-    // Pixel Size is authored in reference px, so scale by u_dpr to get device px —
-    // without it a block is u_dpr times smaller on a hi-DPI display, unlike every
+    // Pixel Size is authored in reference px, so scale by u_frame_scale to get device px —
+    // without it a block is u_frame_scale times smaller on a hi-DPI display, unlike every
     // other spatial node in the repo. Quantised and reused at BOTH sites so the
     // cell grid and the cell centre cannot disagree.
-    lines.push(`float pxl_size_${id} = max(1.0, floor(${inputs.pixelSize} * u_dpr + 0.5));`)
+    lines.push(`float pxl_size_${id} = max(1.0, floor(${inputs.pixelSize} * u_frame_scale + 0.5));`)
     lines.push(`vec2 pxl_cell_${id} = floor(pxl_centered_${id} / vec2(pxl_size_${id}));`)
     lines.push(`vec2 pxl_px_${id} = (pxl_cell_${id} + 0.5) * vec2(pxl_size_${id}) + u_resolution * u_anchor;`)
     // Screen UV for FBO sampling
     lines.push(`vec2 pxl_screenUV_${id} = pxl_px_${id} / u_viewport;`)
     // Frozen-ref UV for downstream nodes
-    lines.push(`vec2 ${outputs.uv} = (pxl_px_${id} - u_resolution * u_anchor) / (u_dpr * u_ref_size) + u_anchor;`)
+    lines.push(`vec2 ${outputs.uv} = (pxl_px_${id} - u_resolution * u_anchor) / (u_frame_scale * u_ref_size) + u_anchor;`)
 
     // Color output
     const samplerName = ctx.textureSamplers?.source
@@ -91,7 +91,7 @@ export const pixelateNode: NodeDefinition = {
       // See the glsl() note: reference px -> device px, quantised, shared by the
       // cell grid and the cell centre.
       raw(
-        `float pxl_size_${id} = max(1.0, floor(${ctx.inputs.pixelSize} * u_dpr + 0.5));`,
+        `float pxl_size_${id} = max(1.0, floor(${ctx.inputs.pixelSize} * u_frame_scale + 0.5));`,
       ),
       declare(`pxl_cell_${id}`, 'vec2',
         call('floor', [
@@ -119,7 +119,7 @@ export const pixelateNode: NodeDefinition = {
         binary('+',
           binary('/',
             binary('-', variable(`pxl_px_${id}`), binary('*', variable('u_resolution'), variable('u_anchor'), 'vec2'), 'vec2'),
-            binary('*', variable('u_dpr'), variable('u_ref_size'), 'float'),
+            binary('*', variable('u_frame_scale'), variable('u_ref_size'), 'float'),
             'vec2',
           ),
           variable('u_anchor'),
@@ -129,7 +129,7 @@ export const pixelateNode: NodeDefinition = {
     ]
 
     standardUniforms.add('u_resolution')
-    standardUniforms.add('u_dpr')
+    standardUniforms.add('u_frame_scale')
     standardUniforms.add('u_ref_size')
     standardUniforms.add('u_anchor')
 

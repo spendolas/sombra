@@ -16,7 +16,7 @@
  *
  * Shape: each pass fetches the 4 diagonal corners at ±off and averages them (0.25 each)
  * — separable, so per axis it is two deltas at ±off with variance off². Across P passes
- * the variances add: σ_texels = k·√(Σ Aₚ²). We want σ = radius/3 · u_dpr (the repo's
+ * the variances add: σ_texels = k·√(Σ Aₚ²). We want σ = radius/3 · u_frame_scale (the repo's
  * texel-sigma convention, matching Gaussian Blur), so k = σ / √(Σ Aₚ²) is solved in the
  * shader from the live radius — no per-radius calibration constant to tune by eye.
  *
@@ -57,8 +57,8 @@ const OFFSET_RMS = Math.sqrt(OFFSETS.reduce((s, a) => s + a * a, 0))
  * (measured σ 1.71 vs target 1.33 at radius 4 → floor ≈ √(1.71²−1.33²) ≈ 1.07 texels).
  * We subtract it in quadrature — target the Kawase kernel at √(σ² − floor²) so the floor
  * brings the OUTPUT back to σ — mirroring the pyramid's intrinsic-sigma subtraction. It
- * is a device-texel constant, NOT ×u_dpr (the fetch grid is device-resolution; σ already
- * carries u_dpr), so the correction fades as radius grows and vanishes by mid-range.
+ * is a device-texel constant, NOT ×u_frame_scale (the fetch grid is device-resolution; σ already
+ * carries u_frame_scale), so the correction fades as radius grows and vanishes by mid-range.
  */
 const INTRINSIC_TEXELS = 1.07
 
@@ -103,10 +103,10 @@ function emit(o: EmitOpts): string {
 
   const L: string[] = []
   L.push(decl(v2, `kw_uv_${id}`, `${frag} / u_viewport`))
-  // σ in texels = clamp(radius)·(1/3)·u_dpr; k spreads the fixed offset schedule to hit
-  // it. u_dpr enters here (kernel WIDTH must be dpr-independent in reference px), the
+  // σ in texels = clamp(radius)·(1/3)·u_frame_scale; k spreads the fixed offset schedule to hit
+  // it. u_frame_scale enters here (kernel WIDTH must be dpr-independent in reference px), the
   // same place Gaussian Blur puts it. One texel in UV is 1/u_viewport.
-  L.push(decl(f, `kw_sig_${id}`, `clamp((${radiusExpr}) * ${SIGMA_PER_RADIUS.toPrecision(9)}, 0.0, ${(RADIUS_MAX * SIGMA_PER_RADIUS).toPrecision(9)}) * u_dpr`))
+  L.push(decl(f, `kw_sig_${id}`, `clamp((${radiusExpr}) * ${SIGMA_PER_RADIUS.toPrecision(9)}, 0.0, ${(RADIUS_MAX * SIGMA_PER_RADIUS).toPrecision(9)}) * u_frame_scale`))
   // Aim the kernel at √(σ² − floor²): the intrinsic tent floor then lands it back on σ.
   L.push(decl(f, `kw_kern_${id}`, `sqrt(max(0.0, kw_sig_${id} * kw_sig_${id} - ${(INTRINSIC_TEXELS * INTRINSIC_TEXELS).toPrecision(9)}))`))
   L.push(decl(f, `kw_k_${id}`, `kw_kern_${id} / ${OFFSET_RMS.toPrecision(9)}`))
@@ -194,7 +194,7 @@ export const kawaseBlurNode: NodeDefinition = {
   glsl: (ctx) => {
     const { inputs, outputs, uniforms, params } = ctx
     uniforms.add('u_viewport')
-    uniforms.add('u_dpr')
+    uniforms.add('u_frame_scale')
     const id = ctx.nodeId.replace(/-/g, '_')
     const sampler = ctx.textureSamplers?.source
     if (sampler) ctx.functionRegistry.set('sombra_color_helpers', COLOR_GLSL_HELPERS)
@@ -232,7 +232,7 @@ export const kawaseBlurNode: NodeDefinition = {
     return {
       statements: stmts,
       uniforms: [],
-      standardUniforms: new Set<string>(['u_viewport', 'u_dpr']),
+      standardUniforms: new Set<string>(['u_viewport', 'u_frame_scale']),
       ...(sampler ? { functions: COLOR_IR_HELPERS } : {}),
     }
   },

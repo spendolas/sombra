@@ -154,7 +154,7 @@ interface ScreenWave {
  *
  *   screen  point = SRT'd v_uv       per-axis, so resMain != resPerp
  *                                    aspect conjugation needed to rotate rigidly
- *   ref     point = SRT'd auto_uv    isotropic: one unit is u_dpr*u_ref_size device
+ *   ref     point = SRT'd auto_uv    isotropic: one unit is u_frame_scale*u_ref_size device
  *                                    px on BOTH axes, so no conjugation (applying
  *                                    one, as the old ref path did, made the
  *                                    rotation non-rigid and skewed the rib angle)
@@ -396,7 +396,7 @@ function emitLensTail(o: {
   lines.push(`vec3 ${lens} = reedLens(${wm}, ${ribUVScreen}, ${o.ior}, ${o.curvature});`)
   lines.push(`float ${disp} = ${lens}.x - ${wm};`)
   // Thickness bow, in rib half-widths → device px → perp-axis screen UV
-  lines.push(`float ${bowV} = ${lens}.y * (${o.ribWidth} * u_dpr * 0.5) * ${o.bow} / ${resPerp};`)
+  lines.push(`float ${bowV} = ${lens}.y * (${o.ribWidth} * u_frame_scale * 0.5) * ${o.bow} / ${resPerp};`)
   const tail = emitDeltaTail({ id, sfx, isVert, disp, bowPerp: bowV, basis, grad: o.grad })
   lines.push(...tail.lines)
   return { lines, delta: tail.delta, lens }
@@ -448,7 +448,7 @@ function emitGrainOverlay(o: {
   const v3 = w ? 'vec3f' : 'vec3'
   const v4 = w ? 'vec4f' : 'vec4'
   const refSz = w ? 'uniforms.u_ref_size' : 'u_ref_size'
-  const dprU = w ? 'uniforms.u_dpr' : 'u_dpr'
+  const dprU = w ? 'uniforms.u_frame_scale' : 'u_frame_scale'
   const gcell = `rg_gcell_${id}`, ggc = `rg_ggc_${id}`, gh = `rg_gh_${id}`, gn = `rg_gn_${id}`, gamp = `rg_gamp_${id}`
   return [
     `${dcl('float')}${gcell} = max(${grain}, 1.0 / ${dprU});`,
@@ -543,7 +543,7 @@ function emitFrostGather(o: {
   const base = w ? 'in.position.xy' : 'gl_FragCoord.xy'
   const vp = w ? 'uniforms.u_viewport' : 'u_viewport'
   const refSz = w ? 'uniforms.u_ref_size' : 'u_ref_size'
-  const dprU = w ? 'uniforms.u_dpr' : 'u_dpr'
+  const dprU = w ? 'uniforms.u_frame_scale' : 'u_frame_scale'
   const nrm = w ? `${v2}(rg_n_${id}.x, -rg_n_${id}.y)` : `rg_n_${id}`
   const dlt = (d: string) => (w ? `${v2}(${d}.x, -${d}.y)` : d)
   const i = `rg_fi_${id}`
@@ -698,7 +698,7 @@ function emitMinifSupersample(o: {
     `  ${dcl('float')}${WM} = ${o.wmCentre} + ${T} * ${o.rate} * ${o.ribUVScreen};`,
     `  ${dcl('vec3')}${L} = reedLens(${WM}, ${o.ribUVScreen}, ${o.ior}, ${o.curvature});`,
     `  ${dcl('float')}${DSP} = ${L}.x - ${WM};`,
-    `  ${dcl('float')}${BW} = ${L}.y * (${o.ribWidth} * u_dpr * 0.5) * ${o.bow} / ${resPerp};`,
+    `  ${dcl('float')}${BW} = ${L}.y * (${o.ribWidth} * u_frame_scale * 0.5) * ${o.bow} / ${resPerp};`,
     `  ${w ? 'var' : 'vec2'} ${D}${w ? ': vec2f' : ''} = ${isVert ? `${v2}(${dMain}, ${dPerp})` : `${v2}(${dPerp}, ${dMain})`};`,
     `  ${D}.x *= ${o.aspScr};`,
     `  ${D} = ${v2}(${D}.x * cos(${o.radScr}) + ${D}.y * sin(${o.radScr}), -${D}.x * sin(${o.radScr}) + ${D}.y * cos(${o.radScr}));`,
@@ -760,9 +760,9 @@ function emitSeamGeometry(o: {
   const hw = `rg_hw_${id}`
 
   // Seams sit at integer rib phase. |∇φ| per SCREEN device px is exact:
-  // sqrt(den) / (ribWidth · u_dpr · srt_scale).
+  // sqrt(den) / (ribWidth · u_frame_scale · srt_scale).
   lines.push(`float ${phi} = ${wmCentre} / ${ribUVScreen};`)
-  lines.push(`float ${prd} = ${ribWidth} * u_dpr * ${scale};`)
+  lines.push(`float ${prd} = ${ribWidth} * u_frame_scale * ${scale};`)
   lines.push(`float ${rate} = sqrt(${den}) / max(abs(${prd}), 1e-6);`)
   lines.push(`float ${ss} = (floor(${phi} + 0.5) - ${phi}) / max(${rate}, 1e-9);`)
   // Seam normal in screen axes. Device px are isotropic, so this is a plain
@@ -956,7 +956,7 @@ export const reededGlassNode: NodeDefinition = {
 
     // Generate auto_uv with SRT applied (frozen-ref space)
     ctx.uniforms.add('u_resolution')
-    ctx.uniforms.add('u_dpr')
+    ctx.uniforms.add('u_frame_scale')
     ctx.uniforms.add('u_ref_size')
     ctx.uniforms.add('u_anchor')
     // Canonical auto_uv, kept BEFORE the SRT. This is what `coords` is measured
@@ -965,11 +965,11 @@ export const reededGlassNode: NodeDefinition = {
     // rotating the glass 47° returned coords in a 47°-rotated frame.)
     const autoUv = `rg_auv_${id}`
     const coordsVar = `rg_coords_${id}`
-    lines.push(`vec2 ${autoUv} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * u_anchor) / (u_dpr * u_ref_size) + u_anchor;`)
+    lines.push(`vec2 ${autoUv} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * u_anchor) / (u_frame_scale * u_ref_size) + u_anchor;`)
     // radRef feeds the rib OPTICS (refBasis.rad, patRef optics). The coordinate
     // lowering itself now routes through the single SRT source (emitSRT) instead
     // of a hand-rolled copy — see reededSRTBases. No aspect conjugation on the
-    // ref basis: it is isotropic (u_dpr*u_ref_size on both axes), so a plain
+    // ref basis: it is isotropic (u_frame_scale*u_ref_size on both axes), so a plain
     // rotation stays rigid; the screen basis conjugates because v_uv is per-axis.
     const radRef = `rg_rad_ref_${id}`
     lines.push(`float ${radRef} = ${inputs.srt_rotate} * 0.01745329;`)
@@ -998,11 +998,11 @@ export const reededGlassNode: NodeDefinition = {
 
     const refBasis: Basis = {
       point: patRef,
-      resMain: '(u_dpr * u_ref_size)', resPerp: '(u_dpr * u_ref_size)',
+      resMain: '(u_frame_scale * u_ref_size)', resPerp: '(u_frame_scale * u_ref_size)',
       ribUV: ribUVRef,
-      toPx: (pt) => `(${pt}) * (u_dpr * u_ref_size)`,
+      toPx: (pt) => `(${pt}) * (u_frame_scale * u_ref_size)`,
       asp: '1.0', rad: radRef, scale: `${inputs.srt_scale}`,
-      amp: ampRef, wl: wlRef, wlPx: `(${inputs.wavelength} * u_dpr)`,
+      amp: ampRef, wl: wlRef, wlPx: `(${inputs.wavelength} * u_frame_scale)`,
     }
 
     // Same emitters the colour path uses — that is the whole point. The two
@@ -1057,13 +1057,13 @@ export const reededGlassNode: NodeDefinition = {
       // Convert amplitude (main axis) and wavelength (perp axis) from pixels to screen UV
       const ampScr = `rg_amp_scr_${id}`
       const wlScr = `rg_wl_scr_${id}`
-      lines.push(`float ${ampScr} = ${inputs.amplitude} * u_dpr / ${resMain};`)
-      lines.push(`float ${wlScr} = ${inputs.wavelength} * u_dpr / ${resPerp};`)
+      lines.push(`float ${ampScr} = ${inputs.amplitude} * u_frame_scale / ${resMain};`)
+      lines.push(`float ${wlScr} = ${inputs.wavelength} * u_frame_scale / ${resPerp};`)
       // Pixel-space wavelength for isotropic noise/circular sampling
-      const wlPx = `(${inputs.wavelength} * u_dpr)`
+      const wlPx = `(${inputs.wavelength} * u_frame_scale)`
       // Rib width in screen UV — per-axis, hence the resMain divisor
       const ribUVScreen = `rg_ribUV_scr_${id}`
-      lines.push(`float ${ribUVScreen} = ${inputs.ribWidth} * u_dpr / ${resMain};`)
+      lines.push(`float ${ribUVScreen} = ${inputs.ribWidth} * u_frame_scale / ${resMain};`)
 
       const scrBasis: Basis = {
         point: srtScr, resMain, resPerp, ribUV: ribUVScreen,
@@ -1250,7 +1250,7 @@ export const reededGlassNode: NodeDefinition = {
         binary('/',
           binary('-', fragCoord('yDown'),
             binary('*', variable('u_resolution'), variable('u_anchor'), 'vec2'), 'vec2'),
-          binary('*', variable('u_dpr'), variable('u_ref_size'), 'float'), 'vec2'),
+          binary('*', variable('u_frame_scale'), variable('u_ref_size'), 'float'), 'vec2'),
         variable('u_anchor'), 'vec2')))
     // radRef feeds the rib OPTICS (refBasis.rad); the coordinate lowering routes
     // through the single SRT source. `emitSrt` is a single-emitter raw split
@@ -1278,11 +1278,11 @@ export const reededGlassNode: NodeDefinition = {
 
     const refBasis: Basis = {
       point: patRef,
-      resMain: '(u_dpr * u_ref_size)', resPerp: '(u_dpr * u_ref_size)',
+      resMain: '(u_frame_scale * u_ref_size)', resPerp: '(u_frame_scale * u_ref_size)',
       ribUV: ribUVRef,
-      toPx: (pt) => `(${pt}) * (u_dpr * u_ref_size)`,
+      toPx: (pt) => `(${pt}) * (u_frame_scale * u_ref_size)`,
       asp: '1.0', rad: radRef, scale: `${ctx.inputs.srt_scale}`,
-      amp: ampRef, wl: wlRef, wlPx: `(${ctx.inputs.wavelength} * u_dpr)`,
+      amp: ampRef, wl: wlRef, wlPx: `(${ctx.inputs.wavelength} * u_frame_scale)`,
     }
 
     const waveRef = screenWave({
@@ -1331,15 +1331,15 @@ export const reededGlassNode: NodeDefinition = {
       const resPerpIR = isVert ? 'u_resolution.y' : 'u_resolution.x'
       const ampScrIR = `rg_amp_scr_${id}`
       const wlScrIR = `rg_wl_scr_${id}`
-      stmts.push(raw(`float ${ampScrIR} = ${ctx.inputs.amplitude} * u_dpr / ${resMainIR};`))
-      stmts.push(raw(`float ${wlScrIR} = ${ctx.inputs.wavelength} * u_dpr / ${resPerpIR};`))
-      const wlPxIR = `(${ctx.inputs.wavelength} * u_dpr)`
+      stmts.push(raw(`float ${ampScrIR} = ${ctx.inputs.amplitude} * u_frame_scale / ${resMainIR};`))
+      stmts.push(raw(`float ${wlScrIR} = ${ctx.inputs.wavelength} * u_frame_scale / ${resPerpIR};`))
+      const wlPxIR = `(${ctx.inputs.wavelength} * u_frame_scale)`
       // Rib width in screen UV — per-axis, hence the resMain divisor. Built as an
       // IR expression rather than a raw string so the WGSL backend parenthesises it
       // exactly as it did before, keeping the colour path byte-identical.
       const ribUVScreen = `rg_ribUV_scr_${id}`
       stmts.push(declare(ribUVScreen, 'float',
-        binary('/', binary('*', variable(ctx.inputs.ribWidth), variable('u_dpr'), 'float'),
+        binary('/', binary('*', variable(ctx.inputs.ribWidth), variable('u_frame_scale'), 'float'),
           variable(resMainIR), 'float')))
 
       const scrBasis: Basis = {
@@ -1530,7 +1530,7 @@ export const reededGlassNode: NodeDefinition = {
     return {
       statements: stmts,
       uniforms: [],
-      standardUniforms: new Set(['u_ref_size', 'u_resolution', 'u_dpr', 'u_anchor', 'u_viewport']),
+      standardUniforms: new Set(['u_ref_size', 'u_resolution', 'u_frame_scale', 'u_anchor', 'u_viewport']),
       functions,
     }
   },
