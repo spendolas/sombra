@@ -648,6 +648,10 @@ void main() { fragColor = sombraMain(v_uv); }
       const set2 = (n, a, b) => { const l = gl.getUniformLocation(prog, n); if (l) gl.uniform2f(l, a, b); };
       setF('u_time', 0);
       setF('u_dpr', spec.dpr || 1);
+      // Phase-1 frame-scale rename: renderers write u_frame_scale == u_dpr, so this
+      // rig must too — several nodes (blur family) now read u_frame_scale instead
+      // of u_dpr for the reference-px -> device-px conversion.
+      setF('u_frame_scale', spec.dpr || 1);
       setF('u_ref_size', 512);
       set2('u_resolution', tw, th);
       set2('u_viewport', tw, th);

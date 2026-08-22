@@ -83,7 +83,7 @@ console.log('\nB. single semantic — translate applied once, in the opening dec
 console.log('\nC. emit byte-pinned to the canonical world lowering')
 {
   const expected = [
-    'var V: vec2f = C - vec2f(TX, -(TY)) / (u_dpr * u_ref_size);',
+    'var V: vec2f = C - vec2f(TX, -(TY)) / (u_frame_scale * u_ref_size);',
     'V -= u_anchor;',
     'V /= vec2f(S);',
     'let V_rad: f32 = R * 0.01745329;',

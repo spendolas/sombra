@@ -39,7 +39,7 @@ const RADIUS_MAX = 128
 /**
  * Highest device pixel ratio the renderer will hand us — both cap at
  * Math.min(devicePixelRatio, 2). Taps step ONE texel and sigma is measured in
- * texels (sigma_reference * u_dpr), so the loop bound must cover the worst case.
+ * texels (sigma_reference * u_frame_scale), so the loop bound must cover the worst case.
  */
 const MAX_DPR = 2
 
@@ -114,15 +114,15 @@ function emit(o: EmitOpts): string {
   const axisComp = axis === 'vertical' ? 'y' : 'x'
   L.push(decl(v2, `blr_uv_${id}`, `${frag} / u_viewport`))
   // ONE TEXEL per tap. It is tempting to step one *reference* pixel
-  // (u_dpr / u_viewport) so the kernel is dpr-independent, but that makes each tap
-  // skip u_dpr texels: at dpr 2 an output pixel then reads only its own parity and
+  // (u_frame_scale / u_viewport) so the kernel is dpr-independent, but that makes each tap
+  // skip u_frame_scale texels: at dpr 2 an output pixel then reads only its own parity and
   // half the source is never sampled — a measured 2-px staircase with 26-40 code
   // risers, and a 34.8-code jump when the quality tier flips dpr mid-session.
   // Kernel WIDTH still has to be dpr-independent, so dpr goes into sigma instead.
   L.push(decl(v2, `blr_step_${id}`, `${v2}(${dir[0].toFixed(1)}, ${dir[1].toFixed(1)}) / u_viewport`))
   // Sigma in TEXELS: clamp in reference units, then scale. Both bounds must scale —
-  // scaling only the upper one would shrink the smallest possible blur by u_dpr.
-  L.push(decl(f, `blr_sig_${id}`, `clamp((${radiusExpr}) * ${SIGMA_PER_RADIUS.toPrecision(9)}, 0.35, ${(RADIUS_MAX * SIGMA_PER_RADIUS).toPrecision(9)}) * u_dpr`))
+  // scaling only the upper one would shrink the smallest possible blur by u_frame_scale.
+  L.push(decl(f, `blr_sig_${id}`, `clamp((${radiusExpr}) * ${SIGMA_PER_RADIUS.toPrecision(9)}, 0.35, ${(RADIUS_MAX * SIGMA_PER_RADIUS).toPrecision(9)}) * u_frame_scale`))
   L.push(decl(f, `blr_inv_${id}`, `1.0 / (2.0 * blr_sig_${id} * blr_sig_${id})`))
   L.push(decl(f, `blr_cut_${id}`, `blr_sig_${id} * 4.0`))
   L.push(decl(v3, `blr_acc_${id}`, `${v3}(0.0)`))
@@ -245,7 +245,7 @@ export const blurNode: NodeDefinition = {
   glsl: (ctx) => {
     const { inputs, outputs, uniforms, params } = ctx
     uniforms.add('u_viewport')
-    uniforms.add('u_dpr')
+    uniforms.add('u_frame_scale')
     const id = ctx.nodeId.replace(/-/g, '_')
     const sampler = ctx.textureSamplers?.source
     if (sampler) {
@@ -268,7 +268,7 @@ export const blurNode: NodeDefinition = {
   ir: (ctx: IRContext): IRNodeOutput => {
     const id = ctx.nodeId.replace(/-/g, '_')
     const sampler = ctx.textureSamplers?.source
-    const standardUniforms = new Set<string>(['u_viewport', 'u_dpr'])
+    const standardUniforms = new Set<string>(['u_viewport', 'u_frame_scale'])
     const axis = axisFor(ctx.params)
 
     const common = {

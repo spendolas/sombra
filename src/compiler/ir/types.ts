@@ -273,8 +273,9 @@ export interface SRTBasisOptions {
   readonly aspectConjugate?: boolean
   /** Aspect expression for aspectConjugate (e.g. 'u_resolution.x/u_resolution.y'). */
   readonly asp?: string
-  /** Translate scale formula. 'ref' = /(u_dpr*u_ref_size) (isotropic ref space);
-   *  'screen' = *u_dpr/u_resolution (per-axis screen space). Default 'ref'. */
+  /** Translate scale formula. 'ref' = /(u_frame_scale*u_ref_size) (isotropic ref
+   *  space); 'screen' = *u_frame_scale/u_resolution (per-axis screen space).
+   *  Default 'ref'. */
   readonly translateFormula?: 'ref' | 'screen'
   /** Op order. 'world' = translate first, before subAnchor (canonical — one
    *  semantic). 'node' = translate after rotate. Default 'world'. */

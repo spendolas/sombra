@@ -35,7 +35,7 @@ export const dotsNode: NodeDefinition = {
 
   glsl: (ctx) => {
     const { inputs, outputs, uniforms } = ctx
-    uniforms.add('u_dpr')
+    uniforms.add('u_frame_scale')
     uniforms.add('u_ref_size')
     const id = ctx.nodeId.replace(/-/g, '_')
     const gapU = `dt_gapU_${id}`
@@ -44,9 +44,9 @@ export const dotsNode: NodeDefinition = {
     const d = `dt_d_${id}`
     return [
       // Gap is edge-to-edge → cell period = gap + 2*radius (center spacing).
-      `vec2 ${gapU} = vec2(${inputs.gapX} + 2.0 * ${inputs.radius}, ${inputs.gapY} + 2.0 * ${inputs.radius}) / (u_dpr * u_ref_size);`,
+      `vec2 ${gapU} = vec2(${inputs.gapX} + 2.0 * ${inputs.radius}, ${inputs.gapY} + 2.0 * ${inputs.radius}) / (u_frame_scale * u_ref_size);`,
       `vec2 ${rel} = ${inputs.coords} - (floor(${inputs.coords} / ${gapU}) + vec2(0.5, 0.5)) * ${gapU};`,
-      `float ${rpx} = ${inputs.radius} / (u_dpr * u_ref_size);`,
+      `float ${rpx} = ${inputs.radius} / (u_frame_scale * u_ref_size);`,
       `float ${d} = length(vec2(${rel}.x * ${inputs.aspect}, ${rel}.y));`,
       `float ${outputs.value} = 1.0 - smoothstep(${rpx} - ${inputs.softness} * ${rpx}, ${rpx} + ${inputs.softness} * ${rpx}, ${d});`,
       `vec4 ${outputs.color} = mix(${inputs.colorB}, ${inputs.colorA}, ${outputs.value});`,
@@ -71,7 +71,7 @@ export const dotsNode: NodeDefinition = {
 
     return {
       statements: [
-        // vec2 gap_u = vec2(gapX + 2r, gapY + 2r) / (u_dpr * u_ref_size)
+        // vec2 gap_u = vec2(gapX + 2r, gapY + 2r) / (u_frame_scale * u_ref_size)
         // Gap is edge-to-edge → cell period = gap + 2*radius (center spacing).
         // (per-component: WGSL has no vec2 + scalar overload)
         declare(gapU, 'vec2',
@@ -80,7 +80,7 @@ export const dotsNode: NodeDefinition = {
               binary('+', gapX, binary('*', literal('float', 2.0), radius, 'float'), 'float'),
               binary('+', gapY, binary('*', literal('float', 2.0), radius, 'float'), 'float'),
             ]),
-            binary('*', variable('u_dpr'), variable('u_ref_size'), 'float'),
+            binary('*', variable('u_frame_scale'), variable('u_ref_size'), 'float'),
             'vec2',
           ),
         ),
@@ -100,11 +100,11 @@ export const dotsNode: NodeDefinition = {
             'vec2',
           ),
         ),
-        // float rpx = radius(px) / (u_dpr * u_ref_size)  → dot radius in coord units
+        // float rpx = radius(px) / (u_frame_scale * u_ref_size)  → dot radius in coord units
         declare(rpx, 'float',
           binary('/',
             radius,
-            binary('*', variable('u_dpr'), variable('u_ref_size'), 'float'),
+            binary('*', variable('u_frame_scale'), variable('u_ref_size'), 'float'),
             'float',
           ),
         ),
@@ -135,7 +135,7 @@ export const dotsNode: NodeDefinition = {
         ),
       ],
       uniforms: [],
-      standardUniforms: new Set(['u_dpr', 'u_ref_size']),
+      standardUniforms: new Set(['u_frame_scale', 'u_ref_size']),
     }
   },
 }
