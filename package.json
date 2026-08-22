@@ -39,6 +39,7 @@
     "verify:pass-resolution": "tsx scripts/verify-pass-resolution.ts",
     "verify:pass-resolution:gpu": "tsx scripts/verify-pass-resolution-gpu.ts",
     "verify:coord-contract:gpu": "tsx scripts/verify-coord-contract-gpu.ts",
+    "verify:frame-scale-invariance": "tsx scripts/verify-frame-scale-invariance.ts",
     "verify:ir-poc": "tsx scripts/verify-ir-poc.ts",
     "verify:wgsl-multipass": "tsx scripts/validate-wgsl-multipass.ts",
     "verify:video-export": "tsx scripts/verify-video-export.ts",
