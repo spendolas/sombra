@@ -213,6 +213,9 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
     const uDpr = gl.getUniformLocation(program, 'u_dpr')
     if (uDpr) gl.uniform1f(uDpr, 1.0)
 
+    const uFrameScale = gl.getUniformLocation(program, 'u_frame_scale')
+    if (uFrameScale) gl.uniform1f(uFrameScale, 1.0)
+
     const uVp = gl.getUniformLocation(program, 'u_viewport')
     if (uVp) gl.uniform2f(uVp, PREVIEW_SIZE, PREVIEW_SIZE)
 
@@ -385,6 +388,8 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
       if (uRefSize) gl.uniform1f(uRefSize, REFERENCE_SIZE)
       const uDpr = gl.getUniformLocation(program, 'u_dpr')
       if (uDpr) gl.uniform1f(uDpr, tdpr)
+      const uFrameScale = gl.getUniformLocation(program, 'u_frame_scale')
+      if (uFrameScale) gl.uniform1f(uFrameScale, tdpr)
       const uVp = gl.getUniformLocation(program, 'u_viewport')
       if (uVp) gl.uniform2f(uVp, tw, th)
       const uAnchor = gl.getUniformLocation(program, 'u_anchor')

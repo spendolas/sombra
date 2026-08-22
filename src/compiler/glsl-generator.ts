@@ -1038,6 +1038,9 @@ export function assembleFragmentShader(
   if (uniforms.has('u_dpr')) {
     uniformDeclarations.push('uniform float u_dpr;')
   }
+  if (uniforms.has('u_frame_scale')) {
+    uniformDeclarations.push('uniform float u_frame_scale;')
+  }
   if (uniforms.has('u_viewport')) {
     uniformDeclarations.push('uniform vec2 u_viewport;')
   }

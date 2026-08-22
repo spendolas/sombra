@@ -578,6 +578,7 @@ function writeBuiltinUniforms(
   set1('u_time', frame.timeSec)
   set2('u_resolution', passW, passH) // pass target size in device px
   set1('u_dpr', passDpr)
+  set1('u_frame_scale', passDpr)
   set1('u_ref_size', REFERENCE_SIZE)
   set2('u_anchor', frame.anchor[0], frame.anchor[1])
   set2('u_viewport', passW, passH)
