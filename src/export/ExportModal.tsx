@@ -403,6 +403,14 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
   const [pngBytesPerPixel, setPngBytesPerPixel] = useState<number | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const urlRef = useRef<string | null>(null)
+  // The OPFS export tier hands back a `cleanup()` that drops the disk temp file
+  // and terminates its writer worker. Hold it so the modal can fire it when the
+  // user is DONE with this result (Close / new export / unmount) — NEVER right
+  // after triggering the download, whose read may still be in flight and reads
+  // straight from that temp. Nulled before firing so a re-entrant close/unmount
+  // can't double-run it (the destination's own teardown is guarded too). Absent
+  // (null) on the FSA + in-memory tiers — there's nothing to clean up there.
+  const destCleanupRef = useRef<(() => Promise<void>) | null>(null)
 
   // Load the available sinks once per open, and pick a default (prefer MP4).
   useEffect(() => {
@@ -460,12 +468,21 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
       URL.revokeObjectURL(urlRef.current)
       urlRef.current = null
     }
+    // The download has been read (or the user closed without downloading) —
+    // safe to drop the OPFS temp now. Null the ref first so a re-entrant close
+    // can't double-fire; the destination teardown is itself idempotent.
+    const cleanup = destCleanupRef.current
+    destCleanupRef.current = null
+    void cleanup?.().catch(() => {})
   }, [open])
 
-  // Final safety net: revoke on unmount.
+  // Final safety net: revoke on unmount + drop any lingering OPFS temp.
   useEffect(
     () => () => {
       if (urlRef.current) URL.revokeObjectURL(urlRef.current)
+      const cleanup = destCleanupRef.current
+      destCleanupRef.current = null
+      void cleanup?.().catch(() => {})
     },
     [],
   )
@@ -692,6 +709,10 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
       URL.revokeObjectURL(urlRef.current)
       urlRef.current = null
     }
+    // Done with this result — drop the OPFS temp alongside the object URL.
+    const cleanup = destCleanupRef.current
+    destCleanupRef.current = null
+    void cleanup?.().catch(() => {})
     setDone(null)
     setPhase('config')
   }
@@ -703,6 +724,11 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
       URL.revokeObjectURL(urlRef.current)
       urlRef.current = null
     }
+    // A new export supersedes any prior result — drop its OPFS temp now that the
+    // previous download has had its chance to read.
+    const prevCleanup = destCleanupRef.current
+    destCleanupRef.current = null
+    void prevCleanup?.().catch(() => {})
     setDone(null)
 
     const width = evenDim(raw.width)
@@ -737,6 +763,12 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
       setError(e instanceof Error ? e.message : String(e))
       return
     }
+
+    // Hold the destination's cleanup (OPFS tier only; undefined otherwise) so the
+    // temp is torn down when the user is done — at close / next export / unmount,
+    // never right after the download. Bind to the destination so an object-method
+    // `cleanup` keeps its receiver.
+    destCleanupRef.current = dest.cleanup ? dest.cleanup.bind(dest) : null
 
     const ac = new AbortController()
     abortRef.current = ac
