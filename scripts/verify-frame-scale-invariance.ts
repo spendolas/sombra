@@ -40,11 +40,13 @@
  * (the fallback pattern is greyscale: R=G=B). The pattern is unsoftened
  * (hard cell edges, no AA), so cell-boundary crossings are found by
  * thresholding at the row's own midpoint value and averaging consecutive
- * crossing spacings — that average IS `pxl_size` (device px). Converting with
- * the brief's own formula, `period_ref = period_device / (uDpr * REF_SIZE)`,
- * must land on the same value across all four configs because `uDpr` cancels
- * algebraically (see above) — an exact algebraic invariant, not a fitted
- * tolerance.
+ * crossing spacings — that average IS `pxl_size` (device px). pixelate sizes
+ * that cell by `u_frame_scale` ONLY, so `period_ref = period_device /
+ * (frameScale * REF_SIZE)` must land on the same value across all five configs
+ * — an exact algebraic invariant, not a fitted tolerance. Crucially, the
+ * `supersample` config holds `frameScale` equal to `Fit` while doubling `uDpr`:
+ * because density never enters the pattern, its `period_device` (and thus
+ * `period_ref`) must match `Fit` exactly, proving the split holds.
  *
  * MECHANISM CHECK: a render that produced no detectable transitions (blank,
  * uniform, or a detector that silently returns 0) FAILS explicitly rather than
@@ -80,17 +82,24 @@ const ROOT = resolve(import.meta.dirname, '..')
  * this gate has no import-time dependency on framing.ts (it tests the
  * RENDERER's invariant, not the framing-choice function).
  *
- * `frameScale` is named separately from `uDpr` in this table (not yet a
- * distinct uniform on the renderer — see the file header) so a later task
- * that adds a real `frameScale` axis to `ExportFrameUniforms` can extend this
- * array without restructuring the gate: today `uDpr` alone is what
- * `renderFrame()` accepts, and it plays the combined framing+density role.
+ * `frameScale` (framing/zoom) and `uDpr` (device density) are now two INDEPENDENT
+ * axes on `ExportFrameUniforms` (Task 7). The reference-locked pattern (pixelate)
+ * scales its cell by `u_frame_scale` ONLY — density must not touch it — so the
+ * device period varies with `frameScale` across configs and `period_ref` divides
+ * by `frameScale` to recover the invariant.
+ *
+ * The 4 original export configs carry `dpr = 1` (a 1:1 export), except
+ * `live-equiv` which represents the LIVE renderer where frameScale == dpr ==
+ * deviceDpr (both 2). The 5th, `supersample`, is the deferred pure-density case
+ * (Task 1 report §8): identical `frameScale` to `Fit` (0.7805) but `dpr = 2` —
+ * proving that raising density alone leaves `period_ref` unmoved.
  */
 const CONFIGS = [
-  { name: 'live-equiv', width: 1754, height: 3280, uDpr: 2 },
-  { name: 'Match', width: 877, height: 1640, uDpr: 1 },
-  { name: 'Fit', width: 2048, height: 1280, uDpr: 0.7805 },
-  { name: 'Reveal', width: 2048, height: 1280, uDpr: 1 },
+  { name: 'live-equiv', width: 1754, height: 3280, frameScale: 2, uDpr: 2 },
+  { name: 'Match', width: 877, height: 1640, frameScale: 1, uDpr: 1 },
+  { name: 'Fit', width: 2048, height: 1280, frameScale: 0.7805, uDpr: 1 },
+  { name: 'Reveal', width: 2048, height: 1280, frameScale: 1, uDpr: 1 },
+  { name: 'supersample', width: 2048, height: 1280, frameScale: 0.7805, uDpr: 2 },
 ] as const
 
 /** Pixelate's own param, reference px. Large enough for low quantisation error
@@ -109,6 +118,7 @@ const MIN_CROSSINGS = 8
 interface CaptureReq {
   width: number
   height: number
+  frameScale: number
   uDpr: number
 }
 
@@ -223,7 +233,7 @@ async function installHarness(page: Page, cfg: { base: string }): Promise<{ webg
           const target = createExportRenderTarget(dev, plan, req.width, req.height, images)
           try {
             // All configs anchor-centered, per the task brief.
-            target.renderFrame({ timeSec: 0, uDpr: req.uDpr, anchor: [0.5, 0.5] })
+            target.renderFrame({ timeSec: 0, frameScale: req.frameScale, uDpr: req.uDpr, anchor: [0.5, 0.5] })
             const px = await target.readback()
             const rowY = Math.floor(req.height / 2)
             const row: number[] = new Array(req.width)
@@ -256,6 +266,7 @@ interface Row {
   name: string
   width: number
   height: number
+  frameScale: number
   uDpr: number
   periodDevice: number
   periodRef: number
@@ -307,7 +318,7 @@ async function main(): Promise<void> {
       for (const cfg of CONFIGS) {
         const res = await page.evaluate(
           (r) => (window as never as { __frameScaleGate: { capture(r: CaptureReq): Promise<CaptureRes> } }).__frameScaleGate.capture(r),
-          { width: cfg.width, height: cfg.height, uDpr: cfg.uDpr } as CaptureReq,
+          { width: cfg.width, height: cfg.height, frameScale: cfg.frameScale, uDpr: cfg.uDpr } as CaptureReq,
         )
         if (!res.ok) throw new Error(`capture ${cfg.name}: ${res.error}`)
         refSize = res.refSize
@@ -316,13 +327,16 @@ async function main(): Promise<void> {
           name: cfg.name,
           width: cfg.width,
           height: cfg.height,
+          frameScale: cfg.frameScale,
           uDpr: cfg.uDpr,
           periodDevice,
-          periodRef: periodDevice / (cfg.uDpr * refSize),
+          // pixelate sizes its cell by u_frame_scale ONLY, so the invariant
+          // divides by frameScale (framing), not uDpr (density).
+          periodRef: periodDevice / (cfg.frameScale * refSize),
           crossings,
           contrast: max - min,
         })
-        console.log(`  ${cfg.name}: ${cfg.width}x${cfg.height} uDpr=${cfg.uDpr} periodDevice=${periodDevice.toFixed(3)}px crossings=${crossings} contrast=${(max - min).toFixed(1)}`)
+        console.log(`  ${cfg.name}: ${cfg.width}x${cfg.height} frameScale=${cfg.frameScale} uDpr=${cfg.uDpr} periodDevice=${periodDevice.toFixed(3)}px crossings=${crossings} contrast=${(max - min).toFixed(1)}`)
       }
     }
   } catch (e) {
@@ -345,7 +359,7 @@ async function main(): Promise<void> {
     assert(webgpuAvailable, 'no WebGPU adapter in the headless harness — this gate proved NOTHING, so it fails rather than reading green')
   })
 
-  test('all four configs were captured', () => {
+  test('all five configs were captured', () => {
     assert(rows.length === CONFIGS.length, `expected ${CONFIGS.length} captures, got ${rows.length}`)
   })
 
@@ -360,10 +374,10 @@ async function main(): Promise<void> {
     })
   }
 
-  // --- The invariant: period_ref constant across all four configs ---
+  // --- The invariant: period_ref constant across all five configs ---
   if (rows.length > 0) {
     const mean = rows.reduce((a, r) => a + r.periodRef, 0) / rows.length
-    test('period_ref (reference units) is constant across all four export configs', () => {
+    test('period_ref (reference units) is constant across all five export configs', () => {
       for (const row of rows) {
         const relErr = Math.abs(row.periodRef - mean) / mean
         assert(relErr <= TOLERANCE_FRAC,

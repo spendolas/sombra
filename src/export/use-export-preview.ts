@@ -97,12 +97,14 @@ export function useExportPreview(
               targetH = ph
               if (cv) { cv.width = pw; cv.height = ph }
             }
-            // Same visible framing as the export at fewer pixels: uDpr scales with
-            // the resolution ratio (correct for Reveal, where export uDpr = 1).
-            const uDpr = s.framing.uDpr * (pw / Math.max(1, s.exportW))
+            // Same visible framing as the export at fewer pixels: frameScale scales
+            // with the resolution ratio (correct for Reveal, where frameScale = 1).
+            // Density (dpr) passes through unscaled. (Task 9 rewrites this hook.)
+            const frameScale = s.framing.frameScale * (pw / Math.max(1, s.exportW))
             target.renderFrame({
               timeSec: (performance.now() - start) / 1000, // live wall-clock (preview only)
-              uDpr,
+              frameScale,
+              uDpr: s.framing.dpr,
               anchor: s.framing.anchor,
             })
             const px = await target.readback()

@@ -94,7 +94,8 @@ export async function runExport(
       const t = i / job.fps
       target.renderFrame({
         timeSec: t,
-        uDpr: job.framing.uDpr,
+        frameScale: job.framing.frameScale,
+        uDpr: job.framing.dpr,
         anchor: job.framing.anchor,
       })
 
