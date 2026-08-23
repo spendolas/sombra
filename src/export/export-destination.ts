@@ -52,6 +52,16 @@ export interface ExportDestination {
    * (the sink closes it in its finish; double-closing would throw).
    */
   finalize(): Promise<{ blob: Blob | null; savedToDisk: boolean; filename: string }>
+  /**
+   * TEST/INTROSPECTION ONLY (fallback path only; undefined on the disk path).
+   * Returns the number of retained Blob parts — one per accepted chunk. This is
+   * the observable that DISTINGUISHES "kept as separate parts" (streaming-safe)
+   * from "concatenated into one growing buffer" (the O(n²)/OOM anti-pattern this
+   * whole abstraction exists to prevent). The concat regression is byte-correct,
+   * so only a parts-count read — not size/order — can catch it. Not part of the
+   * production contract; do not depend on it outside verification.
+   */
+  readonly _partsCount?: () => number
 }
 
 /** Thrown when the user cancels the save dialog. */
@@ -99,7 +109,7 @@ export async function createExportDestination(opts: {
       // The stream is closed by whoever writes to it (the sink's finish calls
       // writable.close()); do NOT double-close here. finalize() only reports.
       async finalize() {
-        return { blob: null, savedToDisk: true, filename: handle.name ?? filename }
+        return { blob: null, savedToDisk: true, filename: handle.name }
       },
     }
   }
@@ -120,5 +130,8 @@ export async function createExportDestination(opts: {
     async finalize() {
       return { blob: new Blob(parts, { type: mimeType }), savedToDisk: false, filename }
     },
+    // Observed from the impl (parts.length), NOT the caller's loop count — so a
+    // regression to a growing-buffer concat (one part) makes this diverge from N.
+    _partsCount: () => parts.length,
   }
 }
