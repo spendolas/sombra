@@ -30,6 +30,7 @@ import { useSettingsStore } from '@/stores/settingsStore'
 import { isWebGL2Forced } from '@/renderer/create-renderer'
 import { getAvailableSinks } from './registry'
 import { runExport, type ExportJob } from './export-engine'
+import { createExportDestination } from './export-destination'
 import { useExportPreview, type ExportPreviewState } from './use-export-preview'
 import {
   targetSize,
@@ -678,7 +679,18 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
     setProgress({ frame: 0, total: frames })
     setPhase('running')
     try {
-      const blob = await runExport(job, (frame, total) => setProgress({ frame, total }), ac.signal)
+      // Minimal wiring for the streaming sink contract: fall back to an
+      // in-memory Blob destination and keep the existing download path. (A
+      // fuller stream-to-disk UX pass is a later task.)
+      const dest = await createExportDestination({
+        filename: `scene.${selectedSink.fileExt}`,
+        mimeType: selectedSink.mimeType,
+        ext: selectedSink.fileExt,
+        preferDisk: false,
+      })
+      await runExport(job, dest.writable, (frame, total) => setProgress({ frame, total }), ac.signal)
+      const { blob } = await dest.finalize()
+      if (!blob) throw new Error('[export] no blob produced')
       const url = URL.createObjectURL(blob)
       urlRef.current = url
       const sizeLabel =

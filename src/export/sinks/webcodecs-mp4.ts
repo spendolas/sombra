@@ -23,21 +23,23 @@
 import {
   Output,
   Mp4OutputFormat,
-  BufferTarget,
+  StreamTarget,
   VideoSampleSource,
   VideoSample,
   getFirstEncodableVideoCodec,
 } from 'mediabunny'
 import type { FrameSink, SinkOpts } from '../frame-sink'
 import { qualityFor } from './quality-map'
+import { createAppendOnlyStreamTarget } from './stream-target-adapter'
 
 export function makeMp4Sink(): FrameSink {
-  let out!: Output<Mp4OutputFormat, BufferTarget>
+  let out!: Output<Mp4OutputFormat, StreamTarget>
   let src!: VideoSampleSource
   let matteCanvas!: OffscreenCanvas
   let mctx!: OffscreenCanvasRenderingContext2D
   let o!: SinkOpts
   let codec!: NonNullable<Awaited<ReturnType<typeof getFirstEncodableVideoCodec>>>
+  let closeWritable!: () => Promise<void>
 
   return {
     id: 'mp4',
@@ -46,6 +48,7 @@ export function makeMp4Sink(): FrameSink {
     output: 'file',
     tier: 'free',
     fileExt: 'mp4',
+    mimeType: 'video/mp4',
 
     async isSupported() {
       // Available if EITHER codec encodes on this machine — the same probe
@@ -63,7 +66,7 @@ export function makeMp4Sink(): FrameSink {
       }
     },
 
-    async begin(opts) {
+    async begin(opts, writable) {
       o = opts
       // Pick the codec at encode time from the REAL export dims — HEVC preferred,
       // AVC-High fallback. Dimension-specific because a machine's hardware HEVC
@@ -80,7 +83,11 @@ export function makeMp4Sink(): FrameSink {
       }
       codec = picked
 
-      out = new Output({ format: new Mp4OutputFormat(), target: new BufferTarget() })
+      // `fastStart: 'fragmented'` makes MP4 emission append-only (monotonic
+      // positions), which the StreamTarget adapter asserts and requires.
+      const bridge = createAppendOnlyStreamTarget(writable)
+      closeWritable = bridge.close
+      out = new Output({ format: new Mp4OutputFormat({ fastStart: 'fragmented' }), target: bridge.target })
       src = new VideoSampleSource({ codec, quality: qualityFor(o.quality, o.width, o.height) })
       out.addVideoTrack(src)
       await out.start()
@@ -104,9 +111,10 @@ export function makeMp4Sink(): FrameSink {
     },
 
     async finish() {
+      // Finalize flushes the encoder and all remaining bytes through the
+      // StreamTarget adapter into the destination writable; then close it.
       await out.finalize()
-      // `out.target.buffer` is populated once `finalize()` resolves.
-      return new Blob([out.target.buffer!], { type: 'video/mp4' })
+      await closeWritable()
     },
   }
 }

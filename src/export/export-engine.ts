@@ -37,9 +37,10 @@ export interface ExportJob {
 
 export async function runExport(
   job: ExportJob,
+  writable: WritableStream<Uint8Array>,
   onProgress: (frame: number, total: number) => void,
   signal?: AbortSignal,
-): Promise<Blob> {
+): Promise<void> {
   // ---------------------------------------------------------------------
   // Step 1: fresh RenderPlan from the CURRENT graph (both codegen paths,
   // kept in parity — mirrors compiler.worker.ts's `useIR` branch verbatim).
@@ -83,14 +84,17 @@ export async function runExport(
   try {
     target = createExportRenderTarget(device, plan, width, height, images)
 
-    await job.sink.begin({
-      width,
-      height,
-      fps: job.fps,
-      alpha: job.alpha,
-      matte: job.matte,
-      quality: job.quality,
-    })
+    await job.sink.begin(
+      {
+        width,
+        height,
+        fps: job.fps,
+        alpha: job.alpha,
+        matte: job.matte,
+        quality: job.quality,
+      },
+      writable,
+    )
 
     // -----------------------------------------------------------------
     // Step 2: the offline loop. No wall-clock — u_time is driven solely
@@ -121,7 +125,9 @@ export async function runExport(
       onProgress(i + 1, total)
     }
 
-    return await job.sink.finish()
+    // Sink flushes and closes the writable. Bytes have streamed out already —
+    // no Blob returned; the caller's ExportDestination reports the outcome.
+    await job.sink.finish()
   } finally {
     // Release GPU resources on success, mid-loop throw, AND abort alike.
     target?.dispose()
