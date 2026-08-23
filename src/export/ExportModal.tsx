@@ -585,7 +585,9 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
     sizeMB = frames * areaK * 0.0016
     timeS = frames * (areaK / 900)
   } else {
-    const mbps = [3.5, 8, 16, 34][quality] * (areaK / 2073)
+    // Mbps@1080p per quality step — MUST match MBPS_AT_1080P in quality-map.ts
+    // so this estimate agrees with the actual encode bitrate.
+    const mbps = [3.5, 8, 20, 45][quality] * (areaK / 2073)
     sizeMB = (mbps * dur) / 8
     timeS = frames / (isWebm ? 70 : 240)
   }
@@ -915,6 +917,11 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                           key={s.id}
                           type="button"
                           disabled={!webgpuOk}
+                          title={
+                            s.id === 'mp4-hevc'
+                              ? 'H.265 — better quality per byte; best for Apple/QuickTime. Tagged hev1; some editors prefer hvc1.'
+                              : undefined
+                          }
                           onClick={() => setSinkId(s.id)}
                           className={cn(
                             'relative flex h-full flex-col justify-between gap-lg rounded-sm p-lg text-left transition-colors',
@@ -937,6 +944,11 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                       )
                     })}
                   </div>
+                  {selectedSink && !lossless && (
+                    <span className={HINT}>
+                      Lossy video subsamples colour — fine dither and high-frequency detail keep best as a PNG sequence or at a larger size.
+                    </span>
+                  )}
                   {gateNote && <span className="text-param text-red-400">{gateNote}</span>}
                 </div>
 

@@ -6,7 +6,14 @@
  * `VideoSampleSource`.
  */
 
-import { Output, Mp4OutputFormat, BufferTarget, VideoSampleSource, VideoSample } from 'mediabunny'
+import {
+  Output,
+  Mp4OutputFormat,
+  BufferTarget,
+  VideoSampleSource,
+  VideoSample,
+  getFirstEncodableVideoCodec,
+} from 'mediabunny'
 import type { FrameSink, SinkOpts } from '../frame-sink'
 import { qualityFor } from './quality-map'
 
@@ -26,14 +33,20 @@ export function makeMp4Sink(): FrameSink {
     fileExt: 'mp4',
 
     async isSupported() {
+      // Ask MediaBunny whether it can actually encode `avc` on THIS machine —
+      // the same code path `begin()` takes below. The old baseline probe
+      // (`VideoEncoder.isConfigSupported({codec:'avc1.42001f'})`) is a
+      // false-negative on hardware-accelerated Chrome/Mac: the HW encoder
+      // reports baseline unsupported yet encodes `avc` (which MediaBunny builds
+      // as AVC High, `avc1.6400XX`) just fine. getFirstEncodableVideoCodec picks
+      // whatever profile actually encodes, so H.264 becomes a universal fallback.
       try {
-        const result = await VideoEncoder.isConfigSupported({
-          codec: 'avc1.42001f',
-          width: 1280,
-          height: 720,
+        const codec = await getFirstEncodableVideoCodec(['avc'], {
+          width: 1920,
+          height: 1080,
           bitrate: 8e6,
         })
-        return result.supported === true
+        return codec !== null
       } catch {
         return false
       }
