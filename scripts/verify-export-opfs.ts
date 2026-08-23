@@ -1,16 +1,24 @@
 /**
  * verify:export-opfs — mechanism-engaged gate proving the OPFS streaming tier
  * writes export chunks straight to a disk temp with FLAT memory, hands back a
- * disk-backed File, and cleans up its temp.
+ * disk-backed File, and reclaims its temp on both the finalize and abort paths.
  *
  * Browsers WITHOUT the File System Access API (Safari, Firefox) used to export by
  * accumulating every chunk in a `BlobPart[]` in RAM — a 4K PNG sequence OOM'd
  * mid-run. `createExportDestination` now takes an OPFS tier whenever FSA is
  * absent/declined and OPFS is available: chunks flow to an OPFS temp file on disk
  * via a worker holding a `FileSystemSyncAccessHandle`, so the heap stays flat no
- * matter how large the export. `finalize()` reopens the temp as a disk-backed
- * `File`; `cleanup()` tears down the worker and (only when NOT finalized) removes
- * the temp; post-finalize the temp lingers for the NEXT export's stale-sweep.
+ * matter how large the export.
+ *
+ * Temp-file contract (two different lifetimes, both verified below):
+ *   - FINALIZED path: `finalize()` hands the temp out AS the download File
+ *     (reopened via `getFile()`). Deleting it right away could truncate an
+ *     in-flight download, so it deliberately LINGERS after finalize; the NEXT
+ *     OPFS export's stale-sweep removes it.
+ *   - ABORT/CANCEL path: nothing downstream needs the temp, so teardown closes
+ *     the SyncAccessHandle and removes it PROMPTLY — no waiting for the next
+ *     export's sweep (fixed in a1c4d4f: closing the handle before `removeEntry`
+ *     avoids the async-release race from `worker.terminate()`).
  *
  * The OOM regression this prevents is BYTE-CORRECT — the produced file is
  * identical whether chunks streamed to disk or piled up in RAM. So output-validity
@@ -22,20 +30,32 @@
  * task-4-report.md — routing the same chunks into a BlobPart[] accumulator drove
  * the delta to ~300 MB).
  *
- * Assertions (all in-page, on a Chrome that has OPFS + SyncAccessHandle):
- *   #1 opfs-tier-taken      — with FSA skipped (preferDisk:false), the destination
- *                             is the OPFS path: it has cleanup() and NO _partsCount
- *                             (the in-memory fallback is the inverse), AND a
- *                             `sombra-export-*` temp exists in OPFS during writing.
- *   #2 flat-memory          — heap delta after 300 MB of writes is < 20% of total
- *                             (the mechanism). An in-memory accumulator ⇒ ≈ total.
- *   #3 disk-backed-file     — finalize().blob is a File (came from getFile()), its
- *                             size == total bytes written, savedToDisk === false.
- *   #4 stale-sweep          — post-finalize the temp lingers; creating a SUBSEQUENT
- *                             OPFS destination sweeps it (old temp gone afterwards).
- *   #5 abort-removes-temp   — writing a chunk then aborting the writable removes
- *                             that destination's temp IMMEDIATELY (not finalized ⇒
- *                             teardown removeEntry).
+ * Assertions (7, all in-page, on a Chrome that has OPFS + SyncAccessHandle):
+ *   1. opfs-tier-taken        — with FSA skipped (preferDisk:false), the
+ *                               destination is the OPFS path: it has cleanup()
+ *                               and NO _partsCount (the in-memory fallback is
+ *                               the inverse), AND exactly one `sombra-export-*`
+ *                               temp exists in OPFS right after creation.
+ *   2. flat-memory            — the mechanism. Heap delta after 300 MB of writes
+ *                               is < 10% of total. An in-memory accumulator ⇒
+ *                               delta ≈ total (proven above).
+ *   3. opfs-temp-during-write — the temp is still present after all chunks are
+ *                               written (OPFS genuinely engaged, not silently
+ *                               fallen back to RAM mid-stream).
+ *   4. disk-backed-file       — finalize().blob is a File (came from getFile()),
+ *                               its size == total bytes written, savedToDisk
+ *                               === false.
+ *   5. stale-sweep            — post-finalize the temp LINGERS (protects an
+ *                               in-flight download); creating a SUBSEQUENT OPFS
+ *                               destination sweeps it away.
+ *   6. abort-engaged          — after `writable.abort()`, the stream is errored
+ *                               (a fresh write on it rejects) — proves
+ *                               teardown() actually ran, so #7 isn't vacuous.
+ *   7. abort-temp-reclaimed   — an aborted (never-finalized) export's temp is
+ *                               gone IMMEDIATELY after `abort()` resolves — no
+ *                               waiting for the next export's sweep. The
+ *                               next-export sweep is checked too, as a backstop
+ *                               in case immediate removal is ever lost.
  *
  * Anti-vacuity: if OPFS/getDirectory or performance.memory is unavailable in the
  * harness browser, the run FAILS loudly rather than silently skipping.
@@ -68,7 +88,7 @@ const CFG: Cfg = {
   destUrl: '/sombra/src/export/export-destination.ts',
   chunkBytes: 1024 * 1024, // 1 MB
   chunkCount: 300, // → 300 MB total pushed through the destination
-  flatFraction: 0.2,
+  flatFraction: 0.1,
 }
 
 interface CheckResult {
@@ -313,23 +333,20 @@ async function runAssertions(cfg: Cfg): Promise<EvalResult> {
   }
 
   // =====================================================================
-  // #5 abort-removes-temp: writing then aborting the writable removes THAT
-  // destination's temp immediately (not finalized ⇒ teardown removeEntry).
+  // #6/#7 abort reclaims the temp: writing then aborting the writable removes
+  // THAT destination's temp (not finalized ⇒ teardown removeEntry).
   // =====================================================================
   // Two mechanism-engaged sub-checks, split so neither is vacuous:
-  //   #5a abort ENGAGES teardown — proved by the stream being errored afterwards
-  //       (a fresh write rejects). Without this, #5b would pass even if abort()
-  //       were a no-op (the never-finalized temp gets swept regardless).
-  //   #5b an ABORTED (never-finalized) export leaks NO permanent temp — creating
-  //       the next OPFS destination sweeps it away.
-  //
-  // NOTE (finding, reported not asserted): teardown() does worker.terminate()
-  // then a best-effort removeEntry(). Terminating the worker releases its
-  // SyncAccessHandle only ASYNCHRONOUSLY, so that immediate removeEntry loses the
-  // race in Chrome and the temp lingers until the next-export sweep reclaims it —
-  // i.e. the `if (!finalized) removeEntry` line does not land immediately here.
-  // We therefore assert the GUARANTEED contract (no permanent leak via sweep),
-  // and log the immediate-removal observation rather than failing on it.
+  //   #6 abort-engaged — proved by the stream being errored afterwards (a fresh
+  //      write rejects). Without this, #7 would pass even if abort() were a
+  //      no-op (the never-finalized temp gets swept regardless, eventually).
+  //   #7 abort-temp-reclaimed — the aborted temp is gone IMMEDIATELY once
+  //      `abort()` resolves. Fixed in a1c4d4f: teardown's abort branch now
+  //      closes the SyncAccessHandle (awaiting the worker's ack) BEFORE
+  //      removeEntry, instead of removeEntry-ing right after worker.terminate()
+  //      — which released the handle only asynchronously and lost the race.
+  //      The next-export stale-sweep is still checked as a backstop in case
+  //      immediate removal is ever lost on some browser.
   if (!temp2) {
     fail('abort-engaged', 'no second temp to exercise the abort path')
     fail('abort-temp-reclaimed', 'no second temp to exercise the abort path')
@@ -340,7 +357,7 @@ async function runAssertions(cfg: Cfg): Promise<EvalResult> {
       const presentBeforeAbort = (await listTemps()).includes(temp2)
       await writer2.abort()
 
-      // #5a: the stream is now errored → teardown().abort() ran. A fresh write
+      // #6: the stream is now errored → teardown().abort() ran. A fresh write
       // must reject; if abort() were inert, this would resolve.
       writer2.releaseLock()
       let writeRejected = false
@@ -359,14 +376,20 @@ async function runAssertions(cfg: Cfg): Promise<EvalResult> {
         )
       }
 
-      // Observation (non-failing): did teardown's immediate removeEntry land?
-      const removedImmediately = !(await listTemps()).includes(temp2)
-      log(
-        `abort immediate-removeEntry landed=${removedImmediately} ` +
-          `(false in Chrome: worker.terminate() frees the SyncAccessHandle async, so teardown's removeEntry races and loses — sweep reclaims it)`,
-      )
+      // #7: immediate removal — by the time writer2.abort() has resolved, the
+      // temp should already be gone (teardown awaits the worker's close ack
+      // before removeEntry, per a1c4d4f). Retry briefly in case the harness
+      // introduces scheduling noise, but the fix should make this deterministic
+      // on the very first check.
+      let removedImmediately = !(await listTemps()).includes(temp2)
+      for (let attempt = 0; !removedImmediately && attempt < 3; attempt++) {
+        await new Promise((r) => setTimeout(r, 50))
+        removedImmediately = !(await listTemps()).includes(temp2)
+      }
 
-      // #5b: the next OPFS destination's stale-sweep reclaims the aborted temp.
+      // Backstop: the next OPFS destination's stale-sweep must reclaim the
+      // aborted temp regardless (guards against a future regression that loses
+      // immediate removal without leaking permanently).
       const dest3 = await destMod.createExportDestination({
         filename: 'scene3.bin',
         mimeType: 'application/octet-stream',
@@ -374,17 +397,27 @@ async function runAssertions(cfg: Cfg): Promise<EvalResult> {
         preferDisk: false,
       })
       const tempsAfterDest3 = await listTemps()
-      if (!tempsAfterDest3.includes(temp2)) {
+      const sweptEventually = !tempsAfterDest3.includes(temp2)
+
+      if (removedImmediately) {
         pass(
           'abort-temp-reclaimed',
-          `aborted (never-finalized) temp ${temp2} reclaimed by the next OPFS destination's sweep — no permanent leak`,
+          `aborted (never-finalized) temp ${temp2} was gone immediately after abort() resolved (a1c4d4f: handle closed before removeEntry); next-export sweep backstop also confirmed clean`,
+        )
+      } else if (sweptEventually) {
+        log(
+          `abort did NOT remove temp ${temp2} immediately (unexpected post-a1c4d4f) — but the next-export sweep reclaimed it, so no permanent leak`,
+        )
+        fail(
+          'abort-temp-reclaimed',
+          `temp ${temp2} was NOT removed immediately after abort() (expected deterministic removal post-a1c4d4f) — only the next-export sweep reclaimed it`,
         )
       } else {
         fail(
           'abort-temp-reclaimed',
           `aborted temp ${temp2} still present after a subsequent OPFS destination swept (temps=${JSON.stringify(
             tempsAfterDest3,
-          )})`,
+          )}) — PERMANENT LEAK`,
         )
       }
       await dest3.cleanup?.()

@@ -208,12 +208,28 @@ async function runAssertions(cfg: Cfg): Promise<EvalResult> {
   // at each phase boundary so we can distinguish "streamed during frames" from
   // "buffered, emitted at finish" from "one whole-file buffer".
   const runSink = async (sink: FrameSinkLike, alpha: boolean): Promise<StreamRun> => {
-    const dest = await destMod.createExportDestination({
-      filename: `scene.${sink.fileExt}`,
-      mimeType: sink.mimeType,
-      ext: sink.fileExt,
-      preferDisk: false,
-    })
+    // This gate's mechanism observable, `_partsCount()`, exists ONLY on the
+    // true in-memory fallback destination. `createExportDestination` now also
+    // has an OPFS streaming tier between the FSA disk path and that fallback,
+    // which engages whenever the host supports OPFS (true on this headless
+    // Chrome) regardless of `preferDisk`. Hide OPFS just for this call so we
+    // keep reaching the fallback tier this gate was written against — the
+    // OPFS tier's own streaming behaviour is covered separately by
+    // verify:export-opfs (flat-memory + disk-backed-file assertions).
+    const storage = navigator.storage as unknown as { getDirectory?: unknown }
+    const savedGetDirectory = storage.getDirectory
+    storage.getDirectory = undefined
+    let dest: ExportDestinationLike
+    try {
+      dest = await destMod.createExportDestination({
+        filename: `scene.${sink.fileExt}`,
+        mimeType: sink.mimeType,
+        ext: sink.fileExt,
+        preferDisk: false,
+      })
+    } finally {
+      storage.getDirectory = savedGetDirectory
+    }
     if (typeof dest._partsCount !== 'function') throw new Error('fallback destination missing _partsCount()')
     const opts: SinkOptsLike = {
       width: cfg.W,
