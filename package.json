@@ -45,6 +45,7 @@
     "verify:video-export": "tsx scripts/verify-video-export.ts",
     "verify:export-destination": "tsx scripts/verify-export-destination.ts",
     "verify:export-streaming": "tsx scripts/verify-export-streaming.ts",
+    "verify:export-opfs": "tsx scripts/verify-export-opfs.ts",
     "verify:export-abort": "tsx scripts/verify-export-abort.ts",
     "verify:node-id": "tsx scripts/verify-node-id.ts",
     "verify:sombra-package": "tsx scripts/verify-sombra-package.ts",
