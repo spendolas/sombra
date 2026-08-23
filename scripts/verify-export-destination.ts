@@ -8,18 +8,20 @@
  * chunks through the real WritableStream, and asserting the assembled Blob.
  *
  * MECHANISM-ENGAGED assertion: we prove the chunks are kept SEPARATE (one Blob
- * part per write) rather than pre-concatenated into a single growing buffer —
- * that separation is the whole point (concatenating reintroduces the OOM). We
- * instrument the number of writes the stream accepted and assert parts stay
- * distinct AND the byte order is preserved.
+ * part per write) rather than concatenated into a single growing buffer — that
+ * separation is the whole point (concat is byte-correct but O(n²)/OOM, the exact
+ * failure this task prevents). The discriminating observable is the destination's
+ * own `_partsCount()` (reads `parts.length` inside the impl, NOT the test's loop
+ * counter): after N writes it must equal N. A growing-buffer concat impl keeps
+ * ONE part, so `_partsCount()` returns 1 and the assertion trips — while size,
+ * order and byte asserts stay GREEN (which is precisely why they cannot catch
+ * the regression on their own).
  *
- * How this gate can FAIL (demonstrating it is not a no-op): if the fallback
- * `write()` concatenated all chunks into one array out of order — e.g. built one
- * buffer and unshifted each chunk to the front — the assembled bytes would come
- * out as [3,4,5,1,2,0] and the "byte order preserved" assert would trip. And if
- * it merged writes into a single growing part, the "one part per write" assert
- * would trip. The committed test stays GREEN because the implementation pushes a
- * COPY of each chunk in arrival order.
+ * Proven to trip: temporarily swapping the fallback `write()` to a growing-buffer
+ * concat (`buf = concat(buf, chunk)`, one retained part) made `_partsCount()`
+ * return 1 for a 3-chunk write → the `=== 3` assertion FAILED while every other
+ * assert stayed green. Reverted so the committed gate is GREEN against the real
+ * impl. (See task-1-report.md fix section for the captured output.)
  */
 import { test, run, assert } from './blur-bakeoff/lib/test-util'
 import { createExportDestination, supportsFileSystemAccess } from '../src/export/export-destination'
@@ -60,12 +62,7 @@ test('fallback assembles ordered chunks into a Blob of correct size/bytes', asyn
   }
 })
 
-test('MECHANISM: chunks kept separate (one Blob part per write, not pre-concatenated)', async () => {
-  // Instrument: wrap the destination's writable to count writes independently,
-  // then compare against the number of distinct byte segments recoverable from
-  // the assembled Blob. If the implementation had merged writes into one growing
-  // buffer, we would not be able to observe 3 distinct segment boundaries and the
-  // size arithmetic below would not add up per-chunk.
+test('MECHANISM: chunks kept as separate Blob parts (NOT concatenated into one growing buffer)', async () => {
   const dest = await createExportDestination({
     filename: 'out.bin',
     mimeType: 'application/octet-stream',
@@ -74,15 +71,17 @@ test('MECHANISM: chunks kept separate (one Blob part per write, not pre-concaten
   })
 
   const chunks = [new Uint8Array([0]), new Uint8Array([1, 2]), new Uint8Array([3, 4, 5])]
-  let writesAccepted = 0
   const writer = dest.writable.getWriter()
-  for (const c of chunks) {
-    await writer.write(c)
-    writesAccepted++
-  }
+  for (const c of chunks) await writer.write(c)
   await writer.close()
 
-  assert(writesAccepted === 3, `writable accepted exactly 3 writes (got ${writesAccepted})`)
+  // DISCRIMINATING assertion. `_partsCount()` reads `parts.length` from INSIDE
+  // the implementation — it is the impl's own retained-part count, not this
+  // test's loop counter. A streaming-safe impl keeps one part per chunk (=== 3);
+  // a growing-buffer concat regression keeps exactly one part (=== 1) and trips
+  // here, even though it stays byte/size/order correct below.
+  assert(typeof dest._partsCount === 'function', 'fallback destination exposes _partsCount()')
+  assert(dest._partsCount!() === 3, `impl retained exactly 3 separate parts (got ${dest._partsCount!()})`)
 
   const { blob } = await dest.finalize()
   // Total size must equal the SUM of per-chunk lengths — proves each chunk was
