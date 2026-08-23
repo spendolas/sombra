@@ -277,7 +277,7 @@ export function generateNodeIR(
     }
     collectedStandardUniforms.add('u_anchor')
     if (spatial.transforms.includes('translate')) {
-      collectedStandardUniforms.add('u_dpr')
+      collectedStandardUniforms.add('u_frame_scale')
       collectedStandardUniforms.add('u_ref_size')
     }
 
@@ -293,11 +293,11 @@ export function generateNodeIR(
         declare(ownUvVar, 'vec2', binary('+',
           binary('/',
             binary('-', fragCoord('yDown'), binary('*', variable('u_resolution'), variable('u_anchor'), 'vec2'), 'vec2'),
-            binary('*', variable('u_dpr'), variable('u_ref_size'), 'float'), 'vec2'),
+            binary('*', variable('u_frame_scale'), variable('u_ref_size'), 'float'), 'vec2'),
           variable('u_anchor'), 'vec2')),
       )
       collectedStandardUniforms.add('u_resolution')
-      collectedStandardUniforms.add('u_dpr')
+      collectedStandardUniforms.add('u_frame_scale')
       collectedStandardUniforms.add('u_ref_size')
       const ownSrt: IRSpatialTransform = { coordsVar: ownUvVar, outputVar: `srtown_${sanitizedNodeId}`, ...srtUniforms }
       // emitSRT text (single source) in preamble; the WGSL assembler rewrites
@@ -388,12 +388,12 @@ export function resolveInputDefaultIR(
       declare(autoUvVar, 'vec2', binary('+',
         binary('/',
           binary('-', fragCoord('yDown'), binary('*', variable('u_resolution'), variable('u_anchor'), 'vec2'), 'vec2'),
-          binary('*', variable('u_dpr'), variable('u_ref_size'), 'float'), 'vec2'),
+          binary('*', variable('u_frame_scale'), variable('u_ref_size'), 'float'), 'vec2'),
         variable('u_anchor'), 'vec2')),
     )
     uniforms.add('u_resolution')
     uniforms.add('u_anchor')
-    uniforms.add('u_dpr')
+    uniforms.add('u_frame_scale')
     uniforms.add('u_ref_size')
     inputs[inputPort.id] = autoUvVar
     return true

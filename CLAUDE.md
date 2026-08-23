@@ -32,7 +32,8 @@ npx tsx scripts/verify-ir-poc.ts              # GLSL vs IR-generated output pari
 npx tsx scripts/validate-wgsl-multipass.ts    # WGSL GPU compilation tests for all nodes/passes
 npx tsx scripts/schema.ts                     # Zod validation of tokens/sombra.ds.json
 
-npm run verify:pass-size          # per-pass sizing maths: the u_dpr rule that keeps auto_uv scale-invariant
+npm run verify:pass-size          # per-pass sizing maths: the u_frame_scale rule that keeps auto_uv scale-invariant
+npm run verify:frame-scale-invariance  # GPU: a scene-locked feature's reference-unit size is constant across resolution/framing/dpr (guards the u_frame_scale split)
 npm run verify:pass-resolution    # a node's declared per-pass scale reaches the RenderPlan on BOTH codegen paths
 npm run verify:pass-resolution:gpu  # real GPUs: pinning, scale-1 identity, pool thrash, preview agreement (needs Chrome)
 
@@ -88,7 +89,7 @@ graph (nodes+edges) → topological sort → codegen → RenderPlan → renderer
 - **Two codegen paths, kept in parity:**
   - `glsl-generator.ts` — legacy string-based GLSL codegen (each node's `glsl(ctx)`)
   - `ir-compiler.ts` + `src/compiler/ir/` — IR-based path (each node's `ir(ctx)`) with `wgsl-backend.ts`/`glsl-backend.ts` and `wgsl-assembler.ts`. This feeds the WebGPU renderer. Worker takes a `useIR` flag and returns both.
-- **Multi-pass:** the compiler outputs a `RenderPlan` (ordered `RenderPass[]`), not a single shader. Ports marked `textureInput: true` trigger pass boundaries — upstream renders to a texture, the effect node samples it. Spatial nodes declare `spatial: SpatialConfig` for framework-managed SRT transforms. Single-pass graphs are just a one-pass plan. Passes may declare `RenderPass.resolution` (a scale factor) to rasterise at a fraction or multiple of canvas size; the framework scales `u_dpr` with it so `auto_uv` stays invariant.
+- **Multi-pass:** the compiler outputs a `RenderPlan` (ordered `RenderPass[]`), not a single shader. Ports marked `textureInput: true` trigger pass boundaries — upstream renders to a texture, the effect node samples it. Spatial nodes declare `spatial: SpatialConfig` for framework-managed SRT transforms. Single-pass graphs are just a one-pass plan. Passes may declare `RenderPass.resolution` (a scale factor) to rasterise at a fraction or multiple of canvas size; the framework scales `u_frame_scale` with it so `auto_uv` stays invariant.
 - `subgraph-compiler.ts` / `ir-subgraph-compiler.ts` — compile the subgraph up to a target node for per-node preview thumbnails.
 
 ### Live update tiers (`use-live-compiler.ts`)
@@ -129,8 +130,9 @@ Each node is one file in `src/nodes/<category>/`, registered in `src/nodes/index
 ### Rendering model
 
 - Fullscreen quad (2 triangles), all work in the fragment shader.
-- Built-in uniforms: `u_time`, `u_resolution`, `u_mouse`, `u_ref_size`, `u_dpr`, `u_viewport`.
-- **Fixed reference sizing:** `u_ref_size` is a constant (`REFERENCE_SIZE = 512`, shared in `src/renderer/constants.ts`), NOT captured per-canvas. `auto_uv` = `(fragXY - u_resolution*u_anchor) / (u_dpr * u_ref_size) + u_anchor` is anchor-relative, so resizing reveals/hides edges (no zoom/distortion) and pins content to the Fragment Output anchor. Nodes placing px-space content relative to this (e.g. gradient Pinned `grad_center = vec2(0.5)`) pin to the anchor on resize.
+- Built-in uniforms: `u_time`, `u_resolution`, `u_mouse`, `u_ref_size`, `u_frame_scale`, `u_dpr`, `u_viewport`.
+- **Fixed reference sizing:** `u_ref_size` is a constant (`REFERENCE_SIZE = 512`, shared in `src/renderer/constants.ts`), NOT captured per-canvas. `auto_uv` = `(fragXY - u_resolution*u_anchor) / (u_frame_scale * u_ref_size) + u_anchor` is anchor-relative, so resizing reveals/hides edges (no zoom/distortion) and pins content to the Fragment Output anchor. Nodes placing px-space content relative to this (e.g. gradient Pinned `grad_center = vec2(0.5)`) pin to the anchor on resize.
+- **`u_frame_scale` vs `u_dpr` (split):** `u_frame_scale` is the reference-px↔device-px ratio for **layout/composition** — every scene-locked feature (auto_uv, dither/pixelate cells, pattern periods, reeded geometry, blur reach) divides/multiplies by it, so feature size in reference units is invariant across resolution and export framing. `u_dpr` is a **pure device-density** knob. On the LIVE renderers both equal `min(devicePixelRatio,2)×dprScale`. On EXPORT, `computeFraming` sets `u_frame_scale` = the framing scale (Fit/Fill/Reveal) and `u_dpr` = 1 (a future supersample pass may raise `u_dpr` without moving the framing). Gate: `npm run verify:frame-scale-invariance`.
 
 ### State + UI
 

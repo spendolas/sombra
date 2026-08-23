@@ -981,6 +981,9 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
     const dprLoc = uniforms.get('u_dpr')
     if (dprLoc) gl.uniform1f(dprLoc, dpr)
 
+    const frameScaleLoc = uniforms.get('u_frame_scale')
+    if (frameScaleLoc) gl.uniform1f(frameScaleLoc, dpr)
+
     const refLoc = uniforms.get('u_ref_size')
     if (refLoc) gl.uniform1f(refLoc, WebGL2ShaderRenderer.REFERENCE_SIZE)
 

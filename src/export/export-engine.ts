@@ -22,6 +22,7 @@ import { createExportRenderTarget, type ExportRenderTarget } from './export-rend
 import { decodeGraphImages } from './export-images'
 import type { FrameSink, QualityLevel } from './frame-sink'
 import type { FramingChoice } from './framing'
+import type { ExportDestination } from './export-destination'
 
 export interface ExportJob {
   sink: FrameSink
@@ -35,11 +36,28 @@ export interface ExportJob {
   framing: FramingChoice
 }
 
+/**
+ * Export lifecycle phase surfaced to the UI. The frame loop reports `'rendering'`
+ * (the implicit default when `onProgress` omits the phase); once the last frame
+ * is queued the engine flips to `'finalizing'` so the modal can show
+ * "Finalizing…" (mux flush) / "Zipping…" (PNG zip central-directory) — these can
+ * take a while on large exports and would otherwise look like a frozen 100% bar.
+ */
+export type ExportPhase = 'rendering' | 'finalizing'
+
+/** What a completed export reports back — mirrors `ExportDestination.finalize()`. */
+export interface ExportResult {
+  blob: Blob | null
+  savedToDisk: boolean
+  filename: string
+}
+
 export async function runExport(
   job: ExportJob,
-  onProgress: (frame: number, total: number) => void,
+  destination: ExportDestination,
+  onProgress: (frame: number, total: number, phase?: ExportPhase) => void,
   signal?: AbortSignal,
-): Promise<Blob> {
+): Promise<ExportResult> {
   // ---------------------------------------------------------------------
   // Step 1: fresh RenderPlan from the CURRENT graph (both codegen paths,
   // kept in parity — mirrors compiler.worker.ts's `useIR` branch verbatim).
@@ -70,17 +88,41 @@ export async function runExport(
   const total = Math.max(1, Math.round(job.durationSec * job.fps))
   let target: ExportRenderTarget | undefined
 
-  try {
-    target = createExportRenderTarget(device, plan, job.width, job.height, images)
+  // Video codecs reject ODD dimensions: mediabunny reports a codec NOT encodable
+  // when width or height is odd, and the sink then silently falls through. Clamp
+  // to even (round DOWN, min 2) HERE so the render target and the sink both see
+  // the exact same even dims — no half-pixel mismatch between what we rasterise
+  // and what we encode. (The modal already rounds up to even; this is the
+  // defensive floor for any other caller. PNG is unaffected either way.)
+  const evenFloor = (n: number) => Math.max(2, Math.floor(n / 2) * 2)
+  const width = evenFloor(job.width)
+  const height = evenFloor(job.height)
 
-    await job.sink.begin({
-      width: job.width,
-      height: job.height,
-      fps: job.fps,
-      alpha: job.alpha,
-      matte: job.matte,
-      quality: job.quality,
-    })
+  // Tracks whether the sink reached a clean `finish()` (which closes the
+  // writable). If we bail before that, the `finally` calls `sink.abort()`.
+  // Each sink locks the destination writable via `getWriter()` in `begin()`, so
+  // only the sink can release it — `sink.abort()` stops the encoder AND releases
+  // its own writer + aborts the destination writable. That makes mid-encode
+  // Cancel tear down DETERMINISTICALLY: on the File System Access path the abort
+  // discards the swap file instead of leaking its handle to GC (and the user's
+  // chosen file is untouched until `close()`, so a cancelled disk export never
+  // corrupts it). `sink.abort()` is a safe no-op before `begin()`.
+  let finished = false
+
+  try {
+    target = createExportRenderTarget(device, plan, width, height, images)
+
+    await job.sink.begin(
+      {
+        width,
+        height,
+        fps: job.fps,
+        alpha: job.alpha,
+        matte: job.matte,
+        quality: job.quality,
+      },
+      destination.writable,
+    )
 
     // -----------------------------------------------------------------
     // Step 2: the offline loop. No wall-clock — u_time is driven solely
@@ -94,7 +136,8 @@ export async function runExport(
       const t = i / job.fps
       target.renderFrame({
         timeSec: t,
-        uDpr: job.framing.uDpr,
+        frameScale: job.framing.frameScale,
+        uDpr: job.framing.dpr,
         anchor: job.framing.anchor,
       })
 
@@ -110,8 +153,30 @@ export async function runExport(
       onProgress(i + 1, total)
     }
 
-    return await job.sink.finish()
+    // Rendering done; the mux finalize / PNG zip flush below can be slow on large
+    // exports, so signal the finalize phase before we hand off to the sink.
+    onProgress(total, total, 'finalizing')
+
+    // Sink flushes and closes the writable. Bytes have streamed out already —
+    // no Blob returned; the ExportDestination reports the outcome.
+    await job.sink.finish()
+    finished = true
+
+    // Reports the outcome (fallback Blob, or savedToDisk on the disk path); does
+    // NOT re-close the stream (finish() already did).
+    return await destination.finalize()
   } finally {
+    // If we didn't reach a clean finish(), tear the sink down deterministically:
+    // sink.abort() stops the encoder, releases the sink's own writer, and aborts
+    // the destination writable (discarding a partial file / FSA swap handle).
+    // Best-effort — never mask the original error (e.g. the AbortError).
+    if (!finished) {
+      try {
+        await job.sink.abort()
+      } catch {
+        /* teardown is best-effort; the original error is what propagates */
+      }
+    }
     // Release GPU resources on success, mid-loop throw, AND abort alike.
     target?.dispose()
     device.destroy()

@@ -14,7 +14,10 @@ export type SizeSource =
 export type FramingMode = 'reveal' | 'fill' | 'fit'
 
 export interface FramingChoice {
-  uDpr: number
+  /** Framing/zoom scale → `u_frame_scale`. Drives `auto_uv` composition. */
+  frameScale: number
+  /** Device density → `u_dpr`. 1:1 export today; the supersample hook. */
+  dpr: number
   anchor: [number, number]
 }
 
@@ -51,12 +54,26 @@ export function targetSize(src: SizeSource, view: ViewInfo): { width: number; he
 /**
  * Compute framing parameters for the renderer.
  *
- * Preserve the view's framing except for Reveal:
- * - Reveal: uDpr=1 makes the target pixel scale = logical scale (anchor-relative crop/reveal)
- * - Fill/Fit: uDpr scales so the view fits/covers the target aspect, preserving blur's visible reach
+ * Preserve the view's framing except for Reveal. Framing (zoom/composition) and
+ * device density are now two INDEPENDENT axes:
+ * - `frameScale` → `u_frame_scale`: drives `auto_uv` composition (blur reach,
+ *   anchor pinning, per-pass sizing). Reveal=1 (logical scale, anchor-relative
+ *   crop/reveal); Fill/Fit scale so the view covers/fits the target aspect.
+ * - `dpr` → `u_dpr`: pure device density. Held at 1 for a 1:1 export; a future
+ *   supersample pass raises it WITHOUT moving the framing.
  *
- * Known limitation: For Reveal, uDpr=1 makes blur reach grow because u_dpr also scales blur radius.
- * The clean fix (separate u_frame_scale uniform) is parked for follow-up.
+ * The split resolves the old limitation where the single overloaded `u_dpr`
+ * conflated composition and density. Blur reach (and every scene-locked feature)
+ * now follows `u_frame_scale`: its reach in REFERENCE units is invariant across
+ * framing modes and sizes, because the `u_frame_scale` factor in the sigma
+ * cancels the one in `auto_uv`'s denominator — Reveal (frameScale=1) and live
+ * (frameScale=deviceDpr) cover the same fraction of the composition.
+ *
+ * `u_dpr` is currently a reserved density knob with NO node consumer (export
+ * holds it at 1; live sets it == frameScale == deviceDpr, so blur is unchanged
+ * there). A follow-up may wire supersampled-AA smoothness onto `u_dpr` — more
+ * samples across the SAME reach — behind a supersample UI. Deferred as YAGNI:
+ * no product path emits dpr≠frameScale today. See the plan's Task 8 ruling.
  */
 export function computeFraming(
   mode: FramingMode,
@@ -65,34 +82,19 @@ export function computeFraming(
   height: number,
 ): FramingChoice {
   if (mode === 'reveal') {
-    return { uDpr: 1, anchor: [0.5, 0.5] }
+    return { frameScale: 1, dpr: 1, anchor: [0.5, 0.5] }
   }
 
   // Compute the composition scale factor. The view (editor's current view) is scaled
   // so it either covers or contains the target frame while maintaining aspect ratio.
-  // Fill: scale to cover target → uDpr = max scale factor
-  // Fit: scale to contain target → uDpr = min scale factor
+  // Fill: scale to cover target → frameScale = max scale factor
+  // Fit: scale to contain target → frameScale = min scale factor
   const scaleX = width / view.cssW
   const scaleY = height / view.cssH
 
-  const uDpr = mode === 'fill' ? Math.max(scaleX, scaleY) : Math.min(scaleX, scaleY)
+  const frameScale = mode === 'fill' ? Math.max(scaleX, scaleY) : Math.min(scaleX, scaleY)
 
-  return { uDpr, anchor: [0.5, 0.5] }
-}
-
-// Helper: compute gcd for aspect ratio simplification
-function gcd(a: number, b: number): number {
-  return b ? gcd(b, a % b) : a
-}
-
-// Helper: format aspect ratio. Clean ratios read as "16:9"; odd view sizes
-// reduce to ugly numbers (e.g. 124:53) — show a decimal "2.34:1" instead.
-function aspectRatio(w: number, h: number): string {
-  const g = gcd(Math.round(w), Math.round(h)) || 1
-  const rw = Math.round(w / g)
-  const rh = Math.round(h / g)
-  if (rw > 21 || rh > 21) return `${(w / h).toFixed(2)}:1`
-  return `${rw}:${rh}`
+  return { frameScale, dpr: 1, anchor: [0.5, 0.5] }
 }
 
 /**
@@ -100,7 +102,7 @@ function aspectRatio(w: number, h: number): string {
  * Returns text and a flag indicating whether the framing control should be hidden
  * (when target size == view size AND same aspect ratio).
  *
- * Strings are copied character-for-character from the export modal mockup.
+ * Card bodies are kept short (≤ ~40 chars) and balanced across the three modes.
  */
 export function describeResult(
   src: SizeSource,
@@ -127,30 +129,29 @@ export function describeResult(
   }
 
   const bigger = targetW * targetH >= viewW * viewH
-  const ar = aspectRatio(targetW, targetH)
 
   let text: string
 
   if (mode === 'reveal') {
     if (aspDiff) {
-      text = `Anchor-relative at ${ar} — keeps content scale: reveals the ${targetAR > viewAR ? 'wider' : 'taller'} axis, crops the other.`
+      text = `Keeps scale; reveals the ${targetAR > viewAR ? 'wider' : 'taller'} axis.`
     } else if (bigger) {
-      text = `Bigger frame — reveals more scene around the anchor.`
+      text = `Reveals more scene around the anchor.`
     } else {
-      text = `Smaller frame — crops in to a tighter view around the anchor.`
+      text = `Crops in tighter around the anchor.`
     }
   } else if (mode === 'fill') {
     if (aspDiff) {
-      text = `Fill — composition scaled to cover ${ar}; the ${targetAR > viewAR ? 'top & bottom' : 'sides'} of your view are cropped.`
+      text = `Scaled to cover; ${targetAR > viewAR ? 'top & bottom' : 'sides'} cropped.`
     } else {
-      text = bigger ? `Same composition, supersampled — sharper.` : `Same composition, downscaled.`
+      text = bigger ? `Same composition, supersampled.` : `Same composition, downscaled.`
     }
   } else {
     // fit
     if (aspDiff) {
-      text = `Fit — your whole composition kept; the ${targetAR > viewAR ? 'sides' : 'top & bottom'} fill with revealed scene.`
+      text = `Whole view kept; ${targetAR > viewAR ? 'sides' : 'top & bottom'} filled.`
     } else {
-      text = bigger ? `Same composition, supersampled — sharper.` : `Same composition, downscaled.`
+      text = bigger ? `Same composition, supersampled.` : `Same composition, downscaled.`
     }
   }
 

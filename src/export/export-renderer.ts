@@ -33,7 +33,17 @@ import { generateMipmaps, mipLevelCount } from '../webgpu/mipmaps'
 export interface ExportFrameUniforms {
   /** Deterministic frame time in seconds (e.g. `i / fps`). Drives `u_time`. */
   timeSec: number
-  /** Framing scale (Task 6). Drives `u_dpr` on the final pass. */
+  /**
+   * Framing/zoom scale (Task 6). Drives `u_frame_scale` and the per-pass base
+   * scale (intermediate-pass sizing + `auto_uv` invariance). Independent of
+   * device density.
+   */
+  frameScale: number
+  /**
+   * Device density. Drives `u_dpr` on every pass (unscaled by pass resolution —
+   * density does not change a pass's pixel size). 1 for a 1:1 export; the
+   * supersample hook raises it without moving the framing.
+   */
   uDpr: number
   /** Fragment Output anchor, default [0.5, 0.5]. Drives `u_anchor`. */
   anchor: [number, number]
@@ -324,16 +334,20 @@ class ExportRenderTargetImpl implements ExportRenderTarget {
       const ps = this.passStates[i]
       const isLast = i === this.passStates.length - 1
 
-      // The final pass always draws to the full-size offscreen target (u_dpr =
-      // frame.uDpr). Intermediate passes honour their own `resolution`, and
-      // passTargetSize scales u_dpr with the actual integer size so `auto_uv`
-      // and anchor pinning stay invariant — the same rule the main renderer uses.
-      const size = passTargetSize(ps.resolution, this.width, this.height, frame.uDpr, maxTex)
+      // Per-pass sizing and `auto_uv` invariance are FRAMING concerns, so the
+      // base scale fed to passTargetSize is `frame.frameScale` (NOT the density
+      // dpr). passTargetSize returns a `dpr` that IS the frame scale for this
+      // pass — scaled with the pass's actual integer size — which we wire to
+      // `u_frame_scale`. The final pass always draws to the full-size offscreen
+      // target at the full frameScale. Device density (`u_dpr`) is a separate
+      // axis: it does NOT change a pass's pixel size, so every pass (final AND
+      // intermediate) writes `frame.uDpr` unscaled by resolution.
+      const size = passTargetSize(ps.resolution, this.width, this.height, frame.frameScale, maxTex)
       const passW = isLast ? this.width : size.width
       const passH = isLast ? this.height : size.height
-      const passDpr = isLast ? frame.uDpr : size.dpr
+      const passFrameScale = isLast ? frame.frameScale : size.dpr
 
-      writeBuiltinUniforms(ps.uniformFloat32, ps.uniformLayout, frame, passW, passH, passDpr)
+      writeBuiltinUniforms(ps.uniformFloat32, ps.uniformLayout, frame, passW, passH, passFrameScale, frame.uDpr)
       this.device.queue.writeBuffer(ps.uniformBuffer, 0, ps.uniformData, 0, ps.uniformLayout.totalSize)
 
       const targetView = isLast
@@ -561,6 +575,7 @@ function writeBuiltinUniforms(
   frame: ExportFrameUniforms,
   passW: number,
   passH: number,
+  passFrameScale: number,
   passDpr: number,
 ): void {
   const off = layout.offsets
@@ -577,7 +592,8 @@ function writeBuiltinUniforms(
   }
   set1('u_time', frame.timeSec)
   set2('u_resolution', passW, passH) // pass target size in device px
-  set1('u_dpr', passDpr)
+  set1('u_dpr', passDpr) // device density — independent of framing
+  set1('u_frame_scale', passFrameScale) // framing/zoom — drives auto_uv composition
   set1('u_ref_size', REFERENCE_SIZE)
   set2('u_anchor', frame.anchor[0], frame.anchor[1])
   set2('u_viewport', passW, passH)

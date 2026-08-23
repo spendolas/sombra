@@ -30,6 +30,7 @@ import { useSettingsStore } from '@/stores/settingsStore'
 import { isWebGL2Forced } from '@/renderer/create-renderer'
 import { getAvailableSinks } from './registry'
 import { runExport, type ExportJob } from './export-engine'
+import { createExportDestination, ExportCancelled } from './export-destination'
 import { useExportPreview, type ExportPreviewState } from './use-export-preview'
 import {
   targetSize,
@@ -40,11 +41,26 @@ import {
   type ViewInfo,
 } from './framing'
 import type { FrameSink } from './frame-sink'
+import type { Mp4Sink } from './sinks/webcodecs-mp4'
 // Side effect: registers the 3 built-in sinks so getAvailableSinks returns them.
 import './sinks/index'
 
 type SizeSrc = 'match' | '2x' | '4x' | 'preset' | 'custom'
 type Phase = 'config' | 'running' | 'done'
+
+/**
+ * Done-state label that reflects the codec the export ACTUALLY used. The mp4
+ * sink offers "MP4 · H.265" (its static `label`, shown on the format card) but
+ * transparently falls back to H.264/AVC where no hardware HEVC encoder exists;
+ * after the export its `usedCodec` field says which one shipped. Non-mp4 sinks
+ * (no such field) keep their static label. Feature-detected — no blanket `any`.
+ */
+function doneLabelForSink(sink: FrameSink): string {
+  const usedCodec = (sink as Partial<Mp4Sink>).usedCodec
+  if (usedCodec === 'hevc') return 'MP4 · H.265'
+  if (usedCodec === 'avc') return 'MP4 · H.264'
+  return sink.label
+}
 
 const QUALITY_LABELS = ['Draft', 'Good', 'High', 'Max'] as const
 
@@ -385,9 +401,20 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
       : (MATTES.find((m) => m.key === selectedMatte)?.color ?? MATTES[0].color)
   // Export flow
   const [phase, setPhase] = useState<Phase>('config')
+  // Sub-phase within `running`: the frame loop ('rendering') then the mux flush /
+  // PNG zip ('finalizing'), so the UI can show a distinct "Finalizing…/Zipping…".
+  const [exportPhase, setExportPhase] = useState<'rendering' | 'finalizing'>('rendering')
   const [progress, setProgress] = useState({ frame: 0, total: 0 })
   const [error, setError] = useState<string | null>(null)
-  const [done, setDone] = useState<{ url: string; filename: string; sizeLabel: string; label: string } | null>(null)
+  // Done state. On the disk-stream path there's no Blob (savedToDisk) — the file
+  // is already written, so no url/sizeLabel/download button; the fallback path
+  // keeps the object-URL download.
+  const [done, setDone] = useState<
+    { savedToDisk: boolean; url?: string; filename: string; sizeLabel?: string; label: string } | null
+  >(null)
+  // Sampled PNG bytes-per-pixel (from the live preview's real readback) — drives
+  // the PNG size estimate. null until the first sample lands (constant fallback).
+  const [pngBytesPerPixel, setPngBytesPerPixel] = useState<number | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const urlRef = useRef<string | null>(null)
 
@@ -438,6 +465,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
   useEffect(() => {
     if (open) return
     setPhase('config')
+    setExportPhase('rendering')
     setError(null)
     setDone(null)
     abortRef.current?.abort()
@@ -484,7 +512,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
     active: false,
     outW: 1,
     outH: 1,
-    framing: { uDpr: 1, anchor: [0.5, 0.5] },
+    framing: { frameScale: 1, dpr: 1, anchor: [0.5, 0.5] },
     exportW: 1,
   })
   // Whether the shader's output is ever translucent — read straight off the
@@ -492,10 +520,11 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
   // blur can't be told apart from a transparent one without the actual pixels).
   // Default hidden so the common opaque case never flashes the matte control.
   const [shaderHasAlpha, setShaderHasAlpha] = useState(false)
-  useExportPreview(previewCanvasRef, previewStateRef, setShaderHasAlpha)
+  useExportPreview(previewCanvasRef, previewStateRef, setShaderHasAlpha, setPngBytesPerPixel)
 
   // Draggable panel — offset from the centred position. Window listeners so the
   // drag survives pointer-capture loss (per the repo's pointer-drag rule).
+  const modalRef = useRef<HTMLDivElement>(null)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
   const dragOrigin = useRef({ px: 0, py: 0, ox: 0, oy: 0 })
@@ -503,7 +532,20 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
     if (!dragging) return
     const move = (e: PointerEvent) => {
       const o = dragOrigin.current
-      setDragOffset({ x: o.ox + (e.clientX - o.px), y: o.oy + (e.clientY - o.py) })
+      let x = o.ox + (e.clientX - o.px)
+      let y = o.oy + (e.clientY - o.py)
+      // Clamp so the centred modal never leaves the viewport. Max travel each
+      // axis is (viewport − modalSize)/2 (0 if the modal is larger than the
+      // viewport there — never push a too-big modal further off-screen).
+      const el = modalRef.current
+      if (el) {
+        const r = el.getBoundingClientRect()
+        const maxX = Math.max(0, (window.innerWidth - r.width) / 2)
+        const maxY = Math.max(0, (window.innerHeight - r.height) / 2)
+        x = Math.min(maxX, Math.max(-maxX, x))
+        y = Math.min(maxY, Math.max(-maxY, y))
+      }
+      setDragOffset({ x, y })
     }
     const up = () => setDragging(false)
     window.addEventListener('pointermove', move)
@@ -519,6 +561,27 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
     dragOrigin.current = { px: e.clientX, py: e.clientY, ox: dragOffset.x, oy: dragOffset.y }
     setDragging(true)
   }
+  // Re-clamp on window resize: pointermove only clamps while dragging, so
+  // shrinking the window could otherwise strand a dragged modal partly
+  // offscreen. Same bounds as the drag clamp: (viewport − modalRect)/2, floored
+  // at 0 for an oversized modal. Listener lives only while the modal is open.
+  useEffect(() => {
+    if (!open) return
+    const reclamp = () => {
+      const el = modalRef.current
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      const maxX = Math.max(0, (window.innerWidth - r.width) / 2)
+      const maxY = Math.max(0, (window.innerHeight - r.height) / 2)
+      setDragOffset((o) => {
+        const x = Math.min(maxX, Math.max(-maxX, o.x))
+        const y = Math.min(maxY, Math.max(-maxY, o.y))
+        return x === o.x && y === o.y ? o : { x, y }
+      })
+    }
+    window.addEventListener('resize', reclamp)
+    return () => window.removeEventListener('resize', reclamp)
+  }, [open])
 
   if (!open) return null
 
@@ -572,9 +635,8 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
   // stripped so the card title doesn't repeat it).
   const framingModes = (['fill', 'fit', 'reveal'] as const).map((m) => {
     const label = m === 'reveal' ? (bigger ? 'Reveal' : 'Crop') : m === 'fill' ? 'Fill' : 'Fit'
-    const raw = describeResult(src, m, view).text
-    const prefix = `${label} — `
-    return { v: m, label, body: raw.startsWith(prefix) ? raw.slice(prefix.length) : raw }
+    const body = describeResult(src, m, view).text
+    return { v: m, label, body }
   })
 
   const frames = Math.max(1, Math.round(dur * fps))
@@ -582,10 +644,24 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
   let sizeMB: number
   let timeS: number
   if (isZip) {
-    sizeMB = frames * areaK * 0.0016
+    // PNG size is content-dependent (compressibility varies wildly with the
+    // shader), so a flat per-pixel constant is a poor guess. When the live
+    // preview has sampled a REAL frame's PNG, use its measured bytes/pixel scaled
+    // to the export resolution: sizeMB = frames · bpp · outW · outH / 1e6. Until
+    // the first sample lands, fall back to a calibrated constant (~0.0016 MB per
+    // 1000 px/frame). See useExportPreview's onSamplePng.
+    sizeMB =
+      pngBytesPerPixel != null
+        ? (frames * pngBytesPerPixel * outW * outH) / 1e6
+        : frames * areaK * 0.0016
     timeS = frames * (areaK / 900)
   } else {
-    const mbps = [3.5, 8, 16, 34][quality] * (areaK / 2073)
+    // Mbps@1080p per quality step — MUST match MBPS_AT_1080P in quality-map.ts
+    // so this estimate agrees with the actual encode bitrate. qualityFor scales
+    // the bitrate by pixel area, so scale the estimate the SAME way (by
+    // outW·outH / 1080p area); with CBR the encode tracks this closely.
+    const areaScale = (outW * outH) / (1920 * 1080)
+    const mbps = [3.5, 8, 20, 45][quality] * areaScale
     sizeMB = (mbps * dur) / 8
     timeS = frames / (isWebm ? 70 : 240)
   }
@@ -609,11 +685,13 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
   }
 
   // Blue guide: where the current view maps inside the export frame. The view
-  // occupies (cssW·uDpr / outW) × (cssH·uDpr / outH) of the frame, centred — so
-  // Reveal shows it smaller (reveals around it) and Fill shows it overflowing
-  // (the excess is cropped). Only meaningful when the frame differs from the view.
-  const guideW = (cssW * framingChoice.uDpr) / outW
-  const guideH = (cssH * framingChoice.uDpr) / outH
+  // occupies (cssW·frameScale / outW) × (cssH·frameScale / outH) of the frame,
+  // centred — so Reveal shows it smaller (reveals around it) and Fill shows it
+  // overflowing (the excess is cropped). This is a FRAMING concern (composition,
+  // not device density), so it reads frameScale. Only meaningful when the frame
+  // differs from the view.
+  const guideW = (cssW * framingChoice.frameScale) / outW
+  const guideH = (cssH * framingChoice.frameScale) / outH
   const showGuide = !framingHidden && Number.isFinite(guideW) && Number.isFinite(guideH)
 
   const gateNote = !webgpuOk
@@ -655,19 +733,56 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
       framing: computeFraming(effFraming, view, width, height),
     }
 
+    const filename = `scene.${selectedSink.fileExt}`
+
+    // Prefer streaming straight to disk (File System Access) — the save dialog is
+    // shown FIRST, before any GPU work, so cancelling it costs nothing. This can
+    // throw ExportCancelled (user dismissed the picker) → silently back to config.
+    let dest
+    try {
+      dest = await createExportDestination({
+        filename,
+        mimeType: selectedSink.mimeType,
+        ext: selectedSink.fileExt,
+        preferDisk: true,
+      })
+    } catch (e) {
+      if (e instanceof ExportCancelled) return // user cancelled the save dialog
+      setError(e instanceof Error ? e.message : String(e))
+      return
+    }
+
     const ac = new AbortController()
     abortRef.current = ac
     setProgress({ frame: 0, total: frames })
+    setExportPhase('rendering')
     setPhase('running')
     try {
-      const blob = await runExport(job, (frame, total) => setProgress({ frame, total }), ac.signal)
-      const url = URL.createObjectURL(blob)
-      urlRef.current = url
-      const sizeLabel =
-        blob.size < 1024 * 1024
-          ? `${(blob.size / 1024).toFixed(0)} KB`
-          : `${(blob.size / (1024 * 1024)).toFixed(1)} MB`
-      setDone({ url, filename: `scene.${selectedSink.fileExt}`, sizeLabel, label: selectedSink.label })
+      const result = await runExport(
+        job,
+        dest,
+        (frame, total, ph) => {
+          if (ph === 'finalizing') setExportPhase('finalizing')
+          setProgress({ frame, total })
+        },
+        ac.signal,
+      )
+      // Label the delivered codec, not just the offered one (H.265→H.264 fallback).
+      const doneLabel = doneLabelForSink(selectedSink)
+      if (result.savedToDisk) {
+        // File is already on disk — nothing to download; just confirm.
+        setDone({ savedToDisk: true, filename: result.filename, label: doneLabel })
+      } else {
+        const blob = result.blob
+        if (!blob) throw new Error('[export] no blob produced')
+        const url = URL.createObjectURL(blob)
+        urlRef.current = url
+        const sizeLabel =
+          blob.size < 1024 * 1024
+            ? `${(blob.size / 1024).toFixed(0)} KB`
+            : `${(blob.size / (1024 * 1024)).toFixed(1)} MB`
+        setDone({ savedToDisk: false, url, filename: result.filename, sizeLabel, label: doneLabel })
+      }
       setPhase('done')
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') {
@@ -691,7 +806,8 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
       onClick={onClose}
     >
       <div
-        className="flex h-[702px] max-h-[92vh] max-w-[92vw] overflow-hidden rounded-lg border border-edge bg-surface text-fg shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]"
+        ref={modalRef}
+        className="flex h-[702px] max-h-[92vh] max-w-[92vw] overflow-hidden rounded-lg bg-surface text-fg shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]"
         style={{ transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)` }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -709,7 +825,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
               }}
             >
               <div
-                className="absolute inset-0 overflow-hidden rounded-sm"
+                className="absolute inset-0 overflow-hidden rounded-sm border-[0.5px] border-edge"
                 style={selectedSink && !selectedSink.supportsAlpha ? { background: matte } : CHECKER}
               >
                 <canvas ref={previewCanvasRef} className="absolute inset-0 h-full w-full" />
@@ -742,18 +858,18 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
         </div>
 
         {/* Right: fixed-width controls panel (its own header + footer) */}
-        <div className="flex min-h-0 w-[460px] max-w-[92vw] flex-none flex-col bg-surface-alt md:border-l md:border-edge">
+        <div className="flex min-h-0 w-[460px] max-w-[92vw] flex-none flex-col bg-surface-alt">
           {/* Header (drag handle) */}
           <div
             onPointerDown={startDrag}
             className={cn(
-              'flex flex-none select-none items-center justify-between border-b border-edge-subtle px-xl py-lg',
+              'flex flex-none select-none items-center justify-between px-xl py-lg',
               dragging ? 'cursor-grabbing' : 'cursor-grab',
             )}
           >
             <span className="text-node-title font-semibold text-fg">Export</span>
             <button
-              className="rounded-sm px-sm py-2xs text-fg-subtle transition-colors hover:bg-hover hover:text-fg"
+              className="grid h-7 w-7 place-items-center rounded-sm text-[15px] leading-none text-fg-subtle transition-colors hover:bg-hover hover:text-fg"
               title="Close"
               aria-label="Close"
               onClick={onClose}
@@ -765,7 +881,9 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
           {/* Content: config controls OR progress/done */}
           <div className="flex min-h-0 min-w-0 flex-1">
             {phase === 'config' ? (
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-xl overflow-y-auto overflow-x-hidden p-xl [scrollbar-gutter:stable]">
+              // pr < pl compensates for the reserved scrollbar gutter (~xl−gutter),
+              // so content stays optically symmetric and lines up with the footer.
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-xl overflow-y-auto overflow-x-hidden py-xl pl-xl pr-sm [scrollbar-gutter:stable]">
                 {error && (
                   <div className="rounded-sm border border-edge-subtle bg-surface-raised px-md py-xs text-param text-red-400">
                     {error}
@@ -913,6 +1031,11 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                           key={s.id}
                           type="button"
                           disabled={!webgpuOk}
+                          title={
+                            s.id === 'mp4'
+                              ? 'H.265 where a hardware HEVC encoder exists (better quality per byte; best for Apple/QuickTime, tagged hev1) — automatic H.264-High fallback elsewhere.'
+                              : undefined
+                          }
                           onClick={() => setSinkId(s.id)}
                           className={cn(
                             'relative flex h-full flex-col justify-between gap-lg rounded-sm p-lg text-left transition-colors',
@@ -935,6 +1058,11 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                       )
                     })}
                   </div>
+                  {selectedSink && !lossless && (
+                    <span className={HINT}>
+                      Lossy video subsamples colour, and browsers tag it differently — Safari matches the live shader, Chrome can look muted in some players. For exact colour and fine detail, use PNG sequence.
+                    </span>
+                  )}
                   {gateNote && <span className="text-param text-red-400">{gateNote}</span>}
                 </div>
 
@@ -991,7 +1119,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                         </div>
                       </div>
                       <span className={cn(HINT, 'flex-1')}>
-                        MP4 / H.264 has no transparency — transparent pixels flatten onto this color.
+                        MP4 video has no transparency — the shader is flattened onto this color.
                       </span>
                     </div>
                   </div>
@@ -1002,17 +1130,31 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                 {phase === 'running' && (
                   <div>
                     <div className="text-body text-fg-dim">
-                      Encoding · <b className="font-semibold text-fg">{selectedSink?.label}</b>
+                      {exportPhase === 'finalizing'
+                        ? isZip
+                          ? 'Zipping'
+                          : 'Finalizing'
+                        : 'Encoding'}{' '}
+                      · <b className="font-semibold text-fg">{selectedSink?.label}</b>
                     </div>
                     <div className="my-md h-2 overflow-hidden rounded-xs bg-edge">
                       <div
-                        className="h-full rounded-xs bg-indigo transition-[width] duration-100"
+                        className={cn(
+                          'h-full rounded-xs bg-indigo transition-[width] duration-100',
+                          // In finalize there are no per-frame ticks — pulse the
+                          // full bar so it doesn't read as a frozen 100%.
+                          exportPhase === 'finalizing' && 'animate-pulse',
+                        )}
                         style={{ width: `${pct}%` }}
                       />
                     </div>
                     <div className="flex justify-between text-mono-value tabular-nums text-fg-subtle">
                       <span>
-                        {progress.frame} / {progress.total} frames
+                        {exportPhase === 'finalizing'
+                          ? isZip
+                            ? 'Zipping frames…'
+                            : 'Finalizing…'
+                          : `${progress.frame} / ${progress.total} frames`}
                       </span>
                       <span>{pct}%</span>
                     </div>
@@ -1027,18 +1169,23 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                   <div className="flex flex-col gap-2xs">
                     <div className="flex items-center gap-sm text-body">
                       <icons.check className="size-5 text-success" />
-                      <span>Exported</span>
+                      <span>{done.savedToDisk ? 'Saved' : 'Exported'}</span>
+                      <span className="text-fg-subtle">{done.label}</span>
                     </div>
                     <div className="text-mono-value tabular-nums text-fg-dim">
-                      {done.filename} · {done.sizeLabel}
+                      {done.savedToDisk
+                        ? `Saved to ${done.filename}`
+                        : `${done.filename} · ${done.sizeLabel}`}
                     </div>
                     <div className="mt-md flex justify-end gap-sm">
                       <ActionButton onClick={resetDone}>
                         Close
                       </ActionButton>
-                      <a href={done.url} download={done.filename} className={actionButtonClass('primary')}>
-                        Download
-                      </a>
+                      {!done.savedToDisk && done.url && (
+                        <a href={done.url} download={done.filename} className={actionButtonClass('primary')}>
+                          Download
+                        </a>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1048,7 +1195,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
 
           {/* Footer (config only) */}
           {phase === 'config' && (
-            <div className="flex flex-none items-center justify-between gap-md border-t border-edge-subtle bg-surface-alt px-xl py-lg">
+            <div className="flex flex-none items-center justify-between gap-md bg-surface-alt px-xl py-lg">
               <div className="flex min-w-0 items-baseline gap-xs text-mono-value tabular-nums text-fg-subtle">
                 <span>
                   <b className="font-semibold text-fg-dim">{frames}</b> frames

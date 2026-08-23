@@ -157,15 +157,15 @@ export const ditherNode: NodeDefinition = {
     const lines: string[] = []
     ctx.uniforms.add('u_resolution')
     ctx.uniforms.add('u_anchor')
-    ctx.uniforms.add('u_dpr')
+    ctx.uniforms.add('u_frame_scale')
     // Screen-space pixel coordinates centered on canvas center (stable on resize)
     lines.push(`vec2 ${px} = gl_FragCoord.xy - u_resolution * u_anchor;`)
     // Cell index (which big pixel)
-    // Pixel Size is authored in reference px; without the u_dpr scale a cell is
-    // u_dpr times smaller on a hi-DPI display, unlike every other spatial node.
-    // Quantised once and reused at EVERY site — scaling the cell floor but not the
-    // fract() below would make the shape walk across its cell.
-    lines.push(`float ${size} = max(1.0, floor(${inputs.pixelSize} * u_dpr + 0.5));`)
+    // Pixel Size is authored in reference px; without the u_frame_scale scale a
+    // cell is u_frame_scale times smaller on a hi-DPI display, unlike every other
+    // spatial node. Quantised once and reused at EVERY site — scaling the cell
+    // floor but not the fract() below would make the shape walk across its cell.
+    lines.push(`float ${size} = max(1.0, floor(${inputs.pixelSize} * u_frame_scale + 0.5));`)
     lines.push(`vec2 ${cell} = floor(${px} / ${size});`)
     // Bayer threshold at cell index
     lines.push(`float ${bv} = bayer8x8(${cell});`)
@@ -301,7 +301,7 @@ export const ditherNode: NodeDefinition = {
       // See the glsl() note: reference px -> device px, quantised, shared by the
       // cell grid, the in-cell fract and the cell-centre resample.
       raw(
-        `float ${size} = max(1.0, floor(${ctx.inputs.pixelSize} * u_dpr + 0.5));`,
+        `float ${size} = max(1.0, floor(${ctx.inputs.pixelSize} * u_frame_scale + 0.5));`,
       ),
       // Cell index (which big pixel)
       declare(cell, 'vec2',
@@ -375,7 +375,7 @@ export const ditherNode: NodeDefinition = {
     const colorSource = (ctx.params.colorSource as string) || 'cell'
     const colVar = `pg_col_${id}`
     const samplerName = ctx.textureSamplers?.color
-    const standardUniforms = new Set(['u_resolution', 'u_anchor', 'u_dpr'])
+    const standardUniforms = new Set(['u_resolution', 'u_anchor', 'u_frame_scale'])
     if (samplerName) {
       standardUniforms.add('u_viewport')
       const suv = `pg_suv_${id}`
