@@ -41,11 +41,26 @@ import {
   type ViewInfo,
 } from './framing'
 import type { FrameSink } from './frame-sink'
+import type { Mp4Sink } from './sinks/webcodecs-mp4'
 // Side effect: registers the 3 built-in sinks so getAvailableSinks returns them.
 import './sinks/index'
 
 type SizeSrc = 'match' | '2x' | '4x' | 'preset' | 'custom'
 type Phase = 'config' | 'running' | 'done'
+
+/**
+ * Done-state label that reflects the codec the export ACTUALLY used. The mp4
+ * sink offers "MP4 · H.265" (its static `label`, shown on the format card) but
+ * transparently falls back to H.264/AVC where no hardware HEVC encoder exists;
+ * after the export its `usedCodec` field says which one shipped. Non-mp4 sinks
+ * (no such field) keep their static label. Feature-detected — no blanket `any`.
+ */
+function doneLabelForSink(sink: FrameSink): string {
+  const usedCodec = (sink as Partial<Mp4Sink>).usedCodec
+  if (usedCodec === 'hevc') return 'MP4 · H.265'
+  if (usedCodec === 'avc') return 'MP4 · H.264'
+  return sink.label
+}
 
 const QUALITY_LABELS = ['Draft', 'Good', 'High', 'Max'] as const
 
@@ -546,6 +561,27 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
     dragOrigin.current = { px: e.clientX, py: e.clientY, ox: dragOffset.x, oy: dragOffset.y }
     setDragging(true)
   }
+  // Re-clamp on window resize: pointermove only clamps while dragging, so
+  // shrinking the window could otherwise strand a dragged modal partly
+  // offscreen. Same bounds as the drag clamp: (viewport − modalRect)/2, floored
+  // at 0 for an oversized modal. Listener lives only while the modal is open.
+  useEffect(() => {
+    if (!open) return
+    const reclamp = () => {
+      const el = modalRef.current
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      const maxX = Math.max(0, (window.innerWidth - r.width) / 2)
+      const maxY = Math.max(0, (window.innerHeight - r.height) / 2)
+      setDragOffset((o) => {
+        const x = Math.min(maxX, Math.max(-maxX, o.x))
+        const y = Math.min(maxY, Math.max(-maxY, o.y))
+        return x === o.x && y === o.y ? o : { x, y }
+      })
+    }
+    window.addEventListener('resize', reclamp)
+    return () => window.removeEventListener('resize', reclamp)
+  }, [open])
 
   if (!open) return null
 
@@ -599,9 +635,8 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
   // stripped so the card title doesn't repeat it).
   const framingModes = (['fill', 'fit', 'reveal'] as const).map((m) => {
     const label = m === 'reveal' ? (bigger ? 'Reveal' : 'Crop') : m === 'fill' ? 'Fill' : 'Fit'
-    const raw = describeResult(src, m, view).text
-    const prefix = `${label} — `
-    return { v: m, label, body: raw.startsWith(prefix) ? raw.slice(prefix.length) : raw }
+    const body = describeResult(src, m, view).text
+    return { v: m, label, body }
   })
 
   const frames = Math.max(1, Math.round(dur * fps))
@@ -732,9 +767,11 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
         },
         ac.signal,
       )
+      // Label the delivered codec, not just the offered one (H.265→H.264 fallback).
+      const doneLabel = doneLabelForSink(selectedSink)
       if (result.savedToDisk) {
         // File is already on disk — nothing to download; just confirm.
-        setDone({ savedToDisk: true, filename: result.filename, label: selectedSink.label })
+        setDone({ savedToDisk: true, filename: result.filename, label: doneLabel })
       } else {
         const blob = result.blob
         if (!blob) throw new Error('[export] no blob produced')
@@ -744,7 +781,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
           blob.size < 1024 * 1024
             ? `${(blob.size / 1024).toFixed(0)} KB`
             : `${(blob.size / (1024 * 1024)).toFixed(1)} MB`
-        setDone({ savedToDisk: false, url, filename: result.filename, sizeLabel, label: selectedSink.label })
+        setDone({ savedToDisk: false, url, filename: result.filename, sizeLabel, label: doneLabel })
       }
       setPhase('done')
     } catch (e) {
@@ -1133,6 +1170,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                     <div className="flex items-center gap-sm text-body">
                       <icons.check className="size-5 text-success" />
                       <span>{done.savedToDisk ? 'Saved' : 'Exported'}</span>
+                      <span className="text-fg-subtle">{done.label}</span>
                     </div>
                     <div className="text-mono-value tabular-nums text-fg-dim">
                       {done.savedToDisk

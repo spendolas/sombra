@@ -14,4 +14,12 @@ export interface FrameSink {
   addFrame(frame: VideoFrame, timestampUs: number): Promise<void>  // sink may also read ImageData internally
   /** Flush the encoder and CLOSE the writable. No Blob — bytes already streamed out. */
   finish(): Promise<void>
+  /**
+   * Deterministic cancel/failure teardown. Stops the encoder (mediabunny
+   * `Output.cancel()` / fflate `Zip.terminate()`), then RELEASES this sink's
+   * writer and ABORTS the destination writable — which on the File System Access
+   * path discards the swap file rather than leaking its handle to GC. Safe to
+   * call before `begin()` (no-op) and idempotent; never throws (best-effort).
+   */
+  abort(): Promise<void>
 }

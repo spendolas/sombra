@@ -23,6 +23,13 @@ export interface AppendOnlyStreamTargetBridge {
   target: StreamTarget
   /** Close the underlying destination writable (call after `out.finalize()`). */
   close(): Promise<void>
+  /**
+   * Cancel teardown: release the writer lock, then abort the destination
+   * writable. On the File System Access path this discards the swap file; on the
+   * Blob fallback it just stops accepting chunks. Best-effort — swallows
+   * "already closed/errored".
+   */
+  abort(): Promise<void>
 }
 
 /**
@@ -55,5 +62,20 @@ export function createAppendOnlyStreamTarget(
   return {
     target: new StreamTarget(adapter),
     close: () => writer.close(),
+    abort: async () => {
+      // Release the writer lock FIRST (writer.abort() alone would abort the
+      // stream but leave the lock held), then abort the now-unlocked destination
+      // writable. After this no lock dangles and the writable is aborted.
+      try {
+        writer.releaseLock()
+      } catch {
+        /* already released — best-effort */
+      }
+      try {
+        await writable.abort()
+      } catch {
+        /* already closed/errored — best-effort */
+      }
+    },
   }
 }

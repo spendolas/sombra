@@ -27,10 +27,13 @@ export function makePngSequenceSink(): FrameSink {
   let n = 0
   let zip!: Zip
   let writer!: WritableStreamDefaultWriter<Uint8Array>
+  let dest!: WritableStream<Uint8Array>
   // Serialises async writer.write calls against fflate's sync ondata callback,
   // preserving chunk order and propagating backpressure.
   let queue: Promise<void> = Promise.resolve()
   let zipError: unknown = null
+  // begin() ran → the zip + writer exist and must be torn down on abort.
+  let begun = false
 
   return {
     id: 'png-sequence',
@@ -50,6 +53,7 @@ export function makePngSequenceSink(): FrameSink {
       n = 0
       queue = Promise.resolve()
       zipError = null
+      dest = writable
       writer = writable.getWriter()
 
       zip = new Zip((err, chunk, final) => {
@@ -69,6 +73,7 @@ export function makePngSequenceSink(): FrameSink {
       const context = cv.getContext('2d')
       if (!context) throw new Error('[export] png-sequence: OffscreenCanvas 2D context unavailable')
       ctx = context
+      begun = true
     },
 
     async addFrame(vf) {
@@ -98,6 +103,33 @@ export function makePngSequenceSink(): FrameSink {
       await queue
       if (zipError) throw zipError
       await writer.close()
+    },
+
+    async abort() {
+      // begin() never ran → nothing to tear down.
+      if (!begun) return
+      // Releasing the lock rejects any still-pending queued write; swallow it so
+      // it never surfaces as an unhandled rejection. (In the normal cancel case
+      // the frame loop awaits `queue` each frame, so it's already settled.)
+      void queue.catch(() => {})
+      // Stop feeding the zip (terminate any internal worker; subsequent add()
+      // would fail), release the writer lock, then abort the destination
+      // writable (discards the file / FSA swap handle). All best-effort.
+      try {
+        zip.terminate()
+      } catch {
+        /* already ended/terminated — best-effort */
+      }
+      try {
+        writer.releaseLock()
+      } catch {
+        /* already released — best-effort */
+      }
+      try {
+        await dest.abort()
+      } catch {
+        /* already closed/errored — best-effort */
+      }
     },
   }
 }
