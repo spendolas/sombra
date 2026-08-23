@@ -46,14 +46,26 @@ export function makeMp4Sink(): Mp4Sink {
   let o!: SinkOpts
   let codec!: NonNullable<Awaited<ReturnType<typeof getFirstEncodableVideoCodec>>>
   let bridge: AppendOnlyStreamTargetBridge | undefined
-  // The codec actually picked in begin() — drives the accurate done-state label.
-  // Null until begin() runs; the static `label` stays "MP4 · H.265" for the
-  // FORMAT card (the offered/preferred option), not the delivered codec.
+  // The codec actually picked in begin() — null until begin() runs.
   let usedCodec: 'hevc' | 'avc' | null = null
+  // The codec `isSupported()` resolved at modal-open (the same probe begin() uses,
+  // at 1080p). Lets the FORMAT card show the codec that WILL be used BEFORE export
+  // — so a machine with no hardware HEVC encoder sees "MP4 · H.264" up front, not
+  // a surprise fallback after the fact. null before the first probe.
+  let probedCodec: 'hevc' | 'avc' | null = null
+
+  // The label reflects the codec that will actually ship: the delivered codec
+  // once begin() has run, else the probe result, defaulting to H.265 before the
+  // probe resolves (getAvailableSinks awaits isSupported() before the card renders,
+  // so by render time this is the real answer).
+  const labelFor = (c: 'hevc' | 'avc' | null): string =>
+    c === 'avc' ? 'MP4 · H.264' : 'MP4 · H.265'
 
   return {
     id: 'mp4',
-    label: 'MP4 · H.265',
+    get label() {
+      return labelFor(usedCodec ?? probedCodec)
+    },
     get usedCodec() {
       return usedCodec
     },
@@ -73,6 +85,8 @@ export function makeMp4Sink(): Mp4Sink {
           height: 1080,
           bitrate: 8e6,
         })
+        // Narrow off the broad VideoCodec union — we only asked for hevc/avc.
+        probedCodec = c === 'hevc' ? 'hevc' : c === 'avc' ? 'avc' : null
         return c !== null
       } catch {
         return false

@@ -41,26 +41,12 @@ import {
   type ViewInfo,
 } from './framing'
 import type { FrameSink } from './frame-sink'
-import type { Mp4Sink } from './sinks/webcodecs-mp4'
 // Side effect: registers the 3 built-in sinks so getAvailableSinks returns them.
 import './sinks/index'
 
 type SizeSrc = 'match' | '2x' | '4x' | 'preset' | 'custom'
 type Phase = 'config' | 'running' | 'done'
 
-/**
- * Done-state label that reflects the codec the export ACTUALLY used. The mp4
- * sink offers "MP4 · H.265" (its static `label`, shown on the format card) but
- * transparently falls back to H.264/AVC where no hardware HEVC encoder exists;
- * after the export its `usedCodec` field says which one shipped. Non-mp4 sinks
- * (no such field) keep their static label. Feature-detected — no blanket `any`.
- */
-function doneLabelForSink(sink: FrameSink): string {
-  const usedCodec = (sink as Partial<Mp4Sink>).usedCodec
-  if (usedCodec === 'hevc') return 'MP4 · H.265'
-  if (usedCodec === 'avc') return 'MP4 · H.264'
-  return sink.label
-}
 
 const QUALITY_LABELS = ['Draft', 'Good', 'High', 'Max'] as const
 
@@ -767,8 +753,9 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
         },
         ac.signal,
       )
-      // Label the delivered codec, not just the offered one (H.265→H.264 fallback).
-      const doneLabel = doneLabelForSink(selectedSink)
+      // sink.label reflects the delivered codec (H.265→H.264 fallback) — the mp4
+      // sink's label getter resolves to the codec begin() actually picked.
+      const doneLabel = selectedSink.label
       if (result.savedToDisk) {
         // File is already on disk — nothing to download; just confirm.
         setDone({ savedToDisk: true, filename: result.filename, label: doneLabel })
