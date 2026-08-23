@@ -24,6 +24,13 @@ const PIXELS_1080P = 1920 * 1080
 
 export function qualityFor(level: QualityLevel, width: number, height: number): Quality {
   const scaled = MBPS_AT_1080P[level] * 1e6 * ((width * height) / PIXELS_1080P)
+  // `bitrateMode: 'constant'` (CBR): mediabunny's default is 'variable' (VBR),
+  // and on high-frequency content (fine dither/noise) Chrome's WebCodecs HEVC VBR
+  // rate-control overshoots the target hard — measured ~2× the requested bitrate
+  // on a real shader export (51 vs ~26 Mbps), Safari ~1×. CBR pins the encoder to
+  // the target on both browsers, which ALSO makes the modal's size estimate honest
+  // (the estimate assumes exactly this bitrate). Verified in-browser: 8 Mbps target
+  // → VBR 9.4 / CBR 8.2 on Chrome HEVC.
   // Floor so very small exports still get a usable bitrate.
-  return new Quality({ bitrate: Math.max(Math.round(scaled), 100_000) })
+  return new Quality({ bitrate: Math.max(Math.round(scaled), 100_000), bitrateMode: 'constant' })
 }

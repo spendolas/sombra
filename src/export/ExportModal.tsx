@@ -946,7 +946,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                   </div>
                   {selectedSink && !lossless && (
                     <span className={HINT}>
-                      Lossy video subsamples colour — fine dither and high-frequency detail keep best as a PNG sequence or at a larger size.
+                      Lossy video subsamples colour, and browsers tag it differently — Safari matches the live shader, Chrome can look muted in some players. For exact colour and fine detail, use PNG sequence.
                     </span>
                   )}
                   {gateNote && <span className="text-param text-red-400">{gateNote}</span>}
