@@ -44,6 +44,7 @@
     "verify:wgsl-multipass": "tsx scripts/validate-wgsl-multipass.ts",
     "verify:video-export": "tsx scripts/verify-video-export.ts",
     "verify:export-destination": "tsx scripts/verify-export-destination.ts",
+    "verify:export-streaming": "tsx scripts/verify-export-streaming.ts",
     "verify:node-id": "tsx scripts/verify-node-id.ts",
     "verify:sombra-package": "tsx scripts/verify-sombra-package.ts",
     "verify:file-drop": "tsx scripts/verify-file-drop.ts",
