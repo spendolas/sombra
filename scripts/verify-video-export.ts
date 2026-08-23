@@ -399,7 +399,7 @@ async function runAssertions(cfg: Cfg): Promise<EvalResult> {
       fail('mp4-realsize', `threw: ${String(e)} — H.264 config rejected at 720p (qualitative-quality → quantizer regression?)`)
     }
   } else {
-    skip('mp4-realsize', 'mp4-h264 sink unsupported on host')
+    skip('mp4-realsize', 'mp4 sink unsupported on host')
   }
 
   // =====================================================================
