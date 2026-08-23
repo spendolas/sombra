@@ -99,9 +99,18 @@ export async function runExport(
   const height = evenFloor(job.height)
 
   // Tracks whether the sink reached a clean `finish()` (which closes the
-  // writable). If we bail before that — mid-loop throw, abort, encoder error —
-  // the `finally` aborts the writable so a partial disk file is torn down / an
-  // open file handle isn't left dangling, rather than leaving a half-written file.
+  // writable). If we bail before that, the `finally` best-effort aborts the
+  // writable.
+  // COVERAGE CAVEAT: each sink calls `writable.getWriter()` in `begin()`, which
+  // LOCKS the stream — so `writable.abort()` here only succeeds for failures
+  // BEFORE `begin()` (e.g. render-target creation throwing). Once encoding has
+  // started (the common Cancel-during-export case) the stream is locked, abort()
+  // rejects, and we swallow it: the sink's writer + FSA swap-file handle are then
+  // released by GC, not deterministically. This is bounded and non-corrupting —
+  // File System Access writes to a swap file and the user's chosen file is
+  // untouched until `close()`, so a cancelled disk export never corrupts it.
+  // Deterministic mid-encode teardown would need a per-sink abort() hook that
+  // releases the writer (parked follow-up).
   let finished = false
 
   try {
