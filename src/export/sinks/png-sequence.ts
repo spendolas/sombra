@@ -55,6 +55,11 @@ export function makePngSequenceSink(): FrameSink {
       zipError = null
       dest = writable
       writer = writable.getWriter()
+      // Set the teardown guard ATOMICALLY with lock acquisition — the very next
+      // statement after getWriter(), before anything throwable (Zip ctor,
+      // getContext). If begin() throws past this point, the engine's finally →
+      // abort() still releases the lock + aborts the destination.
+      begun = true
 
       zip = new Zip((err, chunk, final) => {
         if (err) {
@@ -73,7 +78,6 @@ export function makePngSequenceSink(): FrameSink {
       const context = cv.getContext('2d')
       if (!context) throw new Error('[export] png-sequence: OffscreenCanvas 2D context unavailable')
       ctx = context
-      begun = true
     },
 
     async addFrame(vf) {
