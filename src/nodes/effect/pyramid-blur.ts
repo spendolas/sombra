@@ -26,7 +26,7 @@
  * width runs ~4% wide and steps at each N boundary.
  *
  * Per-pass resolution comes from `multiPass.resolution` (RenderPass.resolution): each
- * pass rasterises at `0.5^depth`, and the framework scales u_dpr so screen-UV sampling
+ * pass rasterises at `0.5^depth`, and the framework scales u_frame_scale so screen-UV sampling
  * stays correct. Tap offsets are in SOURCE texels — down reads a 2× larger source
  * (0.5 target-texel/offset), up reads a 2× smaller one (2 target-texels), coarse reads
  * a same-size source (1 target-texel). See `srcFactor` below.
@@ -211,16 +211,16 @@ function emit(o: EmitOpts): string {
     // Coarse: one axis of a linear-sampled separable Gaussian at coarseSigma (in
     // coarse-level texels). H then V across the two coarse passes.
     //
-    // Radius is authored in REFERENCE px, so the blur must widen by u_dpr to reach the
+    // Radius is authored in REFERENCE px, so the blur must widen by u_frame_scale to reach the
     // same visible extent on a hi-DPI display. N is picked dpr-independently (compile
-    // time), but the coarse blur is where width is set: scaling every tap offset by u_dpr
+    // time), but the coarse blur is where width is set: scaling every tap offset by u_frame_scale
     // and keeping the baked weights turns a Gaussian of coarseSigma into one of
-    // coarseSigma*u_dpr — a Gaussian is self-similar under offset scaling. The down/up
+    // coarseSigma*u_frame_scale — a Gaussian is self-similar under offset scaling. The down/up
     // passes are fixed structural resamples and take no dpr. (At dpr 2 the coarse sigma
     // lands near 8px rather than 4px — still well within the method's clean range.)
     const axis = pass.role === 'coarseH' ? [1, 0] : [0, 1]
     const taps = foldedGaussTaps(coarseSigma)
-    L.push(decl(v2, `b_ct_${id}`, `b_t_${id} * u_dpr`))
+    L.push(decl(v2, `b_ct_${id}`, `b_t_${id} * u_frame_scale`))
     L.push(decl(v4, `b_s_${id}`, `${v4}(0.0)`))
     for (const t of taps) {
       const uv = `b_uv_${id} + ${v2}(${(axis[0] * t.off).toPrecision(9)}, ${(axis[1] * t.off).toPrecision(9)}) * b_ct_${id}`
@@ -298,7 +298,7 @@ export const pyramidBlurNode: NodeDefinition = {
   glsl: (ctx) => {
     const { inputs, outputs, uniforms, params } = ctx
     uniforms.add('u_viewport')
-    uniforms.add('u_dpr')
+    uniforms.add('u_frame_scale')
     const id = ctx.nodeId.replace(/-/g, '_')
     const sampler = ctx.textureSamplers?.source
     if (sampler) ctx.functionRegistry.set('sombra_color_helpers', COLOR_GLSL_HELPERS)
@@ -330,7 +330,7 @@ export const pyramidBlurNode: NodeDefinition = {
     return {
       statements: stmts,
       uniforms: [],
-      standardUniforms: new Set<string>(['u_viewport', 'u_dpr']),
+      standardUniforms: new Set<string>(['u_viewport', 'u_frame_scale']),
       ...(sampler ? { functions: COLOR_IR_HELPERS } : {}),
     }
   },

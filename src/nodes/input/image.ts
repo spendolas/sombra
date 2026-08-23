@@ -104,7 +104,7 @@ export const imageNode: NodeDefinition = {
       } else {
         ctx.uniforms.add('u_resolution')
         ctx.uniforms.add('u_anchor')
-        ctx.uniforms.add('u_dpr')
+        ctx.uniforms.add('u_frame_scale')
         ctx.uniforms.add('u_ref_size')
 
         // inputs.coords is SRT-transformed AUTO_UV — isotropic. Fit is px-based and
@@ -122,8 +122,8 @@ export const imageNode: NodeDefinition = {
         }
         lines.push(`float ${dw} = ${dh} * ${inputs.imageAspect};`)
         lines.push(`vec2 ${fitUV} = vec2(0.0);`)
-        lines.push(`${fitUV}.x = (${inputs.coords}.x - u_anchor.x) * (u_dpr * u_ref_size) / ${dw} + 0.5;`)
-        lines.push(`${fitUV}.y = -(${inputs.coords}.y - u_anchor.y) * (u_dpr * u_ref_size) / ${dh} + 0.5;`)
+        lines.push(`${fitUV}.x = (${inputs.coords}.x - u_anchor.x) * (u_frame_scale * u_ref_size) / ${dw} + 0.5;`)
+        lines.push(`${fitUV}.y = -(${inputs.coords}.y - u_anchor.y) * (u_frame_scale * u_ref_size) / ${dh} + 0.5;`)
       }
 
       const sampleVar = `node_${sanitizedId}_sample`
@@ -200,8 +200,8 @@ export const imageNode: NodeDefinition = {
   ${dhLine}
   float ${dw} = ${dh} * ${aspect};
   vec2 ${fitUV} = vec2(0.0);
-  ${fitUV}.x = (${coords}.x - u_anchor.x) * (u_dpr * u_ref_size) / ${dw} + 0.5;
-  ${fitUV}.y = -(${coords}.y - u_anchor.y) * (u_dpr * u_ref_size) / ${dh} + 0.5;`,
+  ${fitUV}.x = (${coords}.x - u_anchor.x) * (u_frame_scale * u_ref_size) / ${dw} + 0.5;
+  ${fitUV}.y = -(${coords}.y - u_anchor.y) * (u_frame_scale * u_ref_size) / ${dh} + 0.5;`,
         ))
       }
 
@@ -249,7 +249,7 @@ export const imageNode: NodeDefinition = {
       // Preview branch is v_uv-based → needs none of these; the framework SRT
       // preamble still declares what it uses.
       standardUniforms: (hasImage && !ctx.isPreview)
-        ? new Set(['u_resolution', 'u_anchor', 'u_dpr', 'u_ref_size'])
+        ? new Set(['u_resolution', 'u_anchor', 'u_frame_scale', 'u_ref_size'])
         : new Set(),
     }
   },

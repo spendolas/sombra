@@ -97,8 +97,8 @@ export function emitSRT(srt: IRSpatialTransform, lang: 'glsl' | 'wgsl'): string[
   // frozen-ref units; 'screen' = per-axis screen units (reeded's colour basis).
   const tExpr = hasTranslate
     ? (b.translateFormula === 'screen'
-        ? `${v2}(${srt.translateXUniform}, -(${srt.translateYUniform})) * u_dpr / u_resolution`
-        : `${v2}(${srt.translateXUniform}, -(${srt.translateYUniform})) / (u_dpr * u_ref_size)`)
+        ? `${v2}(${srt.translateXUniform}, -(${srt.translateYUniform})) * u_frame_scale / u_resolution`
+        : `${v2}(${srt.translateXUniform}, -(${srt.translateYUniform})) / (u_frame_scale * u_ref_size)`)
     : null
 
   const lines: string[] = []

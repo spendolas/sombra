@@ -33,7 +33,7 @@ export const stripesNode: NodeDefinition = {
 
   glsl: (ctx) => {
     const { inputs, outputs, uniforms } = ctx
-    uniforms.add('u_dpr')
+    uniforms.add('u_frame_scale')
     uniforms.add('u_ref_size')
     const id = ctx.nodeId.replace(/-/g, '_')
     const periodPx = `st_periodPx_${id}`
@@ -45,7 +45,7 @@ export const stripesNode: NodeDefinition = {
     const band = `st_band_${id}`
     return [
       `float ${periodPx} = max(${inputs.width} + ${inputs.gap}, 0.0001);`,
-      `float ${period} = ${periodPx} / (u_dpr * u_ref_size);`,
+      `float ${period} = ${periodPx} / (u_frame_scale * u_ref_size);`,
       `float ${duty} = clamp(${inputs.width} / ${periodPx}, 0.0, 1.0);`,
       `float ${hw} = ${duty} * 0.5;`,
       // stripe LEFT edge at the origin (not centered): stripe occupies [0, duty] per period
@@ -83,11 +83,11 @@ export const stripesNode: NodeDefinition = {
             literal('float', 0.0001),
           ], 'float'),
         ),
-        // float period = periodPx / (u_dpr * u_ref_size)
+        // float period = periodPx / (u_frame_scale * u_ref_size)
         declare(period, 'float',
           binary('/',
             variable(periodPx),
-            binary('*', variable('u_dpr'), variable('u_ref_size'), 'float'),
+            binary('*', variable('u_frame_scale'), variable('u_ref_size'), 'float'),
             'float',
           ),
         ),
@@ -134,7 +134,7 @@ export const stripesNode: NodeDefinition = {
         ),
       ],
       uniforms: [],
-      standardUniforms: new Set(['u_dpr', 'u_ref_size']),
+      standardUniforms: new Set(['u_frame_scale', 'u_ref_size']),
     }
   },
 }

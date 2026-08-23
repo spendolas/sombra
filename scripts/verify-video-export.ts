@@ -48,6 +48,7 @@ interface Cfg {
   /** frames for the quality check (more frames = a clearer bitrate signal) */
   dur20: number
   engineUrl: string
+  destUrl: string
   webmUrl: string
   mp4Url: string
   pngUrl: string
@@ -64,6 +65,7 @@ const CFG: Cfg = {
   dur12: 12 / 12, // 12 frames
   dur20: 20 / 12, // 20 frames
   engineUrl: '/sombra/src/export/export-engine.ts',
+  destUrl: '/sombra/src/export/export-destination.ts',
   webmUrl: '/sombra/src/export/sinks/webm-alpha.ts',
   mp4Url: '/sombra/src/export/sinks/webcodecs-mp4.ts',
   pngUrl: '/sombra/src/export/sinks/png-sequence.ts',
@@ -95,7 +97,8 @@ async function runAssertions(cfg: Cfg): Promise<EvalResult> {
     connect(src: string, tgt: string, srcPort?: string, tgtPort?: string): string
   }
   interface FramingChoice {
-    uDpr: number
+    frameScale: number
+    dpr: number
     anchor: [number, number]
   }
   interface ExportJob {
@@ -111,10 +114,28 @@ async function runAssertions(cfg: Cfg): Promise<EvalResult> {
   }
   interface SinkLike {
     readonly id: string
+    readonly mimeType: string
+    readonly fileExt: string
     isSupported(): Promise<boolean>
   }
+  interface ExportDestinationLike {
+    writable: WritableStream<Uint8Array>
+    finalize(): Promise<{ blob: Blob | null; savedToDisk: boolean; filename: string }>
+  }
   interface EngineModule {
-    runExport(job: ExportJob, onProgress: (f: number, t: number) => void): Promise<Blob>
+    runExport(
+      job: ExportJob,
+      destination: ExportDestinationLike,
+      onProgress: (f: number, t: number, phase?: 'rendering' | 'finalizing') => void,
+    ): Promise<{ blob: Blob | null; savedToDisk: boolean; filename: string }>
+  }
+  interface DestModule {
+    createExportDestination(opts: {
+      filename: string
+      mimeType: string
+      ext: string
+      preferDisk: boolean
+    }): Promise<ExportDestinationLike>
   }
   interface WebmModule {
     makeWebmAlphaSink(): SinkLike
@@ -176,6 +197,7 @@ async function runAssertions(cfg: Cfg): Promise<EvalResult> {
   const S = (window as unknown as { __sombra: SombraBridge }).__sombra
 
   const engine = (await import(cfg.engineUrl)) as EngineModule
+  const destMod = (await import(cfg.destUrl)) as DestModule
   const webm = (await import(cfg.webmUrl)) as WebmModule
   const mp4 = (await import(cfg.mp4Url)) as Mp4Module
   const png = (await import(cfg.pngUrl)) as PngModule
@@ -184,8 +206,22 @@ async function runAssertions(cfg: Cfg): Promise<EvalResult> {
   const MB = (await import(cfg.mediabunnyUrl)) as MediabunnyModule
   const FF = (await import(cfg.fflateUrl)) as FflateModule
 
-  const framing: FramingChoice = { uDpr: 1, anchor: [0.5, 0.5] }
-  const runExport = (job: ExportJob): Promise<Blob> => engine.runExport(job, () => {})
+  const framing: FramingChoice = { frameScale: 1, dpr: 1, anchor: [0.5, 0.5] }
+  // Stream into an in-memory fallback ExportDestination, then read the Blob back
+  // for the decode assertions (mirrors the streaming sink contract end-to-end).
+  const runExport = async (job: ExportJob): Promise<Blob> => {
+    const sink = job.sink as SinkLike
+    const dest = await destMod.createExportDestination({
+      filename: `scene.${sink.fileExt}`,
+      mimeType: sink.mimeType,
+      ext: sink.fileExt,
+      preferDisk: false,
+    })
+    // runExport now finalizes internally and returns the result (Task 6).
+    const { blob } = await engine.runExport(job, dest, () => {})
+    if (!blob) throw new Error('fallback destination produced no blob')
+    return blob
+  }
 
   // ---- decode helpers (independent MediaBunny decode instance) ----
   const openTrack = async (blob: Blob): Promise<MbTrack> => {
@@ -398,7 +434,7 @@ async function runAssertions(cfg: Cfg): Promise<EvalResult> {
       fail('mp4-realsize', `threw: ${String(e)} — H.264 config rejected at 720p (qualitative-quality → quantizer regression?)`)
     }
   } else {
-    skip('mp4-realsize', 'mp4-h264 sink unsupported on host')
+    skip('mp4-realsize', 'mp4 sink unsupported on host')
   }
 
   // =====================================================================
@@ -640,6 +676,7 @@ async function main(): Promise<number> {
       page,
       async (cfg: Cfg) => {
         await import(cfg.engineUrl)
+        await import(cfg.destUrl)
         await import(cfg.webmUrl)
         await import(cfg.pngUrl)
         await import(cfg.sinksIndexUrl)

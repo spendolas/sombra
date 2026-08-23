@@ -1,11 +1,22 @@
 /**
  * Live WYSIWYG export preview. Renders the CURRENT graph through the export
- * renderer (Task 2) at the export's framing, into a small 2D canvas, on a
- * wall-clock rAF loop. Straight-alpha readback is drawn with `putImageData`
- * (replace, no blend) so transparent pixels reveal whatever sits behind the
- * canvas (the checker for alpha sinks, the matte for opaque ones) — matching
- * what the export produces. It renders an actual export frame, so the preview
- * is WYSIWYG by construction.
+ * renderer (Task 2) at (near) the EXPORT resolution using the REAL framing
+ * values, then DOWNSCALES the readback into a small display canvas — true
+ * WYSIWYG by rendering the actual thing.
+ *
+ * Why render big then shrink (not render small directly): feature-size nodes
+ * (`dither`, `pixelate`) compute their cell in device px as
+ * `max(1, floor(pixelSize * u_frame_scale + 0.5))`. Rendering a 2048px-native
+ * shader into a ~480px buffer forced `frameScale` down to ~0.18, flooring the
+ * dither cell to 1px: the triangle-SDF coverage collapsed and the whole image
+ * blew out (mean luminance ~79 vs the correct ~16). NO uniform value can shrink
+ * a ~1px-at-2048 feature into a 480px canvas correctly — the only faithful
+ * preview is to rasterise at export scale and downscale the pixels.
+ *
+ * Straight-alpha readback is drawn with `putImageData` (replace, no blend) into
+ * an offscreen buffer, then `drawImage`-downscaled (high-quality smoothing) into
+ * the display canvas so transparent pixels reveal whatever sits behind it (the
+ * checker for alpha sinks, the matte for opaque ones) — matching the export.
  *
  * Ref-driven: the caller passes a ref it updates every render. This keeps the
  * hook unconditional (it can run before the modal's `if (!open) return null`)
@@ -21,8 +32,19 @@ import { createExportRenderTarget, type ExportRenderTarget } from './export-rend
 import { decodeGraphImages } from './export-images'
 import type { FramingChoice } from './framing'
 
-/** Longest edge of the preview's backing buffer (px). Small — it's a thumbnail. */
+/** Longest edge of the small DISPLAY canvas (px). It's a thumbnail. */
 const PREVIEW_LONG_EDGE = 480
+
+/**
+ * Longest edge of the RENDER backing buffer (px). The preview rasterises at the
+ * export resolution capped to this for perf; never upscaled beyond the true
+ * export size. Big enough that feature-size nodes keep multi-pixel cells (so the
+ * preview stays a faithful proxy of the full-size export).
+ */
+const PREVIEW_RENDER_CAP = 1600
+
+/** ~25fps render gate — full-res readback is heavier than the old 480px path. */
+const RENDER_INTERVAL_MS = 40
 
 export interface ExportPreviewState {
   active: boolean
@@ -32,10 +54,22 @@ export interface ExportPreviewState {
   exportW: number
 }
 
+/** Small display-canvas dimensions (long edge = PREVIEW_LONG_EDGE). */
 function previewDims(outW: number, outH: number): { pw: number; ph: number } {
   if (outW <= 0 || outH <= 0) return { pw: 2, ph: 2 }
   const scale = PREVIEW_LONG_EDGE / Math.max(outW, outH)
   return { pw: Math.max(2, Math.round(outW * scale)), ph: Math.max(2, Math.round(outH * scale)) }
+}
+
+/**
+ * Render-backing dimensions: the export size (`outW×outH`) scaled so its long
+ * edge ≤ PREVIEW_RENDER_CAP, but never upscaled beyond the true export size.
+ * Aspect preserved exactly.
+ */
+function renderDims(outW: number, outH: number): { rw: number; rh: number } {
+  if (outW <= 0 || outH <= 0) return { rw: 2, rh: 2 }
+  const scale = Math.min(1, PREVIEW_RENDER_CAP / Math.max(outW, outH))
+  return { rw: Math.max(2, Math.round(outW * scale)), rh: Math.max(2, Math.round(outH * scale)) }
 }
 
 export function useExportPreview(
@@ -50,6 +84,15 @@ export function useExportPreview(
    * goes translucent partway through its animation.
    */
   onHasAlpha?: (hasAlpha: boolean) => void,
+  /**
+   * Called with the measured PNG bytes-per-pixel of a REAL rendered frame, so the
+   * modal's PNG size estimate reflects the shader's actual compressibility instead
+   * of a flat constant. Sampled a few times over the first seconds (off the render
+   * path via `convertToBlob`) and reported as a running MAX — a conservative
+   * estimate that catches an animation getting busier. Bytes-per-pixel is roughly
+   * resolution-invariant, so the modal scales it by the true export pixel count.
+   */
+  onSamplePng?: (bytesPerPixel: number) => void,
 ): void {
   useEffect(() => {
     if (typeof navigator === 'undefined' || !navigator.gpu) return
@@ -59,9 +102,21 @@ export function useExportPreview(
     let target: ExportRenderTarget | undefined
     let targetW = 0
     let targetH = 0
+    // Reused offscreen buffer holding the full-res straight-alpha readback; the
+    // display canvas is a high-quality downscale of it.
+    let offscreen: OffscreenCanvas | undefined
+    let offscreenCtx: OffscreenCanvasRenderingContext2D | null = null
     let reportedAlpha: boolean | null = null
     let loggedError = false
+    let lastRender = 0
     const start = performance.now()
+    // PNG size sampling: measure a few real frames' PNG bytes/pixel and report
+    // the running max. Bounded count + interval so it never janks the loop.
+    let pngMaxBpp = 0
+    let pngSamples = 0
+    let lastPngSample = 0
+    const PNG_SAMPLE_MAX = 4
+    const PNG_SAMPLE_INTERVAL_MS = 750
 
     void (async () => {
       const { nodes, edges } = useGraphStore.getState()
@@ -86,30 +141,60 @@ export function useExportPreview(
 
       const loop = async (): Promise<void> => {
         if (disposed) return
+        const now = performance.now()
         const s = state.current
-        if (s && s.active && ctx && device) {
+        // Throttle: full-res readback is heavy, so render at ~25fps. Still
+        // request the next frame each tick so we stay responsive to state
+        // changes (size/framing/active) without a fixed-interval timer.
+        if (s && s.active && ctx && device && now - lastRender >= RENDER_INTERVAL_MS) {
+          lastRender = now
+          // DISPLAY size (small thumbnail) vs RENDER size (near export res).
           const { pw, ph } = previewDims(s.outW, s.outH)
+          const { rw, rh } = renderDims(s.outW, s.outH)
           try {
-            if (!target || pw !== targetW || ph !== targetH) {
+            if (!target || rw !== targetW || rh !== targetH) {
               target?.dispose()
-              target = createExportRenderTarget(device, plan, pw, ph, images)
-              targetW = pw
-              targetH = ph
-              if (cv) { cv.width = pw; cv.height = ph }
+              target = createExportRenderTarget(device, plan, rw, rh, images)
+              targetW = rw
+              targetH = rh
+              offscreen = new OffscreenCanvas(rw, rh)
+              // alpha: true keeps straight-alpha pixels intact through putImageData.
+              offscreenCtx = offscreen.getContext('2d', {
+                alpha: true,
+              }) as OffscreenCanvasRenderingContext2D | null
             }
-            // Same visible framing as the export at fewer pixels: uDpr scales with
-            // the resolution ratio (correct for Reveal, where export uDpr = 1).
-            const uDpr = s.framing.uDpr * (pw / Math.max(1, s.exportW))
+            if (cv && (cv.width !== pw || cv.height !== ph)) { cv.width = pw; cv.height = ph }
+            // Real export framing: frameScale scaled by the render/export ratio so
+            // a feature's size occupies the SAME FRACTION of the composition as it
+            // will at full export. When rw == outW (small exports) the ratio is 1;
+            // when capped below export size it is rw/outW (~0.78 at the 1600 cap
+            // for a 2048 export) — still near 1, so `dither`/`pixelate` keep a
+            // multi-pixel cell (this was the bug: the old code used the ~480px
+            // DISPLAY width here, forcing the ratio to ~0.18 and a 1px cell). The
+            // invariant preserved is feature-size-as-a-fraction-of-the-frame:
+            // frameScale/renderPixels matches the export's frameScale/exportPixels,
+            // which also keeps auto_uv (÷ u_frame_scale·u_ref_size) composition-
+            // invariant. Density (dpr) passes through unscaled.
+            const frameScale = s.framing.frameScale * (rw / Math.max(1, s.exportW))
             target.renderFrame({
-              timeSec: (performance.now() - start) / 1000, // live wall-clock (preview only)
-              uDpr,
+              timeSec: (now - start) / 1000, // live wall-clock (preview only)
+              frameScale,
+              uDpr: s.framing.dpr,
               anchor: s.framing.anchor,
             })
             const px = await target.readback()
             if (disposed) return
-            ctx.putImageData(new ImageData(px, pw, ph), 0, 0)
-            // Detect translucency from the readback (alpha = every 4th byte).
-            // Only scan until we've latched `true` (sticky).
+            // Full-res straight-alpha → offscreen (replace), then high-quality
+            // downscale into the small display canvas.
+            if (offscreenCtx) {
+              offscreenCtx.putImageData(new ImageData(px, rw, rh), 0, 0)
+              ctx.clearRect(0, 0, pw, ph)
+              ctx.imageSmoothingEnabled = true
+              ctx.imageSmoothingQuality = 'high'
+              if (offscreen) ctx.drawImage(offscreen, 0, 0, rw, rh, 0, 0, pw, ph)
+            }
+            // Detect translucency from the FULL-RES readback (alpha = every 4th
+            // byte). Only scan until we've latched `true` (sticky).
             if (onHasAlpha && reportedAlpha !== true) {
               let translucent = false
               for (let i = 3; i < px.length; i += 4) {
@@ -122,6 +207,36 @@ export function useExportPreview(
                 reportedAlpha = translucent
                 onHasAlpha(translucent)
               }
+            }
+            // Sample this frame's PNG size (bytes/pixel) for the modal's PNG
+            // estimate. `offscreen` already holds the straight-alpha readback at
+            // render resolution (rw×rh) — the same pixels PNG export encodes.
+            // convertToBlob is async and off the render path; skip the first
+            // ~300ms so an all-flat t≈0 frame doesn't set an unrepresentative low.
+            if (
+              onSamplePng &&
+              offscreen &&
+              pngSamples < PNG_SAMPLE_MAX &&
+              now - start > 300 &&
+              now - lastPngSample > PNG_SAMPLE_INTERVAL_MS
+            ) {
+              lastPngSample = now
+              pngSamples++
+              const sw = rw
+              const sh = rh
+              void offscreen
+                .convertToBlob({ type: 'image/png' })
+                .then((b) => {
+                  if (disposed) return
+                  const bpp = b.size / Math.max(1, sw * sh)
+                  if (bpp > pngMaxBpp) {
+                    pngMaxBpp = bpp
+                    onSamplePng(bpp)
+                  }
+                })
+                .catch(() => {
+                  /* sampling is best-effort; a failed encode just skips it */
+                })
             }
           } catch (e) {
             // Don't let a render/readback failure kill the loop silently (a
@@ -143,5 +258,5 @@ export function useExportPreview(
       target?.dispose()
       device?.destroy()
     }
-  }, [canvas, state, onHasAlpha])
+  }, [canvas, state, onHasAlpha, onSamplePng])
 }

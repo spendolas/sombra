@@ -331,10 +331,10 @@ function resolveInputDefault(
 ): boolean {
   if (inputPort.default === 'auto_uv' && inputPort.type === 'vec2') {
     const autoUvVar = `node_${sanitizedNodeId}_auto_uv`
-    preambleLines.push(`vec2 ${autoUvVar} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * u_anchor) / (u_dpr * u_ref_size) + u_anchor;`)
+    preambleLines.push(`vec2 ${autoUvVar} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * u_anchor) / (u_frame_scale * u_ref_size) + u_anchor;`)
     uniforms.add('u_resolution')
     uniforms.add('u_anchor')
-    uniforms.add('u_dpr')
+    uniforms.add('u_frame_scale')
     uniforms.add('u_ref_size')
     inputs[inputPort.id] = autoUvVar
     return true
@@ -560,7 +560,7 @@ export function generateNodeGlsl(
     const hasTranslate = spatial.transforms.includes('translate')
 
     uniforms.add('u_anchor')
-    if (hasTranslate) { uniforms.add('u_dpr'); uniforms.add('u_ref_size') }
+    if (hasTranslate) { uniforms.add('u_frame_scale'); uniforms.add('u_ref_size') }
 
     // Shared SRT uniform wiring. Single source: op order lives in ir/srt.ts.
     const srtUniforms = {
@@ -577,8 +577,8 @@ export function generateNodeGlsl(
       // the source is read in its own frame; SRT drives only the own-content
       // coordinate (the effect's structure). See ir-compiler + SRT spec.
       const ownUvVar = `node_${sanitizedNodeId}_own_uv`
-      uniforms.add('u_resolution'); uniforms.add('u_dpr'); uniforms.add('u_ref_size')
-      preambleLines.push(`vec2 ${ownUvVar} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * u_anchor) / (u_dpr * u_ref_size) + u_anchor;`)
+      uniforms.add('u_resolution'); uniforms.add('u_frame_scale'); uniforms.add('u_ref_size')
+      preambleLines.push(`vec2 ${ownUvVar} = (vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y) - u_resolution * u_anchor) / (u_frame_scale * u_ref_size) + u_anchor;`)
       const ownSrt: IRSpatialTransform = { coordsVar: ownUvVar, outputVar: `srtown_${sanitizedNodeId}`, ...srtUniforms }
       preambleLines.push(...emitSRT(ownSrt, 'glsl'))
       spatialCoords = ownSrt.outputVar
@@ -1037,6 +1037,9 @@ export function assembleFragmentShader(
   }
   if (uniforms.has('u_dpr')) {
     uniformDeclarations.push('uniform float u_dpr;')
+  }
+  if (uniforms.has('u_frame_scale')) {
+    uniformDeclarations.push('uniform float u_frame_scale;')
   }
   if (uniforms.has('u_viewport')) {
     uniformDeclarations.push('uniform vec2 u_viewport;')

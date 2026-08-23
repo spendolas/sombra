@@ -48,7 +48,7 @@ export const checkerboardNode: NodeDefinition = {
 
   glsl: (ctx) => {
     const { inputs, outputs, uniforms, params } = ctx
-    uniforms.add('u_dpr')
+    uniforms.add('u_frame_scale')
     uniforms.add('u_ref_size')
     const tileMode = (params.tileMode as string) || 'cellSize'
     const id = ctx.nodeId.replace(/-/g, '_')
@@ -63,7 +63,7 @@ export const checkerboardNode: NodeDefinition = {
     if (tileMode === 'density') {
       lines.push(`float ${cell} = 1.0 / ${inputs.density};`)
     } else {
-      lines.push(`float ${cell} = ${inputs.cellSize} / (u_dpr * u_ref_size);`)
+      lines.push(`float ${cell} = ${inputs.cellSize} / (u_frame_scale * u_ref_size);`)
     }
     lines.push(`vec2 ${g} = ${inputs.coords} / ${cell};`)
     // Soft XOR of per-axis triangle waves, phase-shifted by +0.25 so softness=0
@@ -99,7 +99,7 @@ export const checkerboardNode: NodeDefinition = {
       : declare(cell, 'float',
           binary('/',
             variable(ctx.inputs.cellSize),
-            binary('*', variable('u_dpr'), variable('u_ref_size'), 'float'),
+            binary('*', variable('u_frame_scale'), variable('u_ref_size'), 'float'),
             'float',
           ),
         )
@@ -161,7 +161,7 @@ export const checkerboardNode: NodeDefinition = {
         ),
       ],
       uniforms: [],
-      standardUniforms: new Set(['u_dpr', 'u_ref_size']),
+      standardUniforms: new Set(['u_frame_scale', 'u_ref_size']),
     }
   },
 }

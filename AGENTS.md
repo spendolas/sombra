@@ -127,8 +127,9 @@ npm run verify:embed:smoke  # playwright end-to-end smoke (needs dev server + Ch
 
 - **Fullscreen quad**: 2 triangles covering clip space (-1 to 1), vertex shader passes through, fragment shader does all the work
 - **Shader compilation**: Graph nodes → topological sort → GLSL code generation → WebGL program compilation
-- **Uniforms**: Built-in `u_time`, `u_resolution`, `u_mouse`, `u_ref_size`; user-defined uniforms from node parameters
-- **Fixed reference sizing**: `u_ref_size` is a constant (`REFERENCE_SIZE = 512`, shared in `src/renderer/constants.ts`), NOT captured per-canvas. `auto_uv` = `(fragXY - u_resolution*u_anchor) / (u_dpr * u_ref_size) + u_anchor` is anchor-relative — resizing reveals/hides edges without zoom/distortion and pins content to the Fragment Output anchor
+- **Uniforms**: Built-in `u_time`, `u_resolution`, `u_mouse`, `u_ref_size`, `u_frame_scale`, `u_dpr`, `u_viewport`; user-defined uniforms from node parameters
+- **Fixed reference sizing**: `u_ref_size` is a constant (`REFERENCE_SIZE = 512`, shared in `src/renderer/constants.ts`), NOT captured per-canvas. `auto_uv` = `(fragXY - u_resolution*u_anchor) / (u_frame_scale * u_ref_size) + u_anchor` is anchor-relative — resizing reveals/hides edges without zoom/distortion and pins content to the Fragment Output anchor
+- **`u_frame_scale` vs `u_dpr`**: `u_frame_scale` is the reference↔device ratio for layout/composition (auto_uv + all scene-locked features scale by it, so feature size in reference units is resolution/framing-invariant); `u_dpr` is a pure device-density knob. Live: both = `min(devicePixelRatio,2)×dprScale`. Export: `computeFraming` sets `u_frame_scale` = framing scale, `u_dpr` = 1. Gate: `npm run verify:frame-scale-invariance`
 - **Preview rendering**: Single offscreen WebGL context captures frames to `<img>` for per-node previews
 
 ### Node System
