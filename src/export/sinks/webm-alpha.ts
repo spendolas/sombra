@@ -13,15 +13,17 @@
  * container.
  */
 
-import { Output, WebMOutputFormat, BufferTarget, VideoSampleSource, VideoSample } from 'mediabunny'
+import { Output, WebMOutputFormat, StreamTarget, VideoSampleSource, VideoSample } from 'mediabunny'
 import type { FrameSink, SinkOpts } from '../frame-sink'
 import { qualityFor } from './quality-map'
+import { createAppendOnlyStreamTarget } from './stream-target-adapter'
 
 export function makeWebmAlphaSink(): FrameSink {
-  let out!: Output<WebMOutputFormat, BufferTarget>
+  let out!: Output<WebMOutputFormat, StreamTarget>
   let src!: VideoSampleSource
   let o!: SinkOpts
   let codec: 'av1' | 'vp9' = 'vp9'
+  let closeWritable!: () => Promise<void>
 
   return {
     id: 'webm-alpha',
@@ -30,6 +32,7 @@ export function makeWebmAlphaSink(): FrameSink {
     output: 'file',
     tier: 'free',
     fileExt: 'webm',
+    mimeType: 'video/webm',
 
     async isSupported() {
       try {
@@ -62,9 +65,14 @@ export function makeWebmAlphaSink(): FrameSink {
       }
     },
 
-    async begin(opts) {
+    async begin(opts, writable) {
       o = opts
-      out = new Output({ format: new WebMOutputFormat(), target: new BufferTarget() })
+      // Matroska is naturally streamable, but `appendOnly: true` guarantees the
+      // monotonic-position emission the StreamTarget adapter asserts (no seeking
+      // back to patch duration/seek metadata).
+      const bridge = createAppendOnlyStreamTarget(writable)
+      closeWritable = bridge.close
+      out = new Output({ format: new WebMOutputFormat({ appendOnly: true }), target: bridge.target })
       src = new VideoSampleSource({ codec, quality: qualityFor(o.quality, o.width, o.height), alpha: 'keep' })
       out.addVideoTrack(src)
       await out.start()
@@ -83,9 +91,10 @@ export function makeWebmAlphaSink(): FrameSink {
     },
 
     async finish() {
+      // Finalize flushes all remaining bytes through the StreamTarget adapter
+      // into the destination writable; then close it.
       await out.finalize()
-      // `out.target.buffer` is populated once `finalize()` resolves.
-      return new Blob([out.target.buffer!], { type: 'video/webm' })
+      await closeWritable()
     },
   }
 }
