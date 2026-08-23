@@ -95,7 +95,8 @@ async function runAssertions(cfg: Cfg): Promise<EvalResult> {
     connect(src: string, tgt: string, srcPort?: string, tgtPort?: string): string
   }
   interface FramingChoice {
-    uDpr: number
+    frameScale: number
+    dpr: number
     anchor: [number, number]
   }
   interface ExportJob {
@@ -184,7 +185,7 @@ async function runAssertions(cfg: Cfg): Promise<EvalResult> {
   const MB = (await import(cfg.mediabunnyUrl)) as MediabunnyModule
   const FF = (await import(cfg.fflateUrl)) as FflateModule
 
-  const framing: FramingChoice = { uDpr: 1, anchor: [0.5, 0.5] }
+  const framing: FramingChoice = { frameScale: 1, dpr: 1, anchor: [0.5, 0.5] }
   const runExport = (job: ExportJob): Promise<Blob> => engine.runExport(job, () => {})
 
   // ---- decode helpers (independent MediaBunny decode instance) ----
