@@ -62,9 +62,18 @@ export function targetSize(src: SizeSource, view: ViewInfo): { width: number; he
  * - `dpr` → `u_dpr`: pure device density. Held at 1 for a 1:1 export; a future
  *   supersample pass raises it WITHOUT moving the framing.
  *
- * The split resolves the old limitation where Reveal's uDpr=1 also shrank blur
- * reach — blur radius now follows `u_dpr` (density) while composition follows
- * `u_frame_scale`, so the two no longer fight.
+ * The split resolves the old limitation where the single overloaded `u_dpr`
+ * conflated composition and density. Blur reach (and every scene-locked feature)
+ * now follows `u_frame_scale`: its reach in REFERENCE units is invariant across
+ * framing modes and sizes, because the `u_frame_scale` factor in the sigma
+ * cancels the one in `auto_uv`'s denominator — Reveal (frameScale=1) and live
+ * (frameScale=deviceDpr) cover the same fraction of the composition.
+ *
+ * `u_dpr` is currently a reserved density knob with NO node consumer (export
+ * holds it at 1; live sets it == frameScale == deviceDpr, so blur is unchanged
+ * there). A follow-up may wire supersampled-AA smoothness onto `u_dpr` — more
+ * samples across the SAME reach — behind a supersample UI. Deferred as YAGNI:
+ * no product path emits dpr≠frameScale today. See the plan's Task 8 ruling.
  */
 export function computeFraming(
   mode: FramingMode,
