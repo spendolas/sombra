@@ -918,8 +918,8 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                           type="button"
                           disabled={!webgpuOk}
                           title={
-                            s.id === 'mp4-hevc'
-                              ? 'H.265 — better quality per byte; best for Apple/QuickTime. Tagged hev1; some editors prefer hvc1.'
+                            s.id === 'mp4'
+                              ? 'H.265 where a hardware HEVC encoder exists (better quality per byte; best for Apple/QuickTime, tagged hev1) — automatic H.264-High fallback elsewhere.'
                               : undefined
                           }
                           onClick={() => setSinkId(s.id)}
@@ -1005,7 +1005,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                         </div>
                       </div>
                       <span className={cn(HINT, 'flex-1')}>
-                        MP4 / H.264 has no transparency — transparent pixels flatten onto this color.
+                        MP4 video has no transparency — the shader is flattened onto this color.
                       </span>
                     </div>
                   </div>
