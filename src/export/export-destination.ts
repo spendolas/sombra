@@ -151,11 +151,20 @@ async function createOpfsDestination(opts: {
   }
 
   let torndown = false
+  let finalized = false
   async function teardown(): Promise<void> {
     if (torndown) return
     torndown = true
+    // Terminating the worker is always safe. But removeEntry(name) ONLY on the
+    // abort/cancel/failure path: once finalize() has handed the temp out as the
+    // download File/objectURL, deleting it could truncate a still-streaming
+    // download (unverified snapshot semantics on Safari/Firefox — this path's
+    // whole audience). Post-finalize we leave the temp; the next OPFS export's
+    // stale-sweep removes it, so at most one sandboxed temp ever lingers.
     worker.terminate()
-    await root.removeEntry(name).catch(() => {})
+    if (!finalized) {
+      await root.removeEntry(name).catch(() => {})
+    }
   }
 
   const writable = new WritableStream<Uint8Array>({
@@ -176,6 +185,9 @@ async function createOpfsDestination(opts: {
       worker.terminate()
       const fh = await root.getFileHandle(name)
       const file = await fh.getFile()
+      // Handed the temp out as the download File — a later cleanup() must NOT
+      // delete it out from under an in-flight download (see teardown()).
+      finalized = true
       // Disk-backed File IS a Blob; the modal downloads it via object URL with
       // flat memory. savedToDisk:false → the modal still triggers the download
       // (unlike the FSA path, where the user already chose the destination).
@@ -209,8 +221,10 @@ export interface ExportDestination {
    */
   readonly _partsCount?: () => number
   /**
-   * OPFS tier only: discard the disk temp file and terminate the worker. Call
-   * on cancel/failure so a crashed or aborted export can't leak a temp forever.
+   * OPFS tier only. Call on cancel/failure to discard the temp immediately, OR
+   * after a successful export (on modal close) — post-finalize it only
+   * terminates the worker and leaves the temp for the next-export sweep, so an
+   * in-flight download is never truncated. Idempotent and safe to double-call.
    * Absent on the FSA and in-memory paths (nothing to clean up).
    */
   cleanup?(): Promise<void>
