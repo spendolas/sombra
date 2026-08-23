@@ -70,12 +70,22 @@ export async function runExport(
   const total = Math.max(1, Math.round(job.durationSec * job.fps))
   let target: ExportRenderTarget | undefined
 
+  // Video codecs reject ODD dimensions: mediabunny reports a codec NOT encodable
+  // when width or height is odd, and the sink then silently falls through. Clamp
+  // to even (round DOWN, min 2) HERE so the render target and the sink both see
+  // the exact same even dims — no half-pixel mismatch between what we rasterise
+  // and what we encode. (The modal already rounds up to even; this is the
+  // defensive floor for any other caller. PNG is unaffected either way.)
+  const evenFloor = (n: number) => Math.max(2, Math.floor(n / 2) * 2)
+  const width = evenFloor(job.width)
+  const height = evenFloor(job.height)
+
   try {
-    target = createExportRenderTarget(device, plan, job.width, job.height, images)
+    target = createExportRenderTarget(device, plan, width, height, images)
 
     await job.sink.begin({
-      width: job.width,
-      height: job.height,
+      width,
+      height,
       fps: job.fps,
       alpha: job.alpha,
       matte: job.matte,

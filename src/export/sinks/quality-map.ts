@@ -15,7 +15,11 @@ import type { QualityLevel } from '../frame-sink'
  * The Mbps figures mirror the export modal's size-estimate model, so the
  * estimate and the actual encode agree.
  */
-const MBPS_AT_1080P: Record<QualityLevel, number> = { draft: 3.5, good: 8, high: 16, max: 34 }
+// High/Max raised (16→20, 34→45) to retain more high-frequency detail (fine
+// dither, noise) — lossy 4:2:0 has no 4:4:4 lever, so bitrate is the only knob.
+// NOTE: the ExportModal size-estimate has its OWN hardcoded copy of this table
+// (`[3.5, 8, 20, 45]` in ExportModal.tsx) — keep the two in sync.
+const MBPS_AT_1080P: Record<QualityLevel, number> = { draft: 3.5, good: 8, high: 20, max: 45 }
 const PIXELS_1080P = 1920 * 1080
 
 export function qualityFor(level: QualityLevel, width: number, height: number): Quality {
