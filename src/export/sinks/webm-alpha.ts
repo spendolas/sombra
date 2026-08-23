@@ -16,14 +16,14 @@
 import { Output, WebMOutputFormat, StreamTarget, VideoSampleSource, VideoSample } from 'mediabunny'
 import type { FrameSink, SinkOpts } from '../frame-sink'
 import { qualityFor } from './quality-map'
-import { createAppendOnlyStreamTarget } from './stream-target-adapter'
+import { createAppendOnlyStreamTarget, type AppendOnlyStreamTargetBridge } from './stream-target-adapter'
 
 export function makeWebmAlphaSink(): FrameSink {
   let out!: Output<WebMOutputFormat, StreamTarget>
   let src!: VideoSampleSource
   let o!: SinkOpts
   let codec: 'av1' | 'vp9' = 'vp9'
-  let closeWritable!: () => Promise<void>
+  let bridge: AppendOnlyStreamTargetBridge | undefined
 
   return {
     id: 'webm-alpha',
@@ -70,8 +70,7 @@ export function makeWebmAlphaSink(): FrameSink {
       // Matroska is naturally streamable, but `appendOnly: true` guarantees the
       // monotonic-position emission the StreamTarget adapter asserts (no seeking
       // back to patch duration/seek metadata).
-      const bridge = createAppendOnlyStreamTarget(writable)
-      closeWritable = bridge.close
+      bridge = createAppendOnlyStreamTarget(writable)
       out = new Output({ format: new WebMOutputFormat({ appendOnly: true }), target: bridge.target })
       src = new VideoSampleSource({ codec, quality: qualityFor(o.quality, o.width, o.height), alpha: 'keep' })
       out.addVideoTrack(src)
@@ -94,7 +93,21 @@ export function makeWebmAlphaSink(): FrameSink {
       // Finalize flushes all remaining bytes through the StreamTarget adapter
       // into the destination writable; then close it.
       await out.finalize()
-      await closeWritable()
+      await bridge!.close()
+    },
+
+    async abort() {
+      // begin() never ran → nothing to tear down (bridge/out are unset).
+      if (!bridge) return
+      // Stop the encoder and release the target (state → 'canceled'); then abort
+      // the destination writable via the adapter (discards the FSA swap file,
+      // releases the writer lock). Both best-effort.
+      try {
+        await out.cancel()
+      } catch {
+        /* not started / already finalized — best-effort */
+      }
+      await bridge.abort()
     },
   }
 }

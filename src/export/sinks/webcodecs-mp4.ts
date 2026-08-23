@@ -30,20 +30,33 @@ import {
 } from 'mediabunny'
 import type { FrameSink, SinkOpts } from '../frame-sink'
 import { qualityFor } from './quality-map'
-import { createAppendOnlyStreamTarget } from './stream-target-adapter'
+import { createAppendOnlyStreamTarget, type AppendOnlyStreamTargetBridge } from './stream-target-adapter'
 
-export function makeMp4Sink(): FrameSink {
+/** MP4 sink with the extra `usedCodec` field the done-state label reads. */
+export interface Mp4Sink extends FrameSink {
+  /** The codec actually chosen in `begin()` — null before begin(). */
+  readonly usedCodec: 'hevc' | 'avc' | null
+}
+
+export function makeMp4Sink(): Mp4Sink {
   let out!: Output<Mp4OutputFormat, StreamTarget>
   let src!: VideoSampleSource
   let matteCanvas!: OffscreenCanvas
   let mctx!: OffscreenCanvasRenderingContext2D
   let o!: SinkOpts
   let codec!: NonNullable<Awaited<ReturnType<typeof getFirstEncodableVideoCodec>>>
-  let closeWritable!: () => Promise<void>
+  let bridge: AppendOnlyStreamTargetBridge | undefined
+  // The codec actually picked in begin() — drives the accurate done-state label.
+  // Null until begin() runs; the static `label` stays "MP4 · H.265" for the
+  // FORMAT card (the offered/preferred option), not the delivered codec.
+  let usedCodec: 'hevc' | 'avc' | null = null
 
   return {
     id: 'mp4',
     label: 'MP4 · H.265',
+    get usedCodec() {
+      return usedCodec
+    },
     supportsAlpha: false,
     output: 'file',
     tier: 'free',
@@ -82,11 +95,11 @@ export function makeMp4Sink(): FrameSink {
         )
       }
       codec = picked
+      usedCodec = codec === 'hevc' ? 'hevc' : 'avc'
 
       // `fastStart: 'fragmented'` makes MP4 emission append-only (monotonic
       // positions), which the StreamTarget adapter asserts and requires.
-      const bridge = createAppendOnlyStreamTarget(writable)
-      closeWritable = bridge.close
+      bridge = createAppendOnlyStreamTarget(writable)
       out = new Output({ format: new Mp4OutputFormat({ fastStart: 'fragmented' }), target: bridge.target })
       src = new VideoSampleSource({ codec, quality: qualityFor(o.quality, o.width, o.height) })
       out.addVideoTrack(src)
@@ -114,7 +127,21 @@ export function makeMp4Sink(): FrameSink {
       // Finalize flushes the encoder and all remaining bytes through the
       // StreamTarget adapter into the destination writable; then close it.
       await out.finalize()
-      await closeWritable()
+      await bridge!.close()
+    },
+
+    async abort() {
+      // begin() never ran → nothing to tear down (bridge/out are unset).
+      if (!bridge) return
+      // Stop the encoder and release the target (state → 'canceled'), preventing
+      // further sample adds; then abort the destination writable via the adapter
+      // (discards the FSA swap file, releases the writer lock). Both best-effort.
+      try {
+        await out.cancel()
+      } catch {
+        /* not started / already finalized — best-effort */
+      }
+      await bridge.abort()
     },
   }
 }

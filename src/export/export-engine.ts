@@ -99,18 +99,14 @@ export async function runExport(
   const height = evenFloor(job.height)
 
   // Tracks whether the sink reached a clean `finish()` (which closes the
-  // writable). If we bail before that, the `finally` best-effort aborts the
-  // writable.
-  // COVERAGE CAVEAT: each sink calls `writable.getWriter()` in `begin()`, which
-  // LOCKS the stream — so `writable.abort()` here only succeeds for failures
-  // BEFORE `begin()` (e.g. render-target creation throwing). Once encoding has
-  // started (the common Cancel-during-export case) the stream is locked, abort()
-  // rejects, and we swallow it: the sink's writer + FSA swap-file handle are then
-  // released by GC, not deterministically. This is bounded and non-corrupting —
-  // File System Access writes to a swap file and the user's chosen file is
-  // untouched until `close()`, so a cancelled disk export never corrupts it.
-  // Deterministic mid-encode teardown would need a per-sink abort() hook that
-  // releases the writer (parked follow-up).
+  // writable). If we bail before that, the `finally` calls `sink.abort()`.
+  // Each sink locks the destination writable via `getWriter()` in `begin()`, so
+  // only the sink can release it — `sink.abort()` stops the encoder AND releases
+  // its own writer + aborts the destination writable. That makes mid-encode
+  // Cancel tear down DETERMINISTICALLY: on the File System Access path the abort
+  // discards the swap file instead of leaking its handle to GC (and the user's
+  // chosen file is untouched until `close()`, so a cancelled disk export never
+  // corrupts it). `sink.abort()` is a safe no-op before `begin()`.
   let finished = false
 
   try {
@@ -170,16 +166,15 @@ export async function runExport(
     // NOT re-close the stream (finish() already did).
     return await destination.finalize()
   } finally {
-    // If we didn't reach a clean finish(), abort the writable so a partial file
-    // is discarded / its handle torn down. Best-effort and guarded: when a sink
-    // holds an open writer the stream is locked and abort() rejects — swallow it
-    // (the sink's own error is what propagates). Effective when the failure is
-    // before the sink acquired its writer (e.g. render-target creation threw).
+    // If we didn't reach a clean finish(), tear the sink down deterministically:
+    // sink.abort() stops the encoder, releases the sink's own writer, and aborts
+    // the destination writable (discarding a partial file / FSA swap handle).
+    // Best-effort — never mask the original error (e.g. the AbortError).
     if (!finished) {
       try {
-        await destination.writable.abort?.()
+        await job.sink.abort()
       } catch {
-        /* stream locked by the sink's writer, or already closed — best-effort */
+        /* teardown is best-effort; the original error is what propagates */
       }
     }
     // Release GPU resources on success, mid-loop throw, AND abort alike.
