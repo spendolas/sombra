@@ -118,16 +118,16 @@ async function runAssertions(cfg: Cfg): Promise<EvalResult> {
     readonly fileExt: string
     isSupported(): Promise<boolean>
   }
-  interface EngineModule {
-    runExport(
-      job: ExportJob,
-      writable: WritableStream<Uint8Array>,
-      onProgress: (f: number, t: number) => void,
-    ): Promise<void>
-  }
   interface ExportDestinationLike {
     writable: WritableStream<Uint8Array>
     finalize(): Promise<{ blob: Blob | null; savedToDisk: boolean; filename: string }>
+  }
+  interface EngineModule {
+    runExport(
+      job: ExportJob,
+      destination: ExportDestinationLike,
+      onProgress: (f: number, t: number, phase?: 'rendering' | 'finalizing') => void,
+    ): Promise<{ blob: Blob | null; savedToDisk: boolean; filename: string }>
   }
   interface DestModule {
     createExportDestination(opts: {
@@ -217,8 +217,8 @@ async function runAssertions(cfg: Cfg): Promise<EvalResult> {
       ext: sink.fileExt,
       preferDisk: false,
     })
-    await engine.runExport(job, dest.writable, () => {})
-    const { blob } = await dest.finalize()
+    // runExport now finalizes internally and returns the result (Task 6).
+    const { blob } = await engine.runExport(job, dest, () => {})
     if (!blob) throw new Error('fallback destination produced no blob')
     return blob
   }
