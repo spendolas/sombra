@@ -496,6 +496,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
 
   // Draggable panel — offset from the centred position. Window listeners so the
   // drag survives pointer-capture loss (per the repo's pointer-drag rule).
+  const modalRef = useRef<HTMLDivElement>(null)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [dragging, setDragging] = useState(false)
   const dragOrigin = useRef({ px: 0, py: 0, ox: 0, oy: 0 })
@@ -503,7 +504,20 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
     if (!dragging) return
     const move = (e: PointerEvent) => {
       const o = dragOrigin.current
-      setDragOffset({ x: o.ox + (e.clientX - o.px), y: o.oy + (e.clientY - o.py) })
+      let x = o.ox + (e.clientX - o.px)
+      let y = o.oy + (e.clientY - o.py)
+      // Clamp so the centred modal never leaves the viewport. Max travel each
+      // axis is (viewport − modalSize)/2 (0 if the modal is larger than the
+      // viewport there — never push a too-big modal further off-screen).
+      const el = modalRef.current
+      if (el) {
+        const r = el.getBoundingClientRect()
+        const maxX = Math.max(0, (window.innerWidth - r.width) / 2)
+        const maxY = Math.max(0, (window.innerHeight - r.height) / 2)
+        x = Math.min(maxX, Math.max(-maxX, x))
+        y = Math.min(maxY, Math.max(-maxY, y))
+      }
+      setDragOffset({ x, y })
     }
     const up = () => setDragging(false)
     window.addEventListener('pointermove', move)
@@ -695,6 +709,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
       onClick={onClose}
     >
       <div
+        ref={modalRef}
         className="flex h-[702px] max-h-[92vh] max-w-[92vw] overflow-hidden rounded-lg border border-edge bg-surface text-fg shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]"
         style={{ transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)` }}
         onClick={(e) => e.stopPropagation()}
@@ -713,7 +728,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
               }}
             >
               <div
-                className="absolute inset-0 overflow-hidden rounded-sm"
+                className="absolute inset-0 overflow-hidden rounded-sm border-[0.5px] border-edge"
                 style={selectedSink && !selectedSink.supportsAlpha ? { background: matte } : CHECKER}
               >
                 <canvas ref={previewCanvasRef} className="absolute inset-0 h-full w-full" />
@@ -746,18 +761,18 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
         </div>
 
         {/* Right: fixed-width controls panel (its own header + footer) */}
-        <div className="flex min-h-0 w-[460px] max-w-[92vw] flex-none flex-col bg-surface-alt md:border-l md:border-edge">
+        <div className="flex min-h-0 w-[460px] max-w-[92vw] flex-none flex-col bg-surface-alt">
           {/* Header (drag handle) */}
           <div
             onPointerDown={startDrag}
             className={cn(
-              'flex flex-none select-none items-center justify-between border-b border-edge-subtle px-xl py-lg',
+              'flex flex-none select-none items-center justify-between px-xl py-lg',
               dragging ? 'cursor-grabbing' : 'cursor-grab',
             )}
           >
             <span className="text-node-title font-semibold text-fg">Export</span>
             <button
-              className="rounded-sm px-sm py-2xs text-fg-subtle transition-colors hover:bg-hover hover:text-fg"
+              className="grid h-7 w-7 place-items-center rounded-sm text-[15px] leading-none text-fg-subtle transition-colors hover:bg-hover hover:text-fg"
               title="Close"
               aria-label="Close"
               onClick={onClose}
@@ -769,7 +784,9 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
           {/* Content: config controls OR progress/done */}
           <div className="flex min-h-0 min-w-0 flex-1">
             {phase === 'config' ? (
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-xl overflow-y-auto overflow-x-hidden p-xl [scrollbar-gutter:stable]">
+              // pr < pl compensates for the reserved scrollbar gutter (~xl−gutter),
+              // so content stays optically symmetric and lines up with the footer.
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-xl overflow-y-auto overflow-x-hidden py-xl pl-xl pr-sm [scrollbar-gutter:stable]">
                 {error && (
                   <div className="rounded-sm border border-edge-subtle bg-surface-raised px-md py-xs text-param text-red-400">
                     {error}
@@ -1062,7 +1079,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
 
           {/* Footer (config only) */}
           {phase === 'config' && (
-            <div className="flex flex-none items-center justify-between gap-md border-t border-edge-subtle bg-surface-alt px-xl py-lg">
+            <div className="flex flex-none items-center justify-between gap-md bg-surface-alt px-xl py-lg">
               <div className="flex min-w-0 items-baseline gap-xs text-mono-value tabular-nums text-fg-subtle">
                 <span>
                   <b className="font-semibold text-fg-dim">{frames}</b> frames
