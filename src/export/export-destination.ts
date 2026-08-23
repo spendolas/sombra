@@ -11,6 +11,10 @@
  * APIs are fine. Do NOT import compiler/nodes/renderers here.
  */
 
+// Message protocol — mirror of src/export/opfs-writer.worker.ts (imported
+// type-only so it erases; no runtime dependency on the worker module here).
+import type { OpfsReq, OpfsRes } from './opfs-writer.worker'
+
 // --- Minimal ambient typing for the File System Access API ---------------
 // The TS DOM lib may not declare `showSaveFilePicker` / `FileSystemWritableFileStream`.
 // We declare only the narrow surface we use, keeping the public API type-safe
@@ -41,6 +45,148 @@ function getShowSaveFilePicker(): ShowSaveFilePicker | undefined {
   return typeof fn === 'function' ? (fn as ShowSaveFilePicker) : undefined
 }
 
+// --- Minimal ambient typing for OPFS (main-thread surface) -----------------
+// We reach OPFS via `navigator.storage.getDirectory()` and read back the temp
+// file the worker wrote. Declare only the narrow surface we use, cast through
+// `unknown` (rather than augmenting globals) so this never conflicts with
+// whatever the ambient DOM lib does or does not ship. The worker owns the
+// SyncAccessHandle write side; here we only reopen/list/remove.
+
+interface OpfsFileHandle {
+  getFile(): Promise<File>
+}
+
+interface OpfsDirectoryHandle {
+  getFileHandle(name: string, opts?: { create?: boolean }): Promise<OpfsFileHandle>
+  removeEntry(name: string): Promise<void>
+  keys(): AsyncIterableIterator<string>
+}
+
+function getStorageDirectory(): (() => Promise<OpfsDirectoryHandle>) | undefined {
+  const nav = (globalThis as { navigator?: { storage?: { getDirectory?: unknown } } }).navigator
+  const storage = nav?.storage
+  const fn = storage?.getDirectory
+  return typeof fn === 'function'
+    ? () => (fn as () => Promise<unknown>).call(storage) as Promise<OpfsDirectoryHandle>
+    : undefined
+}
+
+/** True when the Origin-Private File System is available (Safari/Firefox/Chrome). */
+export function supportsOpfs(): boolean {
+  return getStorageDirectory() !== undefined
+}
+
+const OPFS_TEMP_PREFIX = 'sombra-export-'
+
+/** Best-effort removal of temp files leaked by a crash mid-export. */
+async function sweepStaleOpfsTemps(root: OpfsDirectoryHandle): Promise<void> {
+  try {
+    for await (const key of root.keys()) {
+      if (key.startsWith(OPFS_TEMP_PREFIX)) {
+        await root.removeEntry(key).catch(() => {})
+      }
+    }
+  } catch {
+    // Listing/removal is best-effort; never block an export on cleanup.
+  }
+}
+
+/**
+ * OPFS streaming tier: chunks flow to a temp file on disk via a worker holding a
+ * SyncAccessHandle, keeping heap flat. Returns null (falls through to in-memory)
+ * when the worker cannot open a SyncAccessHandle on this browser.
+ */
+async function createOpfsDestination(opts: {
+  filename: string
+  ext: string
+}): Promise<ExportDestination | null> {
+  const { filename, ext } = opts
+  const getDirectory = getStorageDirectory()
+  if (!getDirectory) return null
+
+  const name = `${OPFS_TEMP_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+
+  let root: OpfsDirectoryHandle
+  try {
+    root = await getDirectory()
+  } catch {
+    return null
+  }
+  await sweepStaleOpfsTemps(root)
+
+  const worker = new Worker(new URL('./opfs-writer.worker.ts', import.meta.url), { type: 'module' })
+
+  // WritableStream serialises writes, so at most one message is ever in flight:
+  // a single pending resolver is enough to ack each round-trip (backpressure).
+  let pending: { resolve: (msg: OpfsRes) => void; reject: (err: unknown) => void } | null = null
+  worker.onmessage = (event: MessageEvent<OpfsRes>) => {
+    const msg = event.data
+    const p = pending
+    pending = null
+    if (!p) return
+    if (msg.type === 'error') p.reject(new Error(msg.error))
+    else p.resolve(msg)
+  }
+  worker.onerror = (event) => {
+    const p = pending
+    pending = null
+    p?.reject(new Error(event.message || 'opfs worker error'))
+  }
+
+  function postAndAwait(req: OpfsReq): Promise<OpfsRes> {
+    return new Promise<OpfsRes>((resolve, reject) => {
+      pending = { resolve, reject }
+      worker.postMessage(req)
+    })
+  }
+
+  // init round-trip. If the worker cannot create a SyncAccessHandle (e.g. very
+  // old Safari), tear down and fall through to the in-memory fallback.
+  try {
+    await postAndAwait({ type: 'init', name })
+  } catch {
+    worker.terminate()
+    await root.removeEntry(name).catch(() => {})
+    return null
+  }
+
+  let torndown = false
+  async function teardown(): Promise<void> {
+    if (torndown) return
+    torndown = true
+    worker.terminate()
+    await root.removeEntry(name).catch(() => {})
+  }
+
+  const writable = new WritableStream<Uint8Array>({
+    async write(chunk) {
+      // Copy the chunk — the producer may reuse its buffer; do NOT transfer.
+      // Awaiting the worker's ack keeps exactly one chunk in flight (flat mem).
+      await postAndAwait({ type: 'write', chunk: chunk.slice() })
+    },
+    async abort() {
+      await teardown()
+    },
+  })
+
+  return {
+    writable,
+    async finalize() {
+      await postAndAwait({ type: 'close' })
+      worker.terminate()
+      const fh = await root.getFileHandle(name)
+      const file = await fh.getFile()
+      // Disk-backed File IS a Blob; the modal downloads it via object URL with
+      // flat memory. savedToDisk:false → the modal still triggers the download
+      // (unlike the FSA path, where the user already chose the destination).
+      return { blob: file, savedToDisk: false, filename }
+    },
+    async cleanup() {
+      await teardown()
+    },
+  }
+}
+
 // --- Public API -----------------------------------------------------------
 
 export interface ExportDestination {
@@ -62,6 +208,12 @@ export interface ExportDestination {
    * production contract; do not depend on it outside verification.
    */
   readonly _partsCount?: () => number
+  /**
+   * OPFS tier only: discard the disk temp file and terminate the worker. Call
+   * on cancel/failure so a crashed or aborted export can't leak a temp forever.
+   * Absent on the FSA and in-memory paths (nothing to clean up).
+   */
+  cleanup?(): Promise<void>
 }
 
 /** Thrown when the user cancels the save dialog. */
@@ -112,6 +264,15 @@ export async function createExportDestination(opts: {
         return { blob: null, savedToDisk: true, filename: handle.name }
       },
     }
+  }
+
+  // --- OPFS streaming tier: stream chunks to a disk temp via a worker ----
+  // Engages whenever FSA was absent/declined and OPFS is available — it's
+  // strictly better than the in-memory fallback (flat heap on huge exports).
+  // A worker that can't open a SyncAccessHandle returns null → fall through.
+  if (supportsOpfs()) {
+    const opfsDest = await createOpfsDestination({ filename, ext })
+    if (opfsDest) return opfsDest
   }
 
   // --- Fallback path: accumulate chunk COPIES into a Blob ----------------
