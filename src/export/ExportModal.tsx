@@ -484,7 +484,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
     active: false,
     outW: 1,
     outH: 1,
-    framing: { uDpr: 1, anchor: [0.5, 0.5] },
+    framing: { frameScale: 1, dpr: 1, anchor: [0.5, 0.5] },
     exportW: 1,
   })
   // Whether the shader's output is ever translucent — read straight off the
@@ -609,11 +609,13 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
   }
 
   // Blue guide: where the current view maps inside the export frame. The view
-  // occupies (cssW·uDpr / outW) × (cssH·uDpr / outH) of the frame, centred — so
-  // Reveal shows it smaller (reveals around it) and Fill shows it overflowing
-  // (the excess is cropped). Only meaningful when the frame differs from the view.
-  const guideW = (cssW * framingChoice.uDpr) / outW
-  const guideH = (cssH * framingChoice.uDpr) / outH
+  // occupies (cssW·frameScale / outW) × (cssH·frameScale / outH) of the frame,
+  // centred — so Reveal shows it smaller (reveals around it) and Fill shows it
+  // overflowing (the excess is cropped). This is a FRAMING concern (composition,
+  // not device density), so it reads frameScale. Only meaningful when the frame
+  // differs from the view.
+  const guideW = (cssW * framingChoice.frameScale) / outW
+  const guideH = (cssH * framingChoice.frameScale) / outH
   const showGuide = !framingHidden && Number.isFinite(guideW) && Number.isFinite(guideH)
 
   const gateNote = !webgpuOk
