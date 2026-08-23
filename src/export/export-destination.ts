@@ -92,6 +92,30 @@ async function sweepStaleOpfsTemps(root: OpfsDirectoryHandle): Promise<void> {
 }
 
 /**
+ * Reclaim any OPFS export temp left behind by a PRIOR completed export.
+ *
+ * Post-finalize the temp deliberately lingers (so an in-flight download isn't
+ * truncated) and is normally swept when the NEXT OPFS export is created. But a
+ * user who exports once (potentially multi-GB) and never exports again would
+ * keep that temp on disk indefinitely — it even survives a reload. Call this on
+ * export-modal OPEN (the mount/open transition), when NO export is in flight:
+ * any lingering `sombra-export-*` temp is then from a completed export and safe
+ * to reclaim. Never call it mid-export (it would delete the in-flight temp).
+ *
+ * Feature-detected (no-op when OPFS is absent) and best-effort (never throws).
+ */
+export async function sweepOpfsExportTemps(): Promise<void> {
+  const getDirectory = getStorageDirectory()
+  if (!getDirectory) return
+  try {
+    const root = await getDirectory()
+    await sweepStaleOpfsTemps(root)
+  } catch {
+    // Best-effort; never surface a cleanup failure to the caller.
+  }
+}
+
+/**
  * OPFS streaming tier: chunks flow to a temp file on disk via a worker holding a
  * SyncAccessHandle, keeping heap flat. Returns null (falls through to in-memory)
  * when the worker cannot open a SyncAccessHandle on this browser.
@@ -185,9 +209,12 @@ async function createOpfsDestination(opts: {
 
   const writable = new WritableStream<Uint8Array>({
     async write(chunk) {
-      // Copy the chunk — the producer may reuse its buffer; do NOT transfer.
-      // Awaiting the worker's ack keeps exactly one chunk in flight (flat mem).
-      await postAndAwait({ type: 'write', chunk: chunk.slice() })
+      // Pass the chunk directly (no transfer): structured clone during
+      // postMessage synchronously deep-copies it, which already satisfies "the
+      // producer may reuse its buffer" — an extra `.slice()` here would just be
+      // a second per-chunk copy. Awaiting the worker's ack keeps exactly one
+      // chunk in flight (flat mem).
+      await postAndAwait({ type: 'write', chunk })
     },
     async abort() {
       await teardown()
@@ -197,13 +224,19 @@ async function createOpfsDestination(opts: {
   return {
     writable,
     async finalize() {
+      // Flip `finalized` FIRST — before any terminate/await — so a teardown()
+      // racing in during this method (e.g. modal unmount mid-finalize) takes the
+      // finalized branch (terminate-only, no removeEntry) instead of the abort
+      // branch: the latter would `postAndAwait({type:'close'})` to a worker this
+      // method is about to terminate (a message that never acks → hang) and send
+      // the temp to the sweep path instead of the finalized-linger path. Setting
+      // it here also still guards a LATER cleanup() from deleting the temp out
+      // from under an in-flight download (the flag's original purpose).
+      finalized = true
       await postAndAwait({ type: 'close' })
       worker.terminate()
       const fh = await root.getFileHandle(name)
       const file = await fh.getFile()
-      // Handed the temp out as the download File — a later cleanup() must NOT
-      // delete it out from under an in-flight download (see teardown()).
-      finalized = true
       // Disk-backed File IS a Blob; the modal downloads it via object URL with
       // flat memory. savedToDisk:false → the modal still triggers the download
       // (unlike the FSA path, where the user already chose the destination).

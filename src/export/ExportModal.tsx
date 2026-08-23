@@ -30,7 +30,7 @@ import { useSettingsStore } from '@/stores/settingsStore'
 import { isWebGL2Forced } from '@/renderer/create-renderer'
 import { getAvailableSinks } from './registry'
 import { runExport, type ExportJob } from './export-engine'
-import { createExportDestination, ExportCancelled } from './export-destination'
+import { createExportDestination, ExportCancelled, sweepOpfsExportTemps } from './export-destination'
 import { useExportPreview, type ExportPreviewState } from './use-export-preview'
 import {
   targetSize,
@@ -417,6 +417,13 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
     if (!open) return
     let cancelled = false
     setBackend(readBackend())
+    // Reclaim any OPFS export temp left behind by a PRIOR completed export. Post-
+    // finalize the temp lingers (so an in-flight download isn't truncated) and is
+    // normally swept at the NEXT export — but a user who exports once (multi-GB)
+    // and never re-exports would keep it on disk across reloads. Safe here: on
+    // modal open no export is in flight, so any lingering temp is from a completed
+    // one. Best-effort / feature-detected inside; never blocks the modal.
+    void sweepOpfsExportTemps()
     void getAvailableSinks({ pro: false }).then((list) => {
       if (cancelled) return
       setSinks(list)
