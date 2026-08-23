@@ -22,6 +22,7 @@ import { createExportRenderTarget, type ExportRenderTarget } from './export-rend
 import { decodeGraphImages } from './export-images'
 import type { FrameSink, QualityLevel } from './frame-sink'
 import type { FramingChoice } from './framing'
+import type { ExportDestination } from './export-destination'
 
 export interface ExportJob {
   sink: FrameSink
@@ -35,12 +36,28 @@ export interface ExportJob {
   framing: FramingChoice
 }
 
+/**
+ * Export lifecycle phase surfaced to the UI. The frame loop reports `'rendering'`
+ * (the implicit default when `onProgress` omits the phase); once the last frame
+ * is queued the engine flips to `'finalizing'` so the modal can show
+ * "Finalizing…" (mux flush) / "Zipping…" (PNG zip central-directory) — these can
+ * take a while on large exports and would otherwise look like a frozen 100% bar.
+ */
+export type ExportPhase = 'rendering' | 'finalizing'
+
+/** What a completed export reports back — mirrors `ExportDestination.finalize()`. */
+export interface ExportResult {
+  blob: Blob | null
+  savedToDisk: boolean
+  filename: string
+}
+
 export async function runExport(
   job: ExportJob,
-  writable: WritableStream<Uint8Array>,
-  onProgress: (frame: number, total: number) => void,
+  destination: ExportDestination,
+  onProgress: (frame: number, total: number, phase?: ExportPhase) => void,
   signal?: AbortSignal,
-): Promise<void> {
+): Promise<ExportResult> {
   // ---------------------------------------------------------------------
   // Step 1: fresh RenderPlan from the CURRENT graph (both codegen paths,
   // kept in parity — mirrors compiler.worker.ts's `useIR` branch verbatim).
@@ -81,6 +98,12 @@ export async function runExport(
   const width = evenFloor(job.width)
   const height = evenFloor(job.height)
 
+  // Tracks whether the sink reached a clean `finish()` (which closes the
+  // writable). If we bail before that — mid-loop throw, abort, encoder error —
+  // the `finally` aborts the writable so a partial disk file is torn down / an
+  // open file handle isn't left dangling, rather than leaving a half-written file.
+  let finished = false
+
   try {
     target = createExportRenderTarget(device, plan, width, height, images)
 
@@ -93,7 +116,7 @@ export async function runExport(
         matte: job.matte,
         quality: job.quality,
       },
-      writable,
+      destination.writable,
     )
 
     // -----------------------------------------------------------------
@@ -125,10 +148,31 @@ export async function runExport(
       onProgress(i + 1, total)
     }
 
+    // Rendering done; the mux finalize / PNG zip flush below can be slow on large
+    // exports, so signal the finalize phase before we hand off to the sink.
+    onProgress(total, total, 'finalizing')
+
     // Sink flushes and closes the writable. Bytes have streamed out already —
-    // no Blob returned; the caller's ExportDestination reports the outcome.
+    // no Blob returned; the ExportDestination reports the outcome.
     await job.sink.finish()
+    finished = true
+
+    // Reports the outcome (fallback Blob, or savedToDisk on the disk path); does
+    // NOT re-close the stream (finish() already did).
+    return await destination.finalize()
   } finally {
+    // If we didn't reach a clean finish(), abort the writable so a partial file
+    // is discarded / its handle torn down. Best-effort and guarded: when a sink
+    // holds an open writer the stream is locked and abort() rejects — swallow it
+    // (the sink's own error is what propagates). Effective when the failure is
+    // before the sink acquired its writer (e.g. render-target creation threw).
+    if (!finished) {
+      try {
+        await destination.writable.abort?.()
+      } catch {
+        /* stream locked by the sink's writer, or already closed — best-effort */
+      }
+    }
     // Release GPU resources on success, mid-loop throw, AND abort alike.
     target?.dispose()
     device.destroy()

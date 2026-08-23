@@ -30,7 +30,7 @@ import { useSettingsStore } from '@/stores/settingsStore'
 import { isWebGL2Forced } from '@/renderer/create-renderer'
 import { getAvailableSinks } from './registry'
 import { runExport, type ExportJob } from './export-engine'
-import { createExportDestination } from './export-destination'
+import { createExportDestination, ExportCancelled } from './export-destination'
 import { useExportPreview, type ExportPreviewState } from './use-export-preview'
 import {
   targetSize,
@@ -386,9 +386,20 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
       : (MATTES.find((m) => m.key === selectedMatte)?.color ?? MATTES[0].color)
   // Export flow
   const [phase, setPhase] = useState<Phase>('config')
+  // Sub-phase within `running`: the frame loop ('rendering') then the mux flush /
+  // PNG zip ('finalizing'), so the UI can show a distinct "Finalizing…/Zipping…".
+  const [exportPhase, setExportPhase] = useState<'rendering' | 'finalizing'>('rendering')
   const [progress, setProgress] = useState({ frame: 0, total: 0 })
   const [error, setError] = useState<string | null>(null)
-  const [done, setDone] = useState<{ url: string; filename: string; sizeLabel: string; label: string } | null>(null)
+  // Done state. On the disk-stream path there's no Blob (savedToDisk) — the file
+  // is already written, so no url/sizeLabel/download button; the fallback path
+  // keeps the object-URL download.
+  const [done, setDone] = useState<
+    { savedToDisk: boolean; url?: string; filename: string; sizeLabel?: string; label: string } | null
+  >(null)
+  // Sampled PNG bytes-per-pixel (from the live preview's real readback) — drives
+  // the PNG size estimate. null until the first sample lands (constant fallback).
+  const [pngBytesPerPixel, setPngBytesPerPixel] = useState<number | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const urlRef = useRef<string | null>(null)
 
@@ -439,6 +450,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
   useEffect(() => {
     if (open) return
     setPhase('config')
+    setExportPhase('rendering')
     setError(null)
     setDone(null)
     abortRef.current?.abort()
@@ -493,7 +505,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
   // blur can't be told apart from a transparent one without the actual pixels).
   // Default hidden so the common opaque case never flashes the matte control.
   const [shaderHasAlpha, setShaderHasAlpha] = useState(false)
-  useExportPreview(previewCanvasRef, previewStateRef, setShaderHasAlpha)
+  useExportPreview(previewCanvasRef, previewStateRef, setShaderHasAlpha, setPngBytesPerPixel)
 
   // Draggable panel — offset from the centred position. Window listeners so the
   // drag survives pointer-capture loss (per the repo's pointer-drag rule).
@@ -597,12 +609,24 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
   let sizeMB: number
   let timeS: number
   if (isZip) {
-    sizeMB = frames * areaK * 0.0016
+    // PNG size is content-dependent (compressibility varies wildly with the
+    // shader), so a flat per-pixel constant is a poor guess. When the live
+    // preview has sampled a REAL frame's PNG, use its measured bytes/pixel scaled
+    // to the export resolution: sizeMB = frames · bpp · outW · outH / 1e6. Until
+    // the first sample lands, fall back to a calibrated constant (~0.0016 MB per
+    // 1000 px/frame). See useExportPreview's onSamplePng.
+    sizeMB =
+      pngBytesPerPixel != null
+        ? (frames * pngBytesPerPixel * outW * outH) / 1e6
+        : frames * areaK * 0.0016
     timeS = frames * (areaK / 900)
   } else {
     // Mbps@1080p per quality step — MUST match MBPS_AT_1080P in quality-map.ts
-    // so this estimate agrees with the actual encode bitrate.
-    const mbps = [3.5, 8, 20, 45][quality] * (areaK / 2073)
+    // so this estimate agrees with the actual encode bitrate. qualityFor scales
+    // the bitrate by pixel area, so scale the estimate the SAME way (by
+    // outW·outH / 1080p area); with CBR the encode tracks this closely.
+    const areaScale = (outW * outH) / (1920 * 1080)
+    const mbps = [3.5, 8, 20, 45][quality] * areaScale
     sizeMB = (mbps * dur) / 8
     timeS = frames / (isWebm ? 70 : 240)
   }
@@ -674,30 +698,54 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
       framing: computeFraming(effFraming, view, width, height),
     }
 
+    const filename = `scene.${selectedSink.fileExt}`
+
+    // Prefer streaming straight to disk (File System Access) — the save dialog is
+    // shown FIRST, before any GPU work, so cancelling it costs nothing. This can
+    // throw ExportCancelled (user dismissed the picker) → silently back to config.
+    let dest
+    try {
+      dest = await createExportDestination({
+        filename,
+        mimeType: selectedSink.mimeType,
+        ext: selectedSink.fileExt,
+        preferDisk: true,
+      })
+    } catch (e) {
+      if (e instanceof ExportCancelled) return // user cancelled the save dialog
+      setError(e instanceof Error ? e.message : String(e))
+      return
+    }
+
     const ac = new AbortController()
     abortRef.current = ac
     setProgress({ frame: 0, total: frames })
+    setExportPhase('rendering')
     setPhase('running')
     try {
-      // Minimal wiring for the streaming sink contract: fall back to an
-      // in-memory Blob destination and keep the existing download path. (A
-      // fuller stream-to-disk UX pass is a later task.)
-      const dest = await createExportDestination({
-        filename: `scene.${selectedSink.fileExt}`,
-        mimeType: selectedSink.mimeType,
-        ext: selectedSink.fileExt,
-        preferDisk: false,
-      })
-      await runExport(job, dest.writable, (frame, total) => setProgress({ frame, total }), ac.signal)
-      const { blob } = await dest.finalize()
-      if (!blob) throw new Error('[export] no blob produced')
-      const url = URL.createObjectURL(blob)
-      urlRef.current = url
-      const sizeLabel =
-        blob.size < 1024 * 1024
-          ? `${(blob.size / 1024).toFixed(0)} KB`
-          : `${(blob.size / (1024 * 1024)).toFixed(1)} MB`
-      setDone({ url, filename: `scene.${selectedSink.fileExt}`, sizeLabel, label: selectedSink.label })
+      const result = await runExport(
+        job,
+        dest,
+        (frame, total, ph) => {
+          if (ph === 'finalizing') setExportPhase('finalizing')
+          setProgress({ frame, total })
+        },
+        ac.signal,
+      )
+      if (result.savedToDisk) {
+        // File is already on disk — nothing to download; just confirm.
+        setDone({ savedToDisk: true, filename: result.filename, label: selectedSink.label })
+      } else {
+        const blob = result.blob
+        if (!blob) throw new Error('[export] no blob produced')
+        const url = URL.createObjectURL(blob)
+        urlRef.current = url
+        const sizeLabel =
+          blob.size < 1024 * 1024
+            ? `${(blob.size / 1024).toFixed(0)} KB`
+            : `${(blob.size / (1024 * 1024)).toFixed(1)} MB`
+        setDone({ savedToDisk: false, url, filename: result.filename, sizeLabel, label: selectedSink.label })
+      }
       setPhase('done')
     } catch (e) {
       if (e instanceof DOMException && e.name === 'AbortError') {
@@ -1045,17 +1093,31 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                 {phase === 'running' && (
                   <div>
                     <div className="text-body text-fg-dim">
-                      Encoding · <b className="font-semibold text-fg">{selectedSink?.label}</b>
+                      {exportPhase === 'finalizing'
+                        ? isZip
+                          ? 'Zipping'
+                          : 'Finalizing'
+                        : 'Encoding'}{' '}
+                      · <b className="font-semibold text-fg">{selectedSink?.label}</b>
                     </div>
                     <div className="my-md h-2 overflow-hidden rounded-xs bg-edge">
                       <div
-                        className="h-full rounded-xs bg-indigo transition-[width] duration-100"
+                        className={cn(
+                          'h-full rounded-xs bg-indigo transition-[width] duration-100',
+                          // In finalize there are no per-frame ticks — pulse the
+                          // full bar so it doesn't read as a frozen 100%.
+                          exportPhase === 'finalizing' && 'animate-pulse',
+                        )}
                         style={{ width: `${pct}%` }}
                       />
                     </div>
                     <div className="flex justify-between text-mono-value tabular-nums text-fg-subtle">
                       <span>
-                        {progress.frame} / {progress.total} frames
+                        {exportPhase === 'finalizing'
+                          ? isZip
+                            ? 'Zipping frames…'
+                            : 'Finalizing…'
+                          : `${progress.frame} / ${progress.total} frames`}
                       </span>
                       <span>{pct}%</span>
                     </div>
@@ -1070,18 +1132,22 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                   <div className="flex flex-col gap-2xs">
                     <div className="flex items-center gap-sm text-body">
                       <icons.check className="size-5 text-success" />
-                      <span>Exported</span>
+                      <span>{done.savedToDisk ? 'Saved' : 'Exported'}</span>
                     </div>
                     <div className="text-mono-value tabular-nums text-fg-dim">
-                      {done.filename} · {done.sizeLabel}
+                      {done.savedToDisk
+                        ? `Saved to ${done.filename}`
+                        : `${done.filename} · ${done.sizeLabel}`}
                     </div>
                     <div className="mt-md flex justify-end gap-sm">
                       <ActionButton onClick={resetDone}>
                         Close
                       </ActionButton>
-                      <a href={done.url} download={done.filename} className={actionButtonClass('primary')}>
-                        Download
-                      </a>
+                      {!done.savedToDisk && done.url && (
+                        <a href={done.url} download={done.filename} className={actionButtonClass('primary')}>
+                          Download
+                        </a>
+                      )}
                     </div>
                   </div>
                 )}

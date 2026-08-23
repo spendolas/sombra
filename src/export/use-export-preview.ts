@@ -84,6 +84,15 @@ export function useExportPreview(
    * goes translucent partway through its animation.
    */
   onHasAlpha?: (hasAlpha: boolean) => void,
+  /**
+   * Called with the measured PNG bytes-per-pixel of a REAL rendered frame, so the
+   * modal's PNG size estimate reflects the shader's actual compressibility instead
+   * of a flat constant. Sampled a few times over the first seconds (off the render
+   * path via `convertToBlob`) and reported as a running MAX — a conservative
+   * estimate that catches an animation getting busier. Bytes-per-pixel is roughly
+   * resolution-invariant, so the modal scales it by the true export pixel count.
+   */
+  onSamplePng?: (bytesPerPixel: number) => void,
 ): void {
   useEffect(() => {
     if (typeof navigator === 'undefined' || !navigator.gpu) return
@@ -101,6 +110,13 @@ export function useExportPreview(
     let loggedError = false
     let lastRender = 0
     const start = performance.now()
+    // PNG size sampling: measure a few real frames' PNG bytes/pixel and report
+    // the running max. Bounded count + interval so it never janks the loop.
+    let pngMaxBpp = 0
+    let pngSamples = 0
+    let lastPngSample = 0
+    const PNG_SAMPLE_MAX = 4
+    const PNG_SAMPLE_INTERVAL_MS = 750
 
     void (async () => {
       const { nodes, edges } = useGraphStore.getState()
@@ -192,6 +208,36 @@ export function useExportPreview(
                 onHasAlpha(translucent)
               }
             }
+            // Sample this frame's PNG size (bytes/pixel) for the modal's PNG
+            // estimate. `offscreen` already holds the straight-alpha readback at
+            // render resolution (rw×rh) — the same pixels PNG export encodes.
+            // convertToBlob is async and off the render path; skip the first
+            // ~300ms so an all-flat t≈0 frame doesn't set an unrepresentative low.
+            if (
+              onSamplePng &&
+              offscreen &&
+              pngSamples < PNG_SAMPLE_MAX &&
+              now - start > 300 &&
+              now - lastPngSample > PNG_SAMPLE_INTERVAL_MS
+            ) {
+              lastPngSample = now
+              pngSamples++
+              const sw = rw
+              const sh = rh
+              void offscreen
+                .convertToBlob({ type: 'image/png' })
+                .then((b) => {
+                  if (disposed) return
+                  const bpp = b.size / Math.max(1, sw * sh)
+                  if (bpp > pngMaxBpp) {
+                    pngMaxBpp = bpp
+                    onSamplePng(bpp)
+                  }
+                })
+                .catch(() => {
+                  /* sampling is best-effort; a failed encode just skips it */
+                })
+            }
           } catch (e) {
             // Don't let a render/readback failure kill the loop silently (a
             // swallowed throw here left the preview blank with no clue why).
@@ -212,5 +258,5 @@ export function useExportPreview(
       target?.dispose()
       device?.destroy()
     }
-  }, [canvas, state, onHasAlpha])
+  }, [canvas, state, onHasAlpha, onSamplePng])
 }

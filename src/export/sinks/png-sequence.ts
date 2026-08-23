@@ -82,6 +82,13 @@ export function makePngSequenceSink(): FrameSink {
       const e = new ZipPassThrough(`frame_${String(n++).padStart(5, '0')}.png`)
       zip.add(e)
       e.push(data, true)
+
+      // Backpressure: `e.push` fires fflate's sync `ondata`, which appends this
+      // frame's chunk write(s) to `queue`. Await the queue tail so a slow disk
+      // writer throttles the engine's frame loop instead of the encoder racing
+      // ahead and buffering an unbounded number of pending PNG writes in memory.
+      await queue
+      if (zipError) throw zipError
     },
 
     async finish() {
