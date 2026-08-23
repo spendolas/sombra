@@ -770,7 +770,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
     >
       <div
         ref={modalRef}
-        className="flex h-[702px] max-h-[92vh] max-w-[92vw] overflow-hidden rounded-lg border border-edge bg-surface text-fg shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]"
+        className="flex h-[702px] max-h-[92vh] max-w-[92vw] overflow-hidden rounded-lg bg-surface text-fg shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]"
         style={{ transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)` }}
         onClick={(e) => e.stopPropagation()}
       >
