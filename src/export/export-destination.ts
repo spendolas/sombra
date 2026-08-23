@@ -155,16 +155,32 @@ async function createOpfsDestination(opts: {
   async function teardown(): Promise<void> {
     if (torndown) return
     torndown = true
-    // Terminating the worker is always safe. But removeEntry(name) ONLY on the
-    // abort/cancel/failure path: once finalize() has handed the temp out as the
-    // download File/objectURL, deleting it could truncate a still-streaming
-    // download (unverified snapshot semantics on Safari/Firefox — this path's
-    // whole audience). Post-finalize we leave the temp; the next OPFS export's
-    // stale-sweep removes it, so at most one sandboxed temp ever lingers.
-    worker.terminate()
-    if (!finalized) {
-      await root.removeEntry(name).catch(() => {})
+
+    // FINALIZED path: finalize() already closed the handle during its own
+    // `close`, and it handed the temp out as the download File/objectURL —
+    // deleting it now could truncate a still-streaming download (unverified
+    // snapshot semantics on Safari/Firefox, this path's whole audience). Just
+    // terminate; the next OPFS export's stale-sweep reclaims the temp (at most
+    // one sandboxed temp ever lingers).
+    if (finalized) {
+      worker.terminate()
+      return
     }
+
+    // ABORT/CANCEL/FAILURE path: reclaim the temp PROMPTLY. `worker.terminate()`
+    // releases the worker's SyncAccessHandle only asynchronously, so deleting
+    // right after terminate() loses a race (the file is still locked) and the
+    // temp survives until the next sweep — for a cancelled multi-GB export that
+    // is exactly what we must avoid. Close the handle explicitly and await the
+    // ack (WritableStream serialises sink calls, so no write is in flight here),
+    // THEN removeEntry, THEN terminate. Best-effort throughout.
+    try {
+      await postAndAwait({ type: 'close' })
+    } catch {
+      // Worker gone or close failed — still attempt removal below.
+    }
+    await root.removeEntry(name).catch(() => {})
+    worker.terminate()
   }
 
   const writable = new WritableStream<Uint8Array>({
