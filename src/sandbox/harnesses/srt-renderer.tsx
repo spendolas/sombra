@@ -72,7 +72,7 @@ function compile(p: Params) {
   return result
 }
 
-export function SrtRendererSandbox() {
+export default function SrtRendererHarness() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rendererRef = useRef<ShaderRenderer | null>(null)
   const [p, setP] = useState<Params>(INITIAL)

@@ -14,4 +14,7 @@ export interface SandboxEntry {
 // Migration tasks append entries here. Keep alphabetical within a group.
 export const SANDBOXES: SandboxEntry[] = [
   { name: 'color-picker', title: 'Color Picker', group: 'Controls', load: () => import('./harnesses/color-picker') },
+  { name: 'segmented-control', title: 'Segmented Control', group: 'Controls', load: () => import('./harnesses/segmented-control') },
+  { name: 'editor-chrome', title: 'Editor Chrome', group: 'Chrome', load: () => import('./harnesses/editor-chrome') },
+  { name: 'srt-renderer', title: 'SRT Renderer', group: 'Chrome', load: () => import('./harnesses/srt-renderer') },
 ]
