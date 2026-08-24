@@ -1,9 +1,13 @@
 /**
  * PNG sequence sink (fflate zip of straight-alpha PNGs) — STREAMED.
  *
- * Each `VideoFrame` is drawn to an `OffscreenCanvas` and encoded natively via
- * `convertToBlob({ type: 'image/png' })` — the canvas keeps straight alpha, and
- * PNG is lossless, so no colour or alpha data is lost. Frames are zipped with
+ * Each `VideoFrame` is drawn to an `OffscreenCanvas`, its raw straight-alpha
+ * RGBA is read back with `getImageData`, and encoded via our own deterministic
+ * `encodePng` (fflate zlib) rather than the browser's native canvas-to-PNG blob,
+ * whose deflate strength varies by engine (Chrome ~2× larger than Safari for the
+ * same pixels). encodePng is pure JS, so frame sizes are consistent
+ * cross-browser. The canvas keeps straight alpha and PNG is lossless, so no
+ * colour or alpha data is lost. Frames are zipped with
  * fflate's streaming `Zip` at pass-through level (`ZipPassThrough`): PNG is
  * already deflate-compressed internally, so re-compressing the zip entries would
  * only spend CPU for no size benefit.
@@ -18,6 +22,7 @@
  */
 
 import { Zip, ZipPassThrough } from 'fflate'
+import { encodePng } from '../png-encode'
 import type { FrameSink, SinkOpts } from '../frame-sink'
 
 export function makePngSequenceSink(): FrameSink {
@@ -84,8 +89,11 @@ export function makePngSequenceSink(): FrameSink {
       if (zipError) throw zipError
       ctx.clearRect(0, 0, o.width, o.height)
       ctx.drawImage(vf, 0, 0)
-      const blob = await cv.convertToBlob({ type: 'image/png' })
-      const data = new Uint8Array(await blob.arrayBuffer())
+      // Read back straight-alpha RGBA and encode deterministically. getImageData
+      // returns non-premultiplied RGBA, which is exactly PNG colour type 6, so
+      // alpha round-trips without premultiply/unpremultiply error.
+      const imageData = ctx.getImageData(0, 0, o.width, o.height).data
+      const data = encodePng(imageData, o.width, o.height, { level: 6 })
 
       // Stream this PNG into the zip and DROP it — never retained in an array.
       const e = new ZipPassThrough(`frame_${String(n++).padStart(5, '0')}.png`)
