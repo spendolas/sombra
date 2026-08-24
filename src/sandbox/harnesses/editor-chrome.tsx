@@ -130,7 +130,7 @@ function CanvasRegion({ nodesOpen, onToggleNodes }: { nodesOpen: boolean; onTogg
   )
 }
 
-export function EditorChromeSandbox() {
+export default function EditorChromeHarness() {
   const [nodesOpen, setNodesOpen] = useState(true)
   const [previewDock, setPreviewDock] = useState<'none' | 'left' | 'right'>('none')
 
