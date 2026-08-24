@@ -1,7 +1,9 @@
 /**
- * DSPreview — Design System contact sheet.
+ * ds-preview — Design System contact sheet.
  * Renders every DS component in every state with data-ds-* attributes
- * for programmatic audit inspection.
+ * for programmatic audit inspection. View via the sandbox registry
+ * (sandbox.html?c=ds-preview) or the standalone ds-preview-sandbox.html
+ * entry. Not shipped.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -933,7 +935,7 @@ function OrganismsSection() {
 
 // ─── Main Component ─────────────────────────────────────────────────────────
 
-export function DSPreview() {
+export default function DSPreviewHarness() {
   // Override the global overflow:hidden on html/body/#root
   useEffect(() => {
     const root = document.getElementById('root')
