@@ -53,6 +53,40 @@ export function initPngWasm(): Promise<boolean> {
   return initPromise
 }
 
+// Memoised compiled module for sharing across a worker pool. Compiled ONCE on the
+// main thread and structured-cloned into each worker via postMessage — every
+// worker then runs its own @jsquash instance off the same compiled bytecode.
+let modulePromise: Promise<WebAssembly.Module | null> | null = null
+
+/**
+ * Compile the `@jsquash` PNG WASM once, into a `WebAssembly.Module` that can be
+ * shared (structured-cloned) with worker threads. Memoised; never rejects —
+ * resolves null on any failure so callers fall back to the serial path.
+ *
+ * A compiled Module is transferable across `postMessage` by structured clone, so
+ * a pool of workers can each `init(module)` off ONE compilation. This is separate
+ * from `initPngWasm()`, which initialises the main-thread serial encoder in place.
+ */
+export function compilePngWasmModule(): Promise<WebAssembly.Module | null> {
+  if (modulePromise) return modulePromise
+  modulePromise = (async () => {
+    try {
+      // Prefer streaming compile; some hosts serve .wasm with a non-wasm MIME
+      // type, which rejects compileStreaming — fall back to buffer compile.
+      try {
+        return await WebAssembly.compileStreaming(fetch(wasmUrl))
+      } catch {
+        const bytes = await (await fetch(wasmUrl)).arrayBuffer()
+        return await WebAssembly.compile(bytes)
+      }
+    } catch (err) {
+      console.warn('[export] png-wasm: compile of shared module failed, no worker pool:', err)
+      return null
+    }
+  })()
+  return modulePromise
+}
+
 /**
  * Encode straight-alpha RGBA pixels into a complete PNG file via WASM.
  *
