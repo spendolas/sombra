@@ -17,4 +17,5 @@ export const SANDBOXES: SandboxEntry[] = [
   { name: 'segmented-control', title: 'Segmented Control', group: 'Controls', load: () => import('./harnesses/segmented-control') },
   { name: 'editor-chrome', title: 'Editor Chrome', group: 'Chrome', load: () => import('./harnesses/editor-chrome') },
   { name: 'srt-renderer', title: 'SRT Renderer', group: 'Chrome', load: () => import('./harnesses/srt-renderer') },
+  { name: 'ds-preview', title: 'DS Preview', group: 'DS', load: () => import('./harnesses/ds-preview') },
 ]
