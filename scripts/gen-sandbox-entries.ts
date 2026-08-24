@@ -33,16 +33,15 @@ function htmlFor(name: string): string {
 
 function mainFor(name: string): string {
   return `${TS_BANNER}
-import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import Harness from './sandbox/harnesses/${name}'
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <Harness />
-  </StrictMode>,
-)
+// No StrictMode: dev double-invoke mounts → disposes → remounts the WebGPU
+// renderer, and disposing destroys the shared GPUDevice, leaving a dead
+// canvas for any harness that owns a renderer. The app's real src/main.tsx
+// keeps StrictMode.
+createRoot(document.getElementById('root')!).render(<Harness />)
 `
 }
 
