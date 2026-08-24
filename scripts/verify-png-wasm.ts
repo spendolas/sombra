@@ -1,14 +1,17 @@
 /**
- * verify:png-wasm — gate for the WASM PNG encoder (`@jsquash/png`) that now backs
- * the PNG-sequence export, with the pure-JS fflate encoder as fallback.
+ * verify:png-wasm — gate for the WASM PNG encoder (`@jsquash/oxipng`, single-
+ * threaded codec, level 0) that now backs the PNG-sequence export, with the
+ * pure-JS fflate encoder as fallback.
  *
- * WHAT THIS PROVES (all in real headless Chrome — @jsquash loads its .wasm, and
- * the sink drives OffscreenCanvas/VideoFrame, so a blank page can't host it):
+ * WHAT THIS PROVES (all in real headless Chrome — the oxipng codec loads its
+ * .wasm, and the sink drives OffscreenCanvas/VideoFrame, so a blank page can't
+ * host it):
  *
  *   #1 wasm-roundtrip (ffmpeg): encodePngWasm() on a fixture that mixes gradient,
  *      opaque, SEMI-TRANSPARENT and fully-transparent-but-coloured pixels →
  *      decode with ffmpeg (/usr/local/bin) → decoded RGBA EQUALS the input
- *      EXACTLY, alpha included. Straight alpha (colour type 6) round-trips.
+ *      EXACTLY, alpha included. Straight alpha (colour type 6) round-trips
+ *      (`optimize_alpha: false` — oxipng never "cleans up" transparent pixels).
  *   #2 wasm-determinism: encodePngWasm() called twice on the same pixels returns
  *      BYTE-IDENTICAL output (the whole reason to prefer it over the browser's
  *      engine-dependent canvas PNG).
@@ -17,7 +20,7 @@
  *   #4 sink-uses-wasm (MECHANISM): drive the REAL png-sequence sink with WASM
  *      available; unzip its frame; assert those bytes EQUAL encodePngWasm(pixels)
  *      and DIFFER from encodePng(pixels) (the fflate fallback). Same pixels,
- *      different encoders → different bytes, so byte-equality to the @jsquash
+ *      different encoders → different bytes, so byte-equality to the oxipng
  *      output is proof the sink took the WASM path and NOT the fallback.
  *   #5 fallback-fflate (MECHANISM): in a SECOND page whose WASM fetch is blocked
  *      (simulating CSP/unavailable), drive the same sink; assert initPngWasm()
@@ -28,7 +31,7 @@
  *      proves nothing.
  *
  * The two pages are separate JS realms → separate module graphs, so blocking the
- * wasm in the fallback page can't poison @jsquash's (promise-memoised) init in the
+ * wasm in the fallback page can't poison oxipng's (promise-memoised) init in the
  * WASM page.
  *
  * Fails LOUD (never silently skips): missing ffmpeg, an unsupported sink, or a
@@ -496,7 +499,7 @@ const HELPER_INIT = (): void => {
 }
 
 async function main(): Promise<number> {
-  console.log('verify:png-wasm — @jsquash WASM PNG encoder gate (round-trip + determinism + fallback)\n')
+  console.log('verify:png-wasm — @jsquash/oxipng (ST, L0) WASM PNG encoder gate (round-trip + determinism + fallback)\n')
 
   const ffmpeg = ffmpegPath()
   if (!ffmpeg) {
@@ -623,7 +626,7 @@ async function main(): Promise<number> {
       const realFetch = globalThis.fetch.bind(globalThis)
       globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url
-        if (url.includes('squoosh_png_bg') || url.endsWith('.wasm')) {
+        if (url.includes('squoosh_oxipng_bg') || url.endsWith('.wasm')) {
           return Promise.reject(new Error('[test] wasm fetch blocked'))
         }
         return realFetch(input as RequestInfo, init)
