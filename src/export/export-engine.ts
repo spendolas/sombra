@@ -144,11 +144,18 @@ export async function runExport(
       // REQUIRED before toVideoFrame(): the render target throws on a stale
       // readback guard otherwise — readback() populates (and tags) the
       // pixels toVideoFrame() reuses.
-      await target.readback()
+      const rgba = await target.readback()
       const timestampUs = Math.round(t * 1e6)
-      const vf = target.toVideoFrame(timestampUs)
-      await job.sink.addFrame(vf, timestampUs)
-      vf.close()
+      if (job.sink.addFrameRaw) {
+        // Fast path: hand raw RGBA straight to the sink (PNG pool). readback()
+        // returns a FRESH Uint8ClampedArray each call, so the sink/pool may
+        // transfer its buffer — nothing else reads it after this.
+        await job.sink.addFrameRaw(rgba, width, height, i, timestampUs)
+      } else {
+        const vf = target.toVideoFrame(timestampUs)
+        await job.sink.addFrame(vf, timestampUs)
+        vf.close()
+      }
 
       onProgress(i + 1, total)
     }
