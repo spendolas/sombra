@@ -62,6 +62,7 @@
     "verify:wgsl-mod": "tsx scripts/verify-wgsl-mod.ts",
     "verify:srt": "tsx scripts/verify-srt.ts",
     "verify:srt-conformity": "tsx scripts/verify-srt-conformity.ts",
+    "verify:sandbox": "tsx scripts/verify-sandbox-isolation.ts",
     "verify:ci": "npm run verify:ir-poc && npm run verify:wgsl-multipass && npm run verify:raw-budget && npm run verify:pass-size && npm run verify:pass-resolution && npm run verify:ir-control-flow && npm run verify:wired-branch && npm run verify:node-id && npm run verify:sombra-package && npm run verify:file-drop && npm run verify:stream-fixes && npm run verify:wgsl-mod && npm run verify:srt && npm run verify:srt-conformity",
     "build:embed": "vite build --config vite.embed.config.ts",
     "verify:embed:artifact": "tsx scripts/verify-artifact-roundtrip.ts",
