@@ -48,6 +48,7 @@
     "verify:export-opfs": "tsx scripts/verify-export-opfs.ts",
     "verify:export-abort": "tsx scripts/verify-export-abort.ts",
     "verify:png-encode": "tsx scripts/verify-png-encode.ts",
+    "verify:png-wasm": "tsx scripts/verify-png-wasm.ts",
     "verify:node-id": "tsx scripts/verify-node-id.ts",
     "verify:sombra-package": "tsx scripts/verify-sombra-package.ts",
     "verify:file-drop": "tsx scripts/verify-file-drop.ts",
@@ -70,6 +71,7 @@
   "dependencies": {
     "@dagrejs/dagre": "^2.0.4",
     "@fontsource/inter": "^5.3.0",
+    "@jsquash/png": "3.1.1",
     "@types/pako": "^2.0.4",
     "@xyflow/react": "^12.10.0",
     "clsx": "^2.1.1",

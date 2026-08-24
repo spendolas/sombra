@@ -2,12 +2,17 @@
  * PNG sequence sink (fflate zip of straight-alpha PNGs) — STREAMED.
  *
  * Each `VideoFrame` is drawn to an `OffscreenCanvas`, its raw straight-alpha
- * RGBA is read back with `getImageData`, and encoded via our own deterministic
- * `encodePng` (fflate zlib) rather than the browser's native canvas-to-PNG blob,
- * whose deflate strength varies by engine (Chrome ~2× larger than Safari for the
- * same pixels). encodePng is pure JS, so frame sizes are consistent
- * cross-browser. The canvas keeps straight alpha and PNG is lossless, so no
- * colour or alpha data is lost. Frames are zipped with
+ * RGBA is read back with `getImageData`, and encoded to PNG. The PRIMARY encoder
+ * is `@jsquash/png` (WASM, via `encodePngWasm`): it does the whole encode
+ * (filtering + deflate) in WebAssembly ~20–30× faster than our pure-JS encoder
+ * AND is deterministic (byte-identical across browsers). If the WASM can't load
+ * (CSP/blocked/unsupported host), `begin()` sets a flag and every frame falls
+ * back to our pure-JS `encodePng` (fflate zlib) — the export NEVER fails just
+ * because WASM didn't load. Both encoders avoid the browser's native
+ * canvas-to-PNG blob, whose deflate strength varies by engine (Chrome ~2× larger
+ * than Safari for the same pixels), so frame sizes stay consistent. The canvas
+ * keeps straight alpha and PNG is lossless (colour type 6), so no colour or alpha
+ * data is lost. Frames are zipped with
  * fflate's streaming `Zip` at pass-through level (`ZipPassThrough`): PNG is
  * already deflate-compressed internally, so re-compressing the zip entries would
  * only spend CPU for no size benefit.
@@ -23,6 +28,7 @@
 
 import { Zip, ZipPassThrough } from 'fflate'
 import { encodePng } from '../png-encode'
+import { encodePngWasm, initPngWasm } from '../png-encode-wasm'
 import type { FrameSink, SinkOpts } from '../frame-sink'
 
 export function makePngSequenceSink(): FrameSink {
@@ -39,6 +45,8 @@ export function makePngSequenceSink(): FrameSink {
   let zipError: unknown = null
   // begin() ran → the zip + writer exist and must be torn down on abort.
   let begun = false
+  // Encoder path chosen in begin(): WASM (@jsquash) when it loaded, else fflate.
+  let useWasm = false
 
   return {
     id: 'png-sequence',
@@ -83,6 +91,12 @@ export function makePngSequenceSink(): FrameSink {
       const context = cv.getContext('2d')
       if (!context) throw new Error('[export] png-sequence: OffscreenCanvas 2D context unavailable')
       ctx = context
+
+      // Compile the WASM encoder ONCE (memoised across exports). If it can't load
+      // — CSP, blocked fetch, unsupported host — degrade to the pure-JS encoder
+      // rather than failing the export. Log the chosen path once per export.
+      useWasm = await initPngWasm()
+      console.info(`[export] png-sequence: encoder = ${useWasm ? '@jsquash (WASM)' : 'fflate (pure-JS fallback)'}`)
     },
 
     async addFrame(vf) {
@@ -93,7 +107,10 @@ export function makePngSequenceSink(): FrameSink {
       // returns non-premultiplied RGBA, which is exactly PNG colour type 6, so
       // alpha round-trips without premultiply/unpremultiply error.
       const imageData = ctx.getImageData(0, 0, o.width, o.height).data
-      const data = encodePng(imageData, o.width, o.height, { level: 6 })
+      // Primary path: WASM (@jsquash) — fast + deterministic. Fallback: fflate.
+      const data = useWasm
+        ? await encodePngWasm(imageData, o.width, o.height)
+        : encodePng(imageData, o.width, o.height, { level: 6 })
 
       // Stream this PNG into the zip and DROP it — never retained in an array.
       const e = new ZipPassThrough(`frame_${String(n++).padStart(5, '0')}.png`)
