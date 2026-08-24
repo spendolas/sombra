@@ -12,4 +12,6 @@ export interface SandboxEntry {
 }
 
 // Migration tasks append entries here. Keep alphabetical within a group.
-export const SANDBOXES: SandboxEntry[] = []
+export const SANDBOXES: SandboxEntry[] = [
+  { name: 'color-picker', title: 'Color Picker', group: 'Controls', load: () => import('./harnesses/color-picker') },
+]
