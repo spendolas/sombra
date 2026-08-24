@@ -1,6 +1,7 @@
 /**
- * ColorPickerSandbox — local dev harness for the RgbaColorPicker prototype.
- * View at /color-picker-sandbox.html on the dev server. Not shipped.
+ * color-picker — local dev harness for the RgbaColorPicker prototype.
+ * View via the sandbox registry (sandbox.html?c=color-picker) or the
+ * standalone color-picker-sandbox.html entry. Not shipped.
  */
 
 import { useState } from 'react'
@@ -26,7 +27,7 @@ function Seg({ value, options, onChange }: { value: string; options: Array<{ v: 
   )
 }
 
-export function ColorPickerSandbox() {
+export default function ColorPickerHarness() {
   const [color, setColor] = useState<Rgba>([0.42, 0.86, 0.17, 1])
   const [placement, setPlacement] = useState<'popover' | 'inline'>('popover')
   const [showAlpha, setShowAlpha] = useState(true)
