@@ -114,7 +114,7 @@ export function makePngSequenceSink(): FrameSink {
       // — CSP, blocked fetch, unsupported host — degrade to the pure-JS encoder
       // rather than failing the export. Log the chosen path once per export.
       useWasm = await initPngWasm()
-      console.info(`[export] png-sequence: encoder = ${useWasm ? '@jsquash (WASM)' : 'fflate (pure-JS fallback)'}`)
+      console.info(`[export] png-sequence: encoder = ${useWasm ? 'oxipng (WASM)' : 'fflate (pure-JS fallback)'}`)
 
       // Parallel encode pool: fans frames across workers, each an oxipng ST
       // encoder off one shared compiled module. onEncoded is called in STRICT

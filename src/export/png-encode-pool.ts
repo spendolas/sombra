@@ -106,6 +106,14 @@ export async function createPngEncodePool(opts: {
     }
   }
 
+  // NOTE: a worker crash / encode error here FAILS THE WHOLE EXPORT — it does not
+  // degrade to inline/serial encoding mid-flight. By the time a worker dies, some
+  // of its in-flight frames are lost (never delivered to `onEncoded`), and strict
+  // ordering means the stream can't just skip ahead and resume from a later index.
+  // The "fallback never fails the export" guarantee (see png-sequence.ts) covers
+  // ONLY unavailability discovered at `begin()` time (no WASM/workers → pool is
+  // never created); it does not cover a pool that started successfully and then
+  // lost a worker mid-export.
   const fail = (err: unknown): void => {
     if (failure) return
     failure = err instanceof Error ? err : new Error(String(err))

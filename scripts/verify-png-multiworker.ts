@@ -39,6 +39,17 @@
  *   #6 PROVE IT CAN FAIL: flip one IDAT byte of `serialPng[0]` and confirm the
  *      SAME byte-equality comparison used in #1 now reports NOT-equal against
  *      `deliver[0]`. A gate that can't fail proves nothing.
+ *   #7 workers-terminated-after-finish (THIRD page, mechanism-engaged regression
+ *      for the worker-leak fix): before any module import, the page's global
+ *      `Worker` constructor is wrapped to count constructions and `.terminate()`
+ *      calls. A REAL successful export is then driven through the actual
+ *      `makePngSequenceSink()` — `begin()` → 10 `addFrameRaw` calls → `finish()`.
+ *      Asserts `constructed >= 1` (anti-vacuity: a pool actually ran) AND
+ *      `terminated === constructed` (every worker the export created was torn
+ *      down by `finish()`'s `pool?.dispose()`). Deleting that `dispose()` call
+ *      makes this check fail (`terminated < constructed`) while the other 14
+ *      checks stay green — this is the check that would have caught the
+ *      original worker-leak bug.
  *
  * Frames are generated IN-PAGE (a seeded xorshift32 keyed on frame index) so
  * every frame is content-distinct and reruns are identical, without shipping
@@ -131,6 +142,13 @@ interface FallbackResult {
   allValidPngSig: boolean
   firstPng: number[]
   firstPixels: number[]
+  logs: string[]
+}
+
+interface WorkersResult {
+  supported: boolean
+  constructed: number
+  terminated: number
   logs: string[]
 }
 
@@ -542,6 +560,89 @@ async function runFallback(cfg: Cfg): Promise<FallbackResult> {
 }
 
 // ---------------------------------------------------------------------------
+// In-page body: WORKER-LIFECYCLE page. `globalThis.Worker` is wrapped (before
+// any module import) to count constructions and `.terminate()` calls, then a
+// REAL successful export is driven through the actual `makePngSequenceSink()`
+// so the assertion exercises the production `finish()` → `pool?.dispose()`
+// path, not a test-harness-only `dispose()` call.
+// ---------------------------------------------------------------------------
+async function runWorkersTerminated(cfg: Cfg): Promise<WorkersResult> {
+  interface SinkOptsLike {
+    width: number
+    height: number
+    fps: number
+    alpha: boolean
+    matte?: string
+    quality: 'draft' | 'good' | 'high' | 'max'
+  }
+  interface FrameSinkLike {
+    isSupported(): Promise<boolean>
+    begin(o: SinkOptsLike, writable: WritableStream<Uint8Array>): Promise<void>
+    addFrameRaw?(rgba: Uint8ClampedArray, width: number, height: number, index: number, timestampUs: number): Promise<void>
+    finish(): Promise<void>
+  }
+  interface SinkModule {
+    makePngSequenceSink(): FrameSinkLike
+  }
+
+  const logs: string[] = []
+  const stats = (globalThis as unknown as { __workerStats: { constructed: number; terminated: number } }).__workerStats
+
+  const fillFrame = (seed: number, w: number, h: number): Uint8ClampedArray => {
+    const buf = new Uint8ClampedArray(w * h * 4)
+    let s = (seed * 2654435761) >>> 0
+    if (s === 0) s = 0x9e3779b9
+    const next = (): number => {
+      s ^= s << 13
+      s >>>= 0
+      s ^= s >>> 17
+      s ^= s << 5
+      s >>>= 0
+      return s
+    }
+    for (let i = 0; i < w * h; i++) {
+      const r = next()
+      buf[i * 4] = r & 0xff
+      buf[i * 4 + 1] = (r >>> 8) & 0xff
+      buf[i * 4 + 2] = (r >>> 16) & 0xff
+      buf[i * 4 + 3] = 255
+    }
+    return buf
+  }
+
+  const sinkMod = (await import(cfg.sinkUrl)) as SinkModule
+  const sink = sinkMod.makePngSequenceSink()
+  const supported = await sink.isSupported()
+  logs.push(`png-sequence isSupported() => ${supported}`)
+
+  if (!supported) {
+    return { supported: false, constructed: stats.constructed, terminated: stats.terminated, logs }
+  }
+
+  // 10 frames — enough to engage the pool (poolSize is hardwareConcurrency-1,
+  // capped at 8) across more than one dispatch round per worker.
+  const N = 10
+  const w = cfg.smallW
+  const h = cfg.smallH
+  const parts: Uint8Array[] = []
+  const writable = new WritableStream<Uint8Array>({
+    write(chunk) {
+      parts.push(chunk)
+    },
+  })
+
+  await sink.begin({ width: w, height: h, fps: 30, alpha: true, matte: '#000000', quality: 'good' }, writable)
+  for (let i = 0; i < N; i++) {
+    await sink.addFrameRaw!(fillFrame(i, w, h), w, h, i, i * 33333)
+  }
+  await sink.finish()
+
+  logs.push(`after finish(): constructed=${stats.constructed}, terminated=${stats.terminated}`)
+
+  return { supported: true, constructed: stats.constructed, terminated: stats.terminated, logs }
+}
+
+// ---------------------------------------------------------------------------
 // Node-side helpers (copied from the verify-png-wasm template).
 // ---------------------------------------------------------------------------
 let passed = 0
@@ -874,6 +975,97 @@ async function main(): Promise<number> {
     }
 
     await pageFb.close()
+
+    // ================= PAGE 3: WORKER-LIFECYCLE (regression for the pool-dispose fix) =================
+    const pageWk = await browser.newPage()
+    pageWk.on('pageerror', (err) => console.error('[pageerror:wk]', err.message))
+    pageWk.on('console', (m) => {
+      if (m.type() === 'error') console.error('[page.error:wk]', m.text())
+    })
+    await pageWk.addInitScript(HELPER_INIT)
+    // Wrap the global Worker constructor BEFORE any module import, so every
+    // `new Worker(...)` the pool performs (inside png-encode-pool.ts) and every
+    // `.terminate()` call is counted from outside the code under test.
+    await pageWk.addInitScript(() => {
+      const RealWorker = globalThis.Worker
+      const stats = { constructed: 0, terminated: 0 }
+      class InstrumentedWorker extends RealWorker {
+        constructor(scriptURL: string | URL, options?: WorkerOptions) {
+          super(scriptURL, options)
+          stats.constructed++
+        }
+        terminate(): void {
+          stats.terminated++
+          super.terminate()
+        }
+      }
+      ;(globalThis as unknown as { Worker: typeof Worker }).Worker = InstrumentedWorker
+      ;(globalThis as unknown as { __workerStats: typeof stats }).__workerStats = stats
+    })
+    await pageWk.goto(APP_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 })
+    await evalWithRetry(
+      pageWk,
+      async (cfg: Cfg) => {
+        await import(cfg.wasmUrl)
+        await import(cfg.sinkUrl)
+        return true
+      },
+      CFG,
+    )
+    // Baseline AFTER the app has mounted: the full app (not a blank harness
+    // page) is loaded at APP_URL, and it independently starts its own worker(s)
+    // (e.g. the compiler worker) on mount, unrelated to the PNG encode pool —
+    // and does so on its own async schedule. Poll until the counts are stable
+    // for 300ms before snapshotting, so that startup churn is fully absorbed
+    // into the baseline rather than leaking into the window attributed to the
+    // export below. Diff baseline vs the post-finish() snapshot so only workers
+    // constructed/terminated INSIDE the sink.begin()..finish() window (i.e. the
+    // pool's own workers) count toward the assertion.
+    const baseline = await evalWithRetry(
+      pageWk,
+      async () => {
+        const s = (globalThis as unknown as { __workerStats: { constructed: number; terminated: number } }).__workerStats
+        let last = { c: s.constructed, t: s.terminated }
+        let stableMs = 0
+        while (stableMs < 300) {
+          await new Promise((r) => setTimeout(r, 50))
+          const cur = { c: s.constructed, t: s.terminated }
+          if (cur.c === last.c && cur.t === last.t) {
+            stableMs += 50
+          } else {
+            stableMs = 0
+            last = cur
+          }
+        }
+        return { constructed: s.constructed, terminated: s.terminated }
+      },
+      CFG,
+    )
+    const wkRes = await evalWithRetry(pageWk, runWorkersTerminated, CFG)
+    for (const l of wkRes.logs) console.log('  · ' + l)
+
+    const wkConstructed = wkRes.constructed - baseline.constructed
+    const wkTerminated = wkRes.terminated - baseline.terminated
+    console.log(
+      `  · baseline (app-startup, unrelated workers): constructed=${baseline.constructed} terminated=${baseline.terminated}`,
+    )
+    console.log(`  · delta attributable to this export: constructed=${wkConstructed} terminated=${wkTerminated}`)
+
+    if (!wkRes.supported) {
+      check('workers-terminated-after-finish', false, 'png-sequence sink unsupported on this page — cannot verify (anti-vacuity)')
+    } else {
+      check(
+        'workers-terminated-after-finish',
+        wkConstructed >= 1 && wkTerminated === wkConstructed,
+        wkConstructed <= 0
+          ? 'no Worker was constructed by this export — pool path did not run (anti-vacuity, cannot verify the dispose fix)'
+          : `constructed=${wkConstructed}, terminated=${wkTerminated} — ${
+              wkTerminated === wkConstructed ? 'finish() disposed every worker the export created' : 'LEAK: finish() left workers alive'
+            }`,
+      )
+    }
+
+    await pageWk.close()
 
     console.log(`\n  ${passed} passed, ${failed} failed`)
     console.log(failed === 0 ? '\nPNG-MULTIWORKER: PASS' : '\nPNG-MULTIWORKER: FAIL')

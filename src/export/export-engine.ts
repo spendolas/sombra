@@ -150,6 +150,12 @@ export async function runExport(
         // Fast path: hand raw RGBA straight to the sink (PNG pool). readback()
         // returns a FRESH Uint8ClampedArray each call, so the sink/pool may
         // transfer its buffer — nothing else reads it after this.
+        // IMPORTANT: because the buffer may be TRANSFERRED (not copied) into a
+        // worker, `target`'s internal `lastPixels` can end up detached after this
+        // call. `toVideoFrame()` must NOT be called for this frame afterward —
+        // the render target's staleness guard only checks the readback
+        // generation counter, not whether the underlying buffer is detached, so
+        // it would not catch a read of a detached buffer here.
         await job.sink.addFrameRaw(rgba, width, height, i, timestampUs)
       } else {
         const vf = target.toVideoFrame(timestampUs)
