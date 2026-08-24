@@ -12,6 +12,14 @@ export interface FrameSink {
   /** Begin encoding, streaming all output bytes into `writable` (append-only). */
   begin(o: SinkOpts, writable: WritableStream<Uint8Array>): Promise<void>
   addFrame(frame: VideoFrame, timestampUs: number): Promise<void>  // sink may also read ImageData internally
+  /**
+   * Fast path for sinks that want raw straight-alpha RGBA instead of a
+   * VideoFrame (PNG sequence). When present, the engine calls THIS instead of
+   * `addFrame`, handing over the frame's readback buffer directly (the sink /
+   * its worker pool may TRANSFER `rgba.buffer` — the engine does not reuse it).
+   * `index` is the 0-based frame number; `timestampUs` mirrors `addFrame`'s.
+   */
+  addFrameRaw?(rgba: Uint8ClampedArray, width: number, height: number, index: number, timestampUs: number): Promise<void>
   /** Flush the encoder and CLOSE the writable. No Blob — bytes already streamed out. */
   finish(): Promise<void>
   /**

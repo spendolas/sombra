@@ -1,26 +1,38 @@
 /**
- * PNG sequence sink (fflate zip of straight-alpha PNGs) — STREAMED.
+ * PNG sequence sink (fflate zip of straight-alpha PNGs) — STREAMED, PARALLEL.
  *
- * Each `VideoFrame` is drawn to an `OffscreenCanvas`, its raw straight-alpha
- * RGBA is read back with `getImageData`, and encoded to PNG. The PRIMARY encoder
- * is `@jsquash/png` (WASM, via `encodePngWasm`): it does the whole encode
- * (filtering + deflate) in WebAssembly ~20–30× faster than our pure-JS encoder
- * AND is deterministic (byte-identical across browsers). If the WASM can't load
- * (CSP/blocked/unsupported host), `begin()` sets a flag and every frame falls
- * back to our pure-JS `encodePng` (fflate zlib) — the export NEVER fails just
- * because WASM didn't load. Both encoders avoid the browser's native
- * canvas-to-PNG blob, whose deflate strength varies by engine (Chrome ~2× larger
- * than Safari for the same pixels), so frame sizes stay consistent. The canvas
- * keeps straight alpha and PNG is lossless (colour type 6), so no colour or alpha
- * data is lost. Frames are zipped with
- * fflate's streaming `Zip` at pass-through level (`ZipPassThrough`): PNG is
- * already deflate-compressed internally, so re-compressing the zip entries would
- * only spend CPU for no size benefit.
+ * The PRIMARY path (`addFrameRaw`, the engine's fast path — see
+ * `export-engine.ts`) hands each frame's raw straight-alpha RGBA straight to a
+ * `PngEncodePool` (`../png-encode-pool.ts`): a pool of workers, each running its
+ * own oxipng (single-threaded) encoder off one shared compiled WASM module.
+ * Frames fan out across workers and encode in parallel, but `onEncoded(index,
+ * png)` fires in STRICT ascending frame order, so entries stream into the zip
+ * in the same order a serial run would produce, with byte-identical output
+ * (same oxipng L0 encoder either way).
+ *
+ * FALLBACK: if workers or WASM are unavailable, `createPngEncodePool` resolves
+ * null and `addFrameRaw` encodes inline instead — serial `encodePngWasm`
+ * (oxipng L0, same encoder as the pool) when WASM loaded, else the pure-JS
+ * fflate `encodePng` when WASM itself can't load (CSP/blocked/unsupported
+ * host). The export NEVER fails just because workers or WASM didn't load.
+ *
+ * `addFrame` (the `VideoFrame` path) is kept as a fallback for any caller that
+ * doesn't use `addFrameRaw`: it draws to an `OffscreenCanvas`, reads back
+ * straight-alpha RGBA with `getImageData`, and encodes with the same
+ * WASM-or-fflate choice. Both encoders avoid the browser's native
+ * canvas-to-PNG blob, whose deflate strength varies by engine (Chrome ~2×
+ * larger than Safari for the same pixels), so frame sizes stay consistent.
+ * The canvas keeps straight alpha and PNG is lossless (colour type 6), so no
+ * colour or alpha data is lost. Frames are zipped with fflate's streaming
+ * `Zip` at pass-through level (`ZipPassThrough`): PNG is already
+ * deflate-compressed internally, so re-compressing the zip entries would only
+ * spend CPU for no size benefit.
  *
  * Streaming: the OLD code kept every PNG in a `frames[]` array and built one
  * giant zip `Uint8Array` in `finish()` — the exact OOM this rework removes. Now
  * each frame is pushed into the streaming `Zip` and DROPPED; the only bytes
- * retained at any moment are the current frame's PNG. Zip output chunks flow
+ * retained at any moment are the current frame's PNG (times the pool's
+ * outstanding-frame window, on the parallel path). Zip output chunks flow
  * straight into the destination `writable`, serialised through a promise chain
  * so backpressure is respected and chunk order is preserved (fflate's `ondata`
  * is synchronous but `writer.write` is async).
@@ -29,6 +41,7 @@
 import { Zip, ZipPassThrough } from 'fflate'
 import { encodePng } from '../png-encode'
 import { encodePngWasm, initPngWasm } from '../png-encode-wasm'
+import { createPngEncodePool, type PngEncodePool } from '../png-encode-pool'
 import type { FrameSink, SinkOpts } from '../frame-sink'
 
 export function makePngSequenceSink(): FrameSink {
@@ -47,6 +60,7 @@ export function makePngSequenceSink(): FrameSink {
   let begun = false
   // Encoder path chosen in begin(): WASM (@jsquash) when it loaded, else fflate.
   let useWasm = false
+  let pool: PngEncodePool | null = null
 
   return {
     id: 'png-sequence',
@@ -97,6 +111,26 @@ export function makePngSequenceSink(): FrameSink {
       // rather than failing the export. Log the chosen path once per export.
       useWasm = await initPngWasm()
       console.info(`[export] png-sequence: encoder = ${useWasm ? '@jsquash (WASM)' : 'fflate (pure-JS fallback)'}`)
+
+      // Parallel encode pool: fans frames across workers, each an oxipng ST
+      // encoder off one shared compiled module. onEncoded is called in STRICT
+      // frame order, so entries stream into the zip in order. Null → workers or
+      // WASM unavailable → serial inline encode in addFrameRaw (below).
+      const poolSize = Math.max(1, Math.min((navigator.hardwareConcurrency ?? 4) - 1, 8))
+      pool = await createPngEncodePool({
+        poolSize,
+        onEncoded: async (index, png) => {
+          if (zipError) throw zipError
+          const e = new ZipPassThrough(`frame_${String(index).padStart(5, '0')}.png`)
+          zip.add(e)
+          e.push(png, true)
+          // Same disk backpressure as the serial path: awaiting the write queue
+          // here throttles the pool's flush → its submit() → the engine loop.
+          await queue
+          if (zipError) throw zipError
+        },
+      })
+      console.info(`[export] png-sequence: ${pool ? `pool (${poolSize} workers)` : 'serial'} encode`)
     },
 
     async addFrame(vf) {
@@ -125,7 +159,25 @@ export function makePngSequenceSink(): FrameSink {
       if (zipError) throw zipError
     },
 
+    async addFrameRaw(rgba: Uint8ClampedArray, width: number, height: number, index: number) {
+      if (zipError) throw zipError
+      if (pool) {
+        // Pool delivers to onEncoded in order; submit() backpressures on the window.
+        await pool.submit(index, rgba, width, height)
+        return
+      }
+      // Fallback: encode inline in order (index is monotonic 0..N-1).
+      const data = useWasm ? await encodePngWasm(rgba, width, height) : encodePng(rgba, width, height, { level: 6 })
+      const e = new ZipPassThrough(`frame_${String(index).padStart(5, '0')}.png`)
+      zip.add(e)
+      e.push(data, true)
+      await queue
+      if (zipError) throw zipError
+    },
+
     async finish() {
+      // Wait for every submitted frame to be encoded AND written in order.
+      await pool?.drain()
       // Signal no more files; fflate emits the central directory + final chunk.
       zip.end()
       // Wait for every queued write (including the final chunk) to flush.
@@ -137,6 +189,7 @@ export function makePngSequenceSink(): FrameSink {
     async abort() {
       // begin() never ran → nothing to tear down.
       if (!begun) return
+      pool?.dispose()
       // Releasing the lock rejects any still-pending queued write; swallow it so
       // it never surfaces as an unhandled rejection. (In the normal cancel case
       // the frame loop awaits `queue` each frame, so it's already settled.)
