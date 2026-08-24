@@ -34,6 +34,9 @@ export interface ExportJob {
   matte?: string
   quality: QualityLevel
   framing: FramingChoice
+  /** Base name for output files, e.g. PNG-sequence frames become
+   *  `<baseName>_<NNNNN>.png`. Falls back to 'frame' when absent. */
+  baseName?: string
 }
 
 /**
@@ -120,6 +123,7 @@ export async function runExport(
         alpha: job.alpha,
         matte: job.matte,
         quality: job.quality,
+        baseName: job.baseName,
       },
       destination.writable,
     )

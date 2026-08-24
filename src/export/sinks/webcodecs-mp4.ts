@@ -93,6 +93,18 @@ export function makeMp4Sink(): Mp4Sink {
       }
     },
 
+    async probeSize(width, height) {
+      // Same probe begin() runs, at the REAL export size — HEVC or AVC must encode
+      // it. Large frames (e.g. a 4× upscale past the encoder's max dimension) fail
+      // here so the modal can gate before export instead of throwing mid-run.
+      try {
+        const c = await getFirstEncodableVideoCodec(['hevc', 'avc'], { width, height, bitrate: 8_000_000 })
+        return c !== null
+      } catch {
+        return false
+      }
+    },
+
     async begin(opts, writable) {
       o = opts
       // Pick the codec at encode time from the REAL export dims — HEVC preferred,
