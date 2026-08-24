@@ -38,3 +38,5 @@ tsconfig.tsbuildinfo
 
 # Generated reports (self-validate, blur-bakeoff)
 reports/
+
+.superpowers/
