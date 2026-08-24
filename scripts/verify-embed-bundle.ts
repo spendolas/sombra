@@ -17,7 +17,9 @@ let src = ''
 try { src = readFileSync(path, 'utf8') } catch { console.error(`  [FAIL] missing ${path} — run npm run build:embed first`); process.exit(1) }
 
 // Forbidden markers — identifiers that only appear if the wrong module tree got pulled in.
-const forbidden = ['react-dom', '@xyflow', 'ALL_NODES', 'initializeNodeLibrary', 'compileGraph', 'react/jsx-runtime']
+// `squoosh_png` / `@jsquash` = the WASM PNG encoder used only by the editor-side
+// export sink; it (and its ~180 KB wasm) must never reach the player bundle.
+const forbidden = ['react-dom', '@xyflow', 'ALL_NODES', 'initializeNodeLibrary', 'compileGraph', 'react/jsx-runtime', 'squoosh_png', '@jsquash']
 for (const f of forbidden) check(`no "${f}" in bundle`, !src.includes(f))
 
 const raw = statSync(path).size
