@@ -46,6 +46,11 @@ import type { FrameSink, SinkOpts } from '../frame-sink'
 
 export function makePngSequenceSink(): FrameSink {
   let o!: SinkOpts
+  // Frame entry name inside the zip: <baseName>_<NNNNN>.png. baseName carries the
+  // user's file name + baked settings (e.g. reveal_1920x1080_30fps_20260824);
+  // absent → 'frame' so a caller that doesn't set it still gets valid names.
+  const frameEntryName = (index: number): string =>
+    `${o.baseName || 'frame'}_${String(index).padStart(5, '0')}.png`
   let cv!: OffscreenCanvas
   let ctx!: OffscreenCanvasRenderingContext2D
   let n = 0
@@ -123,9 +128,9 @@ export function makePngSequenceSink(): FrameSink {
       const poolSize = Math.max(1, Math.min((navigator.hardwareConcurrency ?? 4) - 1, 8))
       pool = await createPngEncodePool({
         poolSize,
-        onEncoded: async (index, png) => {
+        onEncoded: async (index: number, png: Uint8Array) => {
           if (zipError) throw zipError
-          const e = new ZipPassThrough(`frame_${String(index).padStart(5, '0')}.png`)
+          const e = new ZipPassThrough(frameEntryName(index))
           zip.add(e)
           e.push(png, true)
           // Same disk backpressure as the serial path: awaiting the write queue
@@ -151,7 +156,7 @@ export function makePngSequenceSink(): FrameSink {
         : encodePng(imageData, o.width, o.height, { level: 6 })
 
       // Stream this PNG into the zip and DROP it — never retained in an array.
-      const e = new ZipPassThrough(`frame_${String(n++).padStart(5, '0')}.png`)
+      const e = new ZipPassThrough(frameEntryName(n++))
       zip.add(e)
       e.push(data, true)
 
@@ -172,7 +177,7 @@ export function makePngSequenceSink(): FrameSink {
       }
       // Fallback: encode inline in order (index is monotonic 0..N-1).
       const data = useWasm ? await encodePngWasm(rgba, width, height) : encodePng(rgba, width, height, { level: 6 })
-      const e = new ZipPassThrough(`frame_${String(index).padStart(5, '0')}.png`)
+      const e = new ZipPassThrough(frameEntryName(index))
       zip.add(e)
       e.push(data, true)
       await queue

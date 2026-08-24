@@ -15,7 +15,7 @@
  * backend being 'webgpu'.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
@@ -51,11 +51,11 @@ type Phase = 'config' | 'running' | 'done'
 const QUALITY_LABELS = ['Draft', 'Good', 'High', 'Max'] as const
 
 const PRESETS: { value: string; label: string }[] = [
-  { value: '1280x720', label: '720p — 1280 × 720' },
-  { value: '1920x1080', label: '1080p — 1920 × 1080' },
-  { value: '3840x2160', label: '4K — 3840 × 2160' },
-  { value: '1080x1920', label: 'Vertical — 1080 × 1920' },
-  { value: '1080x1080', label: 'Square — 1080 × 1080' },
+  { value: '1280x720', label: '720p · 1280 × 720' },
+  { value: '1920x1080', label: '1080p · 1920 × 1080' },
+  { value: '3840x2160', label: '4K · 3840 × 2160' },
+  { value: '1080x1920', label: 'Vertical · 1080 × 1920' },
+  { value: '1080x1080', label: 'Square · 1080 × 1080' },
 ]
 
 // Matte presets expressed in rgb() (never hex literals — CLAUDE.md "no raw hex").
@@ -92,6 +92,46 @@ const aspectStr = (w: number, h: number) => {
 // source size can't silently crop a pixel row/column — Match stays lossless.
 const evenDim = (n: number) => Math.max(16, (Math.round(n) + 1) & ~1)
 
+// Sanitise a typed core name into a safe, readable filename token (lowercase,
+// dashes for spaces, no filesystem-illegal characters). Empty → caller default.
+const sanitizeCore = (raw: string): string =>
+  raw
+    .trim()
+    .toLowerCase()
+    .replace(/[/\\:*?"<>|]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/[^a-z0-9._-]/g, '')
+    .replace(/^[-_.]+|[-_.]+$/g, '')
+
+// YYYYMMDD stamp (no separators) baked into export names, so repeated exports
+// version cleanly without cluttering the filename with dashes.
+const dateStamp = (): string => {
+  const d = new Date()
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}`
+}
+
+// Map the Size controls to a SizeSource. Module-level so the codec-size probe
+// (which must run in a hook before the modal's early return) and the render body
+// resolve the export dimensions the SAME way.
+function toSizeSource(sizeSrc: SizeSrc, preset: string, customW: number, customH: number): SizeSource {
+  switch (sizeSrc) {
+    case 'match':
+      return { kind: 'match' }
+    case '2x':
+      return { kind: 'mul', factor: 2 }
+    case '4x':
+      return { kind: 'mul', factor: 4 }
+    case 'preset': {
+      const [w, h] = preset.split('x').map(Number)
+      return { kind: 'preset', w, h }
+    }
+    case 'custom':
+      return { kind: 'custom', w: Math.max(16, customW || 16), h: Math.max(16, customH || 16) }
+  }
+}
+
 // The matte is a CSS colour string in the same `rgb(r, g, b)` shape as the
 // presets (MATTES), so preset equality checks and the export job both work.
 // Sombra's picker speaks normalized Rgba floats, so the custom colour lives in
@@ -121,8 +161,14 @@ function readBackend(): 'webgpu' | 'webgl2' | 'unknown' {
   return b === 'webgpu' || b === 'webgl2' ? b : 'unknown'
 }
 
+// Remembers the tallest export-modal height measured this session so reopening
+// (and any settings change) starts at the tallest and never jumps. Reset on reload.
+let rememberedModalH = 0
+
 const LABEL = 'text-param font-semibold uppercase tracking-wider text-fg-subtle'
-const HINT = 'text-param text-fg-muted'
+// text-balance evens the line lengths of these short hints so no lone word hangs
+// on the last line (orphan).
+const HINT = 'text-param text-fg-muted text-balance'
 // One field shape/height for every input & select, so they align (DS tokens only).
 const FIELD =
   'h-select-h rounded-sm border border-edge bg-surface-raised px-md text-mono-value text-fg outline-none transition-colors focus:border-active'
@@ -346,7 +392,16 @@ type SavedSettings = {
   sinkId: string | null
   selectedMatte: MatteKey
   customOverride: Rgba | null
+  core: string
+  nameParts: NameParts
 }
+// Which auto-appendices are baked onto the file name. The per-frame _NNNNN index
+// is NOT here — it's not a choice: PNG sequences always need it (unique frame
+// names) and single-file formats never have it.
+type NameParts = { res: boolean; fps: boolean; date: boolean }
+// First-time default: all optional appendices OFF — a clean bare name. Users opt
+// in to resolution/fps/date per taste; the choice then persists.
+const DEFAULT_NAME_PARTS: NameParts = { res: false, fps: false, date: false }
 function loadExportSettings(): Partial<SavedSettings> {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
@@ -374,6 +429,20 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
   // (null = track the preview). See the "dynamic preset" note above.
   const [selectedMatte, setSelectedMatte] = useState<MatteKey>(initial.selectedMatte ?? 'black')
   const [customOverride, setCustomOverride] = useState<Rgba | null>(initial.customOverride ?? null)
+  // Editable core file name. Baked postfixes (resolution·fps·date) + extension are
+  // appended automatically and shown as a ghost suffix that tracks the typed text.
+  const [core, setCore] = useState(initial.core ?? 'sombra')
+  const [nameParts, setNameParts] = useState<NameParts>(initial.nameParts ?? DEFAULT_NAME_PARTS)
+  const coreInputRef = useRef<HTMLInputElement>(null)
+  const coreGhostRef = useRef<HTMLSpanElement>(null)
+  const coreMirrorRef = useRef<HTMLSpanElement>(null)
+  // Dynamic modal height: measured, not hard-coded. Locked to the TALLEST content
+  // state seen (never shrinks) so switching settings never jumps the layout, and
+  // the square left panel follows this height. Measured via `modalRef` (the shell);
+  // see the grow effect below.
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const [modalH, setModalH] = useState(rememberedModalH)
   // Runtime / gates
   const [backend, setBackend] = useState<'webgpu' | 'webgl2' | 'unknown'>('unknown')
   const hasErrors = useCompilerStore((s) => s.hasErrors)
@@ -455,12 +524,14 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
           sinkId,
           selectedMatte,
           customOverride,
+          core,
+          nameParts,
         } satisfies SavedSettings),
       )
     } catch {
       /* storage unavailable / quota — non-fatal */
     }
-  }, [quality, sizeSrc, preset, customW, customH, framing, fpsChoice, dur, sinkId, selectedMatte, customOverride])
+  }, [quality, sizeSrc, preset, customW, customH, framing, fpsChoice, dur, sinkId, selectedMatte, customOverride, core, nameParts])
 
   // Reset transient state + revoke any object URL whenever the modal closes.
   useEffect(() => {
@@ -593,6 +664,123 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
     return () => window.removeEventListener('resize', reclamp)
   }, [open])
 
+  // ── file-name ghost positioning (hooks — must run before any early return) ──
+  // Positions the ghost suffix to begin right after the typed text and slide with
+  // the field's scroll (tracks the title); only its own tail clips at the edge.
+  // Depends on the TYPED text width, not the suffix content, so the suffix
+  // changing (toggles/format) needs no reposition.
+  const positionCoreGhost = useCallback(() => {
+    const inp = coreInputRef.current
+    const gh = coreGhostRef.current
+    const mir = coreMirrorRef.current
+    if (!inp || !gh || !mir) return
+    const cs = getComputedStyle(inp)
+    mir.style.fontFamily = cs.fontFamily
+    mir.style.fontSize = cs.fontSize
+    mir.style.fontWeight = cs.fontWeight
+    mir.style.letterSpacing = cs.letterSpacing
+    mir.style.fontVariantNumeric = cs.fontVariantNumeric
+    mir.style.fontFeatureSettings = cs.fontFeatureSettings
+    mir.textContent = inp.value
+    const padL = parseFloat(cs.paddingLeft) || 0
+    const padR = parseFloat(cs.paddingRight) || 0
+    const left = padL + mir.getBoundingClientRect().width - inp.scrollLeft
+    const innerRight = inp.clientWidth - padR
+    gh.style.left = `${left}px`
+    gh.style.maxWidth = `${Math.max(0, innerRight - left)}px`
+  }, [])
+  // Callback ref: fires on every mount AND remount (the config view unmounts during
+  // export and remounts on return), so the ghost is repositioned against the fresh
+  // input each time — the self-healing fix for the overlap after export.
+  const setCoreInput = useCallback(
+    (node: HTMLInputElement | null) => {
+      coreInputRef.current = node
+      if (node) requestAnimationFrame(() => positionCoreGhost())
+    },
+    [positionCoreGhost],
+  )
+  useLayoutEffect(() => {
+    positionCoreGhost()
+    // `phase` is a dep because the config view (with the field) unmounts during
+    // export and remounts on return — the freshly-mounted input needs repositioning.
+  }, [positionCoreGhost, core, open, phase])
+  useEffect(() => {
+    const inp = coreInputRef.current
+    if (!inp) return
+    const on = () => positionCoreGhost()
+    inp.addEventListener('scroll', on)
+    window.addEventListener('resize', on)
+    // A ResizeObserver fires once the field is actually laid out — the fix for the
+    // ghost landing at the wrong offset (over the typed text) when the modal opens
+    // and the first layout pass measured a not-yet-laid-out (width 0) field.
+    const ro = new ResizeObserver(on)
+    ro.observe(inp)
+    const raf = requestAnimationFrame(on)
+    // Web-font load can shift glyph metrics after first paint → re-measure.
+    document.fonts?.ready.then(on).catch(() => {})
+    return () => {
+      inp.removeEventListener('scroll', on)
+      window.removeEventListener('resize', on)
+      ro.disconnect()
+      cancelAnimationFrame(raf)
+    }
+    // Re-attach on `phase` change: the field unmounts during export and remounts on
+    // return, so the observer must bind to the NEW input, not the detached old one.
+  }, [positionCoreGhost, open, phase])
+
+  // Codec size gate. Video encoders (H.265/H.264, VP9/AV1) can accept 1080p yet
+  // reject a much larger export (e.g. a 4× upscale beyond their max dimension),
+  // which otherwise only surfaces as a mid-export failure. Probe the SELECTED sink
+  // at the REAL export size so the modal can gate up front. PNG has no probeSize,
+  // so it stays encodable at any size.
+  const [sizeEncodable, setSizeEncodable] = useState(true)
+  useEffect(() => {
+    const sink = sinks.find((s) => s.id === sinkId) ?? null
+    if (!open || !sink?.probeSize) {
+      setSizeEncodable(true)
+      return
+    }
+    const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1
+    const probeView: ViewInfo = {
+      cssW: previewCanvasSize.width || 1280,
+      cssH: previewCanvasSize.height || 720,
+      deviceDpr: dpr,
+    }
+    const dims = targetSize(toSizeSource(sizeSrc, preset, customW, customH), probeView)
+    const w = evenDim(dims.width)
+    const h = evenDim(dims.height)
+    let cancelled = false
+    setSizeEncodable(true) // optimistic while the async probe runs
+    void sink.probeSize(w, h).then((ok) => {
+      if (!cancelled) setSizeEncodable(ok)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [open, sinks, sinkId, sizeSrc, preset, customW, customH])
+
+  // Grow the modal to fit the tallest content state, measured live. `needed` is the
+  // natural height of ALL content (scroll area's full scrollHeight + the fixed
+  // header/footer chrome), computed the same whether the shell is auto or fixed.
+  // Math.max never shrinks → no downward jumps; a ResizeObserver on the content
+  // catches sections/messages appearing so it settles on the tallest.
+  useLayoutEffect(() => {
+    if (!open) return
+    const shell = modalRef.current
+    const scroll = scrollAreaRef.current
+    const content = contentRef.current
+    if (!shell || !scroll || !content) return
+    const measure = () => {
+      const needed = scroll.scrollHeight + (shell.clientHeight - scroll.clientHeight)
+      if (needed > rememberedModalH) rememberedModalH = needed
+      setModalH((m) => (needed > m ? needed : m))
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(content)
+    return () => ro.disconnect()
+  }, [open, modalH, phase])
+
   if (!open) return null
 
   // ── derived values ────────────────────────────────────────────────────────
@@ -608,27 +796,33 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
 
   const fps = Number(fpsChoice)
 
-  const sizeSource = (): SizeSource => {
-    switch (sizeSrc) {
-      case 'match':
-        return { kind: 'match' }
-      case '2x':
-        return { kind: 'mul', factor: 2 }
-      case '4x':
-        return { kind: 'mul', factor: 4 }
-      case 'preset': {
-        const [w, h] = preset.split('x').map(Number)
-        return { kind: 'preset', w, h }
-      }
-      case 'custom':
-        return { kind: 'custom', w: Math.max(16, customW || 16), h: Math.max(16, customH || 16) }
-    }
-  }
-
-  const src = sizeSource()
+  const src = toSizeSource(sizeSrc, preset, customW, customH)
   const raw = targetSize(src, view)
   const outW = evenDim(raw.width)
   const outH = evenDim(raw.height)
+
+  // File name: editable core + baked postfixes, each toggleable below the field.
+  // The extension is implied by the format and NOT shown.
+  const today = dateStamp()
+  const cleanCore = sanitizeCore(core) || 'sombra'
+  // Archive/file name suffix — resolution·fps·date (whichever are enabled). The
+  // per-frame _NNNNN index is NOT part of this (the zip name omits it); it only
+  // shows in the field ghost + names the PNG frames inside.
+  const baked =
+    (nameParts.res ? `_${outW}x${outH}` : '') +
+    (nameParts.fps ? `_${fps}fps` : '') +
+    (nameParts.date ? `_${today}` : '')
+  // PNG sequences always carry the per-frame _NNNNN index (not optional); videos
+  // never do. Shown in the field ghost; the archive/.zip name itself omits it.
+  const ghostSuffix = baked + (isZip ? '_00000' : '')
+  // Toggle-chips shown below the field, one per optional auto-appendix.
+  const nameChips: { key: keyof NameParts; label: string }[] = [
+    { key: 'res', label: 'Resolution' },
+    { key: 'fps', label: 'Frame rate' },
+    { key: 'date', label: 'Date' },
+  ]
+  const toggleNamePart = (k: keyof NameParts) => setNameParts((p) => ({ ...p, [k]: !p[k] }))
+
   const { framingHidden } = describeResult(src, framing, view)
   // Compare export size against the view's LOGICAL area (matches targetSize's
   // Match = logical). Using device px here made a 1080p preset read as "smaller"
@@ -645,7 +839,10 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
   // stripped so the card title doesn't repeat it).
   const framingModes = (['fill', 'fit', 'reveal'] as const).map((m) => {
     const label = m === 'reveal' ? (bigger ? 'Reveal' : 'Crop') : m === 'fill' ? 'Fill' : 'Fit'
-    const body = describeResult(src, m, view).text
+    // Fit is disabled when it equals Fill (aspect already matches); say why instead
+    // of showing its normal description.
+    const body =
+      m === 'fit' && aspectMatches ? 'Same as Fill at this aspect ratio.' : describeResult(src, m, view).text
     return { v: m, label, body }
   })
 
@@ -682,7 +879,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
     backend === 'webgpu' ||
     (backend === 'unknown' && typeof navigator !== 'undefined' && !!navigator.gpu && !isWebGL2Forced())
   const compileOk = !hasErrors && fragmentShader !== null
-  const canExport = webgpuOk && compileOk && !!selectedSink && phase === 'config'
+  const canExport = webgpuOk && compileOk && !!selectedSink && phase === 'config' && sizeEncodable
 
   const framingChoice = computeFraming(effFraming, view, outW, outH)
   // Feed the live-preview loop the current size / framing / active state.
@@ -707,8 +904,10 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
   const gateNote = !webgpuOk
     ? 'Video export requires WebGPU.'
     : !compileOk
-      ? 'Graph has no valid compile — fix errors to export.'
-      : null
+      ? 'Graph has no valid compile. Fix errors to export.'
+      : !sizeEncodable
+        ? `${outW} × ${outH} is too large for ${selectedSink?.label ?? 'video'} on this device. Use PNG sequence, or a smaller size.`
+        : null
 
   // ── actions ───────────────────────────────────────────────────────────────
   const resetDone = () => {
@@ -750,9 +949,14 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
       matte: selectedSink.supportsAlpha ? undefined : matte,
       quality: (['draft', 'good', 'high', 'max'] as const)[quality],
       framing: computeFraming(effFraming, view, width, height),
+      // Base name for the PNG frames inside the zip (<baseName>_<NNNNN>.png). Same
+      // stem as the archive, minus the extension and frame index.
+      baseName: cleanCore + baked,
     }
 
-    const filename = `scene.${selectedSink.fileExt}`
+    // <core>_<WxH>_<fps>fps_<date>.<ext> — the archive/file name. For PNG
+    // sequences the sink names each frame <core>_<WxH>_<fps>fps_<date>_<NNNNN>.png.
+    const filename = `${cleanCore}${baked}.${selectedSink.fileExt}`
 
     // Prefer streaming straight to disk (File System Access) — the save dialog is
     // shown FIRST, before any GPU work, so cancelling it costs nothing. This can
@@ -833,12 +1037,17 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
     >
       <div
         ref={modalRef}
-        className="flex h-[702px] max-h-[92vh] max-w-[92vw] overflow-hidden rounded-lg bg-surface text-fg shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]"
-        style={{ transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)` }}
+        className="flex max-h-[92vh] max-w-[92vw] overflow-hidden rounded-lg bg-surface text-fg shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]"
+        style={{
+          transform: `translate(${dragOffset.x}px, ${dragOffset.y}px)`,
+          ...(modalH ? { height: modalH } : {}),
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Left: square panel (side == modal height); the export-aspect preview frame fits centred inside it */}
-        <div className="hidden h-full w-[700px] flex-none flex-col bg-surface p-xl md:flex">
+        {/* The ENTIRE left side is square (metadata line included); the shader frame
+            inside keeps its own aspect ratio and letterboxes within the area. */}
+        <div className="hidden aspect-square h-full flex-none flex-col bg-surface p-xl md:flex">
           <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden">
             {/* Frame box (not clipped) so the guide can overflow it when the view
                 extends past the output (Fill/crop) — bounded by the panel above. */}
@@ -876,8 +1085,8 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
             <div className="text-param">
               {selectedSink && !selectedSink.supportsAlpha
                 ? shaderHasAlpha
-                  ? 'Opaque — flattened onto the matte.'
-                  : 'Fully opaque — no transparency to flatten.'
+                  ? 'Opaque, flattened onto the matte.'
+                  : 'Fully opaque, no transparency to flatten.'
                 : 'Transparent background preserved.'}
             </div>
           </div>
@@ -909,9 +1118,13 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
             {phase === 'config' ? (
               // pr < pl compensates for the reserved scrollbar gutter (~xl−gutter),
               // so content stays optically symmetric and lines up with the footer.
-              <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-xl overflow-y-auto overflow-x-hidden py-xl pl-xl pr-sm [scrollbar-gutter:stable]">
+              <div
+                ref={scrollAreaRef}
+                className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden py-xl pl-xl pr-sm [scrollbar-gutter:stable]"
+              >
+                <div ref={contentRef} className="flex flex-col gap-xl">
                 {error && (
-                  <div className="rounded-sm border border-edge-subtle bg-surface-raised px-md py-xs text-param text-red-400">
+                  <div className="rounded-sm border border-edge-subtle bg-surface-raised px-md py-xs text-param text-red-400 text-balance">
                     {error}
                   </div>
                 )}
@@ -1000,7 +1213,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                             key={m.v}
                             type="button"
                             disabled={disabled}
-                            title={disabled ? 'Same as Fill — the aspect ratio already matches' : undefined}
+                            title={disabled ? 'Same as Fill; the aspect ratio already matches' : undefined}
                             onClick={() => setFraming(m.v)}
                             className={cn(
                               'flex h-full flex-col justify-between gap-lg rounded-sm p-lg text-left transition-colors',
@@ -1059,7 +1272,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                           disabled={!webgpuOk}
                           title={
                             s.id === 'mp4'
-                              ? 'H.265 where a hardware HEVC encoder exists (better quality per byte; best for Apple/QuickTime, tagged hev1) — automatic H.264-High fallback elsewhere.'
+                              ? 'H.265 where a hardware HEVC encoder exists (better quality per byte; best for Apple/QuickTime, tagged hev1). Automatic H.264-High fallback elsewhere.'
                               : undefined
                           }
                           onClick={() => setSinkId(s.id)}
@@ -1073,7 +1286,7 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                             {s.label}
                           </span>
                           <span className={cn('text-param', on ? 'text-fg-dim' : 'text-fg-muted')}>
-                            {zip ? 'scene_####.png' : `scene.${s.fileExt}`}
+                            {zip ? '.png frames · .zip' : `.${s.fileExt}`}
                           </span>
                           {s.supportsAlpha && (
                             <span className="absolute right-xs top-xs rounded-xs bg-surface-elevated px-xs text-mono-value text-fg-dim">
@@ -1084,19 +1297,23 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                       )
                     })}
                   </div>
-                  {selectedSink && !lossless && (
+                  {/* One message at a time: a runtime error owns the top banner, so
+                      show nothing here; otherwise the blocking gate note wins over
+                      the informational lossy-video hint. */}
+                  {error ? null : gateNote ? (
+                    <span className="text-param text-red-400 text-balance">{gateNote}</span>
+                  ) : selectedSink && !lossless ? (
                     <span className={HINT}>
-                      Lossy video subsamples colour, and browsers tag it differently — Safari matches the live shader, Chrome can look muted in some players. For exact colour and fine detail, use PNG sequence.
+                      Lossy video subsamples colour, and browsers tag it differently. Safari matches the live shader; Chrome can look muted in some players. For exact colour and fine detail, use PNG sequence.
                     </span>
-                  )}
-                  {gateNote && <span className="text-param text-red-400">{gateNote}</span>}
+                  ) : null}
                 </div>
 
                 {/* Quality / lossless */}
                 {lossless ? (
                   <div className="flex flex-col gap-sm">
                     <span className={LABEL}>Quality</span>
-                    <span className={HINT}>Lossless — every frame is a full PNG.</span>
+                    <span className={HINT}>Lossless. Every frame is a full PNG.</span>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-sm">
@@ -1145,11 +1362,62 @@ export function ExportModal({ open, onClose }: { open: boolean; onClose: () => v
                         </div>
                       </div>
                       <span className={cn(HINT, 'flex-1')}>
-                        MP4 video has no transparency — the shader is flattened onto this color.
+                        MP4 video has no transparency, so the shader is flattened onto this color.
                       </span>
                     </div>
                   </div>
                 )}
+
+                {/* File name — LAST in the options list. Editable core; each
+                    auto-appendix (resolution · fps · date · frame no.) is a toggle
+                    chip below the field and updates the ghost suffix that tracks
+                    the typed text. PNG frames additionally carry the _NNNNN index. */}
+                <div className="flex flex-col gap-sm">
+                  <span className={LABEL}>File name</span>
+                  <div className="relative">
+                    <input
+                      ref={setCoreInput}
+                      type="text"
+                      spellCheck={false}
+                      autoComplete="off"
+                      value={core}
+                      onChange={(e) => setCore(e.target.value)}
+                      aria-label="File name"
+                      className={cn(FIELD, 'relative z-[1] w-full')}
+                    />
+                    <span
+                      ref={coreGhostRef}
+                      aria-hidden
+                      className="pointer-events-none absolute inset-y-px z-[2] flex items-center overflow-hidden whitespace-nowrap text-mono-value text-fg-muted"
+                    >
+                      {ghostSuffix}
+                    </span>
+                    <span
+                      ref={coreMirrorRef}
+                      aria-hidden
+                      className="pointer-events-none invisible absolute left-0 top-0 whitespace-pre"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-sm">
+                    {nameChips.map((chip) => {
+                      const on = nameParts[chip.key]
+                      return (
+                        <button
+                          key={chip.key}
+                          type="button"
+                          onClick={() => toggleNamePart(chip.key)}
+                          className={cn(
+                            'flex h-select-h items-center rounded-sm px-md text-mono-value transition-colors',
+                            on ? SEG_ON : SEG_OFF,
+                          )}
+                        >
+                          {chip.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+                </div>
               </div>
             ) : (
               <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center gap-xl overflow-y-auto p-xl">

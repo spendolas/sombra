@@ -1,5 +1,5 @@
 export type QualityLevel = 'draft' | 'good' | 'high' | 'max'
-export interface SinkOpts { width: number; height: number; fps: number; alpha: boolean; matte?: string; quality: QualityLevel }
+export interface SinkOpts { width: number; height: number; fps: number; alpha: boolean; matte?: string; quality: QualityLevel; baseName?: string }
 export interface FrameSink {
   readonly id: string
   readonly label: string
@@ -9,6 +9,14 @@ export interface FrameSink {
   readonly fileExt: string              // 'mp4' | 'webm' | 'zip'
   readonly mimeType: string             // 'video/mp4' | 'video/webm' | 'application/zip'
   isSupported(): Promise<boolean>       // runtime feature detection
+  /**
+   * Optional: can this sink actually encode at the given pixel dimensions on THIS
+   * device? Video sinks probe their codec at the real export size — a hardware
+   * encoder that handles 1080p can still reject a very large frame (e.g. a 4×
+   * upscale), which otherwise only surfaces as a mid-export failure. Absent →
+   * treat as always encodable (e.g. the PNG sequence).
+   */
+  probeSize?(width: number, height: number): Promise<boolean>
   /** Begin encoding, streaming all output bytes into `writable` (append-only). */
   begin(o: SinkOpts, writable: WritableStream<Uint8Array>): Promise<void>
   addFrame(frame: VideoFrame, timestampUs: number): Promise<void>  // sink may also read ImageData internally

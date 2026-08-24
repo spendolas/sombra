@@ -65,6 +65,20 @@ export function makeWebmAlphaSink(): FrameSink {
       }
     },
 
+    async probeSize(width, height) {
+      // VP9 or AV1 must encode the REAL export size on this device — large frames
+      // can exceed an encoder's max dimension even when 720p is fine. Lets the
+      // modal gate before export instead of failing mid-run.
+      try {
+        const vp9 = await VideoEncoder.isConfigSupported({ codec: 'vp09.00.10.08', width, height, bitrate: 8e6 })
+        if (vp9.supported === true) return true
+        const av1 = await VideoEncoder.isConfigSupported({ codec: 'av01.0.04M.08', width, height, bitrate: 8e6 })
+        return av1.supported === true
+      } catch {
+        return false
+      }
+    },
+
     async begin(opts, writable) {
       o = opts
       // Matroska is naturally streamable, but `appendOnly: true` guarantees the
