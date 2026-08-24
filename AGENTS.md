@@ -52,6 +52,7 @@ sombra/
 │   ├── compiler/        # Graph-to-GLSL compiler logic
 │   ├── stores/          # Zustand stores for app state
 │   ├── utils/           # Graph layout, test presets, port-colors.ts (generated), sombra-file.ts
+│   ├── sandbox/         # Dev-only component harnesses — see src/sandbox/README.md
 │   ├── webgl/           # WebGL renderer (fullscreen quad, offscreen preview)
 │   ├── App.tsx          # Root layout component
 │   ├── main.tsx         # Entry point (inits node library + dev bridge)
@@ -113,6 +114,12 @@ npm run tokens:pull  # Fetch latest values from Figma REST API → update DB
 npm run tokens:sync  # Pull from Figma + regenerate code (the main workflow)
 npm run tokens:check # CI guard: fail if generated files diverge from DB
 npm run tokens:audit # Compare DB component parts against Figma REST API (requires FIGMA_TOKEN)
+
+# Component sandboxes (see src/sandbox/README.md)
+npm run sandbox           # Dev server opened to the routed sandbox shell (sandbox.html)
+npm run sandbox:gen       # Regenerate per-harness standalone dev entries from src/sandbox/registry.ts
+npm run sandbox:gen:check # CI guard: fail if standalone entries are stale
+npm run verify:sandbox    # Assert sandbox stays out of the prod build (input allowlist + import boundary)
 
 # Shader embed (see EMBED.md)
 npm run build:embed         # build the standalone UMD player → dist/embed/sombra-player.<version>.umd.js

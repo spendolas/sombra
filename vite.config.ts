@@ -52,8 +52,6 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         viewer: resolve(__dirname, 'viewer.html'),
-        dsPreview: resolve(__dirname, 'ds-preview.html'),
-        embedTester: resolve(__dirname, 'embed-tester.html'),
       },
     },
   },
