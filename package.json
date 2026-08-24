@@ -49,6 +49,7 @@
     "verify:export-abort": "tsx scripts/verify-export-abort.ts",
     "verify:png-encode": "tsx scripts/verify-png-encode.ts",
     "verify:png-wasm": "tsx scripts/verify-png-wasm.ts",
+    "verify:png-multiworker": "tsx scripts/verify-png-multiworker.ts",
     "verify:node-id": "tsx scripts/verify-node-id.ts",
     "verify:sombra-package": "tsx scripts/verify-sombra-package.ts",
     "verify:file-drop": "tsx scripts/verify-file-drop.ts",
