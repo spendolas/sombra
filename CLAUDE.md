@@ -27,6 +27,12 @@ npm run tokens:audit   # Figma↔DB parity audit (-- --fix-dry-run to preview pa
 npm run audit:full     # audit:collect + tokens:audit + audit:visual
 npm run drift:collect  # / drift:check — token drift detection
 
+# Component sandboxes (see src/sandbox/README.md)
+npm run sandbox         # Dev server opened to the routed sandbox shell (sandbox.html)
+npm run sandbox:gen     # Regenerate per-harness standalone dev entries from src/sandbox/registry.ts
+npm run sandbox:gen:check # CI guard: fail if standalone entries are stale
+npm run verify:sandbox  # Assert sandbox stays out of the prod build (input allowlist + import boundary)
+
 # Verification scripts (no test framework — these are the test suite)
 npx tsx scripts/verify-ir-poc.ts              # GLSL vs IR-generated output parity (--verbose for full output)
 npx tsx scripts/validate-wgsl-multipass.ts    # WGSL GPU compilation tests for all nodes/passes
@@ -72,6 +78,7 @@ Because `.git` is per-machine, **GitHub is the source of truth for history**: al
 |---|---|
 | `NODE_AUTHORING_GUIDE.md` | **Read before adding/editing nodes.** NodeDefinition reference, GLSL + IR authoring, copy-paste skeleton, pitfalls |
 | `BROWSER-AUTOMATION.md` | Full `window.__sombra` dev-bridge API (createNode, connect, compile, describeGraph…) |
+| `src/sandbox/README.md` | Component sandbox convention (harnesses, shell, standalone entries) |
 | `PHASE6-MULTIPASS.md` | Multi-pass RenderPlan architecture spec (texture boundaries, spatial transforms) |
 | `docs/migration/` | WebGPU migration history: `architecture-snapshot.md` (deep module map + data flows), phase reports, agent handoffs |
 | `ROADMAP.md` | Phase history and future phases |
