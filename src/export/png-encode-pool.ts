@@ -5,9 +5,10 @@
  * WHY THIS EXISTS: `encodePngWasm` (see `png-encode-wasm.ts`) is fast per frame
  * but main-thread and serial, so a long PNG-sequence export encodes one frame at
  * a time. This pool fans frames out across `poolSize` workers
- * (`png-encode.worker.ts`), each running its own @jsquash encoder off ONE shared
- * compiled `WebAssembly.Module` (compiled once via `compilePngWasmModule()` and
- * structured-cloned into every worker). Three properties matter:
+ * (`png-encode.worker.ts`), each running its own oxipng (single-threaded)
+ * encoder off ONE shared compiled `WebAssembly.Module` (compiled once via
+ * `compilePngWasmModule()` and structured-cloned into every worker). Three
+ * properties matter:
  *
  *   1. PARALLEL   — N workers encode N frames concurrently.
  *   2. ORDERED    — workers finish out of order (frame 3 may beat frame 1), but
@@ -20,10 +21,10 @@
  *                   number of outstanding frames (in flight + completed-but-not-
  *                   yet-emitted) is capped at `window = poolSize + 2`.
  *
- * DETERMINISM: workers use the exact same @jsquash encoder as the serial
- * `encodePngWasm`, so per-frame bytes are identical; the `nextEmit` flush enforces
- * identical delivery order. Same frames in → same bytes to `onEncoded`, same order
- * as a serial loop.
+ * DETERMINISM: workers use the exact same oxipng (single-threaded) encoder as
+ * the serial `encodePngWasm`, so per-frame bytes are identical; the `nextEmit`
+ * flush enforces identical delivery order. Same frames in → same bytes to
+ * `onEncoded`, same order as a serial loop.
  *
  * FALLBACK: `createPngEncodePool` resolves null (never throws) if the shared WASM
  * module can't be compiled or any worker fails to init — the caller then uses the
@@ -115,10 +116,19 @@ export async function createPngEncodePool(opts: {
 
   const dispose = (): void => {
     if (disposed) return
+    // `failure` must be set FIRST, before `disposed`/terminate: a flush microtask
+    // queued before an external dispose() can still be pending on the
+    // `flushChain`, and `runFlush`'s loop guard is `while (!failure && …)` — it
+    // has no other way to know dispose happened. Setting `failure` here makes an
+    // already-queued `runFlush` see it truthy and deliver nothing more. The `??`
+    // guard means a real error from `fail()` (which sets `failure` before calling
+    // `dispose()`) is never overwritten — only the direct-external-dispose path
+    // (no prior failure) is affected.
+    failure = failure ?? new Error('[png-pool] disposed')
     disposed = true
     for (const w of workers) w.terminate()
     wakeSlotWaiters()
-    rejectDrains(failure ?? new Error('[png-pool] disposed'))
+    rejectDrains(failure)
   }
 
   // Deliver every ready frame at the emit cursor, in order, one at a time.
@@ -213,6 +223,12 @@ export async function createPngEncodePool(opts: {
       if (disposed) throw new Error('[png-pool] submit after dispose')
       submittedCount = Math.max(submittedCount, index + 1)
 
+      // Ensure the pixel view is tight before it gets transferred — a larger
+      // backing buffer or a non-zero byteOffset (e.g. a subarray view) would ship
+      // stray bytes into the worker. Mirrors `encodePngWasm`'s `tight` check.
+      const tight = rgba.byteOffset === 0 && rgba.byteLength === rgba.buffer.byteLength
+      const pixels = tight ? rgba : new Uint8ClampedArray(rgba)
+
       // BACKPRESSURE: accept the frame only when a worker is free AND we are not
       // too far ahead of the emit cursor. The window gate (`index - nextEmit >=
       // window`) is an OR-level condition — it must block even when a worker is
@@ -225,7 +241,7 @@ export async function createPngEncodePool(opts: {
         if (disposed) throw new Error('[png-pool] submit after dispose')
         const windowFull = index - nextEmit >= encodeWindow
         if (!windowFull && free.length > 0) {
-          dispatch(free.pop()!, index, rgba, width, height)
+          dispatch(free.pop()!, index, pixels, width, height)
           return
         }
         await new Promise<void>((res) => slotWaiters.push(res))

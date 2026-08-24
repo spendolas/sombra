@@ -1,10 +1,11 @@
 /**
- * PNG encode worker — one @jsquash WASM encoder instance per worker.
+ * PNG encode worker — one @jsquash/oxipng (single-threaded) WASM encoder
+ * instance per worker.
  *
  * WHY THIS EXISTS: `encodePngWasm` (see `png-encode-wasm.ts`) is fast per frame
  * but runs on the main thread, so a long PNG-sequence export is still serial.
  * This worker lets a pool (`png-encode-pool.ts`) encode frames in PARALLEL — each
- * worker owns its own @jsquash instance, all sharing ONE compiled
+ * worker owns its own oxipng instance, all sharing ONE compiled
  * `WebAssembly.Module` handed in at init (compiled once via
  * `compilePngWasmModule()` and structured-cloned to every worker).
  *
@@ -15,7 +16,8 @@
  * Editor-side export code — NOT shipped in the embed player.
  */
 
-import encode, { init as jsquashInit } from '@jsquash/png/encode'
+import init, { optimise_raw } from '@jsquash/oxipng/codec/pkg/squoosh_oxipng.js'
+import { OXIPNG_LEVEL } from './png-encode-wasm'
 
 // --- Message protocol (shared with png-encode-pool.ts) ---------------------
 
@@ -43,9 +45,9 @@ ctx.onmessage = async (event: MessageEvent<PngWorkerReq>) => {
   switch (msg.type) {
     case 'init': {
       try {
-        // @jsquash's init accepts a precompiled WebAssembly.Module — every worker
-        // instantiates the SAME shared module handed in by the pool.
-        await jsquashInit(msg.module)
+        // oxipng's ST init accepts a precompiled WebAssembly.Module — every
+        // worker instantiates the SAME shared module handed in by the pool.
+        await init(msg.module)
         ctx.postMessage({ type: 'inited' })
       } catch (err) {
         ctx.postMessage({ type: 'error', error: String(err) })
@@ -54,10 +56,17 @@ ctx.onmessage = async (event: MessageEvent<PngWorkerReq>) => {
     }
     case 'encode': {
       try {
-        const image = new ImageData(new Uint8ClampedArray(msg.rgba), msg.width, msg.height)
-        const out = await encode(image)
+        const data = new Uint8ClampedArray(msg.rgba)
+        // optimise_raw is SYNCHRONOUS (no await) — it returns a fresh Uint8Array.
+        const out = optimise_raw(data, msg.width, msg.height, OXIPNG_LEVEL, false, false)
+        // optimise_raw returns a fresh tight array (byteOffset 0, byteLength ===
+        // buffer.byteLength), so its buffer is safe to transfer as-is. Belt-and-
+        // suspenders: copy if that ever isn't true, so we never transfer stray
+        // bytes from an oversized/offset backing buffer.
+        const tight = out.byteOffset === 0 && out.byteLength === out.buffer.byteLength
+        const buf = tight ? out.buffer : new Uint8Array(out).buffer
         // Transfer the PNG buffer back (zero-copy) — the pool copies out of it.
-        ctx.postMessage({ type: 'done', id: msg.id, png: out }, [out])
+        ctx.postMessage({ type: 'done', id: msg.id, png: buf }, [buf])
       } catch (err) {
         ctx.postMessage({ type: 'error', id: msg.id, error: String(err) })
       }
