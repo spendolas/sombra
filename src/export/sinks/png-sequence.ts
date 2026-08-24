@@ -76,6 +76,10 @@ export function makePngSequenceSink(): FrameSink {
     },
 
     async begin(opts, writable) {
+      // Defensive: dispose any stale pool left behind by a prior aborted run
+      // that didn't clean up, before this run creates its own.
+      pool?.dispose()
+      pool = null
       o = opts
       n = 0
       queue = Promise.resolve()
@@ -184,12 +188,20 @@ export function makePngSequenceSink(): FrameSink {
       await queue
       if (zipError) throw zipError
       await writer.close()
+      // Successful export: drain() already flushed every frame, so nothing is
+      // pending. Dispose the pool now — without this, a sink reused for the
+      // app's lifetime (see sinks/index.ts) would leak up to `poolSize` live
+      // worker+WASM instances per successful export (abort() only runs when
+      // the engine's finally sees a NON-clean finish).
+      pool?.dispose()
+      pool = null
     },
 
     async abort() {
       // begin() never ran → nothing to tear down.
       if (!begun) return
       pool?.dispose()
+      pool = null
       // Releasing the lock rejects any still-pending queued write; swallow it so
       // it never surfaces as an unhandled rejection. (In the normal cancel case
       // the frame loop awaits `queue` each frame, so it's already settled.)
