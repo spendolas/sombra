@@ -52,7 +52,7 @@ function FakeSlider({ label, value }: { label: string; value: string }) {
   )
 }
 
-export function SegmentedControlSandbox() {
+export default function SegmentedControlHarness() {
   const [space, setSpace] = useState('world')
   const [wrap, setWrap] = useState('clamp')
 

@@ -19,8 +19,15 @@ import { createShaderRenderer } from '@/renderer/create-renderer'
 import { anchorToVec2 } from '@/nodes/output/fragment-output'
 import { FloatSlider, SegmentedControl } from '@/components/NodeParameters'
 import { worldOffsetToNode, nodeOffsetToWorld } from '@/compiler/ir/srt'
+import { initializeNodeLibrary } from '@/nodes'
 import type { NodeData, EdgeData, PortType, NodeParameter } from '@/nodes/types'
 import type { ShaderRenderer } from '@/renderer/types'
+
+// Populates the node registry (registerNodes(ALL_NODES)) — required before
+// compileGraph/compileGraphIR can resolve 'checkerboard' / 'fragment_output'.
+// Runs once per module evaluation; the app's real entry point (main.tsx) does
+// this too, but this harness is loaded standalone (no App.tsx in the tree).
+initializeNodeLibrary()
 
 // ONE STORAGE: tx/ty always hold the WORLD offset (exactly what the params
 // store in the real editor). The Offset Space toggle is a VIEW — in 'node'
@@ -72,7 +79,7 @@ function compile(p: Params) {
   return result
 }
 
-export function SrtRendererSandbox() {
+export default function SrtRendererHarness() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rendererRef = useRef<ShaderRenderer | null>(null)
   const [p, setP] = useState<Params>(INITIAL)
