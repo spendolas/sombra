@@ -33,9 +33,14 @@ function walk(dir: string): string[] {
   return out
 }
 const SANDBOX = join(ROOT, 'src/sandbox')
+// Dev-only sandbox entry points at src/ root: the shell main and the codegen'd
+// standalone mains. They import sandbox by design and never enter the prod
+// bundle (guaranteed by the input==={main,viewer} assertion above).
+const isSandboxEntry = (f: string) => /(?:^|\/)sandbox-main\.tsx$/.test(f) || /-sandbox-main\.tsx$/.test(f)
 const importRe = /\bfrom\s+['"]([^'"]+)['"]/g
 for (const file of walk(join(ROOT, 'src'))) {
   if (file.startsWith(SANDBOX)) continue // sandbox may import itself
+  if (isSandboxEntry(file)) continue
   const src = readFileSync(file, 'utf8')
   for (const m of src.matchAll(importRe)) {
     const spec = m[1]
