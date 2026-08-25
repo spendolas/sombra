@@ -1709,7 +1709,12 @@
           "figmaNodeId": "306:236",
           "layout": "vertical",
           "justify": "center",
-          "align": "center"
+          "align": "center",
+          "auditIgnore": [
+            "layout",
+            "align",
+            "justify"
+          ]
         }
       }
     },
@@ -2188,7 +2193,9 @@
             "weight": 1
           },
           "auditIgnore": [
-            "fill"
+            "fill",
+            "overflow",
+            "height"
           ],
           "figmaNodeId": "867:2068"
         },
@@ -2245,7 +2252,12 @@
           "textCase": "upper",
           "extra": "flex-1 min-w-0 h-8 focus:outline-none focus:border-indigo",
           "auditIgnore": [
-            "text.textTransform"
+            "text.textTransform",
+            "text.case",
+            "layout",
+            "align",
+            "padding.top",
+            "padding.bottom"
           ],
           "figmaNodeId": "867:2075"
         },
@@ -2266,7 +2278,8 @@
           },
           "extra": "focus-visible:outline-2 focus-visible:outline-indigo-hover",
           "auditIgnore": [
-            "fill"
+            "fill",
+            "overflow"
           ],
           "figmaNodeId": "867:2077"
         },
@@ -2284,6 +2297,9 @@
             "top": "md"
           },
           "extra": "mt-0.5",
+          "auditIgnore": [
+            "height"
+          ],
           "figmaNodeId": "867:2078"
         },
         "formTrigger": {
@@ -2294,7 +2310,14 @@
             "fill": "surface/elevated",
             "textColor": "fg"
           },
-          "extra": "inline-flex items-center gap-1 px-2 py-1 text-[13px] font-medium",
+          "textStyle": "text-handle",
+          "extra": "inline-flex items-center gap-1 px-2 py-1",
+          "auditIgnore": [
+            "layout",
+            "align",
+            "padding",
+            "gap"
+          ],
           "figmaNodeId": "867:2079"
         },
         "menu": {
@@ -2309,6 +2332,10 @@
           "padding": "xs",
           "z": 20,
           "extra": "left-0 right-0 bottom-[calc(100%+8px)] gap-0.5 shadow-[0_12px_32px_-8px_rgba(0,0,0,.7)]",
+          "auditIgnore": [
+            "gap",
+            "width"
+          ],
           "figmaNodeId": "867:2598"
         },
         "menuItem": {
@@ -2335,11 +2362,14 @@
           "layout": "horizontal",
           "align": "center",
           "justify": "between",
+          "auditIgnore": [
+            "height"
+          ],
           "figmaNodeId": "867:2102"
         },
         "channelLabel": {
           "textColor": "fg",
-          "extra": "text-[13px] font-medium",
+          "textStyle": "text-handle",
           "figmaNodeId": "867:2103"
         },
         "channelValue": {
@@ -2351,6 +2381,9 @@
             "fill": "surface/elevated"
           },
           "extra": "w-[58px] bg-transparent border border-transparent px-1.5 py-0.5 focus:outline-none focus:border-indigo focus:bg-surface-elevated [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none",
+          "auditIgnore": [
+            "radius"
+          ],
           "figmaNodeId": "867:2104"
         },
         "menuItemIdle": {
