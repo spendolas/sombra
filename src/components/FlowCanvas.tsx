@@ -3,7 +3,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ReactFlow, Background, MiniMap, useNodesInitialized, useReactFlow } from '@xyflow/react'
+import { ReactFlow, MiniMap, useNodesInitialized, useReactFlow } from '@xyflow/react'
 import type { Node, Edge, NodeTypes, OnNodesChange, OnEdgesChange, OnReconnect, Connection, IsValidConnection } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
@@ -12,6 +12,7 @@ import { useGraphStore } from '../stores/graphStore'
 import { makeNodeId } from '../utils/node-id'
 import { ZoomSlider } from '@/components/zoom-slider'
 import { NodesPanelOverlay } from '@/components/NodesPanelOverlay'
+import { CrossBackground } from '@/components/CrossBackground'
 import { getFitViewPadding } from '@/components/nodes-panel-layout'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { TypedEdge } from './TypedEdge'
@@ -467,11 +468,7 @@ export function FlowCanvas({
       proOptions={{ hideAttribution: true }}
       style={{ width: '100%', height: '100%', backgroundColor: 'var(--surface)' }}
     >
-      <Background
-        color="var(--edge-subtle)"
-        gap={16}
-        style={{ backgroundColor: 'var(--surface)' }}
-      />
+      <CrossBackground gap={64} armLength={3} lineWidth={1} />
       <NodesPanelOverlay />
       <ZoomSlider position="bottom-left" />
       <MiniMap
