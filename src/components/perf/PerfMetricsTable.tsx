@@ -87,3 +87,66 @@ export function PerfMetricsTable({ sample }: { sample: PerfSample | null }) {
     </div>
   )
 }
+
+/**
+ * EditorPerfMetrics — the editor-HUD readout (Perf View editor mode).
+ *
+ * A PASSIVE reader of the editor's OWN renderer: no PerfSession, no FPS (the
+ * editor's rAF loop is throttled, so a raw FPS would mislead). It leads with the
+ * real per-frame GPU cost of what's on screen and lists the per-pass breakdown.
+ * `passNs` comes straight from the live renderer's `getPassTimingsNs()`, so its
+ * length IS the pass count the editor actually renders. When timestamps are
+ * unavailable (WebGL2 editor / no timestamp-query) it shows the same muted note
+ * the standalone table uses.
+ */
+export function EditorPerfMetrics({
+  passNs,
+  timingActive,
+}: {
+  passNs: number[] | null
+  timingActive: boolean
+}) {
+  if (!timingActive) {
+    return (
+      <div className={ds.propertiesPanel.paramSection}>
+        <div className={ds.propertiesPanel.sectionHeader}>GPU / frame</div>
+        <div className={ds.propertiesPanel.emptyText}>
+          GPU per-pass timing unavailable (WebGL2 / no timestamp-query).
+        </div>
+      </div>
+    )
+  }
+
+  const gpuTotalNs = passNs ? passNs.reduce((a, b) => a + b, 0) : null
+
+  return (
+    <div className="flex flex-col gap-lg">
+      {/* Headline: the real cost of the frame the user is looking at. */}
+      <div className={ds.propertiesPanel.paramSection}>
+        <div className={ds.propertiesPanel.sectionHeader}>GPU / frame</div>
+        <div className={ds.propertiesPanel.portList}>
+          <MetricRow label="GPU total" value={gpuTotalNs != null ? fmtUs(gpuTotalNs) : '—'} />
+        </div>
+      </div>
+
+      {/* Per-pass breakdown of the editor's actual on-screen render. */}
+      <div className={ds.propertiesPanel.paramSection}>
+        <div className="flex flex-row justify-between items-baseline">
+          <span className={ds.propertiesPanel.sectionHeader}>Per-pass</span>
+          <span className={ds.propertiesPanel.categoryMeta}>
+            {passNs?.length ?? 0} {(passNs?.length ?? 0) === 1 ? 'pass' : 'passes'}
+          </span>
+        </div>
+        {passNs && passNs.length > 0 ? (
+          <div className={ds.propertiesPanel.portList}>
+            {passNs.map((ns, i) => (
+              <MetricRow key={i} label={`Pass ${i}`} value={fmtUs(ns)} />
+            ))}
+          </div>
+        ) : (
+          <div className={ds.propertiesPanel.emptyText}>Waiting for the first rendered frame…</div>
+        )}
+      </div>
+    </div>
+  )
+}

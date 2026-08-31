@@ -1,47 +1,43 @@
 /**
- * PerfView — the in-app GPU/FPS profiler UI (Perf View, Task 4).
+ * PerfView — the in-app GPU profiler UI (Perf View).
  *
- * Owns a <canvas> and one PerfSession. Subject / resolution / dpr / isolation
- * changes are pushed to the LIVE session via `session.update({...})` — the
- * session never restarts for those. Samples flow session → onSample → React
- * state → table.
+ * Two modes, two very different jobs:
  *
- * Backend is the ONE exception: a canvas's drawing-context type is fixed the
- * first time `getContext` succeeds, so a WebGPU canvas can never hand back a
- * WebGL2 context (getContext('webgl2') returns null → "WebGL2 not supported").
- * Switching backend therefore remounts a FRESH <canvas> and starts a fresh
- * PerfSession. That is exactly what the lifecycle effect is keyed on.
+ * - `standalone` (default; the sandbox harness `?c=perf-view`): the full
+ *   independent benchmark. Owns a <canvas> and one PerfSession, compiles a
+ *   subject graph (live / scene / isolated node), and drives an UNCAPPED render
+ *   loop at a chosen resolution/backend/dpr. Scene picker, visible preview, all
+ *   controls. Unchanged.
  *
- * Effect discipline (memory `effect-deps-value-not-identity`): the lifecycle
- * effect is keyed on the PRIMITIVE `config.backend`, never on a fresh config
- * object — so no re-create storm. The full config is read from a ref at start
- * time; the canvas is in the DOM before `start()` runs (PerfSession reads
- * clientWidth/Height).
+ * - `editor` (the app's dev-only `?perf=1` HUD): a PASSIVE reader of the
+ *   EDITOR'S OWN on-screen renderer. It creates NOTHING — no PerfSession, no
+ *   second canvas, no second GPUDevice, no render loop. It polls the live main
+ *   `ShaderRenderer` (passed in as a prop) for per-pass GPU timings and shows the
+ *   real cost of what's on screen at the editor's actual backing resolution.
+ *   There is only ONE device, so no cross-device resource fight.
+ *
+ * Backend note (standalone): a canvas's drawing-context type is fixed the first
+ * time `getContext` succeeds, so switching backend remounts a FRESH <canvas> and
+ * starts a fresh PerfSession — exactly what the lifecycle effect is keyed on.
+ *
+ * Effect discipline (memory `effect-deps-value-not-identity`): the standalone
+ * lifecycle effect is keyed on the PRIMITIVE `config.backend`, never a fresh
+ * config object; the editor poll effect is keyed on the `renderer` identity.
  */
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { PerfSession, type PerfConfig, type PerfSample } from '@/perf/perf-session'
 import { useGraphStore } from '@/stores/graphStore'
+import { usePreviewStore } from '@/stores/previewStore'
 import { nodeRegistry } from '@/nodes/registry'
+import type { ShaderRenderer } from '@/renderer/types'
 import { ds } from '@/generated/ds'
 import { PerfControls } from './PerfControls'
-import { PerfMetricsTable } from './PerfMetricsTable'
+import { PerfMetricsTable, EditorPerfMetrics } from './PerfMetricsTable'
 import { RESOLUTIONS, type ResolutionOption, type NodeOption } from './perf-view-config'
 
 const DEFAULT_CONFIG: PerfConfig = {
   subject: { kind: 'scene', sceneId: 'gaussian_r' },
-  width: RESOLUTIONS[0].width,
-  height: RESOLUTIONS[0].height,
-  dpr: 1,
-  backend: 'webgpu',
-}
-
-/**
- * Editor HUD default: the subject is FIXED to the live current graph (no
- * benchmark scenes in the editor), so isolation targets real nodes.
- */
-const EDITOR_CONFIG: PerfConfig = {
-  subject: { kind: 'live' },
   width: RESOLUTIONS[0].width,
   height: RESOLUTIONS[0].height,
   dpr: 1,
@@ -53,22 +49,89 @@ function subjectKey(subject: PerfConfig['subject']): string {
 }
 
 /**
- * `standalone` (default) = the full profiler (scene picker, visible preview,
- * all controls) — used by the sandbox harness. `editor` = the slim live-graph
- * HUD mounted in the app under `?perf=1`: subject pinned to the live graph, no
- * scene picker, no visible preview canvas (the profiling canvas stays in the
- * DOM offscreen at its true render resolution so measurement stays honest).
+ * `standalone` (default) = the full profiler (scene picker, visible preview, all
+ * controls) — used by the sandbox harness. `editor` = the slim live HUD mounted
+ * in the app under `?perf=1`: a passive reader of the editor's own renderer.
  */
 export type PerfViewMode = 'standalone' | 'editor'
 
-export function PerfView({ mode = 'standalone' }: { mode?: PerfViewMode } = {}) {
-  const editor = mode === 'editor'
-  const initialConfig = editor ? EDITOR_CONFIG : DEFAULT_CONFIG
+export function PerfView({
+  mode = 'standalone',
+  renderer,
+}: {
+  mode?: PerfViewMode
+  renderer?: ShaderRenderer | null
+} = {}) {
+  return mode === 'editor' ? (
+    <EditorPerfView renderer={renderer ?? null} />
+  ) : (
+    <StandalonePerfView />
+  )
+}
 
+// ---------------------------------------------------------------------------
+// Editor HUD — passive reader of the editor's actual on-screen renderer.
+// ---------------------------------------------------------------------------
+
+const POLL_INTERVAL_MS = 250
+
+function EditorPerfView({ renderer }: { renderer: ShaderRenderer | null }) {
+  const [passNs, setPassNs] = useState<number[] | null>(null)
+  const [timingActive, setTimingActive] = useState(false)
+
+  // The editor's REAL backing resolution (device px) — App feeds it here from the
+  // main canvas ResizeObserver. Read-only display, never a control.
+  const [mainW, mainH] = usePreviewStore((s) => s.mainCanvasSize)
+
+  // Poll the passed renderer — no render loop of our own; the editor already
+  // renders. getPassTimingsNs() returns the most recent readback (cached), so
+  // this is cheap and reflects the last on-screen frame; it refreshes whenever
+  // the graph is edited and the editor re-renders.
+  useEffect(() => {
+    if (!renderer) {
+      setPassNs(null)
+      setTimingActive(false)
+      return
+    }
+    const poll = () => {
+      setPassNs(renderer.getPassTimingsNs?.() ?? null)
+      setTimingActive(renderer.timestampsActive?.() ?? false)
+    }
+    poll()
+    const id = setInterval(poll, POLL_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [renderer])
+
+  const resolutionText = renderer
+    ? `${mainW}×${mainH} · ${renderer.backend === 'webgpu' ? 'WebGPU' : 'WebGL2'}`
+    : '—'
+
+  return (
+    <div className={`${ds.propertiesPanel.root} w-full h-full overflow-y-auto bg-surface text-fg`}>
+      <div className="flex flex-row justify-between items-baseline">
+        <span className={ds.propertiesPanel.nodeTitle}>Performance</span>
+        <span className={ds.propertiesPanel.categoryMeta}>{resolutionText}</span>
+      </div>
+      <div className={ds.propertiesPanel.categoryMeta}>Editor's actual on-screen render</div>
+
+      {!renderer ? (
+        <div className={ds.propertiesPanel.emptyText}>Waiting for renderer…</div>
+      ) : (
+        <EditorPerfMetrics passNs={passNs} timingActive={timingActive} />
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Standalone profiler — the full independent benchmark (sandbox harness).
+// ---------------------------------------------------------------------------
+
+function StandalonePerfView() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sessionRef = useRef<PerfSession | null>(null)
 
-  const [config, setConfig] = useState<PerfConfig>(initialConfig)
+  const [config, setConfig] = useState<PerfConfig>(DEFAULT_CONFIG)
   const [sample, setSample] = useState<PerfSample | null>(null)
 
   // The measured canvas keeps its true render-resolution CSS size (PerfSession
@@ -99,7 +162,7 @@ export function PerfView({ mode = 'standalone' }: { mode?: PerfViewMode } = {}) 
 
   // The session's source of truth for the full config (the lifecycle effect
   // reads this at start time; it is not a render input, so it stays a ref).
-  const configRef = useRef<PerfConfig>(initialConfig)
+  const configRef = useRef<PerfConfig>(DEFAULT_CONFIG)
 
   // Node-isolation options: the current graph's nodes, id + node-type label.
   // Read reactively so live-graph edits refresh the list. Scenes have their own
@@ -151,57 +214,32 @@ export function PerfView({ mode = 'standalone' }: { mode?: PerfViewMode } = {}) 
     <div className="flex flex-row gap-xl w-full h-full bg-surface text-fg overflow-hidden">
       {/* Left column: canvas + controls */}
       <div className={`${ds.propertiesPanel.root} w-[300px] shrink-0 overflow-y-auto`}>
-        {editor ? (
-          // Editor HUD: the app's own canvas already shows the graph output, so a
-          // second preview is redundant. The profiling canvas MUST stay in the DOM
-          // at its real cfg.width×cfg.height CSS size (PerfSession reads clientWidth
-          // for the backing store) — hide it offscreen, NOT with display:none which
-          // would zero clientWidth and break measurement.
-          <canvas
-            key={config.backend}
-            ref={canvasRef}
-            aria-hidden
-            className="block"
+        <div className={ds.propertiesPanel.sectionHeader}>Preview</div>
+        <div
+          ref={previewBoxRef}
+          className="relative aspect-video w-full overflow-hidden rounded-md border border-edge bg-surface-raised"
+        >
+          {/* Wrapper carries the scale-to-fit transform; the canvas inside keeps
+              its real cfg.width×cfg.height CSS size (set by PerfSession), so its
+              clientWidth stays honest while the whole frame is shown scaled down. */}
+          <div
+            className="absolute left-0 top-0"
             style={{
-              position: 'absolute',
-              left: -99999,
-              top: 0,
-              opacity: 0,
-              pointerEvents: 'none',
-              width: config.width,
-              height: config.height,
+              transform: `translateY(${preview.offsetY}px) scale(${preview.scale})`,
+              transformOrigin: 'top left',
             }}
-          />
-        ) : (
-          <>
-            <div className={ds.propertiesPanel.sectionHeader}>Preview</div>
-            <div
-              ref={previewBoxRef}
-              className="relative aspect-video w-full overflow-hidden rounded-md border border-edge bg-surface-raised"
-            >
-              {/* Wrapper carries the scale-to-fit transform; the canvas inside keeps
-                  its real cfg.width×cfg.height CSS size (set by PerfSession), so its
-                  clientWidth stays honest while the whole frame is shown scaled down. */}
-              <div
-                className="absolute left-0 top-0"
-                style={{
-                  transform: `translateY(${preview.offsetY}px) scale(${preview.scale})`,
-                  transformOrigin: 'top left',
-                }}
-              >
-                <canvas
-                  key={config.backend}
-                  ref={canvasRef}
-                  className="block"
-                  style={{ width: config.width, height: config.height }}
-                />
-              </div>
-            </div>
-          </>
-        )}
+          >
+            <canvas
+              key={config.backend}
+              ref={canvasRef}
+              className="block"
+              style={{ width: config.width, height: config.height }}
+            />
+          </div>
+        </div>
 
         <PerfControls
-          showSubjectSelect={!editor}
+          showSubjectSelect
           subjectKey={subjectKey(config.subject)}
           backend={config.backend}
           width={config.width}
