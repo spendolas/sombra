@@ -73,9 +73,9 @@ const staticCap = new Map<number, Rgba8>()
 const panCap = new Map<number, number[]>() // period -> centre pixel across phases
 const PH = 12
 for (const P of PERIODS) {
-  staticCap.set(P, await rig.captureRawGlsl({ width: W, height: H, input: grating(P, 0), passes: blurPasses(R), dpr: 1 }))
+  staticCap.set(P, await rig.captureRawGlsl({ width: W, height: H, input: grating(P, 0), passes: blurPasses(R), dpr: 1, faithfulResolution: true }))
   const seq: number[] = []
-  for (let i = 0; i < PH; i++) seq.push(centerPx(await rig.captureRawGlsl({ width: W, height: H, input: grating(P, P * i / PH), passes: blurPasses(R), dpr: 1 })))
+  for (let i = 0; i < PH; i++) seq.push(centerPx(await rig.captureRawGlsl({ width: W, height: H, input: grating(P, P * i / PH), passes: blurPasses(R), dpr: 1, faithfulResolution: true })))
   panCap.set(P, seq)
 }
 // Reference sanity: a true Gaussian crushes these gratings (proves the stimulus is in-band).

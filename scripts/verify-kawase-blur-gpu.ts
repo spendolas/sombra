@@ -131,7 +131,7 @@ const RADII = [8, 16, 24, 32, 48, 64, 96, 128, 192]
 const capByRadius = new Map<number, Rgba8>()
 for (const r of RADII) {
   try {
-    capByRadius.set(r, await rig.captureRawGlsl({ width: W, height: H, input, passes: blurPasses(r).map((c) => c.pass), dpr: 1 }))
+    capByRadius.set(r, await rig.captureRawGlsl({ width: W, height: H, input, passes: blurPasses(r).map((c) => c.pass), dpr: 1, faithfulResolution: true }))
   } catch (err) {
     capByRadius.set(r, { width: W, height: H, data: new Uint8ClampedArray(W * H * 4) })
     console.error(`  capture r${r} threw: ${err instanceof Error ? err.message : err}`)
