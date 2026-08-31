@@ -52,6 +52,7 @@ export interface NodeParameter {
   connectable?: boolean                              // If true, renders as wirable handle + inline slider
   hidden?: boolean                                   // If true, param is not rendered in UI (internal state)
   warnAbove?: number                                  // Show performance hint when unwired value exceeds this
+  warnHint?: string                                   // Extra advisory line shown under the warnAbove message (e.g. name a cheaper node)
   /**
    * Controls how a parameter change is handled by the compiler and renderer.
    *

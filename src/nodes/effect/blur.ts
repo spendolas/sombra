@@ -243,6 +243,10 @@ export const blurNode: NodeDefinition = {
       // A big radius is genuinely expensive (~343 fetches per pass at the max),
       // so warn even though it no longer recompiles.
       warnAbove: 96,
+      // Honest, non-prescriptive routing: Kawase holds a fixed ~20-tap cost at
+      // any radius (still animatable); Pyramid is cheapest for a large static
+      // radius (recompiles on change, not connectable).
+      warnHint: 'Kawase Blur holds a fixed cost, or Pyramid Blur for a static large radius.',
     },
     {
       id: 'edgeMode',
