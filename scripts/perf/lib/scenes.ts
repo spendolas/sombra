@@ -62,6 +62,7 @@ const SCENE_META: Record<string, { description: string; expectedPasses: number; 
     expectedPasses: 3,
     cheap: () => buildGaussian({ radius: 1 }),
   },
+  kawase_r: { description: 'Kawase blur @large radius — 5 fixed passes × 4 taps', expectedPasses: 6 },
   reeded_frost: { description: 'reeded_glass frost=max — heaviest single-pass fetch', expectedPasses: 2 },
   pyramid_deep: { description: 'generator→pyramid_blur — deep pass chain (pass-boundary churn)', expectedPasses: 9 },
   chain_heavy: { description: 'warp→fbm→gaussian→reeded — deep multi-pass chain', expectedPasses: 4 },

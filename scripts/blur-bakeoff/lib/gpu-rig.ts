@@ -83,6 +83,17 @@ export interface RawCaptureSpec {
   passes: RawGlslPass[]
   /** Value uploaded as u_dpr. Lets a DPR-dependent bug be reproduced at dpr 2. */
   dpr?: number
+  /**
+   * Model the real renderer's per-pass built-in uniforms faithfully
+   * (src/webgpu/renderer.ts writeMultiPassBuiltinUniforms): force the LAST pass to
+   * full canvas size, and set each pass's u_frame_scale / u_dpr to its OWN target
+   * dpr (target_scale * dpr). REQUIRED for any node whose kernel reads
+   * u_frame_scale and declares a fractional RenderPass.resolution (the blur family:
+   * blur, kawase_blur) — without it a downscaled pass measures a ~2x-inflated
+   * reference-px kernel. Left off (default) the rig keeps the historical flat-dpr,
+   * every-pass-scaled prototype behaviour that the pyramid gate is calibrated to.
+   */
+  faithfulResolution?: boolean
 }
 
 export interface Rig {
@@ -156,6 +167,7 @@ export async function createRig(): Promise<Rig> {
         height: spec.height,
         passes: spec.passes,
         dpr: spec.dpr ?? 1,
+        faithfulResolution: spec.faithfulResolution ?? false,
         input: {
           width: spec.input.width,
           height: spec.input.height,
@@ -620,9 +632,22 @@ void main() { fragColor = sombraMain(v_uv); }
     const created = [srcTex];
     const fbo = gl.createFramebuffer();
 
+    // Faithful per-pass resolution mode (opt-in via spec.faithfulResolution):
+    // mirror the real renderer's writeMultiPassBuiltinUniforms (src/webgpu/
+    // renderer.ts:1015-1023) — the LAST pass always draws to the full-size
+    // swap-chain target regardless of what it declared, and each pass's
+    // u_frame_scale / u_dpr is ITS OWN target dpr (resolution * dpr), not a flat
+    // canvas dpr. A downscaled pass that reads u_frame_scale for a reference-px
+    // kernel (the blur family: blr_sig / kw_sig = radius/3 * u_frame_scale)
+    // otherwise measures a ~2x-inflated kernel — a rig artifact the renderer never
+    // ships. OFF by default so the historical single-scale prototype path
+    // (pyramid gate) is byte-unchanged; only the blur/kawase gates opt in.
+    const faithful = !!spec.faithfulResolution;
     for (let i = 0; i < spec.passes.length; i++) {
       const pass = spec.passes[i];
-      const scale = pass.scale != null ? pass.scale : 1;
+      const isLast = i === spec.passes.length - 1;
+      const declaredScale = pass.scale != null ? pass.scale : 1;
+      const scale = faithful && isLast ? 1 : declaredScale;
       const tw = Math.max(1, Math.round(W * scale));
       const th = Math.max(1, Math.round(H * scale));
       const target = makeTex(gl, tw, th, false, null);
@@ -647,11 +672,12 @@ void main() { fragColor = sombraMain(v_uv); }
       const setF = (n, v) => { const l = gl.getUniformLocation(prog, n); if (l) gl.uniform1f(l, v); };
       const set2 = (n, a, b) => { const l = gl.getUniformLocation(prog, n); if (l) gl.uniform2f(l, a, b); };
       setF('u_time', 0);
-      setF('u_dpr', spec.dpr || 1);
-      // Phase-1 frame-scale rename: renderers write u_frame_scale == u_dpr, so this
-      // rig must too — several nodes (blur family) now read u_frame_scale instead
-      // of u_dpr for the reference-px -> device-px conversion.
-      setF('u_frame_scale', spec.dpr || 1);
+      // In faithful mode, per-pass target dpr = target_scale * canvas dpr, exactly
+      // as the renderer writes it (see the note above). Otherwise the legacy flat
+      // dpr (the historical prototype behaviour the pyramid gate is calibrated to).
+      const passDpr = faithful ? (spec.dpr || 1) * scale : (spec.dpr || 1);
+      setF('u_dpr', passDpr);
+      setF('u_frame_scale', passDpr);
       setF('u_ref_size', 512);
       set2('u_resolution', tw, th);
       set2('u_viewport', tw, th);
