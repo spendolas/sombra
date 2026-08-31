@@ -148,6 +148,30 @@ export function buildGaussian(opts?: { radius?: number }): Graph {
   }
 }
 
+/** generator → Kawase blur @large radius — 5 fixed passes × 4 taps. */
+export function buildKawase(opts?: { radius?: number }): Graph {
+  const fbm = n('fbm', { srt_scale: 1.0, noiseType: 'simplex', octaves: 4 })
+  const ramp = n('color_ramp', {
+    interpolation: 'smooth',
+    stops: [
+      { position: 0.0, color: [0.02, 0.03, 0.05] },
+      { position: 1.0, color: [0.9, 0.95, 1.0] },
+    ],
+  })
+  // Kawase cost is CONSTANT in radius (fixed 5×4 taps), so radius is not a cost
+  // knob — a large radius just makes the low-pass reach obvious. No cheap variant.
+  const kawase = n('kawase_blur', { radius: opts?.radius ?? 200 })
+  const out = n('fragment_output', {})
+  return {
+    nodes: [fbm, ramp, kawase, out],
+    edges: [
+      e(fbm, ramp, 'value', 't', 'float'),
+      e(ramp, kawase, 'color', 'source', 'color'),
+      e(kawase, out, 'color', 'color', 'color'),
+    ],
+  }
+}
+
 /** generator → reeded glass at max frost — heaviest single-pass gather. */
 export function buildReededFrost(opts?: { frost?: number }): Graph {
   const fbm = n('fbm', { srt_scale: 1.0, noiseType: 'simplex', octaves: 4 })
@@ -235,6 +259,7 @@ export const PERF_SCENES: PerfScene[] = [
   { id: 'fbm_single', title: 'FBM (8 oct)', build: () => buildFbmSingle() },
   { id: 'worley_warp', title: 'Worley + Warp', build: buildWorleyWarp },
   { id: 'gaussian_r', title: 'Gaussian blur (max radius)', build: () => buildGaussian() },
+  { id: 'kawase_r', title: 'Kawase blur (large radius)', build: () => buildKawase() },
   { id: 'reeded_frost', title: 'Reeded frost', build: buildReededFrost },
   { id: 'pyramid_deep', title: 'Pyramid (deep)', build: buildPyramidDeep },
   { id: 'chain_heavy', title: 'Chain (heavy)', build: buildChainHeavy },
