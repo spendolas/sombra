@@ -518,6 +518,12 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                     {param.warnAbove != null && !isConnected && displayValue > param.warnAbove && (
                       <span className={cn(ds.shaderNode.warnText, "pb-2xs")}>
                         High value — may impact performance
+                        {param.warnHint && (
+                          <>
+                            <br />
+                            {param.warnHint}
+                          </>
+                        )}
                       </span>
                     )}
                   </div>
