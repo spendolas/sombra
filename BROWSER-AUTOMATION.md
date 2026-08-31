@@ -165,16 +165,19 @@ Import is undoable — the previous graph is pushed to the undo stack. Validates
 
 Returns a compact share URL (`viewer.html#g=<base64url(deflate)>`) for the current graph. Image nodes embed their `imageData` (chunked base64 — large but functional).
 
-### `sombra.renderer` — no such property
+### `sombra.renderer` — the live `ShaderRenderer`
 
-`window.__sombra` has no `renderer` field — see the `api` object built in
-`installDevBridge()` (`src/dev-bridge.ts`); there is no dev-bridge handle to the
-live `ShaderRenderer`. `sombra.compile()` does not hand its plan to a renderer
-either (see above), so there is currently no path from the bridge to forcing a
-frame or reading renderer state — this section previously claimed one existed.
-Automation that needs `render()`, `updateUniforms()`, `setAnchor()`,
-`uploadImageTexture()` etc. (the `ShaderRenderer` interface, `src/renderer/types.ts`)
-has no bridge accessor for them today.
+`window.__sombra.renderer` is the live main-canvas renderer. `App.tsx` attaches
+it after init (`sombra.renderer = r`, `src/App.tsx:271`) — it is NOT built inside
+`installDevBridge()` (`src/dev-bridge.ts`), so it appears only once the editor has
+mounted and created a renderer, and it is replaced on device-loss recovery.
+
+It is a full `ShaderRenderer` instance (`src/renderer/types.ts`), so automation can
+call `render()`, `updateUniforms()`, `setAnchor()`, `uploadImageTexture()`,
+`updateRenderPlan()`, `setQualityTier()`, `getDevice()` (WebGPU only), etc., and
+read `renderer.backend` (`'webgpu'` | `'webgl2'`). Note that `sombra.compile()`
+does **not** push its plan into this renderer (see above) — call
+`renderer.updateRenderPlan(plan)` yourself if you need the canvas to reflect it.
 
 ### Store actions worth knowing (`sombra.stores.graph.getState()`)
 

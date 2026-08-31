@@ -71,7 +71,12 @@
     "verify:embed:snippets": "tsx scripts/verify-embed-snippets.ts",
     "verify:embed:smoke": "tsx scripts/verify-embed-smoke.ts",
     "verify:embed:fwd": "tsx scripts/verify-embed-forward-compat.ts",
-    "verify:embed": "npm run verify:embed:artifact && npm run verify:embed:manifest && npm run verify:embed:snippets"
+    "verify:embed": "npm run verify:embed:artifact && npm run verify:embed:manifest && npm run verify:embed:snippets",
+    "perf:gpu": "tsx scripts/perf/perf-gpu.ts",
+    "perf:fps": "tsx scripts/perf/perf-fps.ts",
+    "perf:all": "tsx scripts/perf/perf-all.ts",
+    "perf:baseline": "tsx scripts/perf/perf-baseline.ts",
+    "perf": "npm run perf:gpu && npm run perf:fps"
   },
   "dependencies": {
     "@dagrejs/dagre": "^2.0.4",
