@@ -250,8 +250,13 @@ export class PerfSession {
   private compilePlan(): RenderPlan {
     const { nodes, edges } = this.resolveGraph()
     const wantWgsl = this.cfg!.backend === 'webgpu'
-    return this.cfg!.isolateNodeId
-      ? this.compileIsolatedPlan(nodes, edges, this.cfg!.isolateNodeId, wantWgsl)
+    // Isolate only when the target exists in the CURRENT subject's graph. A
+    // stale/foreign id (e.g. a Live node id left set when switching to a scene)
+    // would otherwise make the subgraph compiler throw "Target node not found"
+    // and crash update(); fall back to profiling the whole subject instead.
+    const id = this.cfg!.isolateNodeId
+    return id && nodes.some((n) => n.id === id)
+      ? this.compileIsolatedPlan(nodes, edges, id, wantWgsl)
       : this.compileFullPlan(nodes, edges, wantWgsl)
   }
 
@@ -405,6 +410,13 @@ export class PerfSession {
     if (gl && this.glReadPx) {
       gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, this.glReadPx)
     }
+    // readPixels is synchronous and resolves no macrotask, so without this the
+    // uncapped loop would spin on microtasks alone and starve the compositor —
+    // the tab freezes while a WebGL2 subject runs. Yield one macrotask per frame
+    // (~4ms browser clamp, so WebGL2 samples cap ~250fps; its wall-clock metric
+    // is coarse anyway). WebGPU's onSubmittedWorkDone already yields, so it's
+    // untouched and stays truly uncapped.
+    await new Promise<void>((resolve) => setTimeout(resolve))
   }
 
   private emitSample(): void {
