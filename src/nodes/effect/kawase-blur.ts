@@ -5,7 +5,9 @@
  * count and per-pass resolution from the radius at compile time.
  *
  * The trade the prototype accepts (see docs/superpowers/specs/2026-07-30-animatable-
- * pyramid-blur-design.md): FIXED pass count at FULL resolution. Kawase's classic
+ * pyramid-blur-design.md): FIXED pass count. Its passes rasterise at HALF linear
+ * resolution (the low-pass half-res lever, same as Gaussian Blur — see multiPass below).
+ * Kawase's classic
  * structure is a small fixed set of passes whose sample offsets grow per pass; scaling
  * every offset by one factor scales the whole (self-similar) kernel, so a uniform can
  * drive the blur size continuously. Cost is therefore constant in radius — cheaper than
@@ -166,7 +168,22 @@ export const kawaseBlurNode: NodeDefinition = {
   conditionalPreview: true,
 
   // Fixed pass count (NOT radius-dependent) — that is what keeps radius a uniform.
-  multiPass: { count: () => PASS_COUNT, from: 'color', to: 'source' },
+  //
+  // Every pass rasterises at HALF linear resolution (¼ the fragments). Kawase is a
+  // low-pass filter, like the Gaussian (blur.ts) — it destroys exactly the high
+  // frequencies a full-res target would keep — so downscaling its passes is near-free
+  // visually: shape still matches a Gaussian of σ=radius/3 (verify-kawase-blur-gpu),
+  // shimmer/leakage is unchanged (verify-kawase-shimmer), and the half-vs-full pixel
+  // delta is RMS ~0.5 / max ~6 codes — a re-realisation of the sub-visible stochastic
+  // jitter grain at half-res, NOT structural softening (contrast reeded-glass at 107).
+  // Each downscaled pass cuts its fragment count ~4×. `u_frame_scale` is scaled with the pass
+  // so the kernel's reach in REFERENCE units is unchanged (guarded by
+  // verify:frame-scale-invariance); screen-UV sampling stays correct
+  // (verify:pass-resolution:gpu), and WGSL/GLSL agree because the scale is backend-agnostic
+  // config, not shader text. Each kawase sub-pass is its own depth group, so the pin rule
+  // (pass-resolution.ts) is satisfied; when Kawase is terminal its last pass is force-drawn
+  // at full canvas by the renderer, so the earlier passes are the ones that downscale.
+  multiPass: { count: () => PASS_COUNT, from: 'color', to: 'source', resolution: () => 0.5 },
 
   inputs: [
     { id: 'source', label: 'Source', type: 'color', textureInput: true, default: [0, 0, 0, 1] },
