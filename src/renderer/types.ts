@@ -101,6 +101,26 @@ export interface ShaderRenderer {
   /** Mark all multi-pass render passes as dirty. */
   markAllDirty(): void
 
+  /** Dev/perf only, WebGPU-only: per-pass GPU durations (ns) from the most recent
+   *  timestamp-query readback, or null when timestamps are inactive or no frame
+   *  has completed a readback. Opt-in via createShaderRenderer's enableTimestamps. */
+  getPassTimingsNs?(): number[] | null
+
+  /** Dev/perf only, WebGPU-only: whether timestamp queries are actually running
+   *  (opt-in AND supported by the adapter). */
+  timestampsActive?(): boolean
+
+  /** Dev/perf only: monotonic count of frames actually drawn/presented. The
+   *  editor HUD samples deltas over an interval to derive DELIVERED FPS (which is
+   *  capped by the render loop's target — see getTargetFps). Cheap always-on
+   *  counter; implemented on both backends. */
+  getFrameCount?(): number
+
+  /** Dev/perf only: the render loop's current target-FPS cap (30/45/60). The HUD
+   *  shows delivered vs. this target so a capped reading isn't mistaken for the
+   *  uncapped ceiling. */
+  getTargetFps?(): number
+
   /** Which backend is active. */
   readonly backend: 'webgl2' | 'webgpu'
 }

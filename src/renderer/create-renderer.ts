@@ -19,6 +19,7 @@ export function isWebGL2Forced(): boolean {
 export async function createShaderRenderer(
   canvas: HTMLCanvasElement,
   plan?: RenderPlan,
+  opts?: { enableTimestamps?: boolean },
 ): Promise<ShaderRenderer> {
   // A plan with no WGSL passes (e.g. an embed artifact published from a
   // non-WebGPU browser) can't run on WebGPU — force WebGL2, which renders the
@@ -29,6 +30,9 @@ export async function createShaderRenderer(
     try {
       const { WebGPUShaderRenderer } = await import('../webgpu/renderer')
       const renderer = new WebGPUShaderRenderer()
+      // Opt-in per-pass GPU timing (dev/perf only). Must precede init(), where
+      // the device feature is requested. WebGL2 fallback ignores it.
+      if (opts?.enableTimestamps) renderer.setEnableTimestamps(true)
       await renderer.init(canvas)
       console.log('[Sombra] Renderer backend:', renderer.backend)
       return renderer
