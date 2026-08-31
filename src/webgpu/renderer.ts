@@ -1123,7 +1123,12 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
 
     this.writeSinglePassBuiltinUniforms(w, h, dpr, time)
 
-    const useTs = this.tsActive && this.tsQuerySet !== null && this.tsPassCount === 1
+    // Gate the ENTIRE capture (timestampWrites + resolve + copy + readback) on
+    // no readback being in flight. While a mapAsync holds tsReadBuffer mapped,
+    // a copyBufferToBuffer into it is a validation error that invalidates the
+    // whole command buffer → the frame is dropped → the output strobes. When a
+    // readback is pending, this frame renders with NO instrumentation at all.
+    const useTs = this.tsActive && this.tsQuerySet !== null && this.tsPassCount === 1 && !this.tsMapPending
 
     const currentTexture = this.context.getCurrentTexture()
     const encoder = this.device.createCommandEncoder()
@@ -1174,7 +1179,9 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     this.writeMultiPassBuiltinUniforms(w, h, dpr, time)
 
     const passCount = this.passStates.length
-    const useTs = this.tsActive && this.tsQuerySet !== null && this.tsPassCount === passCount
+    // See renderSinglePass: gate the whole capture on no readback in flight so
+    // a copyBufferToBuffer never targets a mapped tsReadBuffer (→ strobe).
+    const useTs = this.tsActive && this.tsQuerySet !== null && this.tsPassCount === passCount && !this.tsMapPending
 
     const encoder = this.device.createCommandEncoder()
 
