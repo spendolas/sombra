@@ -81,6 +81,18 @@ export class PerfSession {
   private running = false
   private loopDone: Promise<void> | null = null
 
+  // Set the moment dispose() is called. start() (and rebuildRenderer) create the
+  // renderer across an `await`; if the session is torn down during that gap —
+  // e.g. React StrictMode's mount→unmount→mount, which constructs one session,
+  // disposes it, then constructs another on the SAME canvas — the renderer we're
+  // about to build has no owner. Without this flag start() would blindly finish,
+  // create the renderer, and call startLoop(), leaving an orphaned renderer
+  // rendering the canvas forever. When the remounted session then configures the
+  // same canvas context with ITS device, the orphan's swap-chain submits become
+  // cross-device and fail every frame ("TextureView … cannot be used with
+  // [Device]"). We check it right after each build-await and release instead.
+  private disposed = false
+
   private sampleCb: ((s: PerfSample) => void) | null = null
 
   private frameTimes: number[] = []
@@ -106,6 +118,16 @@ export class PerfSession {
     this.cfg = { ...cfg }
     this.applyCanvasSize()
     await this.buildRendererAndPlan()
+    // dispose() may have run while the renderer was building (StrictMode remount
+    // / fast teardown). The renderer we just created is then orphaned — release
+    // it and abort before starting a loop that would render this canvas from a
+    // device the remounted session has already replaced. No `await` sits between
+    // this check and startLoop(), so dispose() cannot interleave past it.
+    if (this.disposed) {
+      this.renderer?.dispose()
+      this.renderer = null
+      return
+    }
     this.reconcileLiveSubscription()
     this.startLoop()
   }
@@ -156,6 +178,7 @@ export class PerfSession {
   }
 
   dispose(): void {
+    this.disposed = true
     this.stop()
     // The loop reads this.renderer; let it observe running=false first, then
     // release the GPU renderer. dispose() is not awaited, so guard the loop.
@@ -202,6 +225,11 @@ export class PerfSession {
       this.renderer = null
     })
     await this.buildRendererAndPlan()
+    if (this.disposed) {
+      this.renderer?.dispose()
+      this.renderer = null
+      return
+    }
     if (wasRunning) this.startLoop()
   }
 

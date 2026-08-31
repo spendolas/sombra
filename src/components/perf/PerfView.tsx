@@ -36,15 +36,39 @@ const DEFAULT_CONFIG: PerfConfig = {
   backend: 'webgpu',
 }
 
+/**
+ * Editor HUD default: the subject is FIXED to the live current graph (no
+ * benchmark scenes in the editor), so isolation targets real nodes.
+ */
+const EDITOR_CONFIG: PerfConfig = {
+  subject: { kind: 'live' },
+  width: RESOLUTIONS[0].width,
+  height: RESOLUTIONS[0].height,
+  dpr: 1,
+  backend: 'webgpu',
+}
+
 function subjectKey(subject: PerfConfig['subject']): string {
   return subject.kind === 'live' ? 'live' : subject.sceneId
 }
 
-export function PerfView() {
+/**
+ * `standalone` (default) = the full profiler (scene picker, visible preview,
+ * all controls) — used by the sandbox harness. `editor` = the slim live-graph
+ * HUD mounted in the app under `?perf=1`: subject pinned to the live graph, no
+ * scene picker, no visible preview canvas (the profiling canvas stays in the
+ * DOM offscreen at its true render resolution so measurement stays honest).
+ */
+export type PerfViewMode = 'standalone' | 'editor'
+
+export function PerfView({ mode = 'standalone' }: { mode?: PerfViewMode } = {}) {
+  const editor = mode === 'editor'
+  const initialConfig = editor ? EDITOR_CONFIG : DEFAULT_CONFIG
+
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sessionRef = useRef<PerfSession | null>(null)
 
-  const [config, setConfig] = useState<PerfConfig>(DEFAULT_CONFIG)
+  const [config, setConfig] = useState<PerfConfig>(initialConfig)
   const [sample, setSample] = useState<PerfSample | null>(null)
 
   // The measured canvas keeps its true render-resolution CSS size (PerfSession
@@ -75,7 +99,7 @@ export function PerfView() {
 
   // The session's source of truth for the full config (the lifecycle effect
   // reads this at start time; it is not a render input, so it stays a ref).
-  const configRef = useRef<PerfConfig>(DEFAULT_CONFIG)
+  const configRef = useRef<PerfConfig>(initialConfig)
 
   // Node-isolation options: the current graph's nodes, id + node-type label.
   // Read reactively so live-graph edits refresh the list. Scenes have their own
@@ -127,31 +151,57 @@ export function PerfView() {
     <div className="flex flex-row gap-xl w-full h-full bg-surface text-fg overflow-hidden">
       {/* Left column: canvas + controls */}
       <div className={`${ds.propertiesPanel.root} w-[300px] shrink-0 overflow-y-auto`}>
-        <div className={ds.propertiesPanel.sectionHeader}>Preview</div>
-        <div
-          ref={previewBoxRef}
-          className="relative aspect-video w-full overflow-hidden rounded-md border border-edge bg-surface-raised"
-        >
-          {/* Wrapper carries the scale-to-fit transform; the canvas inside keeps
-              its real cfg.width×cfg.height CSS size (set by PerfSession), so its
-              clientWidth stays honest while the whole frame is shown scaled down. */}
-          <div
-            className="absolute left-0 top-0"
+        {editor ? (
+          // Editor HUD: the app's own canvas already shows the graph output, so a
+          // second preview is redundant. The profiling canvas MUST stay in the DOM
+          // at its real cfg.width×cfg.height CSS size (PerfSession reads clientWidth
+          // for the backing store) — hide it offscreen, NOT with display:none which
+          // would zero clientWidth and break measurement.
+          <canvas
+            key={config.backend}
+            ref={canvasRef}
+            aria-hidden
+            className="block"
             style={{
-              transform: `translateY(${preview.offsetY}px) scale(${preview.scale})`,
-              transformOrigin: 'top left',
+              position: 'absolute',
+              left: -99999,
+              top: 0,
+              opacity: 0,
+              pointerEvents: 'none',
+              width: config.width,
+              height: config.height,
             }}
-          >
-            <canvas
-              key={config.backend}
-              ref={canvasRef}
-              className="block"
-              style={{ width: config.width, height: config.height }}
-            />
-          </div>
-        </div>
+          />
+        ) : (
+          <>
+            <div className={ds.propertiesPanel.sectionHeader}>Preview</div>
+            <div
+              ref={previewBoxRef}
+              className="relative aspect-video w-full overflow-hidden rounded-md border border-edge bg-surface-raised"
+            >
+              {/* Wrapper carries the scale-to-fit transform; the canvas inside keeps
+                  its real cfg.width×cfg.height CSS size (set by PerfSession), so its
+                  clientWidth stays honest while the whole frame is shown scaled down. */}
+              <div
+                className="absolute left-0 top-0"
+                style={{
+                  transform: `translateY(${preview.offsetY}px) scale(${preview.scale})`,
+                  transformOrigin: 'top left',
+                }}
+              >
+                <canvas
+                  key={config.backend}
+                  ref={canvasRef}
+                  className="block"
+                  style={{ width: config.width, height: config.height }}
+                />
+              </div>
+            </div>
+          </>
+        )}
 
         <PerfControls
+          showSubjectSelect={!editor}
           subjectKey={subjectKey(config.subject)}
           backend={config.backend}
           width={config.width}

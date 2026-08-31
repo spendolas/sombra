@@ -33,6 +33,12 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from '@/components/ui/resizable'
+import { PerfView } from '@/components/perf/PerfView'
+import { isPerfViewEnabled } from '@/perf/perf-enabled'
+
+// Read once at module eval — the `?perf=1` param never changes within a session,
+// so the render branch below is constant and FlowCanvas never remounts mid-session.
+const PERF_ON = isPerfViewEnabled()
 
 /** Apply a compile result to a renderer (shared by handleCompile + pending replay). */
 function applyCompileResult(
@@ -597,9 +603,14 @@ function App() {
   // Determine center split direction based on mode
   const isDocked = previewMode === 'docked'
 
-  return (
-    <ReactFlowProvider>
-      <div className="h-screen w-screen grid grid-cols-1 bg-surface">
+  // When flag absent, `rootClass` is byte-identical to today's — zero structural
+  // change. When present, the editor fills its split panel instead of the window.
+  const rootClass = PERF_ON
+    ? 'h-full w-full grid grid-cols-1 bg-surface'
+    : 'h-screen w-screen grid grid-cols-1 bg-surface'
+
+  const editorTree = (
+    <div className={rootClass}>
         {/* Hidden canvas holder — canvas is always mounted here initially */}
         <div className="hidden">
           <canvas
@@ -666,6 +677,26 @@ function App() {
           <CommandPalette onClose={() => setCommandPaletteOpen(false)} mousePosition={paletteMousePos} />
         )}
       </div>
+  )
+
+  return (
+    <ReactFlowProvider>
+      {PERF_ON ? (
+        // Dev-only (`?perf=1`): split the window — editor left, slim live-graph
+        // Perf HUD right. FlowCanvas stays at the same JSX position inside
+        // editorTree; PERF_ON is constant per session, so no mid-session remount.
+        <ResizablePanelGroup direction="horizontal" className="h-screen w-screen bg-surface">
+          <ResizablePanel id="editor" defaultSize="68%" minSize="30%">
+            {editorTree}
+          </ResizablePanel>
+          <ResizableHandle />
+          <ResizablePanel id="perf" defaultSize="32%" minSize="20%">
+            <PerfView mode="editor" />
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      ) : (
+        editorTree
+      )}
     </ReactFlowProvider>
   )
 }

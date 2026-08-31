@@ -25,6 +25,9 @@ const LIVE = '__live__'
 const ISOLATE_OFF = '__off__'
 
 interface PerfControlsProps {
+  /** Whether to render the scene/Graph picker. Off in the editor HUD, where the
+   *  subject is pinned to the live current graph. Defaults to on (standalone). */
+  showSubjectSelect?: boolean
   subjectKey: string // 'live' or a scene id
   backend: 'webgpu' | 'webgl2'
   width: number
@@ -54,6 +57,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 export function PerfControls(props: PerfControlsProps) {
   const {
+    showSubjectSelect = true,
     subjectKey,
     backend,
     width,
@@ -75,26 +79,28 @@ export function PerfControls(props: PerfControlsProps) {
     <div className="flex flex-col gap-lg">
       <div className={ds.propertiesPanel.sectionHeader}>Subject</div>
 
-      <Field label="Graph">
-        <Select
-          value={subjectKey === 'live' ? LIVE : subjectKey}
-          onValueChange={(v) =>
-            v === LIVE ? onSubjectChange({ kind: 'live' }) : onSubjectChange({ kind: 'scene', sceneId: v })
-          }
-        >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={LIVE}>Live graph</SelectItem>
-            {PERF_SCENES.map((s) => (
-              <SelectItem key={s.id} value={s.id}>
-                {s.title}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </Field>
+      {showSubjectSelect && (
+        <Field label="Graph">
+          <Select
+            value={subjectKey === 'live' ? LIVE : subjectKey}
+            onValueChange={(v) =>
+              v === LIVE ? onSubjectChange({ kind: 'live' }) : onSubjectChange({ kind: 'scene', sceneId: v })
+            }
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={LIVE}>Live graph</SelectItem>
+              {PERF_SCENES.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+      )}
 
       <Field label="Isolate node">
         <Select
