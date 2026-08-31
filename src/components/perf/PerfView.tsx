@@ -74,6 +74,13 @@ export function PerfView({
 // ---------------------------------------------------------------------------
 
 const POLL_INTERVAL_MS = 250
+// A static graph (no animation) stops producing frames, so the surviving
+// renderer may never emit the one instrumented frame the HUD needs. When
+// timestamps are active but no per-pass sample exists yet, we NUDGE the renderer
+// to render one on demand (requestRender — the normal static-render path). We cap
+// the nudges so an environment where timestamps never populate (unsupported /
+// stuck readback) can't spin forever; ~8 × 250ms ≈ 2s of retries.
+const MAX_NUDGE_ATTEMPTS = 8
 
 function EditorPerfView({ renderer }: { renderer: ShaderRenderer | null }) {
   const [passNs, setPassNs] = useState<number[] | null>(null)
@@ -107,10 +114,25 @@ function EditorPerfView({ renderer }: { renderer: ShaderRenderer | null }) {
     let prevFrames = renderer.getFrameCount?.() ?? null
     let prevTime = performance.now()
     let ema: number | null = null
+    // Nudge bookkeeping: how many on-demand renders we've asked for while waiting
+    // for the first instrumented sample. Reset per renderer (this effect re-runs
+    // on renderer identity change), stops as soon as a sample lands.
+    let nudgeAttempts = 0
     const poll = () => {
-      setPassNs(renderer.getPassTimingsNs?.() ?? null)
-      setTimingActive(renderer.timestampsActive?.() ?? false)
+      const timings = renderer.getPassTimingsNs?.() ?? null
+      const timestampsOn = renderer.timestampsActive?.() ?? false
+      setPassNs(timings)
+      setTimingActive(timestampsOn)
       setTargetFps(renderer.getTargetFps?.() ?? null)
+
+      // Static-graph nudge: timestamps are active but no sample has been captured
+      // yet → force one instrumented frame. An animated graph already produces
+      // frames (timings non-null), so this never fires for it. Stop once a sample
+      // lands or the attempt cap is hit (timestamps genuinely unavailable/stuck).
+      if (timestampsOn && timings == null && nudgeAttempts < MAX_NUDGE_ATTEMPTS) {
+        nudgeAttempts += 1
+        renderer.requestRender()
+      }
 
       const frames = renderer.getFrameCount?.()
       const now = performance.now()
