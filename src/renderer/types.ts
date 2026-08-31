@@ -101,6 +101,15 @@ export interface ShaderRenderer {
   /** Mark all multi-pass render passes as dirty. */
   markAllDirty(): void
 
+  /** Dev/perf only, WebGPU-only: per-pass GPU durations (ns) from the most recent
+   *  timestamp-query readback, or null when timestamps are inactive or no frame
+   *  has completed a readback. Opt-in via createShaderRenderer's enableTimestamps. */
+  getPassTimingsNs?(): number[] | null
+
+  /** Dev/perf only, WebGPU-only: whether timestamp queries are actually running
+   *  (opt-in AND supported by the adapter). */
+  timestampsActive?(): boolean
+
   /** Which backend is active. */
   readonly backend: 'webgl2' | 'webgpu'
 }

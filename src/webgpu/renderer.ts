@@ -222,6 +222,31 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
   // Device lost
   private deviceLostCallback: (() => void) | null = null
 
+  // GPU timestamp queries (opt-in, dev-only per-pass profiling). When
+  // enableTimestamps is off, tsActive stays false and NONE of this machinery
+  // engages — the render path is byte-identical to the default renderer.
+  // setEnableTimestamps() must be called before init() (the device feature is
+  // requested there).
+  private enableTimestamps = false
+  private tsActive = false
+  private tsQuerySet: GPUQuerySet | null = null
+  private tsResolveBuffer: GPUBuffer | null = null
+  private tsReadBuffer: GPUBuffer | null = null
+  private tsPassCount = 0
+  private tsMapPending = false
+  private lastPassTimingsNs: number[] | null = null
+
+  /** Opt into GPU timestamp-query per-pass timing. MUST be called before init().
+   *  No-op if the adapter lacks the `timestamp-query` feature. Dev/perf only. */
+  setEnableTimestamps(v: boolean): void { this.enableTimestamps = v }
+
+  /** Per-pass GPU durations (ns) from the most recent readback, or null when
+   *  timestamps are inactive or no frame has completed a readback yet. */
+  getPassTimingsNs(): number[] | null { return this.lastPassTimingsNs }
+
+  /** True when timestamp queries are actually running (opt-in AND supported). */
+  timestampsActive(): boolean { return this.tsActive }
+
   // -----------------------------------------------------------------------
   // Lifecycle
   // -----------------------------------------------------------------------
@@ -236,7 +261,14 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     this.adapter = adapter
     this.vendor = (adapter.info?.vendor ?? '').toLowerCase()
 
-    this.device = await adapter.requestDevice()
+    // Opt-in GPU timestamp queries: only request the feature when both enabled
+    // and supported. When inactive, keep the EXACT original device request so
+    // the default path is byte-identical.
+    const hasTs = !!adapter.features?.has('timestamp-query')
+    this.tsActive = this.enableTimestamps && hasTs
+    this.device = this.tsActive
+      ? await adapter.requestDevice({ requiredFeatures: ['timestamp-query'] })
+      : await adapter.requestDevice()
     this.canvasFormat = navigator.gpu.getPreferredCanvasFormat()
 
     // Get the context but DON'T configure yet — defer to first render.
@@ -301,6 +333,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     this.probeReadBuffer?.destroy()
     this.probeTexture = null
     this.probeReadBuffer = null
+    this.destroyTimestampResources()
 
     // Release the GPUDevice itself — browsers cap devices per page, and
     // StrictMode double-init would otherwise leak one per mount cycle.
@@ -334,8 +367,19 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
 
       this.stopAnimation()
 
-      this.adapter.requestDevice().then((device: GPUDevice) => {
+      const requestFresh = this.tsActive
+        ? this.adapter.requestDevice({ requiredFeatures: ['timestamp-query'] })
+        : this.adapter.requestDevice()
+      requestFresh.then((device: GPUDevice) => {
         this.device = device
+
+        // Timestamp query resources belonged to the dead device — drop them.
+        // The re-applied render plan recreates them on the fresh device.
+        this.tsQuerySet = null
+        this.tsResolveBuffer = null
+        this.tsReadBuffer = null
+        this.tsMapPending = false
+        this.tsPassCount = 0
 
         // Fresh device: force a reconfigure at the current mode's alphaMode.
         this.configuredAlphaMode = null
@@ -397,8 +441,68 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
       result = this.updateMultiPass(wgslPasses)
     }
     // A new plan can change the output's transparency — re-probe on next render.
-    if (result.success) this.needsAlphaProbe = true
+    if (result.success) {
+      this.needsAlphaProbe = true
+      // Size the timestamp query set to the pass count (both codegen paths land
+      // here). Single-pass renders 1 pass → 2 queries; multi-pass N → 2N.
+      this.ensureTimestampResources(wgslPasses.length)
+    }
     return result
+  }
+
+  // -----------------------------------------------------------------------
+  // GPU timestamp queries (opt-in, dev-only). All no-ops when tsActive=false.
+  // -----------------------------------------------------------------------
+
+  /** (Re)create the query set + resolve/readback buffers for `passCount` passes.
+   *  Idempotent when the count is unchanged. No-op unless timestamps are active. */
+  private ensureTimestampResources(passCount: number): void {
+    if (!this.tsActive) return
+    if (this.tsQuerySet && this.tsPassCount === passCount) return
+    this.destroyTimestampResources()
+    this.tsPassCount = passCount
+    const count = 2 * passCount // begin + end per pass
+    this.tsQuerySet = this.device.createQuerySet({ type: 'timestamp', count })
+    this.tsResolveBuffer = this.device.createBuffer({
+      size: count * 8, // u64 per query
+      usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC,
+    })
+    this.tsReadBuffer = this.device.createBuffer({
+      size: count * 8,
+      usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+    })
+  }
+
+  private destroyTimestampResources(): void {
+    // A buffer mid-map cannot be destroyed cleanly; the pending mapAsync will
+    // reject into readbackTimestamps' catch, which clears tsMapPending.
+    this.tsQuerySet?.destroy()
+    this.tsResolveBuffer?.destroy()
+    this.tsReadBuffer?.destroy()
+    this.tsQuerySet = null
+    this.tsResolveBuffer = null
+    this.tsReadBuffer = null
+    this.tsPassCount = 0
+  }
+
+  /** Async, non-blocking readback of the resolved timestamps. A single in-flight
+   *  map is allowed; frames while one is pending simply skip (results are a
+   *  rolling sample, not every frame). Never awaited by render(). */
+  private readbackTimestamps(passCount: number): void {
+    const buf = this.tsReadBuffer
+    if (!buf || this.tsMapPending) return
+    this.tsMapPending = true
+    buf.mapAsync(GPUMapMode.READ).then(() => {
+      // The buffer may have been recreated (plan change / device loss) while the
+      // map was in flight — discard the stale result in that case.
+      if (this.tsReadBuffer !== buf) { this.tsMapPending = false; return }
+      const t = new BigUint64Array(buf.getMappedRange().slice(0))
+      buf.unmap()
+      this.lastPassTimingsNs = Array.from({ length: passCount }, (_, i) =>
+        Number(t[2 * i + 1] - t[2 * i]),
+      )
+      this.tsMapPending = false
+    }).catch(() => { this.tsMapPending = false })
   }
 
   private updateSinglePass(wgslPass: NonNullable<RenderPlan['wgsl']>['passes'][number]): { success: boolean; error?: string } {
@@ -1019,16 +1123,26 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
 
     this.writeSinglePassBuiltinUniforms(w, h, dpr, time)
 
+    const useTs = this.tsActive && this.tsQuerySet !== null && this.tsPassCount === 1
+
     const currentTexture = this.context.getCurrentTexture()
     const encoder = this.device.createCommandEncoder()
-    const pass = encoder.beginRenderPass({
+    const passDesc: GPURenderPassDescriptor = {
       colorAttachments: [{
         view: currentTexture.createView(),
         loadOp: 'clear',
         storeOp: 'store',
         clearValue: this.opaqueBackground ? { ...this.compositeBg, a: 1 } : { r: 0, g: 0, b: 0, a: 0 },
       }],
-    })
+    }
+    if (useTs) {
+      passDesc.timestampWrites = {
+        querySet: this.tsQuerySet!,
+        beginningOfPassWriteIndex: 0,
+        endOfPassWriteIndex: 1,
+      }
+    }
+    const pass = encoder.beginRenderPass(passDesc)
 
     if (this.opaqueBackground && this.compositeChecker) this.drawChecker(pass, dpr)
     pass.setPipeline(this.pipeline)
@@ -1040,7 +1154,14 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     pass.draw(6)
     pass.end()
 
+    if (useTs) {
+      encoder.resolveQuerySet(this.tsQuerySet!, 0, 2, this.tsResolveBuffer!, 0)
+      encoder.copyBufferToBuffer(this.tsResolveBuffer!, 0, this.tsReadBuffer!, 0, 2 * 8)
+    }
+
     this.device.queue.submit([encoder.finish()])
+
+    if (useTs) this.readbackTimestamps(1)
   }
 
   private renderMultiPass(w: number, h: number, dpr: number, time: number): void {
@@ -1051,6 +1172,9 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
 
     // Write built-in uniforms to all passes
     this.writeMultiPassBuiltinUniforms(w, h, dpr, time)
+
+    const passCount = this.passStates.length
+    const useTs = this.tsActive && this.tsQuerySet !== null && this.tsPassCount === passCount
 
     const encoder = this.device.createCommandEncoder()
 
@@ -1067,14 +1191,22 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
         targetView = this.intermediateTextures[i].createView()
       }
 
-      const pass = encoder.beginRenderPass({
+      const passDesc: GPURenderPassDescriptor = {
         colorAttachments: [{
           view: targetView,
           loadOp: 'clear',
           storeOp: 'store',
           clearValue: (isLastPass && this.opaqueBackground) ? { ...this.compositeBg, a: 1 } : { r: 0, g: 0, b: 0, a: 0 },
         }],
-      })
+      }
+      if (useTs) {
+        passDesc.timestampWrites = {
+          querySet: this.tsQuerySet!,
+          beginningOfPassWriteIndex: 2 * i,
+          endOfPassWriteIndex: 2 * i + 1,
+        }
+      }
+      const pass = encoder.beginRenderPass(passDesc)
 
       if (isLastPass && this.opaqueBackground && this.compositeChecker) this.drawChecker(pass, dpr)
       pass.setPipeline(ps.pipeline)
@@ -1087,7 +1219,15 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
       pass.end()
     }
 
+    if (useTs) {
+      const n = 2 * passCount
+      encoder.resolveQuerySet(this.tsQuerySet!, 0, n, this.tsResolveBuffer!, 0)
+      encoder.copyBufferToBuffer(this.tsResolveBuffer!, 0, this.tsReadBuffer!, 0, n * 8)
+    }
+
     this.device.queue.submit([encoder.finish()])
+
+    if (useTs) this.readbackTimestamps(passCount)
   }
 
   clear(): void {
