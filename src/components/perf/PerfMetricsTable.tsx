@@ -88,40 +88,66 @@ export function PerfMetricsTable({ sample }: { sample: PerfSample | null }) {
   )
 }
 
+/** Delivered-FPS row. The editor's render loop is THROTTLED to a target (30/45/
+ *  60), so this reading is CAPPED at that target: a light graph reads the cap
+ *  (not its true ceiling — that's the standalone benchmark's job), a heavy graph
+ *  dips below it (the useful "can't hold target" signal). The target is shown
+ *  alongside so a capped reading can't be mistaken for uncapped capability.
+ *  `null` delivered = idle (static graph rendered then stopped) → shows `—`. */
+function fmtDeliveredFps(deliveredFps: number | null, targetFps: number | null): string {
+  const target = targetFps != null ? String(Math.round(targetFps)) : '—'
+  if (deliveredFps == null) return `idle / ${target}`
+  return `${Math.round(deliveredFps)} / ${target}`
+}
+
 /**
  * EditorPerfMetrics — the editor-HUD readout (Perf View editor mode).
  *
- * A PASSIVE reader of the editor's OWN renderer: no PerfSession, no FPS (the
- * editor's rAF loop is throttled, so a raw FPS would mislead). It leads with the
- * real per-frame GPU cost of what's on screen and lists the per-pass breakdown.
- * `passNs` comes straight from the live renderer's `getPassTimingsNs()`, so its
- * length IS the pass count the editor actually renders. When timestamps are
- * unavailable (WebGL2 editor / no timestamp-query) it shows the same muted note
- * the standalone table uses.
+ * A PASSIVE reader of the editor's OWN renderer: no PerfSession. It leads with
+ * the DELIVERED frame rate (Δframes/Δtime from the renderer's frame counter,
+ * honestly labeled against the loop's throttle target — NOT the uncapped
+ * benchmark FPS) and the real per-frame GPU cost of what's on screen, then lists
+ * the per-pass breakdown. `passNs` comes straight from the live renderer's
+ * `getPassTimingsNs()`, so its length IS the pass count the editor actually
+ * renders. When timestamps are unavailable (WebGL2 editor / no timestamp-query)
+ * the GPU section shows a muted note; delivered FPS still shows.
  */
 export function EditorPerfMetrics({
   passNs,
   timingActive,
+  deliveredFps,
+  targetFps,
 }: {
   passNs: number[] | null
   timingActive: boolean
+  deliveredFps: number | null
+  targetFps: number | null
 }) {
-  if (!timingActive) {
-    return (
-      <div className={ds.propertiesPanel.paramSection}>
-        <div className={ds.propertiesPanel.sectionHeader}>GPU / frame</div>
-        <div className={ds.propertiesPanel.emptyText}>
-          GPU per-pass timing unavailable (WebGL2 / no timestamp-query).
-        </div>
-      </div>
-    )
-  }
-
   const gpuTotalNs = passNs ? passNs.reduce((a, b) => a + b, 0) : null
 
   return (
     <div className="flex flex-col gap-lg">
-      {/* Headline: the real cost of the frame the user is looking at. */}
+      {/* Delivered frame rate — capped at the loop's throttle target (shown). */}
+      <div className={ds.propertiesPanel.paramSection}>
+        <div className={ds.propertiesPanel.sectionHeader}>Frame rate</div>
+        <div className={ds.propertiesPanel.portList}>
+          <MetricRow
+            label="FPS (delivered)"
+            value={fmtDeliveredFps(deliveredFps, targetFps)}
+          />
+        </div>
+      </div>
+
+      {/* Headline: the real GPU cost of the frame the user is looking at. */}
+      {!timingActive ? (
+        <div className={ds.propertiesPanel.paramSection}>
+          <div className={ds.propertiesPanel.sectionHeader}>GPU / frame</div>
+          <div className={ds.propertiesPanel.emptyText}>
+            GPU per-pass timing unavailable (WebGL2 / no timestamp-query).
+          </div>
+        </div>
+      ) : (
+        <>
       <div className={ds.propertiesPanel.paramSection}>
         <div className={ds.propertiesPanel.sectionHeader}>GPU / frame</div>
         <div className={ds.propertiesPanel.portList}>
@@ -147,6 +173,8 @@ export function EditorPerfMetrics({
           <div className={ds.propertiesPanel.emptyText}>Waiting for the first rendered frame…</div>
         )}
       </div>
+        </>
+      )}
     </div>
   )
 }

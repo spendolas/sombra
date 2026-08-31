@@ -174,6 +174,10 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
   private targetFps = 60
   private lastFrameTime = 0
 
+  /** Monotonic count of frames actually submitted/presented (dev-only perf HUD
+   *  reads deltas to derive delivered FPS). Cheap always-on counter. */
+  private frameCount = 0
+
   // Quality tier
   private currentTier: QualityTier = 'adaptive'
   private ANIMATED_DPR_SCALE = 0.75
@@ -246,6 +250,13 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
 
   /** True when timestamp queries are actually running (opt-in AND supported). */
   timestampsActive(): boolean { return this.tsActive }
+
+  /** Monotonic count of frames actually presented. Dev/perf HUD samples deltas
+   *  over an interval to compute delivered FPS. Always-on, negligible cost. */
+  getFrameCount(): number { return this.frameCount }
+
+  /** Current target FPS cap the animation loop throttles to (30/45/60). */
+  getTargetFps(): number { return this.targetFps }
 
   // -----------------------------------------------------------------------
   // Lifecycle
@@ -1165,6 +1176,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     }
 
     this.device.queue.submit([encoder.finish()])
+    this.frameCount++
 
     if (useTs) this.readbackTimestamps(1)
   }
@@ -1233,6 +1245,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     }
 
     this.device.queue.submit([encoder.finish()])
+    this.frameCount++
 
     if (useTs) this.readbackTimestamps(passCount)
   }

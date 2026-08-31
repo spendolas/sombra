@@ -78,6 +78,11 @@ const POLL_INTERVAL_MS = 250
 function EditorPerfView({ renderer }: { renderer: ShaderRenderer | null }) {
   const [passNs, setPassNs] = useState<number[] | null>(null)
   const [timingActive, setTimingActive] = useState(false)
+  // Delivered FPS derived from the renderer's frame counter. `null` = idle (no
+  // frames produced over the last window — a static graph rendered on demand
+  // then stopped), which the readout shows as `—`, never 0.
+  const [deliveredFps, setDeliveredFps] = useState<number | null>(null)
+  const [targetFps, setTargetFps] = useState<number | null>(null)
 
   // The editor's REAL backing resolution (device px) — App feeds it here from the
   // main canvas ResizeObserver. Read-only display, never a control.
@@ -86,16 +91,50 @@ function EditorPerfView({ renderer }: { renderer: ShaderRenderer | null }) {
   // Poll the passed renderer — no render loop of our own; the editor already
   // renders. getPassTimingsNs() returns the most recent readback (cached), so
   // this is cheap and reflects the last on-screen frame; it refreshes whenever
-  // the graph is edited and the editor re-renders.
+  // the graph is edited and the editor re-renders. The frame counter is sampled
+  // the same way: Δframes / Δseconds over the poll window = DELIVERED FPS, which
+  // is capped at the loop's target (heavy graph dips below; light graph reads the
+  // cap, not its true ceiling — that's the standalone benchmark's job).
   useEffect(() => {
     if (!renderer) {
       setPassNs(null)
       setTimingActive(false)
+      setDeliveredFps(null)
+      setTargetFps(null)
       return
     }
+    // Previous (frameCount, timestamp) sample and a short EMA for light smoothing.
+    let prevFrames = renderer.getFrameCount?.() ?? null
+    let prevTime = performance.now()
+    let ema: number | null = null
     const poll = () => {
       setPassNs(renderer.getPassTimingsNs?.() ?? null)
       setTimingActive(renderer.timestampsActive?.() ?? false)
+      setTargetFps(renderer.getTargetFps?.() ?? null)
+
+      const frames = renderer.getFrameCount?.()
+      const now = performance.now()
+      if (frames == null || prevFrames == null) {
+        // Backend without a counter — leave delivered FPS unknown (shows —).
+        setDeliveredFps(null)
+        prevFrames = frames ?? null
+        prevTime = now
+        return
+      }
+      const dFrames = frames - prevFrames
+      const dSeconds = (now - prevTime) / 1000
+      prevFrames = frames
+      prevTime = now
+      if (dFrames <= 0 || dSeconds <= 0) {
+        // No frames this window → idle. Reset the EMA so the next active reading
+        // starts clean rather than blending across an idle gap.
+        ema = null
+        setDeliveredFps(null)
+        return
+      }
+      const instant = dFrames / dSeconds
+      ema = ema == null ? instant : ema * 0.5 + instant * 0.5
+      setDeliveredFps(ema)
     }
     poll()
     const id = setInterval(poll, POLL_INTERVAL_MS)
@@ -117,7 +156,12 @@ function EditorPerfView({ renderer }: { renderer: ShaderRenderer | null }) {
       {!renderer ? (
         <div className={ds.propertiesPanel.emptyText}>Waiting for renderer…</div>
       ) : (
-        <EditorPerfMetrics passNs={passNs} timingActive={timingActive} />
+        <EditorPerfMetrics
+          passNs={passNs}
+          timingActive={timingActive}
+          deliveredFps={deliveredFps}
+          targetFps={targetFps}
+        />
       )}
     </div>
   )
