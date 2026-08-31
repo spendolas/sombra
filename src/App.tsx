@@ -33,6 +33,12 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from '@/components/ui/resizable'
+import { PerfView } from '@/components/perf/PerfView'
+import { isPerfViewEnabled } from '@/perf/perf-enabled'
+
+// Read once at module eval — the `?perf=1` param never changes within a session,
+// so the render branch below is constant and FlowCanvas never remounts mid-session.
+const PERF_ON = isPerfViewEnabled()
 
 /** Apply a compile result to a renderer (shared by handleCompile + pending replay). */
 function applyCompileResult(
@@ -100,6 +106,12 @@ function applyCompileResult(
 function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const rendererRef = useRef<ShaderRenderer | null>(null)
+
+  // The live main renderer, exposed to React so the dev-only Perf HUD (?perf=1)
+  // can profile the EDITOR'S ACTUAL on-screen render (no shadow canvas/device).
+  // Null until the async factory resolves; the HUD shows "waiting" until then.
+  // Untouched by the no-flag prod path beyond one extra render when it resolves.
+  const [mainRenderer, setMainRenderer] = useState<ShaderRenderer | null>(null)
 
   // Keep the live preview-canvas CSS size available to graphStore.setOutputAnchor
   // (it compensates pinned gradients atomically with the anchor change).
@@ -241,10 +253,14 @@ function App() {
     let disposed = false
     let renderer: ShaderRenderer | null = null
 
-    createShaderRenderer(canvasRef.current).then((r) => {
+    // Under ?perf=1 only, enable per-pass GPU timestamp-query on the editor's OWN
+    // renderer so the Perf HUD reads real on-screen per-pass costs. No flag = no
+    // opts = byte-identical to prod. WebGL2 fallback ignores enableTimestamps.
+    createShaderRenderer(canvasRef.current, undefined, PERF_ON ? { enableTimestamps: true } : undefined).then((r) => {
       if (disposed) { r.dispose(); return }
       renderer = r
       rendererRef.current = r
+      setMainRenderer(r)
 
       // Record AMD (WebGPU only) so the editor can warn before see-through, the
       // one mode that keeps a transparent canvas (which flickers on AMD/Metal).
@@ -301,6 +317,7 @@ function App() {
       disposed = true
       renderer?.dispose()
       rendererRef.current = null
+      setMainRenderer(null)
       setCaptureThumbnailImpl(null)
     }
   }, [captureThumbnail])
@@ -597,9 +614,14 @@ function App() {
   // Determine center split direction based on mode
   const isDocked = previewMode === 'docked'
 
-  return (
-    <ReactFlowProvider>
-      <div className="h-screen w-screen grid grid-cols-1 bg-surface">
+  // When flag absent, `rootClass` is byte-identical to today's — zero structural
+  // change. When present, the editor fills its split panel instead of the window.
+  const rootClass = PERF_ON
+    ? 'h-full w-full grid grid-cols-1 bg-surface'
+    : 'h-screen w-screen grid grid-cols-1 bg-surface'
+
+  const editorTree = (
+    <div className={rootClass}>
         {/* Hidden canvas holder — canvas is always mounted here initially */}
         <div className="hidden">
           <canvas
@@ -666,6 +688,26 @@ function App() {
           <CommandPalette onClose={() => setCommandPaletteOpen(false)} mousePosition={paletteMousePos} />
         )}
       </div>
+  )
+
+  return (
+    <ReactFlowProvider>
+      {PERF_ON ? (
+        // Dev-only (`?perf=1`): split the window — editor left, slim live-graph
+        // Perf HUD right. FlowCanvas stays at the same JSX position inside
+        // editorTree; PERF_ON is constant per session, so no mid-session remount.
+        <ResizablePanelGroup direction="horizontal" className="h-screen w-screen bg-surface">
+          <ResizablePanel id="editor" defaultSize="68%" minSize="30%">
+            {editorTree}
+          </ResizablePanel>
+          <ResizableHandle />
+          <ResizablePanel id="perf" defaultSize="32%" minSize="20%">
+            <PerfView mode="editor" renderer={mainRenderer} />
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      ) : (
+        editorTree
+      )}
     </ReactFlowProvider>
   )
 }

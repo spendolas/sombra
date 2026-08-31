@@ -18,4 +18,5 @@ export const SANDBOXES: SandboxEntry[] = [
   { name: 'editor-chrome', title: 'Editor Chrome', group: 'Chrome', load: () => import('./harnesses/editor-chrome') },
   { name: 'srt-renderer', title: 'SRT Renderer', group: 'Chrome', load: () => import('./harnesses/srt-renderer') },
   { name: 'ds-preview', title: 'DS Preview', group: 'DS', load: () => import('./harnesses/ds-preview') },
+  { name: 'perf-view', title: 'Perf View', group: 'Perf', load: () => import('./harnesses/perf-view') },
 ]

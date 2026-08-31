@@ -108,6 +108,10 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
   private targetFps = 60
   private lastFrameTime = 0
 
+  /** Monotonic count of frames actually drawn/presented (dev-only perf HUD reads
+   *  deltas to derive delivered FPS). Cheap always-on counter. */
+  private frameCount = 0
+
   // Quality tier
   private currentTier: QualityTier = 'adaptive'
   private ANIMATED_DPR_SCALE = 0.75
@@ -857,6 +861,7 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
     gl.bindVertexArray(this.vao)
     gl.drawArrays(gl.TRIANGLES, 0, 6)
     gl.bindVertexArray(null)
+    this.frameCount++
   }
 
   /** Multi-pass render with FBOs. */
@@ -964,6 +969,7 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
     gl.activeTexture(gl.TEXTURE0)
     gl.bindTexture(gl.TEXTURE_2D, null)
     gl.bindVertexArray(null)
+    this.frameCount++
   }
 
   /** Upload built-in uniforms (time, resolution, ref_size, dpr) to a program. */
@@ -993,6 +999,13 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
     const anchorLoc = uniforms.get('u_anchor')
     if (anchorLoc) gl.uniform2f(anchorLoc, this.anchor[0], this.anchor[1])
   }
+
+  /** Monotonic count of frames actually drawn. Dev/perf HUD samples deltas over
+   *  an interval to compute delivered FPS. Always-on, negligible cost. */
+  getFrameCount(): number { return this.frameCount }
+
+  /** Current target FPS cap the animation loop throttles to (30/45/60). */
+  getTargetFps(): number { return this.targetFps }
 
   // -----------------------------------------------------------------------
   // Animation loop
