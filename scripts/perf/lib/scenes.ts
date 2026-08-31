@@ -296,6 +296,11 @@ export function compileScene(graph: Graph): CompiledScene {
   if (ir.passes.length !== glsl.passes.length) {
     throw new Error(`pass count mismatch: glsl ${glsl.passes.length} vs wgsl ${ir.passes.length}`)
   }
+  for (let i = 0; i < ir.passes.length; i++) {
+    if ((ir.passes[i].resolution ?? 1) !== (glsl.passes[i].resolution ?? 1)) {
+      throw new Error(`pass ${i} resolution mismatch: glsl ${glsl.passes[i].resolution} vs wgsl ${ir.passes[i].resolution}`)
+    }
+  }
 
   const passes: PerfPass[] = ir.passes.map((p, i) => ({
     wgsl: p.shaderCode,
@@ -307,6 +312,10 @@ export function compileScene(graph: Graph): CompiledScene {
     inputTextures: p.inputTextures,
     userUniforms: glsl.passes[i].userUniforms.map((u) => ({ name: u.name, glslType: u.glslType, value: u.value })),
     filter: p.textureFilter,
+    // Per-pass fractional rasterisation scale (RenderPass.resolution). Both
+    // backends resolve it identically via pass-resolution.ts; assert they agree
+    // so the rig can't measure a WGSL/GLSL geometry mismatch as a "win".
+    resolution: p.resolution,
   }))
 
   return { passCount: passes.length, passes }

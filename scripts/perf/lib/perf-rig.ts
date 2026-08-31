@@ -41,6 +41,15 @@ export interface PerfPass {
   inputTextures: Array<{ passIndex: number; samplerName: string }>
   userUniforms: Array<{ name: string; glslType: string; value: number | number[] }>
   filter?: 'linear' | 'nearest'
+  /**
+   * Fractional rasterisation scale for this pass (RenderPass.resolution). When
+   * present and < 1 the pass renders to a target of round(W*scale)×round(H*scale)
+   * and its u_viewport / u_dpr / u_frame_scale scale with it — exactly the real
+   * renderer's per-pass geometry (src/renderer/pass-size.ts, writeMultiPass-
+   * BuiltinUniforms). The LAST pass is always forced to full canvas regardless,
+   * mirroring the swap-chain rule. Undefined ⇒ full resolution.
+   */
+  resolution?: number
 }
 
 export interface PerfRunSpec {
@@ -175,6 +184,28 @@ const BROWSER_SIDE = /* js */ `
 
   const QUAD = new Float32Array([-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1]);
 
+  // Per-pass target geometry, matching src/renderer/pass-size.ts + the renderer's
+  // final-pass-forced-full rule. A pass with resolution < 1 rasterises at
+  // round(W*scale)×round(H*scale); its u_viewport/u_dpr/u_frame_scale scale by
+  // width/W. The LAST pass is always full canvas (swap-chain), whatever it
+  // declared. Undefined/≥1 resolution ⇒ full. maxTex clamp is a no-op at the
+  // resolutions this bench uses but kept for fidelity.
+  function passGeom(passes, i, W, H, baseDpr, baseFrameScale, maxTex) {
+    const isLast = i === passes.length - 1;
+    const s = passes[i].resolution;
+    if (isLast || s == null || !(s > 0) || s >= 1) {
+      return { w: W, h: H, dpr: baseDpr, frameScale: baseFrameScale };
+    }
+    const hi = Math.max(1, Math.floor(maxTex || 16384));
+    const sCeiling = hi / Math.max(W, H);
+    const sFloor = 1 / Math.min(W, H);
+    const sEff = Math.min(sCeiling, Math.max(s, sFloor));
+    const w = Math.min(hi, Math.max(1, Math.round(W * sEff)));
+    const h = Math.min(hi, Math.max(1, Math.round(H * sEff)));
+    const ratio = w / Math.max(1, W);
+    return { w, h, dpr: baseDpr * ratio, frameScale: baseFrameScale * ratio };
+  }
+
   // ---- WebGPU -------------------------------------------------------------
   let device = null, hasTs = false;
   async function getDevice() {
@@ -187,7 +218,7 @@ const BROWSER_SIDE = /* js */ `
     return device;
   }
 
-  function fillUniforms(spec, pass, W, H) {
+  function fillUniforms(spec, pass, geom) {
     const size = Math.max(16, pass.uniformTotalSize);
     const f32 = new Float32Array(size / 4);
     const off = pass.uniformOffsets;
@@ -197,11 +228,11 @@ const BROWSER_SIDE = /* js */ `
       for (let k = 0; k < vals.length; k++) f32[base + k] = vals[k];
     };
     set('u_time', [spec.time]);
-    set('u_resolution', [W, H]);
-    set('u_dpr', [spec.dpr]);
-    set('u_frame_scale', [spec.frameScale]);
+    set('u_resolution', [geom.w, geom.h]);
+    set('u_dpr', [geom.dpr]);
+    set('u_frame_scale', [geom.frameScale]);
     set('u_ref_size', [512]);
-    set('u_viewport', [W, H]);
+    set('u_viewport', [geom.w, geom.h]);
     set('u_anchor', spec.anchor);
     set('u_mouse', [0, 0]);
     for (const u of pass.userUniforms) set(u.name, Array.isArray(u.value) ? u.value : [u.value]);
@@ -225,11 +256,15 @@ const BROWSER_SIDE = /* js */ `
       imageTex[name] = t;
     }
 
+    const maxTex = dev.limits.maxTextureDimension2D;
     const passTextures = [];
+    const passGeoms = [];
     const built = [];
     for (let i = 0; i < spec.passes.length; i++) {
       const pass = spec.passes[i];
-      const target = dev.createTexture({ size: [W, H], format: 'rgba8unorm',
+      const geom = passGeom(spec.passes, i, W, H, spec.dpr, spec.frameScale, maxTex);
+      passGeoms.push(geom);
+      const target = dev.createTexture({ size: [geom.w, geom.h], format: 'rgba8unorm',
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC });
 
       const module = dev.createShaderModule({ code: pass.wgsl });
@@ -259,7 +294,7 @@ const BROWSER_SIDE = /* js */ `
         primitive: { topology: 'triangle-list' },
       });
 
-      const uf = fillUniforms(spec, pass, W, H);
+      const uf = fillUniforms(spec, pass, geom);
       const ubo = dev.createBuffer({ size: uf.size, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       dev.queue.writeBuffer(ubo, 0, uf.f32);
 
@@ -288,7 +323,7 @@ const BROWSER_SIDE = /* js */ `
       built.push({ pipeline, bindGroups, target });
       passTextures.push(target);
     }
-    return { dev, quadBuf, built, passTextures, imageTex };
+    return { dev, quadBuf, built, passTextures, passGeoms, imageTex };
   }
 
   // One encode+submit of the whole plan, R draws per pass, timed if useTs.
@@ -414,13 +449,17 @@ const BROWSER_SIDE = /* js */ `
       imageTex[name] = t; created.push(t);
     }
 
-    // Build programs + targets once.
+    // Build programs + targets once. Per-pass geometry honours RenderPass.resolution.
+    const maxTex = g.getParameter(g.MAX_TEXTURE_SIZE);
+    const geoms = [];
+    for (let i = 0; i < P; i++) geoms.push(passGeom(spec.passes, i, W, H, spec.dpr, spec.frameScale, maxTex));
+
     const passTex = [];
     const progs = [];
     const fbo = g.createFramebuffer();
     for (let i = 0; i < P; i++) {
       const pass = spec.passes[i];
-      const target = makeTex(g, W, H, null);
+      const target = makeTex(g, geoms[i].w, geoms[i].h, null);
       created.push(target);
 
       const vs = g.createShader(g.VERTEX_SHADER);
@@ -437,15 +476,15 @@ const BROWSER_SIDE = /* js */ `
       passTex.push(target);
     }
 
-    const setUniforms = (prog, pass) => {
+    const setUniforms = (prog, pass, geom) => {
       const setF = (nm, v) => { const l = g.getUniformLocation(prog, nm); if (l) g.uniform1f(l, v); };
       const set2 = (nm, a, b) => { const l = g.getUniformLocation(prog, nm); if (l) g.uniform2f(l, a, b); };
       setF('u_time', spec.time);
-      setF('u_dpr', spec.dpr);
-      setF('u_frame_scale', spec.frameScale);
+      setF('u_dpr', geom.dpr);
+      setF('u_frame_scale', geom.frameScale);
       setF('u_ref_size', 512);
-      set2('u_resolution', W, H);
-      set2('u_viewport', W, H);
+      set2('u_resolution', geom.w, geom.h);
+      set2('u_viewport', geom.w, geom.h);
       set2('u_mouse', 0, 0);
       set2('u_anchor', spec.anchor[0], spec.anchor[1]);
       for (const u of pass.userUniforms) {
@@ -468,7 +507,7 @@ const BROWSER_SIDE = /* js */ `
       const st = g.checkFramebufferStatus(g.FRAMEBUFFER);
       if (st !== g.FRAMEBUFFER_COMPLETE) throw new Error('FBO incomplete: 0x' + st.toString(16));
       g.useProgram(prog);
-      setUniforms(prog, pass);
+      setUniforms(prog, pass, geoms[i]);
 
       const inputMap = {};
       for (const it of pass.inputTextures) inputMap[it.samplerName] = it.passIndex;
@@ -495,7 +534,7 @@ const BROWSER_SIDE = /* js */ `
       g.enableVertexAttribArray(loc);
       g.vertexAttribPointer(loc, 2, g.FLOAT, false, 0, 0);
 
-      g.viewport(0, 0, W, H);
+      g.viewport(0, 0, geoms[i].w, geoms[i].h);
       g.disable(g.BLEND);
       g.clearColor(0, 0, 0, 0);
       g.clear(g.COLOR_BUFFER_BIT);
