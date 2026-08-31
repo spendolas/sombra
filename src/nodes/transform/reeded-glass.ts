@@ -402,11 +402,16 @@ function emitLensTail(o: {
   return { lines, delta: tail.delta, lens }
 }
 
-/** Frost gather tap count. 16 is where a stratified disc stops improving on the
- *  content high curvature is actually used on: measured against a 256-tap disc,
- *  8 taps read 5.37 codes, 12 read 3.89, 16 read 2.93, 24 read 2.01. Today's 8
- *  white-noise taps read 10.34. */
-const FROST_TAPS = 16
+/** Frost gather tap count. Measured against a 256-tap disc reference on the
+ *  content high curvature is actually used on: 8 taps read 5.37 codes, 12 read
+ *  3.89, 16 read 2.93, 24 read 2.01 (the old 8 white-noise taps read 10.34).
+ *  12 is the perf pick: each tap runs the FULL reedLens refraction, so 16→12 is
+ *  25% fewer of the node's most expensive inner op for ~1 extra code of error
+ *  vs the disc reference (2.93→3.89) — a measured GPU saving, not just a fetch.
+ *  N drives the loop bound, the stratified `/N` position, the Vogel radius
+ *  `sqrt((i+0.5)/N)`, and the `/N` average below, so changing it alone keeps the
+ *  sample distribution correct (GOLDEN_ANGLE is N-independent for a Vogel spiral). */
+const FROST_TAPS = 12
 
 /** Golden angle, the Vogel/sunflower spiral increment. */
 const GOLDEN_ANGLE = '2.39996323'
@@ -490,7 +495,7 @@ function emitGrainOverlay(o: {
  * KNOWN, ACCEPTED: this gather renders differently on WebGPU and WebGL2 — up to 51
  * codes on a photo at frost 0.3. The cause is hardware BILINEAR FILTERING, not
  * anything in this shader: a single sub-texel fetch differs by up to 109/255 between
- * the two drivers, while reedPcg, the golden-angle trig, pow, and the 16-tap sum are
+ * the two drivers, while reedPcg, the golden-angle trig, pow, and the N-tap sum are
  * all backend-identical, and the mirror fold is ruled out spatially. Fixed-function
  * silicon reached through ANGLE vs Tint; unfixable in-shader. The only real remedy is
  * nearest-sampling plus manual interpolation at 4x the fetches. See
@@ -595,7 +600,7 @@ function emitFrostGather(o: {
     `  ${A} = ${A} + sombra_toLin(rg_s_${id}.rgb) * rg_s_${id}.a;`,
     `  ${AA} = ${AA} + rg_s_${id}.a;`,
     `}`,
-    // Re-encode, plus one LSB of dither: a 16-tap average is smooth and
+    // Re-encode, plus one LSB of dither: an N-tap average is smooth and
     // low-frequency, which is exactly what bands when quantised back to 8 bits.
     `${out} = ${v4}(sombra_toSrgb(${A} / ${w ? `${v3}(max(${AA}, 1e-5))` : `max(${AA}, 1e-5)`}) + ${v3}((sombra_dither(${base}) - 0.5) / 255.0), ${AA} / ${N}.0);`,
   ].join('\n  ')

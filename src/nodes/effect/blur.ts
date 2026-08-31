@@ -203,7 +203,22 @@ export const blurNode: NodeDefinition = {
   conditionalPreview: true,
 
   // Two passes: horizontal, then vertical.
-  multiPass: { count: () => 2, from: 'color', to: 'source' },
+  //
+  // Both passes rasterise at HALF linear resolution (¼ the fragments). A blur is
+  // a low-pass filter — it destroys exactly the high frequencies a full-res
+  // target would preserve — so downscaling the blur passes is near-free visually
+  // while cutting each pass's fragment count ~4×. `u_frame_scale` is scaled with
+  // the pass so the kernel's reach in REFERENCE units is unchanged (guarded by
+  // verify:frame-scale-invariance); screen-UV sampling stays correct (guarded by
+  // verify:pass-resolution:gpu), and WGSL/GLSL agree because the scale lives in
+  // this backend-agnostic config, not the shader text (verify-blur-backend-parity).
+  //
+  // The declaration applies to BOTH sub-passes. When the blur is the terminal
+  // node its vertical (last) pass is force-drawn at full canvas by the renderer
+  // (writeMultiPassBuiltinUniforms), so the horizontal pass is the one that
+  // actually downscales there; mid-chain, both downscale and the downstream
+  // consumer reads a half-res — already-blurred — texture at full res.
+  multiPass: { count: () => 2, from: 'color', to: 'source', resolution: () => 0.5 },
 
   inputs: [
     { id: 'source', label: 'Source', type: 'color', textureInput: true, default: [0, 0, 0, 1] },
