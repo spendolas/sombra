@@ -5,7 +5,7 @@
 **Sombra** is a browser-based, node-based WebGL shader builder. Users wire visual nodes together on a canvas to create fragment shaders, with a live fullscreen preview updating in real time. Think Shadertoy meets Blender's shader nodes, in the browser.
 
 **Repository:** `spendolas/sombra`
-**Deploy target:** `spendolas.github.io/sombra` via GitHub Pages
+**Deploy target:** custom domain `sombra.sh` via GitHub Pages (Vite `base: '/'`; `public/CNAME` carries the domain into every build). Legacy `spendolas.github.io/sombra` redirects to it.
 **Tech:** Vite, React 19 + TypeScript (strict mode), React Flow, Zustand, Tailwind CSS v4, Raw WebGL2
 
 ## Tech Stack
@@ -260,7 +260,7 @@ Every non-trivial change should propagate across these layers. Check each that a
 
 - **GitHub Actions workflow** (`.github/workflows/deploy.yml`) builds on push to `main`
 - Outputs `dist/` to `gh-pages` branch
-- Site available at `https://spendolas.github.io/sombra/`
+- Site available at `https://sombra.sh/`
 - Vite config has `base: '/sombra/'` for correct asset paths
 
 ## Phase 0 Status

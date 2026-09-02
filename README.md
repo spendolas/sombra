@@ -25,7 +25,7 @@ npm run lint      # Run linter
 
 ## Deployment
 
-Deployed to GitHub Pages at: [spendolas.github.io/sombra](https://spendolas.github.io/sombra)
+Deployed to GitHub Pages at: [sombra.sh](https://sombra.sh)
 
 Builds automatically on push to `main` via GitHub Actions.
 
