@@ -246,7 +246,7 @@ function importGraph(graph: unknown): void {
 function shareGraph(): string {
   const { nodes, edges } = useGraphStore.getState()
   const hash = encodeCompactHash(nodes, edges)
-  return `${location.origin}/sombra/viewer.html#g=${hash}`
+  return `${location.origin}${import.meta.env.BASE_URL}viewer.html#g=${hash}`
 }
 
 /**

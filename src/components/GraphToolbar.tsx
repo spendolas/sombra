@@ -89,7 +89,7 @@ export function GraphToolbar() {
   const handleShare = useCallback(async () => {
     const { nodes, edges } = useGraphStore.getState()
     const hash = encodeCompactHash(nodes, edges)
-    const url = `${location.origin}/sombra/viewer.html#g=${hash}`
+    const url = `${location.origin}${import.meta.env.BASE_URL}viewer.html#g=${hash}`
     try {
       await navigator.clipboard.writeText(url)
       setCopied(true)

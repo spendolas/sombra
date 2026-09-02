@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Sombra** is a browser-based, node-based shader builder. Users wire visual nodes together on a React Flow canvas to create fragment shaders, with a live fullscreen preview updating in real time. Think Shadertoy meets Blender's shader nodes, in the browser.
 
-**Repository:** `spendolas/sombra` · **Deploy:** GitHub Pages at `spendolas.github.io/sombra` (Vite `base: '/sombra/'`)
+**Repository:** `spendolas/sombra` · **Deploy:** GitHub Pages at custom domain `sombra.sh` (Vite `base: '/'`; `public/CNAME` carries the domain into every build). Legacy `spendolas.github.io/sombra` redirects to it.
 **Tech:** Vite, React 19 + TypeScript (strict), @xyflow/react (React Flow v12), Zustand, Tailwind CSS v4, **WebGPU-first rendering with WebGL2 fallback**, GLSL ES 3.0 + WGSL, @dagrejs/dagre for auto-layout, no backend (localStorage + `.sombra` files + shareable URLs).
 
 `AGENTS.md` is the Codex copy of this guide — keep the two in sync when updating project-level guidance.
