@@ -28,7 +28,9 @@ const preview = $<HTMLDivElement>('preview')
 const knobsEl = $<HTMLDivElement>('knobs')
 const knobCount = $<HTMLSpanElement>('knobcount')
 
-const CDN_BASE = 'https://spendolas.github.io/sombra'
+// Production hosts a generated snippet may point at; the tester swaps whichever
+// one appears for THIS origin so the locally-built player/viewer load (base '/').
+const PROD_HOSTS = ['https://sombra.sh', 'https://spendolas.github.io/sombra']
 
 type WinWithSombra = Window & {
   Sombra?: { get?: (t: string) => SceneHandle | undefined }
@@ -66,7 +68,7 @@ function parse(text: string): Mode {
 const MODE_LABEL: Record<Mode, string> = { embed: 'embed', iframe: 'iframe (isolated)', none: 'no snippet' }
 
 // Point the CDN URLs at this origin so the built bundle / viewer load locally.
-const rewrite = (text: string) => text.split(CDN_BASE).join(`${location.origin}/sombra`)
+const rewrite = (text: string) => PROD_HOSTS.reduce((t, h) => t.split(h).join(location.origin), text)
 
 // --- host-environment presets (injected into the iframe BEFORE the snippet) ---
 

@@ -22,8 +22,10 @@ exposes every knob to the host page so the surrounding site can drive the shader
     `data-sombra-src="<url>"`. The player `fetch`es and inflates it.
   - **Inline:** the whole artifact base64url-encoded into `data-sombra-scene` —
     self-contained, no hosting, but a large attribute. Good for small scenes.
-- **Player bundle:** `dist/embed/sombra-player.<version>.umd.js`, served from the
-  CDN at `https://spendolas.github.io/sombra/embed/`.
+- **Player bundle:** `dist/embed/sombra-player.<version>.umd.js`, served from
+  `<origin>/embed/` — whatever origin hosts the editor (`https://sombra.sh/embed/`
+  in production). Snippet URLs are derived from that origin at build time, never
+  baked in (see `embedHostBase` in `src/embed/publish.ts`).
 - **Scope (v1):** *frozen* scenes — the compiled shader plus a manifest of knobs
   (unwired `updateMode:'uniform'` params) the host can set at runtime. The graph
   itself is not shipped; the artifact carries only compiled output. The artifact
@@ -44,7 +46,7 @@ its URL. The player lazy-loads once (cached across embeds and sites), then fetch
 + inflates the file and mounts it. Tiny snippet regardless of scene size.
 
 ```html
-<script>!function(){var s=window.Sombra;if(s&&s.init){s.init()}else{var i=document.createElement("script");i.src="https://spendolas.github.io/sombra/embed/sombra-player.0.1.0.umd.js";i.onload=function(){Sombra.init()};(document.head||document.body).appendChild(i)}}();</script>
+<script>!function(){var s=window.Sombra;if(s&&s.init){s.init()}else{var i=document.createElement("script");i.src="https://sombra.sh/embed/sombra-player.0.1.0.umd.js";i.onload=function(){Sombra.init()};(document.head||document.body).appendChild(i)}}();</script>
 <div id="sombra-shader" data-sombra-src="https://your-host.example/scene.ombra" style="width:100%;height:100%"></div>
 ```
 
@@ -59,7 +61,7 @@ The whole artifact base64url'd into the attribute — no file to host, but a lar
 string. Best for small scenes / paste-and-forget.
 
 ```html
-<script>!function(){var s=window.Sombra;if(s&&s.init){s.init()}else{var i=document.createElement("script");i.src="https://spendolas.github.io/sombra/embed/sombra-player.0.1.0.umd.js";i.onload=function(){Sombra.init()};(document.head||document.body).appendChild(i)}}();</script>
+<script>!function(){var s=window.Sombra;if(s&&s.init){s.init()}else{var i=document.createElement("script");i.src="https://sombra.sh/embed/sombra-player.0.1.0.umd.js";i.onload=function(){Sombra.init()};(document.head||document.body).appendChild(i)}}();</script>
 <div id="sombra-shader" data-sombra-scene="<BASE64URL_ARTIFACT>" style="width:100%;height:100%"></div>
 ```
 
@@ -92,7 +94,7 @@ and recompiles in-frame) and exposes **no knob API**. Use only for strict-CSP
 hosts or true paste-and-forget. Renders the viewer via the compact `#g=` hash.
 
 ```html
-<iframe src="https://spendolas.github.io/sombra/viewer.html#g=<HASH>" style="width:100%;height:100%;border:0" allowfullscreen></iframe>
+<iframe src="https://sombra.sh/viewer.html#g=<HASH>" style="width:100%;height:100%;border:0" allowfullscreen></iframe>
 ```
 
 ### Playing well with the host page
@@ -374,13 +376,16 @@ render on demand and never spin a loop. `destroy()` disconnects all observers.
 
 ## 7. Versioning & CDN
 
-`src/embed/version.ts` is the single source of truth:
+`src/embed/version.ts` is the single source of truth for the version + filename:
 
 ```ts
 export const EMBED_VERSION = '0.1.0'
-export const CDN_BASE      = 'https://spendolas.github.io/sombra/embed'
-export const PLAYER_UMD_URL = `${CDN_BASE}/sombra-player.${EMBED_VERSION}.umd.js`
+export const PLAYER_FILENAME = `sombra-player.${EMBED_VERSION}.umd.js`
 ```
+
+The host (which domain serves the player/viewer) is **not** here — it is derived
+from the running origin at snippet-build time by `embedHostBase()` in
+`src/embed/publish.ts`, so embeds follow whatever domain hosts the editor.
 
 - The player filename is **version‑pinned** (`sombra-player.0.1.0.umd.js`) so a
   published snippet keeps rendering against the exact player it was built for;
