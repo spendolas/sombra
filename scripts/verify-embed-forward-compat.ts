@@ -26,9 +26,9 @@ import path from 'node:path'
 import os from 'node:os'
 import { decodePng } from './blur-bakeoff/lib/png'
 
-const EDITOR = process.env.EDITOR_URL ?? 'http://localhost:49950/sombra/'
+const EDITOR = process.env.EDITOR_URL ?? 'http://localhost:49950/'
 const PLAYER = process.env.PLAYER_URL
-  ?? 'https://spendolas.github.io/sombra/embed/sombra-player.0.1.0.umd.js'
+  ?? 'https://sombra.sh/embed/sombra-player.0.1.0.umd.js'
 
 let passed = 0
 let failed = 0

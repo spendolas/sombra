@@ -6,7 +6,7 @@ import { topologicalSort } from '../compiler/topological-sort'
 import { anchorToVec2 } from '../nodes/output/fragment-output'
 import { buildManifest } from './manifest'
 import { stripPlan, encodeArtifact, encodeArtifactBytes, type SceneArtifact, type ImageAsset, type KnobDescriptor } from './artifact'
-import { PLAYER_UMD_URL } from './version'
+import { PLAYER_FILENAME } from './version'
 
 export interface PublishResult {
   sceneB64: string          // inline artifact (base64url) for data-sombra-scene
@@ -96,11 +96,28 @@ export function publishScene(
  * `iframe` fallback. */
 export const HOSTED_URL_PLACEHOLDER = 'REPLACE_WITH_YOUR_FILE_URL.ombra'
 
+/**
+ * Absolute base URL where this Sombra app — and, alongside it, the embed player
+ * bundle (`<base>embed/…`) and the standalone viewer (`<base>viewer.html`) — is
+ * served. Derived from the running origin so snippets point at whatever domain
+ * hosts the editor (sombra.sh in prod, localhost in dev) rather than a baked-in
+ * URL. Always ends in a slash. Returns '' in non-browser contexts (e.g. the
+ * offline snippet-verification script), which only structural-check the output.
+ */
+export function embedHostBase(): string {
+  if (typeof location === 'undefined') return ''
+  const path = import.meta.env?.BASE_URL ?? '/'
+  return `${location.origin}${path}` // e.g. https://sombra.sh/
+}
+
 export function buildSnippets(sceneB64: string, viewerHash?: string) {
+  const host = embedHostBase()
+  const playerUrl = `${host}embed/${PLAYER_FILENAME}`
+
   // Player loader: loads the UMD once (cached across sites) then auto-mounts.
   const loader =
 `<script>!function(){var s=window.Sombra;if(s&&s.init){s.init()}else{var i=document.createElement("script");` +
-`i.src="${PLAYER_UMD_URL}";i.onload=function(){Sombra.init()};(document.head||document.body).appendChild(i)}}();</script>`
+`i.src="${playerUrl}";i.onload=function(){Sombra.init()};(document.head||document.body).appendChild(i)}}();</script>`
 
   // Hosted: reference a compiled .ombra file you host anywhere; tiny snippet, and
   // the container is addressable (id) for optional live control. The primary path.
@@ -125,7 +142,7 @@ export function buildSnippets(sceneB64: string, viewerHash?: string) {
 `</script>`
 
   const iframe = viewerHash
-    ? `<iframe src="https://spendolas.github.io/sombra/viewer.html#g=${viewerHash}" style="width:100%;height:100%;border:0" allowfullscreen></iframe>`
+    ? `<iframe src="${host}viewer.html#g=${viewerHash}" style="width:100%;height:100%;border:0" allowfullscreen></iframe>`
     : '<!-- iframe fallback unavailable: no viewer hash provided -->'
 
   return { hosted, embed, control, iframe }
