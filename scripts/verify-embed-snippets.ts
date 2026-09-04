@@ -4,6 +4,7 @@
  */
 import { buildSnippets } from '../src/embed/publish'
 import { EMBED_VERSION } from '../src/embed/version'
+import { resolveRef } from '../src/embed/config'
 
 let passed = 0, failed = 0
 function check(name: string, cond: boolean) { if (cond) passed++; else { failed++; console.error(`  [FAIL] ${name}`) } }
@@ -18,6 +19,19 @@ check('embed div has a stable id for control', s.embed.includes('id="sombra-shad
 check('control targets the embed via sombra:load', s.control.includes(`getElementById('sombra-shader')`) && s.control.includes('sombra:load') && s.control.includes('e.detail.handle'))
 check('iframe uses the viewer hash', s.iframe.includes('viewer.html#g=HASH'))
 check('iframe absent without hash', buildSnippets(B64).iframe.includes('unavailable'))
+
+// Legacy-host migration shim (heals pre-sombra.sh hosted embeds we don't control).
+const legacy = 'https://spendolas.github.io/sombra/shared/x.ombra'
+check('resolveRef rewrites the legacy GitHub Pages host to sombra.sh',
+  resolveRef(legacy) === 'https://sombra.sh/shared/x.ombra')
+check('resolveRef preserves nested path + filename under the migrated base',
+  resolveRef('https://spendolas.github.io/sombra/a/b/c.ombra') === 'https://sombra.sh/a/b/c.ombra')
+check('resolveRef leaves an already-sombra.sh URL untouched',
+  resolveRef('https://sombra.sh/shared/x.ombra') === 'https://sombra.sh/shared/x.ombra')
+check('resolveRef leaves an unrelated third-party host untouched',
+  resolveRef('https://cdn.example.com/x.ombra') === 'https://cdn.example.com/x.ombra')
+check('resolveRef does NOT rewrite the github.io apex outside the /sombra base',
+  resolveRef('https://spendolas.github.io/other/x.ombra') === 'https://spendolas.github.io/other/x.ombra')
 
 console.log('='.repeat(60))
 console.log(`  SUMMARY: ${passed} passed, ${failed} failed`)
