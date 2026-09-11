@@ -16,6 +16,7 @@ import { compileNodePreviewIR } from './compiler/ir-subgraph-compiler'
 import type { NodeData, EdgeData, PortType } from './nodes/types'
 import type { Node, Edge } from '@xyflow/react'
 import { exportToFile, importFromFile, encodeCompactHash } from './utils/sombra-file'
+import { requestDeviceWithLimits } from './renderer/request-device'
 
 let captureThumbnailImpl: (() => Promise<string | null>) | null = null
 
@@ -428,7 +429,7 @@ async function getValidationDevice(): Promise<GPUDevice> {
   if (!navigator.gpu) throw new Error('WebGPU not available in this browser')
   const adapter = await navigator.gpu.requestAdapter()
   if (!adapter) throw new Error('No GPU adapter available')
-  _validationDevice = await adapter.requestDevice()
+  _validationDevice = await requestDeviceWithLimits(adapter)
   return _validationDevice
 }
 

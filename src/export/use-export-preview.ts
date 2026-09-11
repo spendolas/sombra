@@ -31,6 +31,7 @@ import { compileGraphIR } from '@/compiler/ir-compiler'
 import { createExportRenderTarget, type ExportRenderTarget } from './export-renderer'
 import { decodeGraphImages } from './export-images'
 import type { FramingChoice } from './framing'
+import { requestDeviceWithLimits } from '../renderer/request-device'
 
 /** Longest edge of the small DISPLAY canvas (px). It's a thumbnail. */
 const PREVIEW_LONG_EDGE = 480
@@ -128,7 +129,7 @@ export function useExportPreview(
 
       const adapter = await navigator.gpu.requestAdapter()
       if (!adapter || disposed) return
-      device = await adapter.requestDevice()
+      device = await requestDeviceWithLimits(adapter)
       if (disposed) { device.destroy(); return }
 
       // Decode the graph's images once (async), so image samplers render the

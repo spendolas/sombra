@@ -18,6 +18,7 @@ import type { ShaderRenderer, QualityTier } from '../renderer/types'
 import type { UniformBufferLayout, TextureBinding } from '../compiler/ir/wgsl-assembler'
 import { passTargetSize, type PassTargetSize } from '../renderer/pass-size'
 import { generateMipmaps, mipLevelCount } from './mipmaps'
+import { requestDeviceWithLimits } from '../renderer/request-device'
 
 // ---------------------------------------------------------------------------
 // Internal types
@@ -278,8 +279,8 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     const hasTs = !!adapter.features?.has('timestamp-query')
     this.tsActive = this.enableTimestamps && hasTs
     this.device = this.tsActive
-      ? await adapter.requestDevice({ requiredFeatures: ['timestamp-query'] })
-      : await adapter.requestDevice()
+      ? await requestDeviceWithLimits(adapter, { requiredFeatures: ['timestamp-query'] })
+      : await requestDeviceWithLimits(adapter)
     this.canvasFormat = navigator.gpu.getPreferredCanvasFormat()
 
     // Get the context but DON'T configure yet — defer to first render.
@@ -379,8 +380,8 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
       this.stopAnimation()
 
       const requestFresh = this.tsActive
-        ? this.adapter.requestDevice({ requiredFeatures: ['timestamp-query'] })
-        : this.adapter.requestDevice()
+        ? requestDeviceWithLimits(this.adapter, { requiredFeatures: ['timestamp-query'] })
+        : requestDeviceWithLimits(this.adapter)
       requestFresh.then((device: GPUDevice) => {
         this.device = device
 
