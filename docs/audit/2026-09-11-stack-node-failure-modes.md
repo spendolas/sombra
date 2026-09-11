@@ -47,6 +47,17 @@ and file load (`sombra-file.ts:374-387`) — **never on a param change**.
 `ctx.textureSamplers`, including layers its loop ignores; and layer removal must strip the
 edges immediately (P1.1).
 
+> **Confirmed on hardware (Phase A execution, 2026-09-12)** with a synthetic node declaring
+> texture ports it never reads. `updateRenderPlan` returns **success**, nothing throws, and
+> the draw raises an uncaptured validation error: `"No bind group set at group index 1."` —
+> the whole command encoder is invalidated. Pinned as a tripwire by gate 8 of
+> `verify-renderer-caps-gpu`, which asserts the *broken* signature and goes red when P0.2 is
+> fixed; whoever fixes it flips the assertion to `uncaptured.length === 0`.
+>
+> The same unread-port condition was a silent texture-unit overflow on WebGL2 — fixed in
+> Phase A (`f9d8c72`). On WebGPU it remains open and is Phase B framework work on the WGSL
+> assembler.
+
 ---
 
 ## P1 — silent wrong output

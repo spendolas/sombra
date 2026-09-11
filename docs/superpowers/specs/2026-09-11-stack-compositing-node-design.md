@@ -246,7 +246,14 @@ loop increments `texUnit` unconditionally (`webgl/renderer.ts:1010-1029`), so a 
 sampler still burns a unit and `bindImageTextures` starts from an inflated count, walking
 past the 16-unit ceiling after a program that linked cleanly. No shipped node can reach it;
 Stack can. The one-line fix (skip the bind and the increment together when nothing reads the
-sampler) is being landed in Phase A with a synthetic unread-port node to gate it. Give every layer port an
+sampler) landed in Phase A (`f9d8c72`) with a synthetic unread-port node gating it.
+
+**The WebGPU half is confirmed and still open.** The same synthetic node shows
+`updateRenderPlan` returning success while the draw raises `"No bind group set at group
+index 1."`, invalidating the command encoder. That is P0.2 reproduced end to end, and it is
+Phase B work on the WGSL assembler — Stack hits it the moment a layer port is wired but not
+read. Gate 8 of `verify-renderer-caps-gpu` pins the broken behaviour and will go red when it
+is fixed. Give every layer port an
 explicit `default` of `[0,0,0,0]`, or an unwired port is a hard compile error
 (`glsl-generator.ts:494-497`).
 
