@@ -952,6 +952,18 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
         const sourceFbo = this.fboPool[sourcePassIdx]
         if (!sourceFbo) continue
 
+        // A boundary whose sampler this program does not have is one the GLSL
+        // compiler stripped as unused. Skip it WITHOUT spending a unit: the
+        // increment used to run regardless, so every unread boundary pushed the
+        // image samplers that follow (bindImageTextures continues from this
+        // counter) one unit further, past MAX_TEXTURE_IMAGE_UNITS. There is no
+        // getError in this loop, so activeTexture's GL_INVALID_ENUM goes
+        // unnoticed and the draw fails to a stale or black canvas. The linker
+        // cannot catch it either — it counts ACTIVE samplers, and these are
+        // precisely the ones it dropped.
+        const samplerLoc = ps.uniforms.get(samplerName)
+        if (!samplerLoc) continue
+
         gl.activeTexture(gl.TEXTURE0 + texUnit)
         gl.bindTexture(gl.TEXTURE_2D, sourceFbo.texture)
 
@@ -962,8 +974,7 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
           gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, sourceState.textureFilter)
         }
 
-        const samplerLoc = ps.uniforms.get(samplerName)
-        if (samplerLoc) gl.uniform1i(samplerLoc, texUnit)
+        gl.uniform1i(samplerLoc, texUnit)
         texUnit++
       }
 
