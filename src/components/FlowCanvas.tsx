@@ -8,6 +8,7 @@ import type { Node, Edge, NodeTypes, OnNodesChange, OnEdgesChange, OnReconnect, 
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { areTypesCompatible } from '../nodes/type-coercion'
+import { wouldCreateCycle } from '../compiler/topological-sort'
 import { useGraphStore } from '../stores/graphStore'
 import { makeNodeId } from '../utils/node-id'
 import { ZoomSlider } from '@/components/zoom-slider'
@@ -275,9 +276,14 @@ export function FlowCanvas({
       if (!sourcePort || !targetPort) return false
 
       // Check if types are compatible (with coercion)
-      return areTypesCompatible(sourcePort.type, targetPort.type as import('../nodes/types').PortType)
+      if (!areTypesCompatible(sourcePort.type, targetPort.type as import('../nodes/types').PortType)) return false
+
+      // Refuse a wire that would close a loop. Compilation already reports
+      // "Graph contains cycles", but only after the fact, and topologicalSort
+      // itself has no cycle detection — it returns a mis-ordered list.
+      return !wouldCreateCycle(edges, { source: connection.source, target: connection.target })
     },
-    [nodes]
+    [nodes, edges]
   )
 
   const onNodeDragOver = useCallback((event: React.DragEvent) => {
