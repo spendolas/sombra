@@ -18,13 +18,19 @@
  *                      pool really holds `cap` slots. Without this a guard that
  *                      rejected every multi-pass plan would score green on (1).
  *   3. SINGLE PASS     the one-pass fast path is untouched.
- *   7. UNIT ACCOUNTING a texture boundary the consuming node never reads must
- *                      not spend a texture unit. Its sampler is stripped as
- *                      unused, so the linker cannot see the overflow; the bind
- *                      loop walked one unit per entry regardless and pushed the
- *                      image samplers that follow past the last unit.
- *   8. WEBGPU          the same unread-port condition on the other backend —
- *                      pinned as known-broken (audit P0.2).
+ *   5. OVER UNITS      one pass wanting more texture units than the GPU has
+ *                      is rejected. A SECOND, unconnected ceiling: the FBO cap
+ *                      bounds how many intermediates exist, never how many
+ *                      samplers one pass binds, and inter-pass and image
+ *                      textures share a single unit counter at bind time. Past
+ *                      the limit `activeTexture` raises GL_INVALID_ENUM — no
+ *                      `getError` anywhere in the render loop — and the draw
+ *                      fails to a stale or black canvas, silently.
+ *   6. AT UNITS        a pass sitting exactly ON the limit still renders, with
+ *                      every sampler bound to its own unit. Asserted by reading
+ *                      the units back off the linked program with `getUniform`,
+ *                      not by looking at the picture: a wrongly-bound sampler
+ *                      still draws something.
  *
  * The plans are produced by the real compiler from a real graph (a chain of
  * `pixelate` nodes, each of which is a texture boundary), not hand-written, so
@@ -89,6 +95,11 @@ interface Harness {
   apply(n: number): Promise<PlanResult>
   applyWebGPU(n: number): Promise<PlanResult | null>
   /**
+   * `k` pixelate branches plus `m` image nodes, all converging through a mix
+   * tree into ONE final pass — so that pass wants k + m texture units.
+   */
+  applyUnits(k: number, m: number): Promise<UnitResult>
+  /**
    * `k` texture boundaries the consuming node NEVER READS, plus `m` image
    * nodes. The program links (few declared samplers) but the bind loop still
    * spends a unit per unread boundary.
@@ -147,6 +158,43 @@ async function installHarness(page: Page, base: string): Promise<void> {
     // sampler but never samples it, so GLSL strips it as unused and the pass
     // would want zero units — the gate would be measuring nothing.
     const PIXEL_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+
+    // `k` pixelate branches (each its own pass, so each is one inter-pass
+    // sampler on the final pass) + `m` image nodes (one image sampler each),
+    // folded together by a mix tree. Mix declares no textureInput port, so the
+    // whole tree stays in the FINAL pass and every sampler lands on it.
+    const buildConverging = (k: number, m: number) => {
+      const nodes: unknown[] = []
+      const edges: unknown[] = []
+      const mk = (id: string, type: string, params: Record<string, unknown> = {}) =>
+        ({ id, type: 'shaderNode', position: { x: 0, y: 0 }, data: { type, params } })
+      const sources: string[] = []
+      for (let i = 0; i < k; i++) {
+        nodes.push(mk(`cb${i}`, 'checkerboard'), mk(`px${i}`, 'pixelate'))
+        edges.push({ id: `ce${i}`, source: `cb${i}`, sourceHandle: 'color', target: `px${i}`, targetHandle: 'source' })
+        sources.push(`px${i}`)
+      }
+      for (let j = 0; j < m; j++) {
+        nodes.push(mk(`im${j}`, 'image', { imageData: PIXEL_PNG, imageAspect: 1 }))
+        sources.push(`im${j}`)
+      }
+      let cur = sources[0]
+      let curHandle = 'color'
+      for (let i = 1; i < sources.length; i++) {
+        const id = `mx${i}`
+        nodes.push(mk(id, 'mix'))
+        edges.push({ id: `ma${i}`, source: cur, sourceHandle: curHandle, target: id, targetHandle: 'a' })
+        edges.push({ id: `mb${i}`, source: sources[i], sourceHandle: 'color', target: id, targetHandle: 'b' })
+        cur = id
+        curHandle = 'result'
+      }
+      nodes.push(mk('out', 'fragment_output'))
+      edges.push({ id: 'eo', source: cur, sourceHandle: curHandle, target: 'out', targetHandle: 'color' })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const plan = compileGraph(nodes as any, edges as any)
+      if (!plan.success) throw new Error(`compile failed: ${plan.errors.map((e: { message: string }) => e.message).join('; ')}`)
+      return plan
+    }
 
     // A node that declares texture ports and reads NONE of them.
     // `findTextureBoundaries` creates a boundary for any WIRED textureInput
@@ -310,6 +358,7 @@ async function installHarness(page: Page, base: string): Promise<void> {
           fbos: r.fboPool.length,
         }
       },
+      applyUnits: async (k: number, m: number) => runPlan(await gl(), buildConverging(k, m)),
       applyPhantom: async (k: number, m: number) => runPlan(await gl(), buildPhantom(k, m)),
       phantomWebGPU: async (k: number, m: number) => {
         if (!gpuTried) {
@@ -430,6 +479,50 @@ async function main() {
     test('3 · single-pass fast path is unaffected', () => {
       assert(one.passes === 1, `expected a 1-pass plan, got ${one.passes}`)
       assert(one.success === true, `single-pass plan rejected: ${one.error}`)
+    })
+
+    // The per-pass unit ceiling is a DIFFERENT number from the FBO cap, and on
+    // this hardware it is only reachable by mixing image samplers in: with 16
+    // units the FBO cap is 8, so inter-pass textures alone can never reach it.
+    const branches = Math.min(4, caps.cap)
+    const atUnits = await page.evaluate((a) => globalThis.__caps.applyUnits(a[0], a[1]),
+      [branches, caps.units - branches])
+    const overUnits = await page.evaluate((a) => globalThis.__caps.applyUnits(a[0], a[1]),
+      [branches, caps.units - branches + 1])
+
+    test('5 · a pass wanting more texture units than the GPU has is REJECTED', () => {
+      assert(overUnits.samplers === caps.units + 1,
+        `the harness built a pass with ${overUnits.samplers} samplers, expected ${caps.units + 1} — `
+        + `it is not exercising the unit ceiling`)
+      assert(overUnits.success === false,
+        `updateRenderPlan accepted a pass wanting ${overUnits.samplers} texture units against `
+        + `MAX_TEXTURE_IMAGE_UNITS=${caps.units} — activeTexture then raises GL_INVALID_ENUM unchecked `
+        + `and the draw fails to a stale or black canvas`)
+      assert(overUnits.error.includes(String(caps.units)),
+        `error must name the GPU's unit count (${caps.units}); got: "${overUnits.error}"`)
+      console.log(`  over-units error: ${overUnits.error}`)
+    })
+
+    test('6 · a pass exactly ON the limit renders, every sampler on its own unit', () => {
+      assert(atUnits.samplers === caps.units,
+        `expected a pass with exactly ${caps.units} samplers, got ${atUnits.samplers}`)
+      assert(atUnits.success === true, `at-limit plan was rejected: ${atUnits.error}`)
+      // Mechanism, not picture: without this, gate 5 is satisfied by a guard
+      // that rejects every multi-sampler plan.
+      assert(atUnits.boundUnits.length === caps.units,
+        `only ${atUnits.boundUnits.length} of ${caps.units} samplers were bound at all`)
+      assert(new Set(atUnits.boundUnits).size === caps.units,
+        `samplers share texture units — bound: ${JSON.stringify(atUnits.boundUnits)}`)
+      assert(atUnits.boundUnits.every((u) => u >= 0 && u < caps.units),
+        `a sampler was bound to a unit outside 0..${caps.units - 1}: ${JSON.stringify(atUnits.boundUnits)}`)
+      const checkable = atUnits.mapping.filter((m) => m.unit !== 0)
+      assert(checkable.length > 0, 'no sampler landed above unit 0 — the identity check would be vacuous')
+      const misread = checkable.filter((m) => !m.correctTexture)
+      assert(misread.length === 0,
+        `${misread.length} sampler(s) at the limit read the wrong texture: `
+        + JSON.stringify(misread.map((m) => `${m.name}@${m.unit}`)))
+      assert(atUnits.glError === 0, `gl.getError() after the draw was 0x${atUnits.glError.toString(16)}, expected NO_ERROR`)
+      console.log(`  at-limit: ${atUnits.samplers} samplers over ${atUnits.passes} passes, units ${Math.min(...atUnits.boundUnits)}..${Math.max(...atUnits.boundUnits)}, no GL error`)
     })
 
     // The path the FBO cap cannot bound and the linker does not see: texture
