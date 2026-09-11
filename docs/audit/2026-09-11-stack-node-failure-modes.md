@@ -143,10 +143,17 @@ The draw then issues with group 1 unbound, invalidating the whole command buffer
 Observable at 17+ layers: black/frozen canvas, per-frame validation spam, app reports
 success.
 
-**Free win:** `requestDevice()` is called bare everywhere (`webgpu/renderer.ts:281`,
-`export-engine.ts:86`, `use-export-preview.ts:131`, `dev-bridge.ts:431`), so you are on
-**default** limits, not adapter limits — even a GPU reporting far higher gives 16 unless
-asked.
+**Free win:** `requestDevice()` is called bare everywhere, so you are on **default**
+limits, not adapter limits — even a GPU reporting far higher gives 16 unless asked.
+
+> **Correction (Phase A execution, 2026-09-12).** This listed four call sites; there are
+> **five**. The missed one is the device-loss recovery request in `setupDeviceLostHandler`
+> (`webgpu/renderer.ts:381-382`, once per branch of the timestamp-query ternary) — left
+> bare it drops the session back to default limits on the first recovery, exactly when a
+> limit-heavy graph is what caused the loss. Full list: `webgpu/renderer.ts:281`,
+> `webgpu/renderer.ts:381-382`, `export-engine.ts:86`, `use-export-preview.ts:131`,
+> `dev-bridge.ts:431`. Measured on this machine: adapter reports 48 sampled textures per
+> stage, a bare request yields a device reporting 16, the fixed path yields 48.
 
 ### 3. Intermediate memory is counted in textures, not bytes
 
