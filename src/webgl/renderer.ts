@@ -509,7 +509,23 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
       return this.installSinglePassProgram(plan.passes[0].fragmentShader)
     }
 
-    // Multi-pass setup
+    // Multi-pass setup.
+    //
+    // Reject an over-cap plan instead of allocating a truncated FBO pool.
+    // Silently capping is worse than a hard failure: renderMultiPass skips a
+    // pass with no FBO and `continue`s WITHOUT setting the consumer's sampler
+    // uniform, so that sampler keeps its default of texture unit 0 and the
+    // consumer samples whatever happens to be bound there — a plausible-looking
+    // but wrong image, reported as success. Reachable today: Pyramid Blur at
+    // N=3 is already 7 passes.
+    const intermediateCount = plan.passes.length - 1
+    if (intermediateCount > this.maxIntermediateTextures) {
+      return {
+        success: false,
+        error: `Graph needs ${intermediateCount} intermediate render targets (max ${this.maxIntermediateTextures}) — reduce effect chain depth`,
+      }
+    }
+
     this.isMultiPass = true
 
     try {
@@ -547,7 +563,6 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
       this.buildUniformPassMap()
 
       // Allocate FBOs for intermediate passes (all except last)
-      const intermediateCount = plan.passes.length - 1
       const dpr = Math.min(window.devicePixelRatio || 1, 2) * this.currentDprScale
       const w = Math.floor(this.canvas.clientWidth * dpr) || 1
       const h = Math.floor(this.canvas.clientHeight * dpr) || 1
