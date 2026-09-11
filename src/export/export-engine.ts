@@ -23,6 +23,7 @@ import { decodeGraphImages } from './export-images'
 import type { FrameSink, QualityLevel } from './frame-sink'
 import type { FramingChoice } from './framing'
 import type { ExportDestination } from './export-destination'
+import { requestDeviceWithLimits } from '../renderer/request-device'
 
 export interface ExportJob {
   sink: FrameSink
@@ -83,7 +84,7 @@ export async function runExport(
   if (!adapter) {
     throw new Error('[export] WebGPU unavailable — export requires WebGPU (v1)')
   }
-  const device = await adapter.requestDevice()
+  const device = await requestDeviceWithLimits(adapter)
 
   // Decode the graph's images so image samplers export the real texture.
   const images = await decodeGraphImages(nodes)
