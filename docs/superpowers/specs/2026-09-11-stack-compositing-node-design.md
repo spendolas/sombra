@@ -239,7 +239,14 @@ The two opt-ins described in §4.
 ### 6.8 Stack's own codegen contract
 
 Emit a sample for **every** sampler present in `ctx.textureSamplers`, including ones the
-layer loop ignores — an emitted-but-unread binding is the P0 above. Give every layer port an
+layer loop ignores — an emitted-but-unread binding is the P0 above.
+
+An unread texture port has a **second** consequence, found during Phase A: WebGL2's bind
+loop increments `texUnit` unconditionally (`webgl/renderer.ts:1010-1029`), so a stripped
+sampler still burns a unit and `bindImageTextures` starts from an inflated count, walking
+past the 16-unit ceiling after a program that linked cleanly. No shipped node can reach it;
+Stack can. The one-line fix (skip the bind and the increment together when nothing reads the
+sampler) is being landed in Phase A with a synthetic unread-port node to gate it. Give every layer port an
 explicit `default` of `[0,0,0,0]`, or an unwired port is a hard compile error
 (`glsl-generator.ts:494-497`).
 
