@@ -130,3 +130,61 @@ export function hasCycles(
 
   return false
 }
+
+/**
+ * Would adding this connection put a cycle in the graph?
+ *
+ * Cycles were diagnosed but never prevented: every compile entry point calls
+ * `hasCycles` and surfaces "Graph contains cycles", while `topologicalSort`
+ * itself has no cycle detection and returns a silently mis-ordered list. This
+ * is the check that stops one being drawn — `isValidConnection` on the canvas
+ * refuses the wire.
+ *
+ * `source → target` closes a loop if and only if `target` can ALREADY reach
+ * `source`, so this is a forward walk from `target` that stops the moment it
+ * finds `source` — not `hasCycles` over a speculative copy of the whole graph.
+ * `isValidConnection` fires continuously while a wire is being dragged, and
+ * the walk only touches the component downstream of `target`, where the whole-
+ * graph check visits every node and edge on every call regardless.
+ *
+ * Asking "can target reach source" — rather than "does any node get visited
+ * twice" — is what keeps convergence legal: `A→B`, `A→C`, `B→D`, `C→D` reaches
+ * D by two paths and is a DAG, not a cycle. Rejecting that shape would be far
+ * worse than the bug being fixed, since fan-out-and-converge is the topology
+ * every multi-input node is made of.
+ *
+ * `visited` is not what makes that answer correct — it is what makes the walk
+ * TERMINATE. A cyclic graph can still arrive by file load or share URL (those
+ * paths are deliberately not validated; they load and fail at compile), and
+ * hovering a handle over one would otherwise walk the loop forever and hang
+ * the tab. It also stops a dense DAG being re-explored along every path.
+ *
+ * Edges into connectable params are ordinary edges and carry cycles like any
+ * other, which is why this looks only at `source`/`target` and ignores handles.
+ */
+export function wouldCreateCycle(
+  edges: Edge<EdgeData>[],
+  candidate: { source: string; target: string },
+): boolean {
+  if (candidate.source === candidate.target) return true
+
+  const outgoing = new Map<string, string[]>()
+  for (const edge of edges) {
+    const from = outgoing.get(edge.source)
+    if (from) from.push(edge.target)
+    else outgoing.set(edge.source, [edge.target])
+  }
+
+  const visited = new Set<string>([candidate.target])
+  const stack = [candidate.target]
+  while (stack.length > 0) {
+    const id = stack.pop()!
+    if (id === candidate.source) return true
+    for (const next of outgoing.get(id) ?? []) {
+      if (visited.has(next)) continue
+      visited.add(next)
+      stack.push(next)
+    }
+  }
+  return false
+}
