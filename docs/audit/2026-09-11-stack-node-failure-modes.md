@@ -89,7 +89,7 @@ Also reachable without many layers: Pyramid Blur at N=3 already uses 7 passes, s
 **Fix:** return `{success:false}` instead of warning; the error path to the UI already
 exists (`App.tsx:75-86`).
 
-### 3. `maxTextureImageUnits` is queried but never enforced per pass
+### 3. `maxTextureImageUnits` — mechanism corrected; the real bug is a phantom unit counter
 
 Read once (`webgl/renderer.ts:193`) and used solely to compute `maxIntermediateTextures`.
 The per-pass binding loop (`:934-953`) increments `texUnit` over every entry in
@@ -100,6 +100,26 @@ makes the draw fail. Stale or black canvas, silent from the app's side.
 
 The two caps are unconnected: 8 FBOs may exist, but a single composite pass can still want
 20 sampler units.
+
+> **Correction (Phase A execution, 2026-09-12).** The mechanism above is **wrong**, and
+> measured to be wrong: a fix was implemented, then reverted, and the gates stayed green
+> either way. A program declaring more `sampler2D` uniforms than `MAX_TEXTURE_IMAGE_UNITS`
+> **does not link** — `getOrCompileProgram` throws and the existing `try/catch` in
+> `updateRenderPlan` already returns `{success:false}` with the driver's message. Binding is
+> never reached, so the described `GL_INVALID_ENUM`/silent-black path does not occur.
+> Verified on Chrome/ANGLE-Metal only; whether link-time enforcement is universal across
+> WebGL2 implementations was not established.
+>
+> **A real bug was found underneath it**, by a different route. In the bind loop
+> (`webgl/renderer.ts:1010-1029`) `texUnit++` is **unconditional** — it runs even when
+> `ps.uniforms.get(samplerName)` returns nothing. An `inputTextures` entry whose sampler the
+> compiler stripped as unused still burns a unit, and `bindImageTextures` then starts from
+> an inflated count, walking past the ceiling *after* a program that linked fine. Worst case
+> 8 phantom units + 16 image samplers = 24 against a limit of 16.
+>
+> Not reachable with any shipped node — every texture boundary they create is read. It
+> becomes reachable exactly when a node can have a **wired-but-unread texture port**, i.e.
+> P0.2 above, which is a Stack property.
 
 ### 4. Same-depth siblings silently disable a neighbour's downscale
 
