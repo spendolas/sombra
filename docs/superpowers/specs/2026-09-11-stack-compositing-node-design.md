@@ -254,10 +254,24 @@ Independent of Stack; Stack turns both from exotic into routine.
   9-layer Stack shows layers 9+ as duplicates of layer 1. A **3-layer** Stack over a pyramid
   blur (7 passes) already reaches the cap. Return `{success:false}`; the path to the UI
   exists (`App.tsx:75-86`).
-- **`requestDevice()` is called bare** (`webgpu/renderer.ts:281`, `export-engine.ts:86`,
-  `use-export-preview.ts:131`, `dev-bridge.ts:431`), pinning every session to *default*
-  limits rather than adapter limits. One line each; raises the 16-sampler ceiling on capable
-  hardware.
+- **`requestDevice()` is called bare**, pinning every session to *default* limits rather
+  than adapter limits. **Five sites, not four** — `webgpu/renderer.ts:281`,
+  `export-engine.ts:86`, `use-export-preview.ts:131`, `dev-bridge.ts:431`, and the one the
+  audit missed: the device-loss recovery request in `setupDeviceLostHandler`
+  (`webgpu/renderer.ts:381-382`, once per branch of the timestamp-query ternary). Leaving
+  that one bare drops the session back to default limits on the first recovery — precisely
+  when it hurts most, since device loss on a limit-heavy graph is what triggers it.
+
+  Measured on this machine (Chrome): the adapter reports
+  `maxSampledTexturesPerShaderStage` **48**, a bare `requestDevice()` yields a device
+  reporting **16**, and the fixed path yields **48**. The ceiling is genuinely 3× higher,
+  not a descriptor that merely looks right. `maxSamplersPerShaderStage` stays 16 on this
+  adapter because 16 is what it reports.
+
+  This does not change the §4 architecture decision: the raised ceiling is per-device and
+  WebGL2 is unaffected (8 intermediates, 16 texture units), so a convergence design would
+  still be unportable. It does mean the *interim* layer cap on WebGPU can be higher than
+  originally assumed — derive it from live device limits (§14), not a constant.
 
 Two more worth doing alongside, both cheap:
 
