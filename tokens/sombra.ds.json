@@ -2453,6 +2453,39 @@
           "extra": "flex-1"
         }
       }
+    },
+    "884:355": {
+      "name": "AMD Warning",
+      "type": "molecule",
+      "dsKey": "amdWarning",
+      "codeFile": "src/components/AmdSeeThroughWarning.tsx",
+      "parts": {
+        "pill": {
+          "layout": "horizontal",
+          "align": "center",
+          "fill": "surface/alt",
+          "fillOpacity": 60,
+          "backdropBlur": 16,
+          "radius": "md",
+          "padding": "md",
+          "gap": "md",
+          "figmaNodeId": "884:353"
+        },
+        "tint": {
+          "position": "absolute",
+          "inset": "0",
+          "fill": "color/warning",
+          "fillOpacity": 10,
+          "pointerEvents": "none",
+          "extra": "rounded-[inherit]",
+          "figmaNodeId": null
+        },
+        "label": {
+          "textStyle": "text-param",
+          "textColor": "warning",
+          "figmaNodeId": "884:346"
+        }
+      }
     }
   },
   "nodeTemplates": {
