@@ -219,6 +219,11 @@ export const ds = {
     segment: "flex flex-row items-center justify-center bg-surface-raised rounded-sm text-param text-fg-dim cursor-pointer transition-colors h-select-h hover:bg-highlight flex-1",
     segmentActive: "flex flex-row items-center justify-center bg-indigo rounded-sm text-param text-fg cursor-pointer transition-colors h-select-h hover:bg-indigo-hover flex-1",
   },
+  amdWarning: {
+    pill: "flex flex-row items-center bg-surface-alt/60 rounded-md p-md gap-md backdrop-blur-[16px]",
+    tint: "bg-warning/10 absolute inset-0 pointer-events-none rounded-[inherit]",
+    label: "text-param text-warning",
+  },
 } as const;
 
 export type DSComponent = keyof typeof ds;
