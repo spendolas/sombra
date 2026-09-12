@@ -111,6 +111,8 @@ interface ComponentPart {
   // Layout
   layout?: 'horizontal' | 'vertical'
   fill?: string
+  fillOpacity?: number
+  backdropBlur?: number
   stroke?: StrokeDef
   radius?: string | Record<string, string>
   padding?: string | Record<string, string>
@@ -403,13 +405,21 @@ function buildColorMap(): Record<string, string> {
   return map
 }
 
-/** Convert a Figma fill name to a Tailwind bg- class */
-function fillToClass(fill: string, colorMap: Record<string, string>): string {
-  if (fill === 'black') return 'bg-black'
+/**
+ * Convert a Figma fill name to a Tailwind bg- class.
+ *
+ * `opacity` is a percentage (0-100) from the Figma fill's own opacity. Tailwind's
+ * alpha suffix takes any integer, so the value round-trips exactly rather than
+ * snapping to a scale. 100 (or undefined) emits no suffix, keeping every existing
+ * part's output byte-identical.
+ */
+function fillToClass(fill: string, colorMap: Record<string, string>, opacity?: number): string {
+  const alpha = opacity === undefined || opacity >= 100 ? '' : `/${Math.round(opacity)}`
+  if (fill === 'black') return `bg-black${alpha}`
   const key = colorMap[fill]
-  if (key) return `bg-${key}`
+  if (key) return `bg-${key}${alpha}`
   // Fallback: convert slash to dash
-  return `bg-${fill.replace(/\//g, '-')}`
+  return `bg-${fill.replace(/\//g, '-')}${alpha}`
 }
 
 /** Convert a stroke definition to Tailwind border classes */
@@ -496,7 +506,7 @@ function partToClassString(part: ComponentPart, colorMap: Record<string, string>
   if (part.justify === 'end') classes.push('justify-end')
 
   // Fill
-  if (part.fill) classes.push(fillToClass(part.fill, colorMap))
+  if (part.fill) classes.push(fillToClass(part.fill, colorMap, part.fillOpacity))
 
   // Radius
   if (part.radius) classes.push(...radiusToClasses(part.radius))
@@ -548,6 +558,10 @@ function partToClassString(part: ComponentPart, colorMap: Record<string, string>
     if (s.ring) classes.push(`${prefix}:ring-${s.ring}`)
     if (s.shadow) classes.push(`${prefix}:shadow-${s.shadow}`)
   }
+
+  // Background blur — an arbitrary px value so the Figma radius round-trips
+  // exactly. There is no blur token scale to snap to.
+  if (part.backdropBlur) classes.push(`backdrop-blur-[${part.backdropBlur}px]`)
 
   // Effects
   if (part.effects) {
