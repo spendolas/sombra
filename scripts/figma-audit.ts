@@ -698,7 +698,10 @@ function extractFigmaProps(node: FigmaNode, maps: Maps, dbPart: ComponentPart): 
   if (node.type !== 'TEXT') {
     const fill = resolveColor(bv, 'fills', node.fills, maps)
     if (fill.color) props['fill'] = fill.color
-    if (fill.opacity != null) props['fill.opacity'] = fill.opacity
+    // Percent, not 0-1: Figma stores float32 (0.6 comes back as 0.6000000238),
+    // which never compares equal to a clean DB value. Integer percent is both
+    // robust and what the DB's `fillOpacity` field carries.
+    if (fill.opacity != null) props['fill.opacity'] = Math.round(fill.opacity * 100)
     if (fill.blendMode) props['fill.blendMode'] = fill.blendMode
   }
 
@@ -797,6 +800,9 @@ function extractFigmaProps(node: FigmaNode, maps: Maps, dbPart: ComponentPart): 
         props[`effect.${i}.offset.y`] = eff.offset.y
       }
       if (eff.radius != null) props[`effect.${i}.radius`] = eff.radius
+      // A background blur is a real, checkable property — the DB carries it as
+      // `backdropBlur`. The effect.* entries above stay for the informational dump.
+      if (eff.type === 'BACKGROUND_BLUR' && eff.radius != null) props['backdropBlur'] = eff.radius
       if (eff.spread != null) props[`effect.${i}.spread`] = eff.spread
     }
   }
@@ -931,6 +937,8 @@ function extractDbProps(part: ComponentPart, db: DB, maps: Maps): PropMap {
       ?? part.fill.replace(/\//g, '-')
     props['fill'] = fillKey
   }
+  if (part.fillOpacity != null) props['fill.opacity'] = part.fillOpacity
+  if (part.backdropBlur != null) props['backdropBlur'] = part.backdropBlur
 
   // ── Stroke ──
   if (part.stroke) {

@@ -126,6 +126,15 @@ const ComponentPart = z.object({
   // Layout
   layout: z.enum(['horizontal', 'vertical']).optional(),
   fill: z.string().optional(),
+  // Figma fill opacity as a percentage (0-100). Emitted as Tailwind's alpha
+  // suffix, e.g. fill 'surface/alt' + fillOpacity 60 -> 'bg-surface-alt/60'.
+  // A part carries ONE fill; Figma's stacked fills are modelled as separate
+  // parts layered in code (see amdWarning pill + tint).
+  fillOpacity: z.number().min(0).max(100).optional(),
+  // Figma BACKGROUND_BLUR radius in px -> 'backdrop-blur-[16px]'. Only for
+  // elements that float over live rendered content; see the sombra-ds-component
+  // skill on why in-node chrome should not pay for this.
+  backdropBlur: z.number().min(0).optional(),
   stroke: StrokeDef.optional(),
   radius: StringOrRecord.optional(),
   padding: StringOrRecord.optional(),
