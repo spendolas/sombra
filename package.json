@@ -69,6 +69,7 @@
     "verify:dynamic-texture-ports": "tsx scripts/verify-dynamic-texture-ports.ts",
     "verify:dynamic-params": "tsx scripts/verify-dynamic-params.ts",
     "verify:relay-pruning": "tsx scripts/verify-relay-pruning.ts",
+    "verify:dynamic-param-edges": "tsx scripts/verify-dynamic-param-edges.ts",
     "verify:ci": "npm run verify:ir-poc && npm run verify:wgsl-multipass && npm run verify:raw-budget && npm run verify:pass-size && npm run verify:pass-resolution && npm run verify:ir-control-flow && npm run verify:wired-branch && npm run verify:dynamic-texture-ports && npm run verify:node-id && npm run verify:device-limits && npm run verify:connection-cycles && npm run verify:sombra-package && npm run verify:file-drop && npm run verify:stream-fixes && npm run verify:wgsl-mod && npm run verify:srt && npm run verify:srt-conformity && npm run verify:dynamic-params && npm run verify:relay-pruning",
     "build:embed": "vite build --config vite.embed.config.ts",
     "verify:embed:artifact": "tsx scripts/verify-artifact-roundtrip.ts",
