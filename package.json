@@ -40,6 +40,7 @@
     "verify:ir-control-flow": "tsx scripts/verify-ir-control-flow.ts",
     "verify:pass-size": "tsx scripts/verify-pass-size.ts",
     "verify:pass-resolution": "tsx scripts/verify-pass-resolution.ts",
+    "verify:subpass-routing": "tsx scripts/verify-subpass-routing.ts",
     "verify:pass-resolution:gpu": "tsx scripts/verify-pass-resolution-gpu.ts",
     "verify:renderer-caps:gpu": "tsx scripts/verify-renderer-caps-gpu.ts",
     "verify:coord-contract:gpu": "tsx scripts/verify-coord-contract-gpu.ts",
