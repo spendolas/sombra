@@ -10,6 +10,7 @@
 import type { Node, Edge } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
+import { resolveParams } from '../nodes/resolve-dynamic'
 
 // Derive semantic key from only structural (recompile-mode) data
 export function buildSemanticKey(nodes: Node<NodeData>[], edges: Edge<EdgeData>[]): string {
@@ -17,11 +18,17 @@ export function buildSemanticKey(nodes: Node<NodeData>[], edges: Edge<EdgeData>[
     .map((n) => {
       const def = nodeRegistry.get(n.data.type)
       const structural: Record<string, unknown> = {}
-      if (def?.params) {
-        for (const p of def.params) {
+      if (def) {
+        const params = resolveParams(def, n.data.params)
+        for (const p of params) {
           if (p.updateMode === 'recompile')
             structural[p.id] = n.data.params?.[p.id] ?? p.default
         }
+        // Fold in the param count: two instances can share identical
+        // recompile-param values while differing in how many params exist
+        // (dynamicParams). Without this, adding/removing a param would not
+        // change the semantic key and would never trigger a recompile.
+        structural.__paramCount = params.length
       }
       return `${n.id}:${n.data.type}:${JSON.stringify(structural)}`
     })
@@ -40,8 +47,9 @@ export function buildUniformKey(nodes: Node<NodeData>[]): string {
   return nodes
     .map((n) => {
       const def = nodeRegistry.get(n.data.type)
-      if (!def?.params) return ''
-      return def.params
+      if (!def) return ''
+      const params = resolveParams(def, n.data.params)
+      return params
         .filter((p) => p.updateMode === 'uniform')
         .map(
           (p) =>
@@ -58,8 +66,9 @@ export function buildRendererKey(nodes: Node<NodeData>[]): string {
   return nodes
     .map((n) => {
       const def = nodeRegistry.get(n.data.type)
-      if (!def?.params) return ''
-      return def.params
+      if (!def) return ''
+      const params = resolveParams(def, n.data.params)
+      return params
         .filter((p) => p.updateMode === 'renderer')
         .map(
           (p) =>

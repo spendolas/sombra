@@ -6,6 +6,7 @@ import { memo, useCallback, useMemo, useRef, useEffect, useState } from 'react'
 import { Position, useEdges, type NodeProps } from '@xyflow/react'
 import { matchesShowWhen, type NodeData, type NodeParameter } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
+import { resolveParams } from '../nodes/resolve-dynamic'
 import { FloatSlider, AnchorGrid, EnumSelect, BoolCheckbox, SegmentedControl } from './NodeParameters'
 import { worldOffsetToNode, nodeOffsetToWorld } from '../compiler/ir/srt'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -270,7 +271,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
     )
   }
 
-  const allParams = definition.params || []
+  const allParams = resolveParams(definition, currentValues)
 
   // Build sets of connected port IDs for this node
   const connectedInputs = new Set(
