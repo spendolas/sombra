@@ -34,7 +34,7 @@
 | File | Responsibility |
 |---|---|
 | `src/nodes/types.ts` | **Modify.** Two optional fields on `multiPass`. |
-| `src/compiler/expand-passes.ts` | **Modify.** Honour them at `:70-71` and `:111-113`. |
+| `src/compiler/expand-passes.ts` | **Modify.** Honour them near `:68-71` and `:101-105` — line numbers drift, locate by pattern. |
 | `scripts/verify-subpass-routing.ts` | **Create.** The gate. |
 | `package.json` | **Modify.** Register the gate, add to `verify:ci`. |
 
@@ -360,31 +360,54 @@ Add the routing check before the push:
 the `plans.set(...)` call and the `plans` map's type to include it, reading from
 `mp.routeEdge`. Read `:66-73` and adapt; do not assume the shape.
 
-- [ ] **Step 2: The sub-pass-0 question**
+- [ ] **Step 2: Sub-pass 0 — settled in pre-flight, not open**
 
-This loop runs only for `k > 0` — sub-pass 0 keeps the authored node id and its
-original edges, so **no filtering is applied to it**. For the Stack fixture that
-is correct by luck: layer_0 belongs to sub-pass 0 and stays. But layer_1 and
-layer_2 also still point at the authored node.
+Three lines decide it:
 
-**Check what test 2 reports for sub-pass 0.** If it sees three layer edges, the
-fix is incomplete: sub-pass 0's incoming edges need the same filter applied, by
-rewriting the original edges rather than only the duplicates. Report which case
-you find — this is the part of the plan I am least sure of.
+```
+:76  const outEdges: Edge<EdgeData>[] = [...edges]            ← every original edge, kept
+:87  const id = k === 0 ? node.id : `${node.id}${SUFFIX}${k}`  ← sub-pass 0 IS the authored node
+:97  if (k > 0) { … duplication loop … }                       ← never runs for k = 0
+```
+
+The original `layer_*` edges target the authored id, which *is* sub-pass 0, and
+the duplication loop — the only place Step 1 adds a filter — cannot reach them.
+So Step 1 alone leaves **sub-pass 0 holding every layer edge**: test 2 fails for
+sub-pass 0 while passing for 1 and 2.
+
+**So the fix must also filter the initial `[...edges]` copy:** for each original
+edge whose target has a plan, whose handle is not the chain input, and whose plan
+declares `routeEdge`, keep it only if `routeEdge(handle, 0, params)`.
+
+Without that, the extension is half-implemented in the "correct by luck" way —
+`layer_0` lands right while the others leak into pass 0, reintroducing the exact
+sampler explosion the extension exists to prevent.
 
 - [ ] **Step 3: Run everything**
 
 Run: `npm run verify:subpass-routing && npm run verify:ci && npm run self-validate`
 Expected: 4/4, and 468/468 shaders unchanged.
 
-- [ ] **Step 4: Perturb each extension separately**
+- [ ] **Step 4: Distinguish "misplaced" from "vanished"**
+
+A `routeEdge` that returns false at *every* sub-pass drops that wire from the
+compiled graph entirely. Semantically that is the node saying "this input belongs
+nowhere", so it is arguably correct — but an off-by-one in a routing function
+then **silently discards a user's wire** rather than misplacing it, and the two
+look identical to a pass-count assertion while being very different to the user.
+
+Add a case asserting that every routed edge lands on exactly one sub-pass, and
+that the total count of layer edges across all sub-passes equals the number
+wired. A missing edge must fail differently from a misrouted one.
+
+- [ ] **Step 5: Perturb each extension separately**
 
 Revert `requiresWiredSource` alone → test 1 fails, test 2 passes.
 Revert `routeEdge` alone → test 2 fails, test 1 passes.
 If reverting one fails both, the gate cannot distinguish them and must be
 extended before this ships.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add src/compiler/expand-passes.ts
