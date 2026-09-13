@@ -53,6 +53,14 @@ interface PassState {
   textureFilter: number  // gl.LINEAR or gl.NEAREST
   /** Target scale for this pass. Undefined = full canvas resolution. */
   resolution?: number
+  /**
+   * Physical intermediate SLOT this pass renders into, or -1 when nothing
+   * reads its output (always true of the final pass, which targets the
+   * canvas instead). Undefined on a plan from an un-migrated compiler path —
+   * callers fall back to one-slot-per-pass via `slotForPass()`. Multiple
+   * passes may share a slot; see src/compiler/texture-slots.ts.
+   */
+  targetSlot?: number
 }
 
 interface FBOSlot {
@@ -95,6 +103,10 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
   private fboPool: FBOSlot[] = []
   private downstreamMap: Map<number, number[]> = new Map()
   private uniformPassMap: Map<string, number[]> = new Map()
+  /** `plan.slotCount` for the current plan. Undefined on a plan from an
+   *  un-migrated compiler path — `effectiveSlotCount()` then falls back to
+   *  one slot per intermediate pass. */
+  private planSlotCount?: number
 
   // [P6] Program cache — keyed by fragment shader source
   private programCache: Map<string, ProgramCacheEntry> = new Map()
@@ -353,6 +365,61 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
       passTargetSize(ps.resolution, w, h, dpr, this.maxTextureSize))
   }
 
+  /**
+   * Slot a pass's output lives in. Falls back to the pass's own index (the
+   * old one-texture-per-pass scheme) when `targetSlot` is absent — the plan
+   * came from an un-migrated compiler path.
+   */
+  private slotForPass(passIndex: number): number {
+    const slot = this.passStates[passIndex]?.targetSlot
+    return slot === undefined ? passIndex : slot
+  }
+
+  /** Number of physical intermediate textures this plan needs. Falls back to
+   *  one per intermediate pass when `planSlotCount` is absent. */
+  private effectiveSlotCount(): number {
+    const numIntermediate = this.passStates.length - 1
+    if (numIntermediate <= 0) return 0
+    return this.planSlotCount ?? numIntermediate
+  }
+
+  /**
+   * Size for each intermediate SLOT (not pass): sized from whichever pass
+   * owns it (any of them will do — passes only share a slot when
+   * texture-slots.ts bucketed them under the same `sizeKey`), but verified
+   * rather than assumed, since a wrong-pass slot wiring bug would otherwise
+   * surface only as a silently mis-sized (and therefore visibly wrong)
+   * texture with no error.
+   */
+  private slotTargetSizes(w: number, h: number, cap: number): PassTargetSize[] {
+    const passSizes = this.passTargetSizes(w, h)
+    const sizes: PassTargetSize[] = []
+    const ownerOfSlot: number[] = []
+    for (let i = 0; i < this.passStates.length - 1; i++) {
+      const slot = this.slotForPass(i)
+      if (slot < 0 || slot >= cap) continue
+      const size = passSizes[i]
+      const existing = sizes[slot]
+      if (existing === undefined) {
+        sizes[slot] = size
+        ownerOfSlot[slot] = i
+      } else if (existing.width !== size.width || existing.height !== size.height) {
+        console.error(
+          `[Sombra] intermediate slot ${slot} sized by pass ${ownerOfSlot[slot]} ` +
+          `(${existing.width}x${existing.height}) disagrees with pass ${i} (${size.width}x${size.height}) — ` +
+          `texture-slot assignment should guarantee identical sizes per slot`,
+        )
+      }
+    }
+    // A slot with no owning pass shouldn't happen for a well-formed plan
+    // (every slot is assigned by at least one pass), but still needs a size
+    // to allocate a texture — fall back to full canvas size.
+    for (let s = 0; s < cap; s++) {
+      if (sizes[s] === undefined) sizes[s] = { width: w, height: h, dpr: 1 }
+    }
+    return sizes
+  }
+
   /** Allocate FBO slots for intermediate passes, one per requested size. */
   private allocateFBOs(sizes: Array<{ width: number; height: number }>) {
     const gl = this.gl
@@ -386,13 +453,13 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
     }
   }
 
-  /** Resize FBO textures to each pass's own target size. */
+  /** Resize FBO textures to each SLOT's own target size. */
   private resizeFBOs() {
     const gl = this.gl
     const dpr = Math.min(window.devicePixelRatio || 1, 2) * this.currentDprScale
     const w = Math.floor(this.canvas.clientWidth * dpr)
     const h = Math.floor(this.canvas.clientHeight * dpr)
-    const sizes = this.passTargetSizes(w, h)
+    const sizes = this.slotTargetSizes(w, h, this.fboPool.length)
 
     let resized = false
     for (let i = 0; i < this.fboPool.length; i++) {
@@ -518,15 +585,22 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
     // consumer samples whatever happens to be bound there — a plausible-looking
     // but wrong image, reported as success. Reachable today: Pyramid Blur at
     // N=3 is already 7 passes.
+    //
+    // Compare against SLOTS, not passes: a plan with `slotCount` reuses
+    // textures across non-overlapping-lifetime passes, so a deep pass chain
+    // can need far fewer physical textures than it has passes. Absent
+    // `slotCount` (an un-migrated plan) falls back to the old one-per-pass count.
     const intermediateCount = plan.passes.length - 1
-    if (intermediateCount > this.maxIntermediateTextures) {
+    const effectiveSlots = plan.slotCount ?? intermediateCount
+    if (effectiveSlots > this.maxIntermediateTextures) {
       return {
         success: false,
-        error: `Graph needs ${intermediateCount} intermediate render targets (max ${this.maxIntermediateTextures}) — reduce effect chain depth`,
+        error: `Graph needs ${effectiveSlots} intermediate render targets (max ${this.maxIntermediateTextures}) — reduce effect chain depth`,
       }
     }
 
     this.isMultiPass = true
+    this.planSlotCount = plan.slotCount
 
     try {
       const newPassStates: PassState[] = []
@@ -550,6 +624,7 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
           isTimeLive: pass.isTimeLive,
           textureFilter: glFilter,
           resolution: pass.resolution,
+          targetSlot: pass.targetSlot,
         })
       }
 
@@ -562,12 +637,13 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
       // Build uniform → pass routing map
       this.buildUniformPassMap()
 
-      // Allocate FBOs for intermediate passes (all except last)
+      // Allocate FBOs for intermediate SLOTS (not passes — several passes may
+      // share one when their lifetimes don't overlap; see texture-slots.ts).
       const dpr = Math.min(window.devicePixelRatio || 1, 2) * this.currentDprScale
       const w = Math.floor(this.canvas.clientWidth * dpr) || 1
       const h = Math.floor(this.canvas.clientHeight * dpr) || 1
-      // passStates is already assigned above, so passTargetSizes sees this plan.
-      this.allocateFBOs(this.passTargetSizes(w, h).slice(0, intermediateCount))
+      // passStates is already assigned above, so slotTargetSizes sees this plan.
+      this.allocateFBOs(this.slotTargetSizes(w, h, this.effectiveSlotCount()))
 
       // Clear single-pass program ref (it's in the cache now)
       this.program = null
@@ -615,6 +691,7 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
     this.downstreamMap.clear()
     this.uniformPassMap.clear()
     this.lastUniformValues.clear()
+    this.planSlotCount = undefined
   }
 
   /** [P3] Build downstream adjacency from inputTextures. */
@@ -905,8 +982,12 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
     // array, at the cost of another `passStates.length` allocations every frame.
     const sizes = this.passTargetSizes(w, h)
     if (this.fboPool.length > 0) {
-      const stale = this.fboPool.some((f, i) =>
-        !!sizes[i] && (f.width !== sizes[i].width || f.height !== sizes[i].height))
+      // Staleness is a SLOT property (the FBO pool is indexed by slot), not a
+      // pass property — comparing fboPool[i] against the i-th PASS's size
+      // would misalign as soon as passes outnumber slots.
+      const slotSizes = this.slotTargetSizes(w, h, this.fboPool.length)
+      const stale = this.fboPool.some((f, s) =>
+        !!slotSizes[s] && (f.width !== slotSizes[s].width || f.height !== slotSizes[s].height))
       if (stale) this.resizeFBOs()
     }
 
@@ -934,7 +1015,10 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
         gl.bindFramebuffer(gl.FRAMEBUFFER, null)
       } else {
         // Render to FBO, at this pass's own target size (RenderPass.resolution).
-        const fbo = this.fboPool[i]
+        // Target the pass's SLOT, not its own index — several passes may
+        // share a slot when their lifetimes don't overlap.
+        const slot = this.slotForPass(i)
+        const fbo = this.fboPool[slot]
         if (!fbo) continue
         gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.framebuffer)
         tw = fbo.width
@@ -949,7 +1033,12 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
       // Bind input textures from earlier passes
       let texUnit = 0
       for (const [samplerName, sourcePassIdx] of Object.entries(ps.inputTextures)) {
-        const sourceFbo = this.fboPool[sourcePassIdx]
+        // Read from the source pass's SLOT, not its own index — a shared
+        // slot may currently hold a different pass's later output, which is
+        // fine: liveness guarantees the source pass's own last reader is us
+        // or earlier, so nothing has overwritten it yet.
+        const sourceSlot = this.slotForPass(sourcePassIdx)
+        const sourceFbo = this.fboPool[sourceSlot]
         if (!sourceFbo) continue
 
         // A boundary whose sampler this program does not have is one the GLSL
