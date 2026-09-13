@@ -7,8 +7,9 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Node, Edge, OnNodesChange, OnEdgesChange } from '@xyflow/react'
 import { applyNodeChanges, applyEdgeChanges } from '@xyflow/react'
-import type { NodeData, EdgeData } from '../nodes/types'
+import type { NodeData, EdgeData, NodeDefinition } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
+import { resolveParams } from '../nodes/resolve-dynamic'
 import { dedupeNodeIds } from '../utils/node-id'
 import { migrateOffsetSpace } from '../utils/srt-migration'
 import { anchorToVec2 } from '../nodes/output/fragment-output'
@@ -19,6 +20,22 @@ import { previewCanvasSize } from '../utils/preview-canvas-size'
  *  v4: one-time dedupe of duplicate node ids left by the old
  *  `${type}-${Date.now()}` mint scheme (see src/utils/node-id.ts). */
 const GRAPH_SCHEMA_VERSION = 4
+
+/**
+ * The set of handle ids valid on a node instance: inputs, outputs, connectable
+ * params, and dynamic inputs. Params and inputs must be resolved through the
+ * node instance's own params — a connectable param or input that exists only
+ * through dynamicParams/dynamicInputs is still a real handle, and treating it
+ * as invalid deletes the user's wire.
+ */
+export function buildValidHandles(def: NodeDefinition, nodeParams: Record<string, unknown> | undefined): Set<string> {
+  return new Set([
+    ...def.inputs.map(i => i.id),
+    ...def.outputs.map(o => o.id),
+    ...resolveParams(def, nodeParams).filter(p => p.connectable).map(p => p.id),
+    ...(def.dynamicInputs?.(nodeParams || {}).map(i => i.id) ?? []),
+  ])
+}
 
 /** Renamed node types — applied on localStorage load */
 const TYPE_RENAMES: Record<string, string> = {
@@ -462,12 +479,7 @@ export const useGraphStore = create<GraphState>()(
             if (!targetNode) return true // orphan edge — let React Flow handle it
             const def = nodeRegistry.get(targetNode.data.type)
             if (!def) return true // unknown type — keep edge, node will error separately
-            const validHandles = new Set([
-              ...def.inputs.map(i => i.id),
-              ...def.outputs.map(o => o.id),
-              ...(def.params?.filter(p => p.connectable).map(p => p.id) ?? []),
-              ...(def.dynamicInputs?.(targetNode.data.params || {}).map(i => i.id) ?? []),
-            ])
+            const validHandles = buildValidHandles(def, targetNode.data.params)
             if (edge.targetHandle && !validHandles.has(edge.targetHandle)) return false
             if (edge.sourceHandle) {
               const sourceNode = nodeMap.get(edge.source)
