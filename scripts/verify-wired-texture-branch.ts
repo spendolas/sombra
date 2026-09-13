@@ -28,10 +28,12 @@ const cases: Case[] = []
 
 for (const def of nodeRegistry.getAll()) {
   const type = def.type
-  const texPort = def.inputs.find((i) => i.textureInput)
-  if (!texPort || !def.ir) continue
+  // Every texture port, not just the first: a node can have several, and an
+  // untested port is exactly where a wired-but-unread binding hides (audit P0.2).
+  const texPorts = def.inputs.filter((i) => i.textureInput)
+  if (texPorts.length === 0 || !def.ir) continue
   const floats = (def.params ?? []).filter((p) => p.connectable && p.type === 'float')
-  for (const p of floats) {
+  for (const texPort of texPorts) for (const p of floats) {
     // The driver MUST be fragment-dependent. A float_constant rides as a uniform,
     // so the branch condition stays uniform and Tint accepts textureSample — the
     // bug only appears when the value varies per fragment, e.g. noise.
@@ -43,7 +45,7 @@ for (const def of nodeRegistry.getAll()) {
     ]
     const ir = compileGraphIR(nodes as never, edges as never)
     for (const [i, pass] of (ir?.passes ?? []).entries()) {
-      cases.push({ label: `${type}.${p.id} wired [pass ${i}]`, code: pass.shaderCode })
+      cases.push({ label: `${type}.${texPort.id} + ${p.id} [pass ${i}]`, code: pass.shaderCode })
     }
   }
 }
