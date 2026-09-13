@@ -11,9 +11,13 @@
  *
  * Run: npx tsx scripts/verify-dynamic-param-edges.ts
  */
+import { readFileSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { initializeNodeLibrary } from '../src/nodes'
 import { nodeRegistry } from '../src/nodes/registry'
 import { exportToFile, importFromFile } from '../src/utils/sombra-file'
+import { buildValidHandles } from '../src/stores/graphStore'
 import { test, run, assert } from './blur-bakeoff/lib/test-util'
 import type { Node, Edge } from '@xyflow/react'
 import type { NodeDefinition, NodeParameter } from '../src/nodes/types'
@@ -81,6 +85,28 @@ test('a .sombra round trip keeps the wire into a dynamic param', () => {
   assert(ids.includes('e1'), 'the STATIC param wire was dropped — the fixture is wrong, fix it before reading anything else')
   assert(ids.includes('e2'),
     `the wire into the dynamic param gain_1 was deleted on load. Survivors: ${JSON.stringify(ids)}`)
+})
+
+test('buildValidHandles resolves connectable dynamic params, not just static def.params', () => {
+  const testDef = nodeRegistry.get('test_dyn_param_edges')!
+  const handles = buildValidHandles(testDef, { gainCount: 2 })
+  assert(handles.has('gain_1'),
+    `buildValidHandles(def, { gainCount: 2 }) did not contain gain_1 — it read static def.params instead of resolving dynamicParams. Got: ${JSON.stringify([...handles])}`)
+})
+
+test('migrate actually calls buildValidHandles (not a parallel inline set)', () => {
+  const __dirname = dirname(fileURLToPath(import.meta.url))
+  const src = readFileSync(join(__dirname, '../src/stores/graphStore.ts'), 'utf8')
+  const migrateStart = src.indexOf('migrate: (persisted: unknown) => {')
+  assert(migrateStart !== -1, 'could not find the `migrate:` block in graphStore.ts — has it been renamed/restructured?')
+  // The migrate closure runs until the matching `return state` that closes it out.
+  const migrateEnd = src.indexOf('return state', migrateStart)
+  assert(migrateEnd !== -1, 'could not find the end of the `migrate:` block in graphStore.ts')
+  const migrateBody = src.slice(migrateStart, migrateEnd)
+  assert(migrateBody.includes('buildValidHandles('),
+    'migrate does not call buildValidHandles — it may be computing validHandles inline again, which the extracted-helper gate cannot see')
+  assert(!migrateBody.includes('def.params?.filter(p => p.connectable)'),
+    'migrate still contains the old inline static-params construction — half-migrated: the helper may be correct but migrate is not calling it')
 })
 
 run('dynamic-param-edges')
