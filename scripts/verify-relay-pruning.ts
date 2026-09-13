@@ -172,6 +172,12 @@ test('GLSL: no pass references a node_ identifier it never declares', () => {
   // per-branch source is a leaf and cannot distinguish a crippled
   // `nodesFeeding` (`return new Set([startNodeId])`) from a correct one — a
   // check built on it would be vacuous.
+  //
+  // This relies on the codegen's naming convention: per-node outputs are
+  // named `node_<id>_<port>` and always declared with an initializer at their
+  // point of definition (`<type> node_x = ...`). A future node-authoring
+  // change that drops that convention (e.g. declares without an initializer,
+  // or stops prefixing with `node_`) silently defeats this gate.
   const { nodes, edges } = multiHopConvergingGraph(4)
   const plan = compileGraph(nodes, edges)
   assert(plan.success, 'compile failed')
@@ -189,6 +195,39 @@ test('GLSL: no pass references a node_ identifier it never declares', () => {
     const undeclared = [...referenced].filter((id) => !declared.has(id))
     assert(undeclared.length === 0,
       `pass ${p.index} references undeclared identifier(s): ${undeclared.join(', ')} — a relay dropped a declaration its own body still reads`)
+  }
+})
+
+test('WGSL: no pass references a node_ identifier it never declares', () => {
+  // Same fixture and same reasoning as the GLSL test above — multiHopConvergingGraph,
+  // not convergingGraph, because a leaf-source graph can't distinguish a crippled
+  // `nodesFeeding` from a correct one. Reads `shaderCode` (WGSLPassOutput's field —
+  // there is no `fragmentShader` on this type).
+  //
+  // This relies on the codegen's naming convention too: per-node outputs are
+  // named `node_<id>_<port>` and are declared with an initializer via the IR
+  // `declare()` builder, which the WGSL backend always lowers to
+  // `var <name>: <type> = <expr>;` (see lowerStmtToWGSL's 'declare' case in
+  // ir/wgsl-backend.ts — `let` is never used for declares because IR doesn't
+  // track mutability and some node_ outputs are reassigned later). A future
+  // change to that convention (dropping the `node_` prefix, or declaring
+  // without an initializer) silently defeats this gate.
+  const { nodes, edges } = multiHopConvergingGraph(4)
+  const plan = compileGraphIR(nodes, edges)
+  assert(plan !== null, 'IR compile failed')
+
+  const declRe = /\b(?:var|let)\s+(node_\w+)\s*:\s*\w+\s*=/g
+  const refRe = /\bnode_\w+\b/g
+
+  for (const p of plan!.passes) {
+    const src = p.shaderCode
+    const declared = new Set<string>()
+    for (const m of src.matchAll(declRe)) declared.add(m[1])
+    const referenced = new Set<string>()
+    for (const m of src.matchAll(refRe)) referenced.add(m[0])
+    const undeclared = [...referenced].filter((id) => !declared.has(id))
+    assert(undeclared.length === 0,
+      `WGSL pass references undeclared identifier(s): ${undeclared.join(', ')} — a relay dropped a declaration its own body still reads`)
   }
 })
 
