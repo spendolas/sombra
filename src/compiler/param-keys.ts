@@ -18,19 +18,22 @@ export function buildSemanticKey(nodes: Node<NodeData>[], edges: Edge<EdgeData>[
     .map((n) => {
       const def = nodeRegistry.get(n.data.type)
       const structural: Record<string, unknown> = {}
+      let paramCount = 0
       if (def) {
         const params = resolveParams(def, n.data.params)
+        paramCount = params.length
         for (const p of params) {
           if (p.updateMode === 'recompile')
             structural[p.id] = n.data.params?.[p.id] ?? p.default
         }
-        // Fold in the param count: two instances can share identical
-        // recompile-param values while differing in how many params exist
-        // (dynamicParams). Without this, adding/removing a param would not
-        // change the semantic key and would never trigger a recompile.
-        structural.__paramCount = params.length
       }
-      return `${n.id}:${n.data.type}:${JSON.stringify(structural)}`
+      // Carry the param count alongside `structural` (not folded into it):
+      // two instances can share identical recompile-param values while
+      // differing in how many params exist (dynamicParams). Without this,
+      // adding/removing a param would not change the semantic key and would
+      // never trigger a recompile. Keeping the count in a sibling field
+      // means a param literally named `__paramCount` can never shadow it.
+      return `${n.id}:${n.data.type}:${JSON.stringify({ p: structural, n: paramCount })}`
     })
     .join('|')
   const ek = edges
