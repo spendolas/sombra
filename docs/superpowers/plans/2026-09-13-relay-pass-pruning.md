@@ -181,15 +181,21 @@ function convergingGraph(branches: number) {
   return { nodes, edges }
 }
 
-const shaderChars = (plan: { passes: Array<{ fragmentShader: string }> }) =>
+// The two backends name their shader field DIFFERENTLY. RenderPass has
+// `fragmentShader` (glsl-generator.ts:56); WGSLPassOutput has `shaderCode`
+// (ir-compiler.ts:457) and no `fragmentShader` at all — reading the wrong one
+// yields undefined.length and the size comparison measures nothing.
+const glslChars = (plan: { passes: Array<{ fragmentShader: string }> }) =>
   plan.passes.reduce((sum, p) => sum + p.fragmentShader.length, 0)
+const wgslChars = (plan: { passes: Array<{ shaderCode: string }> }) =>
+  plan.passes.reduce((sum, p) => sum + p.shaderCode.length, 0)
 
 test('GLSL: total shader size grows sub-quadratically with converging branches', () => {
   const g2 = convergingGraph(2), g6 = convergingGraph(6)
   const two = compileGraph(g2.nodes, g2.edges)
   const six = compileGraph(g6.nodes, g6.edges)
   assert(two.success && six.success, 'compile failed')
-  const ratio = shaderChars(six) / shaderChars(two)
+  const ratio = glslChars(six) / glslChars(two)
   // 3x the branches. Linear-ish growth lands near 3-5x; quadratic re-emission
   // lands near 9x or above. The threshold is deliberately loose — this measures
   // an asymptote, not an exact size.
@@ -215,7 +221,7 @@ test('WGSL: same, on the IR path', () => {
   const six = compileGraphIR(g6.nodes, g6.edges)
   // No `success` field on this path — null is the only failure signal.
   assert(two !== null && six !== null, 'IR compile returned null')
-  const ratio = shaderChars(six!) / shaderChars(two!)
+  const ratio = wgslChars(six!) / wgslChars(two!)
   assert(ratio < 6,
     `WGSL shader size grew ${ratio.toFixed(1)}x for 3x the branches`)
 })

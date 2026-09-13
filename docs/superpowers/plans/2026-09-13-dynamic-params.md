@@ -24,6 +24,11 @@
 
 ## The nine call sites (verified 2026-09-13)
 
+> **Line numbers in `glsl-generator.ts` shifted by roughly +13** when plan 1
+> landed, which this plan predates: sites 4/5/6 are near `:202`, `:513` and
+> `:551`. **Locate every site by pattern, not by line number.** `ir-compiler.ts`
+> and `ShaderNode.tsx` are unaffected.
+
 | # | File:line | What it does | Needs resolving? |
 |---|---|---|---|
 | 1 | `use-live-compiler.ts:239` | `semanticKey` — recompile params | Yes |
