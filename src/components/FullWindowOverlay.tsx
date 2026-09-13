@@ -4,6 +4,7 @@ import { BackgroundModeControl } from './BackgroundModeControl'
 import { GizmoViewControl } from './GizmoViewControl'
 import { ShaderPlaceholder } from './ShaderPlaceholder'
 import { PreviewBackdrop } from './PreviewBackdrop'
+import { CompileErrorBanner } from './CompileErrorBanner'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { ds } from '@/generated/ds'
 
@@ -24,6 +25,7 @@ export function FullWindowOverlay({ targetRef }: FullWindowOverlayProps) {
         <BackgroundModeControl />
       </div>
       <PreviewToolbar className="absolute top-xl right-xl z-10" />
+      <CompileErrorBanner />
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { BackgroundModeControl } from './BackgroundModeControl'
 import { GizmoViewControl } from './GizmoViewControl'
 import { ShaderPlaceholder } from './ShaderPlaceholder'
 import { PreviewBackdrop } from './PreviewBackdrop'
+import { CompileErrorBanner } from './CompileErrorBanner'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { ds } from '@/generated/ds'
 
@@ -302,6 +303,7 @@ export function FloatingPreview({ targetRef }: FloatingPreviewProps) {
         />
         <div ref={targetRef} className="w-full h-full" />
         <ShaderPlaceholder />
+        <CompileErrorBanner />
       </div>
       {/* Resize edges — 12px hit area (6px each side of boundary) */}
       <div className={`absolute -top-1.5 left-3 right-3 h-3 cursor-n-resize z-50${DEBUG_HIT_AREAS ? ' bg-red-500/30' : ''}`} onMouseDown={(e) => onResizeStart(0, -1, e)} />
