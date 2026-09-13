@@ -11,6 +11,7 @@ import pako from 'pako'
 import type { Node, Edge } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
+import { resolveParams } from '../nodes/resolve-dynamic'
 import { migrateOffsetSpace } from './srt-migration'
 import { SOMBRA_FILE_MIME_TYPE } from './file-type-constants'
 import type { ShaderThumbnail } from '../renderer/capture-thumbnail'
@@ -380,9 +381,13 @@ export function importFromFile(json: unknown): {
     if (!srcDef || !tgtDef) return false
     const srcOk = !e.sourceHandle || srcDef.outputs.some((p) => p.id === e.sourceHandle)
     const tgtInputs = tgtDef.dynamicInputs ? tgtDef.dynamicInputs(tgt.data.params || {}) : tgtDef.inputs
+    // Params must be resolved exactly as inputs are: a handle that exists only
+    // through dynamicParams is still a real handle, and treating it as invalid
+    // deletes the user's wire on every file open.
+    const tgtParams = resolveParams(tgtDef, tgt.data.params as Record<string, unknown> | undefined)
     const tgtOk = !e.targetHandle
       || tgtInputs.some((p) => p.id === e.targetHandle)
-      || (tgtDef.params ?? []).some((p) => p.connectable && p.id === e.targetHandle)
+      || tgtParams.some((p) => p.connectable && p.id === e.targetHandle)
     return srcOk && tgtOk
   })
 
