@@ -82,16 +82,27 @@ test('GLSL: total shader size grows sub-quadratically with converging branches',
     `shader size grew ${ratio.toFixed(1)}x for 3x the branches — relays are still re-emitting whole bodies`)
 })
 
-test('GLSL: a relay contains fewer lines than the primary pass', () => {
+test('GLSL: only ONE pass carries the full body', () => {
   const { nodes, edges } = convergingGraph(4)
   const plan = compileGraph(nodes, edges)
   assert(plan.success, 'compile failed')
   const lens = plan.passes.map((p) => p.fragmentShader.split('\n').length)
-  const primary = Math.max(...lens)
-  const relays = lens.filter((l) => l !== primary)
-  assert(relays.length > 0, 'no relay passes were produced — the fixture is wrong')
-  assert(relays.some((l) => l < primary),
-    `every pass is the same size (${primary} lines) — relays still carry the full body`)
+  const max = Math.max(...lens)
+  const atMax = lens.filter((l) => l === max).length
+  // Today the primary and all 3 relays tie at the maximum because each re-emits
+  // the entire pass body. After pruning, exactly one pass should carry it.
+  //
+  // This replaces an earlier `relays.some(l => l < max)` shape that looked
+  // plausible but was satisfiable by an unrelated cheap pass: for 4 branches
+  // the actual line counts are [162, 162, 162, 162, 72] — four passes tied at
+  // the bloated maximum (the bug) plus one small combining pass that exists
+  // regardless of whether relays are pruned. `some(l < max)` was trivially
+  // true because of that combiner, so it passed on unfixed source. Counting
+  // ties at the max is the assertion that actually distinguishes "N passes
+  // duplicate the body" from "one pass is naturally cheaper." Do not revert to
+  // the tidier-looking `some()` form — it measures nothing.
+  assert(atMax === 1,
+    `${atMax} passes tie at ${max} lines — relays still carry the full body (lines: ${JSON.stringify(lens)})`)
 })
 
 test('WGSL: same, on the IR path', () => {
