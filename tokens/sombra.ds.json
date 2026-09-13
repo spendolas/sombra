@@ -2495,6 +2495,72 @@
           "figmaNodeId": "884:346"
         }
       }
+    },
+    "954:2141": {
+      "name": "Compile Error Banner",
+      "type": "molecule",
+      "dsKey": "compileErrorBanner",
+      "codeFile": "src/components/CompileErrorBanner.tsx",
+      "parts": {
+        "pill": {
+          "layout": "horizontal",
+          "align": "center",
+          "fill": "surface/alt",
+          "fillOpacity": 60,
+          "backdropBlur": 16,
+          "radius": "md",
+          "padding": "md",
+          "gap": "md",
+          "cursor": "pointer",
+          "figmaNodeId": "954:2126"
+        },
+        "panel": {
+          "layout": "vertical",
+          "fill": "surface/alt",
+          "fillOpacity": 60,
+          "backdropBlur": 16,
+          "radius": "md",
+          "padding": "md",
+          "gap": "sm",
+          "cursor": "pointer",
+          "figmaNodeId": "954:2133"
+        },
+        "tint": {
+          "position": "absolute",
+          "inset": "0",
+          "fill": "color/error",
+          "fillOpacity": 10,
+          "pointerEvents": "none",
+          "extra": "rounded-[inherit]",
+          "figmaNodeId": null
+        },
+        "header": {
+          "layout": "horizontal",
+          "align": "center",
+          "gap": "md",
+          "figmaNodeId": "954:2134"
+        },
+        "icon": {
+          "textColor": "error",
+          "figmaNodeId": null
+        },
+        "title": {
+          "textStyle": "text-section",
+          "textColor": "error",
+          "figmaNodeId": "954:2131",
+          "textCase": "upper"
+        },
+        "count": {
+          "textStyle": "text-param",
+          "textColor": "fg-dim",
+          "figmaNodeId": "954:2132"
+        },
+        "message": {
+          "textStyle": "text-param",
+          "textColor": "fg-dim",
+          "figmaNodeId": "954:2140"
+        }
+      }
     }
   },
   "nodeTemplates": {
