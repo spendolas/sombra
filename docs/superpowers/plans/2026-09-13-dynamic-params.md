@@ -303,7 +303,9 @@ test('GLSL: every dynamic param becomes a uniform', () => {
 test('WGSL: every dynamic param becomes a uniform', () => {
   const { nodes, edges } = graph(3)
   const plan = compileGraphIR(nodes, edges)
-  assert(plan !== null && plan.success, `IR compile failed: ${JSON.stringify(plan?.errors)}`)
+  // compileGraphIR returns WGSLMultiPassOutput | null — it has NO `success` or
+  // `errors` field (ir-compiler.ts:483). null is its only failure signal.
+  assert(plan !== null, 'IR compile returned null')
   const names = plan!.passes.flatMap((p) => p.userUniforms.map((u) => u.name))
   for (const i of [0, 1, 2]) {
     assert(names.some((nm) => nm.includes(`gain_${i}`)),
@@ -332,7 +334,7 @@ test('a node without dynamicParams is unaffected', () => {
   assert(plan.success, `static-param node regressed: ${JSON.stringify(plan.errors)}`)
 })
 
-run()
+run('dynamic-params')
 ```
 
 - [ ] **Step 2: Register it**
