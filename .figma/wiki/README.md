@@ -17,13 +17,13 @@ V2 was rebuilt from scratch using a **code-driven approach**: every Figma compon
 
 ---
 
-## Parity Score: 41/41 ✅
+## Parity Score: 43/43 ✅
 
 | Level | Total | ✅ Match | Notes |
 |---|---|---|---|
 | Tokens | 5 collections + 12 text styles | All | 40 variables + 12 text styles, dark mode only |
 | Atoms | 8 | 8 | Handle, Separator, Category Header, Palette Item, Plus Minus Button, Node Header, Node Footer, Action Button |
-| Molecules | 12 | 12 | Labeled Handle, Float Slider (SombraSlider), Enum Select, Anchor Grid, Color Input, Connectable Param Row, Preview Toolbar, Zoom Bar, Gradient Editor, Random Display, MiniMap, Graph Toolbar |
+| Molecules | 14 | 14 | Labeled Handle, Float Slider (SombraSlider), Enum Select, Anchor Grid, Color Input, Connectable Param Row, Preview Toolbar, Zoom Bar, Gradient Editor, Random Display, MiniMap, Graph Toolbar, AMD Warning, Compile Error Banner |
 | Organisms | 6 | 6 | Node Card, Node Palette, Properties Panel, Floating Preview, Full Window Overlay, File Drop Dialog |
 | Templates | 23 | 23 | All node types (Bayer Dither removed, Domain Warp → Warp UV, Pixel Grid → Dither) |
 | Scenes | 5 | 5 | All preview modes |
@@ -68,6 +68,8 @@ V2 was rebuilt from scratch using a **code-driven approach**: every Figma compon
 | [random-display.md](molecules/random-display.md) | `111:954` | — | RandomDisplay.tsx | ✅ |
 | [minimap.md](molecules/minimap.md) | `111:963` | — | FlowCanvas.tsx (MiniMap) | ✅ |
 | [graph-toolbar.md](molecules/graph-toolbar.md) | `268:1427` | — | GraphToolbar.tsx | ✅ |
+| [amd-warning.md](molecules/amd-warning.md) | `884:355` | 2 | AmdSeeThroughWarning.tsx | ✅ |
+| [compile-error-banner.md](molecules/compile-error-banner.md) | `954:2141` | 2 | CompileErrorBanner.tsx | ✅ |
 
 ### Organisms
 | Page | Figma ID | Variants | Code File | Parity |
