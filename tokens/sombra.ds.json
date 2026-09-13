@@ -2468,8 +2468,10 @@
           "backdropBlur": 16,
           "radius": "md",
           "padding": "md",
-          "gap": "md",
-          "figmaNodeId": "884:353"
+          "figmaNodeId": "884:353",
+          "auditIgnore": [
+            "gap"
+          ]
         },
         "tint": {
           "position": "absolute",
@@ -2478,6 +2480,10 @@
           "fillOpacity": 10,
           "pointerEvents": "none",
           "extra": "rounded-[inherit]",
+          "figmaNodeId": null
+        },
+        "icon": {
+          "textColor": "warning",
           "figmaNodeId": null
         },
         "label": {

@@ -10,8 +10,10 @@
  * after a timeout), then collapsed to just the icon; hover re-expands, mouse-out
  * collapses.
  *
- * Glass pill mirrors the Figma design (color/warning #fbbf24): surface-alt/80 +
- * a warning/10 wash, backdrop-blur, triangle-alert icon + label.
+ * Glass pill comes from the DS (`ds.amdWarning.*`, Figma set 884:355): surface-alt
+ * at 60% + a warning/10 wash + backdrop blur. The blur is justified here because
+ * the pill floats over the live shader canvas; in-node chrome should not pay for
+ * one. Only structure, the collapse animation and the wash's geometry stay inline.
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -20,6 +22,7 @@ import { useRendererStore } from '@/stores/rendererStore'
 import { useSettingsStore } from '@/stores/settingsStore'
 import { seeThroughAvailable } from '@/utils/preview-background'
 import { cn } from '@/lib/utils'
+import { ds } from '@/generated/ds'
 
 const TriangleAlert = icons.triangleAlert
 
@@ -80,17 +83,19 @@ export function AmdSeeThroughWarning() {
       onMouseEnter={() => { clearTimer(); setExpanded(true) }}
       onMouseLeave={() => setExpanded(false)}
       title="See-through can flicker on this GPU (AMD)"
-      className={cn(
-        'nodrag relative isolate flex items-center overflow-hidden select-none',
-        'rounded-md p-md text-warning bg-surface-alt/60 backdrop-blur-lg',
-      )}
+      className={cn(ds.amdWarning.pill, 'nodrag relative isolate overflow-hidden select-none')}
     >
-      {/* Amber wash — the second Figma fill (color/warning @ 10%) over surface-alt/80. */}
-      <span aria-hidden className="absolute inset-0 rounded-[inherit] bg-warning/10 pointer-events-none" />
-      <TriangleAlert className="relative shrink-0 size-icon-sm" />
+      {/* Amber wash — Figma models it as the pill's second fill; a DS part carries one
+          fill, so it is a layered span here. */}
+      <span aria-hidden className={cn(ds.amdWarning.tint)} />
+      <TriangleAlert className={cn(ds.amdWarning.icon, 'relative shrink-0 size-icon-sm')} />
+      {/* The label's margin animates rather than the pill's gap: Figma collapses by
+          hiding the child (auto-layout then drops the gap), which CSS cannot do while
+          also transitioning. Hence `gap` is auditIgnore'd on the pill. */}
       <span
         className={cn(
-          'relative overflow-hidden whitespace-nowrap text-param transition-all duration-200 ease-out',
+          ds.amdWarning.label,
+          'relative overflow-hidden whitespace-nowrap transition-all duration-200 ease-out',
           expanded ? 'ml-md max-w-[12rem] opacity-100' : 'ml-0 max-w-0 opacity-0',
         )}
       >
