@@ -153,7 +153,13 @@ export function partitionPasses(
     const def = nodeRegistry.get(node.data.type)
     if (!def) continue
     const incoming = edgesByTarget.get(nodeId) || []
-    for (const input of def.inputs) {
+    // Dynamic ports count: a node whose texture inputs come from dynamicInputs
+    // must still trip the multi-pass path. The depth loop below already resolves
+    // them; this check has to agree or the graph collapses to a single pass.
+    const quickInputs = def.dynamicInputs
+      ? def.dynamicInputs(node.data.params || {})
+      : def.inputs
+    for (const input of quickInputs) {
       if (input.textureInput && incoming.some(e => e.targetHandle === input.id)) {
         hasTextureBoundary = true
         break
@@ -252,7 +258,14 @@ export function findTextureBoundaries(
       if (!def) continue
       const incoming = edgesByTarget.get(nodeId) || []
 
-      for (const input of def.inputs) {
+      // Same resolution as partitionPasses: a dynamically-declared texture port
+      // needs its own boundary and sampler, or it silently falls back to the
+      // port default while its upstream branch still renders to nothing.
+      const boundaryInputs = def.dynamicInputs
+        ? def.dynamicInputs(node.data.params || {})
+        : def.inputs
+
+      for (const input of boundaryInputs) {
         if (!input.textureInput) continue
         const edge = incoming.find(e => e.targetHandle === input.id)
         if (!edge) continue
