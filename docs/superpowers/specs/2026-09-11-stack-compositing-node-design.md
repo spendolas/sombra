@@ -448,16 +448,23 @@ Ranked by how routinely they fire (verified 2026-09-13):
 
 | Severity | Site | What happens |
 |---|---|---|
-| **Blocking** | `src/utils/sombra-file.ts:374-386` | The load-time dangling-handle prune accepts `(tgtDef.params ?? []).some(p => p.connectable …)` — **static params only**, though it *is* `dynamicInputs`-aware two lines above. Save a Stack with a wired layer opacity, reopen the `.sombra` file, and **the wire is silently gone.** Runs on every file open; nothing gates it. |
-| **Blocking** | `src/stores/graphStore.ts:468` | The same gap in `validHandles`. Lives inside `migrate:`, which zustand calls only when the persisted schema version differs — so it fires on a **schema bump**, not on every reload. Rarer than the file path, equally silent, and a bump is routine when shipping. |
+| **Blocking** | `src/components/FlowCanvas.tsx:271-275` | `isValidConnection` has the identical two-line asymmetry — `dynamicInputs` resolved, then `targetDef.params?.find(p => p.connectable …)`. It runs on **every drag-to-connect**, and `ShaderNode` already resolves params, so **the handle renders and then silently refuses every wire**. Worst-placed of the set: no error, no explanation, and it makes the two fixes below invisible to anyone not driving the dev bridge. Found 2026-09-13 by the sweep this section asked for. Needs the same pure-predicate extraction `migrate` needed — `isValidConnection` is an inline `useCallback` — so it is a task, not a line. **Land before the Stack node.** |
+| **Fixed 2026-09-13** | `src/utils/sombra-file.ts:374-386` | The load-time dangling-handle prune accepts `(tgtDef.params ?? []).some(p => p.connectable …)` — **static params only**, though it *is* `dynamicInputs`-aware two lines above. Save a Stack with a wired layer opacity, reopen the `.sombra` file, and **the wire is silently gone.** Runs on every file open; nothing gates it. |
+| **Fixed 2026-09-13** | `src/stores/graphStore.ts:468` | The same gap in `validHandles`. Lives inside `migrate:`, which zustand calls only when the persisted schema version differs — so it fires on a **schema bump**, not on every reload. Rarer than the file path, equally silent, and a bump is routine when shipping. |
 | Visible | `src/utils/layout.ts:37-38, 115` | `getInputHandleOrder` resolves `dynamicInputs` but reads static `def.params` for connectable ones — the same asymmetry, one module over. A connectable dynamic param gets no handle position. Fails *visibly*: a handle in the wrong place. |
 | Graceful | `src/utils/sombra-file.ts:366, 584` | Definition defaults not merged → the "bakes NaN garbage" path its own comment warns about. Note `:584` needs a reorder: the defaults loop runs before `Object.assign(params, cn.p)`. |
 | Graceful | `src/embed/manifest.ts:81` | A dynamic param never becomes an embed knob. |
 | Minor | `src/dev-bridge.ts:59, 277` · `src/components/CommandPalette.tsx:129` · `src/components/PreviewGizmoOverlay.tsx:156` | Param listing for automation; defaults on node creation; gizmo. |
 
-The two blocking ones are their own plan, and it must land **before** the Stack
-node ships — a node whose layer opacities can be wired is exactly what turns this
-latent gap into lost work. The rest can ride with Phase D.
+The two data-deleting sites were fixed on 2026-09-13
+(`docs/superpowers/plans/2026-09-13-dynamic-param-wire-loss.md`). **`FlowCanvas`
+replaced them at the top of the list** and must land before the Stack node: a
+handle that renders and then refuses every wire is what a user meets first.
+
+The sweep that found it also re-ranked the rest by what gates each — the ordering
+mistake recorded above. Two entries previously called "graceful" turn out to be
+harmless: `sombra-file`'s default-merging self-heals via `?? param.default`, and
+the node-creation sites run before any instance exists.
 
 Related, same class, also logged: `src/dev-bridge.ts:800` does
 `def.inputs.some(i => i.textureInput)` then hardcodes a `'source'` target handle,
