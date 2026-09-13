@@ -147,17 +147,55 @@ const glslChars = (plan: { passes: Array<{ fragmentShader: string }> }) =>
 const wgslChars = (plan: { passes: Array<{ shaderCode: string }> }) =>
   plan.passes.reduce((sum, p) => sum + p.shaderCode.length, 0)
 
+// Splits each pass's shader text at its entry point into a preamble (uniform/
+// sampler/function declarations, re-emitted in full by every relay — untouched
+// by this fix) and a body (the fragment-main statements, which relay pruning
+// actually controls). Bounding the TOTAL conflates the two: at 2->6 branches
+// the preamble grows 6.809x (it is the next plan's lever) while the body grows
+// only 3.455x under the fix. Fails loudly rather than silently treating the
+// whole text as body if the marker is missing — a split that degenerates
+// quietly would make the body assertion measure nothing.
+const splitAtMarker = (text: string, marker: string, label: string) => {
+  const idx = text.indexOf(marker)
+  assert(idx !== -1, `${label}: no '${marker}' entry-point marker found — cannot split preamble from body`)
+  return text.slice(idx)
+}
+const glslBodyChars = (plan: { passes: Array<{ fragmentShader: string }> }) =>
+  plan.passes.reduce((sum, p) => sum + splitAtMarker(p.fragmentShader, 'void main', 'GLSL pass').length, 0)
+// WGSL's entry point is NOT `void main` — confirmed by printing a generated
+// `shaderCode`, which emits `@fragment fn fs_main(in: VertexOutput) -> ...`.
+const wgslBodyChars = (plan: { passes: Array<{ shaderCode: string }> }) =>
+  plan.passes.reduce((sum, p) => sum + splitAtMarker(p.shaderCode, '@fragment fn fs_main', 'WGSL pass').length, 0)
+
 test('GLSL: total shader size grows sub-quadratically with converging branches', () => {
   const g2 = convergingGraph(2), g6 = convergingGraph(6)
   const two = compileGraph(g2.nodes, g2.edges)
   const six = compileGraph(g6.nodes, g6.edges)
   assert(two.success && six.success, 'compile failed')
   const ratio = glslChars(six) / glslChars(two)
-  // 3x the branches. Linear-ish growth lands near 3-5x; quadratic re-emission
-  // lands near 9x or above. The threshold is deliberately loose — this measures
-  // an asymptote, not an exact size.
+  // 3x the branches. This is the COARSE bound: it is currently dominated by
+  // the un-pruned preamble (measured 4.470x now, 7.478x before the fix — see
+  // the body assertion below for what relay pruning actually controls) and a
+  // later plan that prunes per-pass declarations addresses the preamble. Keep
+  // this loose at <6 rather than tightening it — at <4.5 the preamble's
+  // growth alone would put it within 0.7% of the fix's actual margin, too
+  // thin to trust as a gate.
   assert(ratio < 6,
     `shader size grew ${ratio.toFixed(1)}x for 3x the branches — relays are still re-emitting whole bodies`)
+})
+
+test('GLSL: relay-pruned BODY size grows sub-quadratically with converging branches', () => {
+  const g2 = convergingGraph(2), g6 = convergingGraph(6)
+  const two = compileGraph(g2.nodes, g2.edges)
+  const six = compileGraph(g6.nodes, g6.edges)
+  assert(two.success && six.success, 'compile failed')
+  const ratio = glslBodyChars(six) / glslBodyChars(two)
+  // 3x the branches; linear growth is ~3x. This is the quantity relay pruning
+  // actually controls (the preamble is out of scope for this fix — see the
+  // total-size test above). Measured 3.455x now (~23% headroom under 4.5)
+  // against 7.710x before the fix, so 4.5 has real margin in both directions.
+  assert(ratio < 4.5,
+    `body size grew ${ratio.toFixed(2)}x for 3x the branches — relays are still re-emitting whole bodies`)
 })
 
 test('GLSL: only ONE pass carries the full body', () => {
@@ -190,8 +228,22 @@ test('WGSL: same, on the IR path', () => {
   // No `success` field on this path — null is the only failure signal.
   assert(two !== null && six !== null, 'IR compile returned null')
   const ratio = wgslChars(six!) / wgslChars(two!)
+  // Coarse bound, same reasoning as the GLSL total test above: dominated by
+  // the un-pruned preamble, addressed by a later plan. Kept at <6.
   assert(ratio < 6,
     `WGSL shader size grew ${ratio.toFixed(1)}x for 3x the branches`)
+})
+
+test('WGSL: relay-pruned BODY size grows sub-quadratically with converging branches', () => {
+  const g2 = convergingGraph(2), g6 = convergingGraph(6)
+  const two = compileGraphIR(g2.nodes, g2.edges)
+  const six = compileGraphIR(g6.nodes, g6.edges)
+  assert(two !== null && six !== null, 'IR compile returned null')
+  const ratio = wgslBodyChars(six!) / wgslBodyChars(two!)
+  // Same reasoning as the GLSL body test above. Measured 3.455x now against
+  // 7.710x before the fix — real margin under the 4.5 bound in both directions.
+  assert(ratio < 4.5,
+    `WGSL body size grew ${ratio.toFixed(2)}x for 3x the branches — relays are still re-emitting whole bodies`)
 })
 
 test('every pass still declares its own fragColor exactly once', () => {
