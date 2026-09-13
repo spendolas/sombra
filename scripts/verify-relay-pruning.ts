@@ -97,6 +97,47 @@ function multiHopConvergingGraph(branches: number) {
   return { nodes, edges }
 }
 
+/**
+ * `branches` THREE-hop chains — gradient → pixelate → tile — converging into
+ * a chain of mixes. Both pixelate and tile declare a `textureInput` source,
+ * so this graph is TWO passes deep before the branches converge: pass0 is the
+ * gradients, pass1 is the pixelates (each sampling its own gradient's
+ * boundary), pass2+ is the tiles/mixes/output.
+ *
+ * That matters because pass1 is where a relay gets born (both branches'
+ * pixelates sit in the same pass, each feeding a distinct tile downstream —
+ * one primary output, one relay), and pass1 ALSO has its own input samplers
+ * (from pass0). `convergingGraph` and `multiHopConvergingGraph` both put
+ * every relay in pass 0, which never has input samplers of its own — that is
+ * exactly why the stale-declaration regression (relay keeps a sampler its
+ * pruned body no longer references) went uncaught: there was nothing for it
+ * to leave behind.
+ */
+function twoLevelConvergingGraph(branches: number) {
+  const nodes: Node[] = []
+  const edges: Edge[] = []
+  const tips: string[] = []
+  for (let i = 0; i < branches; i++) {
+    nodes.push(n(`src${i}`, 'gradient', { angle: i * 15 }))
+    nodes.push(n(`px${i}`, 'pixelate'))
+    nodes.push(n(`tl${i}`, 'tile'))
+    edges.push(e(`ea${i}`, `src${i}`, 'color', `px${i}`, 'source'))
+    edges.push(e(`eb${i}`, `px${i}`, 'color', `tl${i}`, 'source'))
+    tips.push(`tl${i}`)
+  }
+  let acc = tips[0]
+  for (let i = 1; i < tips.length; i++) {
+    const mixId = `mix${i}`
+    nodes.push(n(mixId, 'mix'))
+    edges.push(e(`em${i}a`, acc, i === 1 ? 'color' : 'result', mixId, 'a'))
+    edges.push(e(`em${i}b`, tips[i], 'color', mixId, 'b'))
+    acc = mixId
+  }
+  nodes.push(n('out', 'fragment_output'))
+  edges.push(e('eout', acc, branches > 1 ? 'result' : 'color', 'out', 'color'))
+  return { nodes, edges }
+}
+
 // The two backends name their shader field DIFFERENTLY. RenderPass has
 // `fragmentShader` (glsl-generator.ts:56); WGSLPassOutput has `shaderCode`
 // (ir-compiler.ts:457) and no `fragmentShader` at all — reading the wrong one
@@ -228,6 +269,54 @@ test('WGSL: no pass references a node_ identifier it never declares', () => {
     const undeclared = [...referenced].filter((id) => !declared.has(id))
     assert(undeclared.length === 0,
       `WGSL pass references undeclared identifier(s): ${undeclared.join(', ')} — a relay dropped a declaration its own body still reads`)
+  }
+})
+
+test('GLSL: every declared sampler is statically used in that pass\'s shader', () => {
+  // Uses twoLevelConvergingGraph, not convergingGraph/multiHopConvergingGraph:
+  // both of those put every relay in pass 0, which has no input samplers of
+  // its own, so a relay that carries the primary's FULL samplerNames/
+  // inputTextures (instead of the ones its pruned body actually needs) has
+  // nothing stale to declare there. Only a relay pass that is itself fed by
+  // an earlier pass's boundary can expose the bug: this fixture's pass1
+  // (the pixelates) is exactly that.
+  const { nodes, edges } = twoLevelConvergingGraph(2)
+  const plan = compileGraph(nodes, edges)
+  assert(plan.success, 'compile failed')
+
+  const declRe = /uniform sampler2D (\w+);/g
+  for (const p of plan.passes) {
+    const src = p.fragmentShader
+    const declared = [...src.matchAll(declRe)].map((m) => m[1])
+    for (const name of declared) {
+      // The declaration line itself is one occurrence — a sampler that is
+      // genuinely used appears at least once more (in a texture() call).
+      const uses = (src.match(new RegExp(`\\b${name}\\b`, 'g')) ?? []).length
+      assert(uses > 1,
+        `pass ${p.index} declares sampler '${name}' but never uses it in the body — a relay carried a stale declaration its pruned body doesn't read`)
+    }
+  }
+})
+
+test('WGSL: every declared texture binding is statically used in that pass\'s shader', () => {
+  // Same fixture and reasoning as the GLSL test above. WGSL declares a
+  // texture/sampler pair per boundary as `var <name>_tex: texture_2d<f32>;`
+  // / `var <name>_samp: sampler;` (wgsl-assembler.ts) — checking `<name>_tex`
+  // is enough to catch a stale binding, since the pair is always added and
+  // used together.
+  const { nodes, edges } = twoLevelConvergingGraph(2)
+  const plan = compileGraphIR(nodes, edges)
+  assert(plan !== null, 'IR compile failed')
+
+  const declRe = /var (\w+_tex): texture_2d<f32>;/g
+  for (const p of plan!.passes) {
+    const src = p.shaderCode
+    const declared = [...src.matchAll(declRe)].map((m) => m[1])
+    for (const name of declared) {
+      const uses = (src.match(new RegExp(`\\b${name}\\b`, 'g')) ?? []).length
+      assert(uses > 1,
+        `pass declares texture binding '${name}' but never uses it in the body — a relay carried a stale declaration its pruned body doesn't read`)
+    }
   }
 })
 
