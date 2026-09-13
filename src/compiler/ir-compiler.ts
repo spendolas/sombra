@@ -669,17 +669,23 @@ function compileMultiPassIR(
     // Generate IR for each node in this pass. `segments` mirrors allOutputs
     // entry-for-entry (one node can push a preamble entry AND a main output
     // entry) so relay passes below can prune by node without drifting from
-    // what actually got pushed.
-    const segments: Array<{ nodeId: string; output: IRNodeOutput }> = []
+    // what actually got pushed. Each segment also carries the image samplers
+    // that node's own generateNodeIR call added, so relay passes can prune
+    // image-sampler declarations the same way.
+    const segments: Array<{ nodeId: string; output: IRNodeOutput; imageSamplers: string[] }> = []
     for (const nodeId of combinedNodeIds) {
+      const nodeImageSamplers = new Set<string>()
       const result = generateNodeIR(
         nodeId, nodeMap, edgesByTarget,
-        standardUniforms, passUserUniforms, imageSamplers,
+        standardUniforms, passUserUniforms, nodeImageSamplers,
         passBoundaries,
       )
 
       if (result.errors.length > 0) return null
       if (!result.output) return null
+
+      for (const name of nodeImageSamplers) imageSamplers.add(name)
+      const nodeImageSamplerList = [...nodeImageSamplers]
 
       if (result.preambleStatements.length > 0) {
         const preambleOutput: IRNodeOutput = {
@@ -688,11 +694,11 @@ function compileMultiPassIR(
           standardUniforms: new Set(),
         }
         allOutputs.push(preambleOutput)
-        segments.push({ nodeId, output: preambleOutput })
+        segments.push({ nodeId, output: preambleOutput, imageSamplers: nodeImageSamplerList })
       }
 
       allOutputs.push(result.output)
-      segments.push({ nodeId, output: result.output })
+      segments.push({ nodeId, output: result.output, imageSamplers: nodeImageSamplerList })
     }
 
     // Intermediate passes: fragColor + relay passes for multi-output conflicts
@@ -749,20 +755,40 @@ function compileMultiPassIR(
         const needed = edge
           ? nodesFeeding(edge.source, edgesByTarget, new Set(combinedNodeIds))
           : null
-        const relayBody = needed && needed.size > 0
-          ? segments.filter((s) => needed.has(s.nodeId)).map((s) => s.output)
+        const pruned = needed !== null && needed.size > 0
+        const relayBody = pruned
+          ? segments.filter((s) => needed!.has(s.nodeId)).map((s) => s.output)
           : bodyOutputs
         const relayOutputs = [...relayBody, resolved.fragOutput]
+        // Declarations must track the pruned body: a relay that no longer
+        // statically uses a boundary/image sampler must not declare it, or
+        // WebGPU's auto bind-group-layout omits the binding while the
+        // renderer still tries to fill it — silent black output. When the
+        // prune fell back to the full body, keep the full resource sets too.
+        const relayInputSamplers = pruned
+          ? passBoundaries.filter((b) => needed!.has(b.consumerId)).map((b) => b.samplerName)
+          : passInputSamplers
+        const relayInputTextures: Array<{ passIndex: number; samplerName: string }> = pruned
+          ? passBoundaries
+              .filter((b) => needed!.has(b.consumerId))
+              .map((b) => ({
+                passIndex: samplerCompiledIndex.get(b.samplerName) ?? b.sourcePassIndex,
+                samplerName: b.samplerName,
+              }))
+          : inputTextures
+        const relayImageSamplers = pruned
+          ? [...new Set(segments.filter((s) => needed!.has(s.nodeId)).flatMap((s) => s.imageSamplers))]
+          : [...imageSamplers]
         const relayAssembled = assembleWGSL(
           relayOutputs, standardUniforms,
           passUserUniforms.map(u => ({ name: u.name, glslType: u.glslType })),
-          [...imageSamplers], passInputSamplers,
+          relayImageSamplers, relayInputSamplers,
         )
         const relayIdx = passes.length
         for (const b of groups[g]) samplerCompiledIndex.set(b.samplerName, relayIdx)
         passes.push({
           shaderCode: relayAssembled.shaderCode, uniformLayout: relayAssembled.uniformLayout,
-          textureBindings: relayAssembled.textureBindings, inputTextures,
+          textureBindings: relayAssembled.textureBindings, inputTextures: relayInputTextures,
           isTimeLive: standardUniforms.has('u_time'), textureFilter: resolved.textureFilter,
           resolution: passResolution,
         })
