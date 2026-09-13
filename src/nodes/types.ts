@@ -359,6 +359,54 @@ export interface NodeDefinition {
     from: string
     to: string
     /**
+     * Whether expansion requires the chain input to be wired. Default true.
+     *
+     * Blur filters an upstream texture, so with nothing wired there is nothing
+     * to filter and extra passes would only re-read a blank target — hence the
+     * default. A node that GENERATES its chain (compositing layers onto a
+     * running result, where sub-pass 0 starts from transparent) sets this false:
+     * its `to` port is wired by the expansion itself and never by the user.
+     */
+    requiresWiredSource?: boolean
+
+    /**
+     * Which of this node's incoming edges reach which sub-pass. Default: all
+     * edges reach all sub-passes.
+     *
+     * That default is right for blur — a connectable radius must reach both
+     * axes, or the two disagree and the result is anisotropic. It is wrong for a
+     * node whose inputs belong to specific steps: duplicating every layer's
+     * source onto every sub-pass binds all N textures into all N passes, which
+     * is the sampler explosion a sequential chain exists to avoid.
+     *
+     * Called once per (edge, sub-pass) pair — for sub-pass 0 (the initial-edge
+     * copy, filtering edges already targeting the authored node id, in
+     * expand-passes.ts) AND for every sub-pass after it (the duplication
+     * loop). Return false to withhold that edge from that sub-pass.
+     *
+     * WARNING: because sub-pass 0 is filtered too, a handle rejected at EVERY
+     * index (0 and every later k) is not merely withheld from some sub-passes —
+     * the edge is dropped from the graph entirely, and the port silently falls
+     * back to its stored default. The natural idiom is a whitelist keyed on
+     * `passIndex` (e.g. `handle === \`layer_${passIndex}\``), but a whitelist
+     * rejects every handle it doesn't recognise — so a routed node with a
+     * GLOBAL connectable param meant to reach every sub-pass (a single `gain`
+     * wired once) would lose that wire with no error. A routing function must
+     * return `true` for any handle it does not recognise, unless it genuinely
+     * intends that input to be discarded.
+     *
+     * `params` is the authored node instance's own params at both call sites —
+     * NOT the per-sub-pass params the expander later injects `__subPass` into.
+     * Use the `passIndex` argument to key routing decisions; `params.__subPass`
+     * is never present here.
+     */
+    routeEdge?: (
+      targetHandle: string,
+      passIndex: number,
+      params: Record<string, unknown>,
+    ) => boolean
+
+    /**
      * Target scale for sub-pass `passIndex`, as a fraction of canvas size.
      * Default 1.0; above 1.0 supersamples. A pyramid returns something like
      * `[1, 0.5, 0.25][passIndex]`. Range is clamped to (0, 4] downstream.
