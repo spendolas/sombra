@@ -425,6 +425,32 @@ rather than a silent wrong image.
 - **Inlining cheap layer sources** to avoid a pass. There is no inlining path for a
   `textureInput` today; every layer costs a full-canvas target even for a constant colour.
 
+## 13b. Other `def.params` readers, deliberately out of scope
+
+Plan 2 resolves `dynamicParams` at the nine sites that matter for codegen,
+change detection and the node body. **Six more read `def.params` and would not
+see a dynamic one** (found during plan-2 pre-flight, 2026-09-13). Excluded on
+purpose — expanding unilaterally breaks one-concern-per-commit — but "nine
+sites, verified by reading the source" is exhaustive *for that plan's concern*,
+not for the codebase:
+
+| Site | What breaks with a dynamic param |
+|---|---|
+| `src/utils/layout.ts:115` | `getInputHandleOrder` resolves `dynamicInputs` but reads static `def.params` for connectable ones — **the exact asymmetry plan 2 fixes, one module over.** A connectable dynamic param gets no handle position. |
+| `src/utils/sombra-file.ts:366, 584` | Definition defaults merged on load and on compact-hash decode |
+| `src/stores/graphStore.ts:468` | `migrate`'s dangling-handle prune |
+| `src/dev-bridge.ts:59, 277` | Param listing for automation |
+| `src/components/CommandPalette.tsx:129` | Defaults applied on node creation |
+
+`layout.ts:115` fails **visibly** (a misplaced handle) rather than silently, and
+no Stack UI exists yet to show it — so it belongs with the Stack UI work in
+Phase D, or with whichever plan lands first after plan 2.
+
+Related, same class, also logged: `src/dev-bridge.ts:800` does
+`def.inputs.some(i => i.textureInput)` then hardcodes a `'source'` target handle,
+so `validateAllSubgraphWGSL()` silently skips a node whose texture ports are
+dynamic-only (found during plan-1 execution).
+
 ## 14. Open questions
 
 - Whether hidden layers drop their upstream pass (cheaper to render) or keep it (cheaper to
