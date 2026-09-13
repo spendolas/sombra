@@ -75,9 +75,9 @@ export const ds = {
     textGhost: "flex flex-col items-center justify-center rounded-sm px-sm text-mono-value text-fg-dim cursor-pointer transition-colors hover:bg-hover hover:text-fg h-btn-md w-auto px-sm",
     textGhostDisabled: "flex flex-col items-center justify-center rounded-sm px-sm text-mono-value text-fg-muted cursor-default h-btn-md w-auto px-sm",
     textGhostActive: "flex flex-col items-center justify-center bg-active rounded-sm px-sm text-mono-value text-fg cursor-default hover:bg-active h-btn-md w-auto px-sm",
-    solidHover: "flex flex-col items-center justify-center bg-highlight rounded-sm text-fg cursor-pointer",
-    ghostHover: "flex flex-col items-center justify-center bg-highlight rounded-sm text-fg cursor-pointer",
-    textGhostHover: "flex flex-col items-center justify-center bg-highlight rounded-sm px-sm text-mono-value text-fg cursor-pointer h-btn-md w-auto px-sm",
+    solidHover: "flex flex-col items-center justify-center bg-highlight/15 rounded-sm text-fg cursor-pointer",
+    ghostHover: "flex flex-col items-center justify-center bg-highlight/15 rounded-sm text-fg cursor-pointer",
+    textGhostHover: "flex flex-col items-center justify-center bg-highlight/15 rounded-sm px-sm text-mono-value text-fg cursor-pointer h-btn-md w-auto px-sm",
   },
   handle: {
     root: "rounded-full !h-3 !w-3 border-2 transition",

@@ -1271,7 +1271,8 @@
           "radius": "sm",
           "auditIgnore": [
             "textColor"
-          ]
+          ],
+          "fillOpacity": 15
         },
         "ghostHover": {
           "figmaNodeId": "329:5",
@@ -1284,7 +1285,8 @@
           "radius": "sm",
           "auditIgnore": [
             "textColor"
-          ]
+          ],
+          "fillOpacity": 15
         },
         "textGhostHover": {
           "figmaNodeId": "329:7",
@@ -1299,7 +1301,8 @@
           "padding": {
             "x": "sm"
           },
-          "radius": "sm"
+          "radius": "sm",
+          "fillOpacity": 15
         }
       }
     },
