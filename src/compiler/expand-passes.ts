@@ -67,8 +67,13 @@ export function expandMultiPassNodes(
     if (!mp) continue
     // A node with nothing wired into its chained input has no upstream texture to
     // filter, so extra passes would only re-read a blank target.
-    const hasSource = edges.some((e) => e.target === node.id && e.targetHandle === mp.to)
-    if (!hasSource) continue
+    // A node that FILTERS an upstream texture has nothing to do without one, so
+    // the default stands. A node that GENERATES its chain wires `to` during
+    // expansion, so requiring it wired first would never let it start.
+    if (mp.requiresWiredSource !== false) {
+      const hasSource = edges.some((e) => e.target === node.id && e.targetHandle === mp.to)
+      if (!hasSource) continue
+    }
     const count = Math.max(1, Math.floor(mp.count(node.data.params || {})))
     if (count > 1) plans.set(node.id, { count, from: mp.from, to: mp.to })
   }
