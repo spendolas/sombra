@@ -788,6 +788,7 @@ function compileMultiPass(
     const functionRegistry = new Map<string, string>()
     const passUserUniforms: UniformSpec[] = []
     const glslLines: string[] = []
+    const segments: Array<{ nodeId: string; lines: string[] }> = []
     const passImageSamplers = new Set<string>()
 
     // Find cross-pass non-texture dependencies: nodes from earlier passes
@@ -857,6 +858,7 @@ function compileMultiPass(
         passBoundaries, passImageSamplers,
       )
       glslLines.push(...result.glslLines)
+      segments.push({ nodeId, lines: result.glslLines })
       allErrors.push(...result.errors)
     }
 
