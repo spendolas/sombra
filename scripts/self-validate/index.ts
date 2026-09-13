@@ -390,8 +390,24 @@ function walk(dir: string): string[] {
 
 function checkFixtures() {
   const dir = path.join(ROOT, 'shaders')
-  if (!fs.existsSync(dir)) return
-  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.sombra') || f.endsWith('.json'))
+  const files = fs.existsSync(dir)
+    ? fs.readdirSync(dir).filter((f) => f.endsWith('.sombra') || f.endsWith('.json'))
+    : []
+
+  // An absent corpus used to return silently, so the run still printed
+  // "0 FAIL / 0 WARN" while this phase — the only one that touches real saved
+  // graphs — had checked nothing. `shaders/` is gitignored, so it does NOT
+  // travel to a git worktree: an agent working in one gets a quieter suite than
+  // the main checkout and no indication why. That cost a whole series of
+  // "shader count unchanged" claims their meaning (2026-09-13).
+  if (files.length === 0) {
+    warn('fixtures', 'corpus', 
+      'shaders/ is empty or absent — this run checked NO real saved graphs. ' +
+      'The directory is gitignored, so it does not come across to a git worktree; ' +
+      'copy it from the main checkout before trusting a "shaders unchanged" claim.')
+    return
+  }
+  console.log(`  fixtures: ${files.length} saved graph(s)`)
   for (const f of files) {
     const name = `fixture:${f}`
     try {
