@@ -124,6 +124,18 @@ test('an unwired chain input still skips expansion when the field is absent', ()
     'blur with nothing wired into `source` must NOT expand — extra passes would re-read a blank target')
 })
 
+// This test's real sequence, verified by hand while writing the routing fix:
+// it passes trivially while expansion is skipped entirely (no layer edges
+// survive to be counted, so the union/count checks vacuously hold); it FAILS
+// on duplication once expansion is enabled but routing is not applied (each
+// layer_i is duplicated onto every sub-pass — 'appeared 3 times'); it FAILS on
+// a drop if routing withholds an edge at every index (temporarily forcing
+// `targetHandle === 'layer_2' ? false : ...` in the fixture above reproduced
+// this: the union came back missing layer_2 entirely — 'appeared 0 times');
+// and it passes for real only when each edge lands in exactly one pass. A
+// green run here is NOT on its own proof that routing works — pair it with
+// the per-sub-pass test above, which is the one that catches duplication at
+// its actual source.
 test('a routed edge is routed, not dropped: each layer appears exactly once across all sub-passes', () => {
   const out = expandMultiPassNodes(nodes as never, edges as never)
   const layerEdges = (out as unknown as { edges: Edge[] }).edges
