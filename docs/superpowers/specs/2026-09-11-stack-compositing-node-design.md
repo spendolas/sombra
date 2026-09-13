@@ -120,6 +120,21 @@ Two extensions to `expand-passes.ts` are required, both small and both opt-in:
    must be able to say which incoming edges belong to which sub-pass: layer *k*'s source,
    opacity and mask go to sub-pass *k*; nothing else does.
 
+**`count` is the VISIBLE layer count, and that has a sharp edge.** §2 drops a
+hidden layer from codegen, so three wired layers with two hidden gives
+`count === 1`. Routing must survive that: `expand-passes` originally formed its
+plan only for `count > 1`, so a degenerate chain got no filter and bound every
+layer's texture into one pass — the sampler explosion this design exists to
+prevent, returning precisely when the chain collapses. Fixed 2026-09-14 by
+forming the plan on `count > 1 || routeEdge` while keeping expansion itself
+gated on `count > 1`. Any future change to how hidden layers are counted must
+keep that distinction.
+
+**A rejected edge is deleted, not withheld.** `routeEdge` must return `true` for
+handles it does not recognise. The natural idiom is a whitelist (`handle ===
+\`layer_${passIndex}\``), which silently discards any *global* connectable param
+the node has — no error, the param falls back to its stored default.
+
 **What the chain does NOT fix.** The N layer *sources* are still independent branches at
 pass depth 0, and one pass writes one target, so they still split into 1 primary +
 (N−1) relay passes — and each relay re-emits **the entire body of all N chains**
