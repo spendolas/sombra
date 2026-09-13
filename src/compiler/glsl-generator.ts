@@ -99,6 +99,10 @@ export interface RenderPlan {
   /** Set when the IR/WGSL path was requested but failed while GLSL succeeded. */
   wgslError?: string
   wgsl?: {
+    /** Mirrors RenderPlan.slotCount above, computed from the WGSL pass set
+     *  (which can differ in structure from the GLSL passes above) — see
+     *  RenderPass.targetSlot. */
+    slotCount?: number
     passes: Array<{
       shaderCode: string
       uniformLayout: import('./ir/wgsl-assembler').UniformBufferLayout
@@ -109,6 +113,8 @@ export interface RenderPlan {
       textureFilter?: 'linear' | 'nearest'
       /** Mirrors RenderPass.resolution — see there. */
       resolution?: number
+      /** Mirrors RenderPass.targetSlot — see there. */
+      targetSlot?: number
     }>
   }
 }

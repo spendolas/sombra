@@ -49,6 +49,14 @@ interface PassState {
   textureFilter: 'linear' | 'nearest'
   /** Target scale for this pass. Undefined = full canvas resolution. */
   resolution?: number
+  /**
+   * Physical intermediate SLOT this pass renders into, or -1 when nothing
+   * reads its output (always true of the final pass, which targets the
+   * canvas instead). Undefined on a plan from an un-migrated compiler path —
+   * callers fall back to one-slot-per-pass via `slotForPass()`. Multiple
+   * passes may share a slot; see src/compiler/texture-slots.ts.
+   */
+  targetSlot?: number
 }
 
 /** Premultiplied source-over blend, baked into every canvas (final-pass)
@@ -153,12 +161,18 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
   private uniformPassMap = new Map<string, number[]>()
   /**
    * Safety ceiling on intermediate textures (memory guard, not a GPU limit —
-   * each is a full-canvas RGBA8 render target). Exceeding it fails the plan
+   * each is a full-canvas RGBA8 render target). Compared against physical
+   * SLOTS (`plan.wgsl.slotCount`), not pass count — a deep pass chain can
+   * share far fewer textures than it has passes. Exceeding it fails the plan
    * loudly in updateMultiPass; the WebGL backend's FBO pool is uncapped.
    */
   private static readonly MAX_INTERMEDIATE_TEXTURES = 32
   /** Last allocated intermediate sizes, as a comparable key. */
   private lastIntermediateKey = ''
+  /** `plan.wgsl.slotCount` for the current plan. Undefined on a plan from an
+   *  un-migrated compiler path — `effectiveSlotCount()` then falls back to
+   *  one slot per intermediate pass, today's behaviour. */
+  private planSlotCount: number | undefined = undefined
 
   // Pipeline cache — keyed by WGSL source hash
   private pipelineCache = new Map<string, PipelineCacheEntry>()
@@ -450,7 +464,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
       this.isMultiPass = false
       result = this.updateSinglePass(wgslPasses[0])
     } else {
-      result = this.updateMultiPass(wgslPasses)
+      result = this.updateMultiPass(wgslPasses, plan.wgsl.slotCount)
     }
     // A new plan can change the output's transparency — re-probe on next render.
     if (result.success) {
@@ -565,20 +579,29 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     }
   }
 
-  private updateMultiPass(wgslPasses: NonNullable<RenderPlan['wgsl']>['passes']): { success: boolean; error?: string } {
+  private updateMultiPass(
+    wgslPasses: NonNullable<RenderPlan['wgsl']>['passes'],
+    slotCount?: number,
+  ): { success: boolean; error?: string } {
     // Fail loudly instead of silently breaking: past this point every frame
     // would thrash the texture pool and the final canvas pass would never run.
-    const numIntermediate = wgslPasses.length - 1
-    if (numIntermediate > WebGPUShaderRenderer.MAX_INTERMEDIATE_TEXTURES) {
+    // Compare against SLOTS, not passes: a plan with `slotCount` reuses
+    // textures across non-overlapping-lifetime passes, so a deep pass chain
+    // can need far fewer physical textures than it has passes. Absent
+    // `slotCount` (an un-migrated plan) falls back to the old one-per-pass count.
+    const numIntermediatePasses = wgslPasses.length - 1
+    const effectiveSlots = slotCount ?? numIntermediatePasses
+    if (effectiveSlots > WebGPUShaderRenderer.MAX_INTERMEDIATE_TEXTURES) {
       return {
         success: false,
-        error: `Graph needs ${numIntermediate} intermediate render targets (max ${WebGPUShaderRenderer.MAX_INTERMEDIATE_TEXTURES}) — reduce effect chain depth`,
+        error: `Graph needs ${effectiveSlots} intermediate render targets (max ${WebGPUShaderRenderer.MAX_INTERMEDIATE_TEXTURES}) — reduce effect chain depth`,
       }
     }
 
     this.destroyMultiPassState()
     this.isMultiPass = true
     this.pipeline = null  // Clear single-pass pipeline
+    this.planSlotCount = slotCount
 
     const passStates: PassState[] = []
     const uniformPassMap = new Map<string, number[]>()
@@ -646,16 +669,58 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
         isTimeLive: wp.isTimeLive,
         textureFilter: wp.textureFilter ?? 'linear',
         resolution: wp.resolution,
+        targetSlot: wp.targetSlot,
       })
     }
 
     this.passStates = passStates
     this.uniformPassMap = uniformPassMap
 
+    // Samplers are keyed by SOURCE PASS, never by slot (Ruling 1): two passes
+    // sharing a slot can declare different filter hints (e.g. a nearest-
+    // filtered pixelate sharing a slot with a linear-filtered blur), and
+    // baking the wrong one into a shared sampler would silently soften or
+    // sharpen the wrong pass with no error. Rebuilt whenever passes change;
+    // unaffected by resize since filter hints don't depend on canvas size.
+    this.buildIntermediateSamplers()
+
     // Build bind groups (intermediate textures will be created on first render)
     this.rebuildMultiPassBindGroups()
 
     return { success: true }
+  }
+
+  /** One sampler per pass that can be a texture-input SOURCE (every pass but
+   *  the last), each using that pass's own filter hint. See Ruling 1 above. */
+  private buildIntermediateSamplers(): void {
+    this.intermediateSamplers = []
+    for (let i = 0; i < this.passStates.length - 1; i++) {
+      const filterMode = this.passStates[i].textureFilter === 'nearest' ? 'nearest' : 'linear'
+      this.intermediateSamplers.push(this.device.createSampler({
+        minFilter: filterMode as GPUFilterMode,
+        magFilter: filterMode as GPUFilterMode,
+        addressModeU: 'clamp-to-edge',
+        addressModeV: 'clamp-to-edge',
+      }))
+    }
+  }
+
+  /**
+   * Slot a pass's output lives in. Falls back to the pass's own index (the
+   * old one-texture-per-pass scheme) when `targetSlot` is absent — the plan
+   * came from an un-migrated compiler path.
+   */
+  private slotForPass(passIndex: number): number {
+    const slot = this.passStates[passIndex]?.targetSlot
+    return slot === undefined ? passIndex : slot
+  }
+
+  /** Number of physical intermediate textures this plan needs. Falls back to
+   *  one per intermediate pass when `planSlotCount` is absent. */
+  private effectiveSlotCount(): number {
+    const numIntermediate = this.passStates.length - 1
+    if (numIntermediate <= 0) return 0
+    return this.planSlotCount ?? numIntermediate
   }
 
   private destroyMultiPassState(): void {
@@ -670,6 +735,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     this.intermediateSamplers = []
     this.uniformPassMap.clear()
     this.lastIntermediateKey = ''
+    this.planSlotCount = undefined
   }
 
   /**
@@ -687,43 +753,70 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     return sizes.map((s) => `${s.width}x${s.height}`).join(',')
   }
 
-  /** Ensure intermediate textures exist and match each pass's target size. */
+  /**
+   * Size for each intermediate SLOT (not pass): sized from whichever pass
+   * owns it (any of them will do — passes only share a slot when
+   * texture-slots.ts bucketed them under the same `sizeKey`), but verified
+   * rather than assumed, since a wrong-pass slot wiring bug would otherwise
+   * surface only as a silently mis-sized (and therefore visibly wrong)
+   * texture with no error.
+   */
+  private slotTargetSizes(w: number, h: number, cap: number): PassTargetSize[] {
+    const passSizes = this.passTargetSizes(w, h)
+    const sizes: PassTargetSize[] = []
+    const ownerOfSlot: number[] = []
+    for (let i = 0; i < this.passStates.length - 1; i++) {
+      const slot = this.slotForPass(i)
+      if (slot < 0 || slot >= cap) continue
+      const size = passSizes[i]
+      const existing = sizes[slot]
+      if (existing === undefined) {
+        sizes[slot] = size
+        ownerOfSlot[slot] = i
+      } else if (existing.width !== size.width || existing.height !== size.height) {
+        console.error(
+          `[Sombra WebGPU] intermediate slot ${slot} sized by pass ${ownerOfSlot[slot]} ` +
+          `(${existing.width}x${existing.height}) disagrees with pass ${i} (${size.width}x${size.height}) — ` +
+          `texture-slot assignment should guarantee identical sizes per slot`,
+        )
+      }
+    }
+    // A slot with no owning pass shouldn't happen for a well-formed plan
+    // (every slot is assigned by at least one pass), but still needs a size
+    // to allocate a texture — fall back to full canvas size.
+    for (let s = 0; s < cap; s++) {
+      if (sizes[s] === undefined) sizes[s] = { width: w, height: h, dpr: 1 }
+    }
+    return sizes
+  }
+
+  /** Ensure intermediate textures exist and match each slot's target size. */
   private ensureIntermediateTextures(width: number, height: number): void {
     const numIntermediate = this.passStates.length - 1
     if (numIntermediate <= 0) return
 
     // Compare against the ALLOCATED count: comparing against the uncapped
-    // pass count made this mismatch permanently for over-cap graphs — the
+    // slot count made this mismatch permanently for over-cap graphs — the
     // pool was destroyed and recreated every single frame.
-    const cap = Math.min(numIntermediate, WebGPUShaderRenderer.MAX_INTERMEDIATE_TEXTURES)
-    const sizes = this.passTargetSizes(width, height).slice(0, cap)
+    const cap = Math.min(this.effectiveSlotCount(), WebGPUShaderRenderer.MAX_INTERMEDIATE_TEXTURES)
+    const sizes = this.slotTargetSizes(width, height, cap)
     const key = this.passSizeKey(sizes)
     if (this.intermediateTextures.length === cap && this.lastIntermediateKey === key) {
       return
     }
 
-    // Destroy old
+    // Destroy old. Samplers are NOT touched here — they're keyed by pass, not
+    // slot, and don't depend on canvas size (see buildIntermediateSamplers).
     for (const tex of this.intermediateTextures) tex.destroy()
     this.intermediateTextures = []
-    this.intermediateSamplers = []
 
-    for (let i = 0; i < cap; i++) {
+    for (let slot = 0; slot < cap; slot++) {
       const texture = this.device.createTexture({
-        size: [sizes[i].width, sizes[i].height],
+        size: [sizes[slot].width, sizes[slot].height],
         format: 'rgba8unorm',
         usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
       })
       this.intermediateTextures.push(texture)
-
-      // Sampler with per-pass filter hint
-      const filterMode = this.passStates[i].textureFilter === 'nearest' ? 'nearest' : 'linear'
-      const sampler = this.device.createSampler({
-        minFilter: filterMode as GPUFilterMode,
-        magFilter: filterMode as GPUFilterMode,
-        addressModeU: 'clamp-to-edge',
-        addressModeV: 'clamp-to-edge',
-      })
-      this.intermediateSamplers.push(sampler)
     }
 
     this.lastIntermediateKey = key
@@ -771,15 +864,23 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
       // Check if this is an inter-pass texture
       const passInput = ps.inputTextures.find(it => it.samplerName === binding.samplerName)
       if (passInput) {
-        const srcTexIdx = passInput.passIndex
-        if (srcTexIdx < this.intermediateTextures.length) {
+        // Texture is indexed by the source pass's SLOT (may be shared with
+        // other passes); the sampler stays indexed by the source PASS itself
+        // (Ruling 1) so a shared slot can't smuggle in the wrong filter hint.
+        const srcPassIdx = passInput.passIndex
+        const slot = this.slotForPass(srcPassIdx)
+        if (
+          slot >= 0 &&
+          slot < this.intermediateTextures.length &&
+          srcPassIdx < this.intermediateSamplers.length
+        ) {
           entries.push({
             binding: binding.textureBinding,
-            resource: this.intermediateTextures[srcTexIdx].createView(),
+            resource: this.intermediateTextures[slot].createView(),
           })
           entries.push({
             binding: binding.samplerBinding,
-            resource: this.intermediateSamplers[srcTexIdx],
+            resource: this.intermediateSamplers[srcPassIdx],
           })
         } else {
           return null // Intermediate texture not yet allocated
@@ -1207,8 +1308,9 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
       if (isLastPass) {
         targetView = this.context.getCurrentTexture().createView()
       } else {
-        if (i >= this.intermediateTextures.length) break
-        targetView = this.intermediateTextures[i].createView()
+        const slot = this.slotForPass(i)
+        if (slot < 0 || slot >= this.intermediateTextures.length) break
+        targetView = this.intermediateTextures[slot].createView()
       }
 
       const passDesc: GPURenderPassDescriptor = {

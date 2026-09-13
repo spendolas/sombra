@@ -160,7 +160,7 @@ self.onmessage = (event: MessageEvent<CompileRequest | PreviewRequest | PreviewI
     if (data.useIR && result.success) {
       const wgslResult = compileGraphIR(nodes, edges)
       if (wgslResult) {
-        result.wgsl = { passes: wgslResult.passes }
+        result.wgsl = { passes: wgslResult.passes, slotCount: wgslResult.slotCount }
       } else {
         // IR failure with GLSL success: on a WebGPU renderer the canvas keeps
         // the previous shader — surface it instead of reporting clean success
