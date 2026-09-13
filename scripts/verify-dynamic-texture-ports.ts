@@ -136,6 +136,46 @@ test('WGSL: every wired dynamic texture port gets a sampler', () => {
   const bound = irSamplers(pass!)
   assert(bound.length === 2,
     `expected 2 bound textures, got ${bound.length}: ${JSON.stringify(bound)}`)
+  // Mechanism-engaged, mirroring the GLSL assertion above: a plan that BINDS two
+  // textures while the shader SAMPLES only one still invalidates the WebGPU
+  // command encoder (audit P0.2). wgsl-assembler declares each bound sampler as
+  // `@group(1) @binding(n) var <samplerName>_tex: texture_2d<f32>` and
+  // wgsl-backend's textureSample() lowering references that same
+  // `<samplerName>_tex` identifier, so — since samplerName here already ends in
+  // "_tex" (e.g. "u_pass0_tex") — the identifier actually used in the shader is
+  // "u_pass0_tex_tex". Confirmed against the generated WGSL before trusting it.
+  for (const s of bound) {
+    assert(pass!.shaderCode.includes(`${s}_tex`), `sampler ${s} bound but never sampled`)
+  }
+})
+
+// Every graph above wires the STATIC port layer_0 on every producer node, so
+// partitionPasses' quick-check trips on that static port regardless of whether
+// its dynamicInputs resolution is correct — reverting that resolution alone
+// left the gate green. This case wires ONLY a dynamic-only port (layer_1) and
+// leaves the static layer_0 empty, so the quick-check's own dynamicInputs
+// branch is the sole thing that can detect a texture boundary here. Without
+// the fix: the quick-check sees only the unwired static layer_0, concludes
+// hasTextureBoundary === false, partitionPasses returns null, the graph
+// collapses to a single pass, and every texture input on 'fx' is dropped —
+// while compileGraph/compileGraphIR both still report success.
+// (Wiring layer_0 here would make this vacuous — don't add it back.)
+test('ONLY-dynamic port wired (static layer_0 left empty) — GLSL', () => {
+  const nn = [n('b', 'gradient'), n('fx', 'test_dyn_tex', { layerCount: 2 }), n('out', 'fragment_output')]
+  const ee = [e('e2', 'b', 'color', 'fx', LAYER(1)), e('e3', 'fx', 'color', 'out', 'color')]
+  const plan = compileGraph(nn, ee)
+  assert(plan.success, `compile failed: ${JSON.stringify(plan.errors)}`)
+  const pass = plan.passes.find((p) => glslSamplers(p).length > 0)
+  assert(!!pass, 'no pass binds any input texture — graph collapsed to one pass')
+})
+
+test('ONLY-dynamic port wired (static layer_0 left empty) — WGSL', () => {
+  const nn = [n('b', 'gradient'), n('fx', 'test_dyn_tex', { layerCount: 2 }), n('out', 'fragment_output')]
+  const ee = [e('e2', 'b', 'color', 'fx', LAYER(1)), e('e3', 'fx', 'color', 'out', 'color')]
+  const plan = compileGraphIR(nn, ee)
+  assert(plan !== null, 'IR compile returned null (a node lacks ir(), or compilation threw)')
+  const pass = plan!.passes.find((p) => irSamplers(p).length > 0)
+  assert(!!pass, 'no pass binds any input texture on the IR path — graph collapsed to one pass')
 })
 
 test('a single wired port still works (no regression)', () => {
