@@ -434,17 +434,21 @@ purpose — expanding unilaterally breaks one-concern-per-commit — but "nine
 sites, verified by reading the source" is exhaustive *for that plan's concern*,
 not for the codebase:
 
-| Site | What breaks with a dynamic param |
-|---|---|
-| `src/utils/layout.ts:115` | `getInputHandleOrder` resolves `dynamicInputs` but reads static `def.params` for connectable ones — **the exact asymmetry plan 2 fixes, one module over.** A connectable dynamic param gets no handle position. |
-| `src/utils/sombra-file.ts:366, 584` | Definition defaults merged on load and on compact-hash decode |
-| `src/stores/graphStore.ts:468` | `migrate`'s dangling-handle prune |
-| `src/dev-bridge.ts:59, 277` | Param listing for automation |
-| `src/components/CommandPalette.tsx:129` | Defaults applied on node creation |
+**Two of these delete user data silently and MUST be fixed before Stack ships.**
+Ranked by how routinely they fire (verified 2026-09-13):
 
-`layout.ts:115` fails **visibly** (a misplaced handle) rather than silently, and
-no Stack UI exists yet to show it — so it belongs with the Stack UI work in
-Phase D, or with whichever plan lands first after plan 2.
+| Severity | Site | What happens |
+|---|---|---|
+| **Blocking** | `src/utils/sombra-file.ts:374-386` | The load-time dangling-handle prune accepts `(tgtDef.params ?? []).some(p => p.connectable …)` — **static params only**, though it *is* `dynamicInputs`-aware two lines above. Save a Stack with a wired layer opacity, reopen the `.sombra` file, and **the wire is silently gone.** Runs on every file open; nothing gates it. |
+| **Blocking** | `src/stores/graphStore.ts:468` | The same gap in `validHandles`. Lives inside `migrate:`, which zustand calls only when the persisted schema version differs — so it fires on a **schema bump**, not on every reload. Rarer than the file path, equally silent, and a bump is routine when shipping. |
+| Visible | `src/utils/layout.ts:37-38, 115` | `getInputHandleOrder` resolves `dynamicInputs` but reads static `def.params` for connectable ones — the same asymmetry, one module over. A connectable dynamic param gets no handle position. Fails *visibly*: a handle in the wrong place. |
+| Graceful | `src/utils/sombra-file.ts:366, 584` | Definition defaults not merged → the "bakes NaN garbage" path its own comment warns about. Note `:584` needs a reorder: the defaults loop runs before `Object.assign(params, cn.p)`. |
+| Graceful | `src/embed/manifest.ts:81` | A dynamic param never becomes an embed knob. |
+| Minor | `src/dev-bridge.ts:59, 277` · `src/components/CommandPalette.tsx:129` · `src/components/PreviewGizmoOverlay.tsx:156` | Param listing for automation; defaults on node creation; gizmo. |
+
+The two blocking ones are their own plan, and it must land **before** the Stack
+node ships — a node whose layer opacities can be wired is exactly what turns this
+latent gap into lost work. The rest can ride with Phase D.
 
 Related, same class, also logged: `src/dev-bridge.ts:800` does
 `def.inputs.some(i => i.textureInput)` then hardcodes a `'source'` target handle,
