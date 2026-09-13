@@ -25,6 +25,7 @@ import type { TextureBoundaryEdge } from './glsl-generator'
 import { assembleWGSL } from './ir/wgsl-assembler'
 import { expandMultiPassNodes, baseNodeId } from './expand-passes'
 import { resolvePassResolution } from './pass-resolution'
+import { nodesFeeding } from './reachability'
 
 // ---------------------------------------------------------------------------
 // WGSL type coercion (IR-level, parallel to type-coercion.ts GLSL rules)
@@ -665,7 +666,11 @@ function compileMultiPassIR(
       .filter(id => reEmitSet.has(id))
     const combinedNodeIds = [...reEmitNodes, ...passNodeIds]
 
-    // Generate IR for each node in this pass
+    // Generate IR for each node in this pass. `segments` mirrors allOutputs
+    // entry-for-entry (one node can push a preamble entry AND a main output
+    // entry) so relay passes below can prune by node without drifting from
+    // what actually got pushed.
+    const segments: Array<{ nodeId: string; output: IRNodeOutput }> = []
     for (const nodeId of combinedNodeIds) {
       const result = generateNodeIR(
         nodeId, nodeMap, edgesByTarget,
@@ -677,14 +682,17 @@ function compileMultiPassIR(
       if (!result.output) return null
 
       if (result.preambleStatements.length > 0) {
-        allOutputs.push({
+        const preambleOutput: IRNodeOutput = {
           statements: result.preambleStatements,
           uniforms: [],
           standardUniforms: new Set(),
-        })
+        }
+        allOutputs.push(preambleOutput)
+        segments.push({ nodeId, output: preambleOutput })
       }
 
       allOutputs.push(result.output)
+      segments.push({ nodeId, output: result.output })
     }
 
     // Intermediate passes: fragColor + relay passes for multi-output conflicts
@@ -732,7 +740,19 @@ function compileMultiPassIR(
       for (let g = 1; g < groups.length; g++) {
         const resolved = resolveGroup(groups[g])
         if (!resolved) continue
-        const relayOutputs = [...bodyOutputs, resolved.fragOutput]
+        // A relay computes ONE source output, so it needs only the nodes
+        // feeding that output — mirrors the same prune in glsl-generator.ts.
+        // Falls back to the full body when the edge can't be resolved or
+        // when the walk comes back empty, to always fall back toward
+        // correctness.
+        const edge = resolveSourceEdge(groups[g][0], edgesByTarget)
+        const needed = edge
+          ? nodesFeeding(edge.source, edgesByTarget, new Set(combinedNodeIds))
+          : null
+        const relayBody = needed && needed.size > 0
+          ? segments.filter((s) => needed.has(s.nodeId)).map((s) => s.output)
+          : bodyOutputs
+        const relayOutputs = [...relayBody, resolved.fragOutput]
         const relayAssembled = assembleWGSL(
           relayOutputs, standardUniforms,
           passUserUniforms.map(u => ({ name: u.name, glslType: u.glslType })),
