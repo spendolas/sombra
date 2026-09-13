@@ -2,7 +2,16 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Stop allocating one full-size intermediate texture per render pass, so the number of layers a Stack can have is not bounded by GPU memory.
+**Goal:** Stop allocating one full-size intermediate texture per render pass.
+
+**Corrected 2026-09-14 — this plan alone does NOT make layer count unbounded.** Measured on
+compiler-produced plans: today costs 2N−1 textures for an N-layer Stack, and liveness costs
+N+1. A near-halving, still linear. On the WebGL2 fallback's 8-intermediate cap that moves a
+Stack from 4 layers to 7 — a higher ceiling, not no ceiling. **Constant memory needs the
+companion plan** (`2026-09-14-consumer-ordered-emission.md`), which reorders passes so each
+layer's source is produced next to the composite that reads it; the two together give 3
+slots at any layer count. Ship them as a pair — liveness alone buys 6% on the real corpus
+and is not worth touching both renderers for.
 
 **Architecture:** Both renderers index their intermediate buffers by pass number — pass *i* renders into buffer *i*, and a consumer reads buffer *sourcePassIndex*. So an N-pass plan allocates N full-canvas textures that are each written once and then held for the life of the plan. The fix is a **liveness assignment** computed once in the compiler — a pure function over the finished plan — that gives each pass a *slot* rather than assuming its own index, reusing a slot once every pass that reads it has run. Both renderers then index by slot. Keeping the analysis in the compiler means it is testable in Node without a GPU and cannot drift between backends.
 
@@ -244,6 +253,10 @@ test('a linear chain needs far fewer slots than passes', () => {
   assert(slotCount <= 2, `a linear chain should need at most 2 slots, got ${slotCount}`)
 })
 
+// NOTE: `converge()` models N branches read by ONE pass — the architecture spec §4
+// REJECTED. It is kept only to prove the analysis is correct on that shape; it is not the
+// Stack. The Stack's real shape is N sources at one depth plus a sequential chain, which
+// this plan's companion measures on compiler-produced plans rather than hand-built lists.
 test('converging branches keep every source alive until the merge', () => {
   const passes = converge(5)
   const { slotOfPass, slotCount } = assignTextureSlots(passes)
