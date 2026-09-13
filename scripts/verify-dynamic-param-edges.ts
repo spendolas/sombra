@@ -74,6 +74,7 @@ function graph() {
     e('e1', 'g0', 'value', 'fx', 'gain_0'),   // static param — must survive
     e('e2', 'g1', 'value', 'fx', 'gain_1'),   // DYNAMIC param — the bug
     e('e3', 'fx', 'color', 'out', 'color'),
+    e('e4', 'g0', 'value', 'fx', 'removed_param'),   // handle does not exist at all — must be pruned
   ]
   return { nodes, edges }
 }
@@ -85,6 +86,13 @@ test('a .sombra round trip keeps the wire into a dynamic param', () => {
   assert(ids.includes('e1'), 'the STATIC param wire was dropped — the fixture is wrong, fix it before reading anything else')
   assert(ids.includes('e2'),
     `the wire into the dynamic param gain_1 was deleted on load. Survivors: ${JSON.stringify(ids)}`)
+  // The other half of the fix: pruning stale handles is the entire reason
+  // these functions exist (e.g. `boxFreq` → `frequency`). An edge into a
+  // handle that genuinely does not exist on the target node must still be
+  // dropped — an over-permissive fix that stops pruning would leave every
+  // other assertion in this file green.
+  assert(!ids.includes('e4'),
+    `the wire into removed_param (a handle that does not exist on the target node) survived the round trip — the prune stopped pruning. Survivors: ${JSON.stringify(ids)}`)
 })
 
 test('buildValidHandles resolves connectable dynamic params, not just static def.params', () => {
@@ -92,6 +100,13 @@ test('buildValidHandles resolves connectable dynamic params, not just static def
   const handles = buildValidHandles(testDef, { gainCount: 2 })
   assert(handles.has('gain_1'),
     `buildValidHandles(def, { gainCount: 2 }) did not contain gain_1 — it read static def.params instead of resolving dynamicParams. Got: ${JSON.stringify([...handles])}`)
+  // Negative direction: with gainCount 2, only gain_0/gain_1 exist through
+  // dynamicParams. gain_5 must NOT be in the set — an over-permissive
+  // buildValidHandles (e.g. dropping the `.filter(p => p.connectable)`, or
+  // unioning def.params with resolveParams "to be safe") would let this pass
+  // silently while every other assertion here stays green.
+  assert(!handles.has('gain_5'),
+    `buildValidHandles(def, { gainCount: 2 }) contained gain_5, which does not exist at gainCount 2 — the set is over-permissive. Got: ${JSON.stringify([...handles])}`)
 })
 
 test('migrate actually calls buildValidHandles (not a parallel inline set)', () => {
@@ -103,8 +118,13 @@ test('migrate actually calls buildValidHandles (not a parallel inline set)', () 
   const migrateEnd = src.indexOf('return state', migrateStart)
   assert(migrateEnd !== -1, 'could not find the end of the `migrate:` block in graphStore.ts')
   const migrateBody = src.slice(migrateStart, migrateEnd)
-  assert(migrateBody.includes('buildValidHandles('),
-    'migrate does not call buildValidHandles — it may be computing validHandles inline again, which the extracted-helper gate cannot see')
+  // Scanning for the bare substring `buildValidHandles(` is satisfied by
+  // `buildValidHandles(def, {})`, which reintroduces the original bug for any
+  // node whose dynamic param count is driven by a param (dynamicParams keyed
+  // off nodeParams never sees them). Pin the full call with its real
+  // arguments so a regression to the loose form fails here.
+  assert(migrateBody.includes('buildValidHandles(def, targetNode.data.params)'),
+    'migrate does not call buildValidHandles(def, targetNode.data.params) — it may be computing validHandles inline again, or calling it with the wrong/empty params object, which the extracted-helper gate alone cannot see')
   assert(!migrateBody.includes('def.params?.filter(p => p.connectable)'),
     'migrate still contains the old inline static-params construction — half-migrated: the helper may be correct but migrate is not calling it')
 })
