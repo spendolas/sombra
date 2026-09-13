@@ -142,8 +142,34 @@ pass depth 0, and one pass writes one target, so they still split into 1 primary
 regardless of how compositing is sequenced. **Relay pruning is therefore mandatory, not an
 optimisation** (§6.4).
 
-Cost summary at N layers, after all enablers: ~2N passes (N sources + N composites), 2
-samplers per pass, ~3 live intermediates, shader size O(total graph).
+Cost at N layers, after all enablers: ~2N passes (N sources + N composites), 2 samplers
+per pass, shader size O(total graph).
+
+**Correction — the chain does NOT bound memory (measured 2026-09-14).** The original
+"~3 live intermediates" claim was wrong. The chain bounds its *own* intermediates, but the
+N layer **sources** are what stay alive: the compiler partitions by depth, so all N sources
+are emitted first, and layer 15's texture is produced at pass 15 and first read at pass 31.
+Measured through the real compiler and expander, both backends agreeing:
+
+| layers | passes | textures today | + liveness | + consumer-ordered emission |
+|---|---|---|---|---|
+| 2 | 4 | 3 | 3 | 2 |
+| 4 | 8 | 7 | 5 | 2 |
+| 8 | 16 | 15 | 9 | 2 |
+| 16 | 32 | 31 | 17 | 2 |
+| 32 | 64 | 63 | 33 | 2 |
+
+So today costs 2N−1 textures and liveness alone costs N+1 — a near-halving, still linear.
+**Constant memory needs the pass ORDER to change**, not the allocator: emit each layer's
+source immediately before the composite that consumes it, and the same liveness analysis
+returns 2 slots at any N.
+
+This is concrete rather than theoretical on the WebGL2 fallback, capped at 8 intermediates:
+a Stack tops out at **4 layers today**, reaches **7** with liveness, and is **unbounded**
+with consumer-ordered emission. The difference between raising a limit and removing it.
+
+Pairwise compositing was chosen to avoid the sampler explosion, and it does avoid that —
+it simply does not deliver the memory property §4 originally claimed for it.
 
 ## 5. Blend modes (22)
 
