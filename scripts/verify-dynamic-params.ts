@@ -13,10 +13,9 @@
  *   - `bias_0`   — non-connectable, uniform-mode → sites 6, 8 (both codegen
  *                  paths' non-connectable-uniform-param loops)
  *   - `renderMode_0` — renderer-mode            → site 3 (buildRendererKey)
- * plus `buildSemanticKey` (param count, sites 1) and `buildUniformKey`
+ * plus `buildSemanticKey` (param count, site 1) and `buildUniformKey`
  * (site 2). Site 9 (ShaderNode.tsx `allParams`) is a React render path this
- * script never exercises — see task-4-report.md for why it is left
- * uncovered rather than faked.
+ * script never exercises, so it is left uncovered rather than faked.
  *
  * Run: npx tsx scripts/verify-dynamic-params.ts
  */
