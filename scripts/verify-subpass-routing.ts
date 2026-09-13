@@ -318,4 +318,64 @@ test('the documented idiom (fall through to true for unrecognised handles) keeps
   }
 })
 
+/**
+ * expand-passes.ts only formed a plan when `count > 1`, so a routed node whose
+ * `count` counts VISIBLE sub-passes (the motivating node for this feature: a
+ * layer stack where hidden layers don't get a sub-pass) can land on
+ * `count === 1` while several textures remain wired — with no plan formed,
+ * NEITHER filter applies, and every wired input binds straight into the single
+ * pass. This fixture reproduces that: `count` is pinned to 1, two inputs are
+ * wired, and routeEdge keeps only one of them.
+ */
+const testCountOneNode: NodeDefinition = {
+  type: 'test_count_one_routed',
+  label: 'Test Count-One Routed',
+  category: 'effect',
+  inputs: [
+    { id: 'src', label: 'Source', type: 'color', textureInput: true, default: [0, 0, 0, 0] },
+    { id: 'keep', label: 'Keep', type: 'color', textureInput: true, default: [0, 0, 0, 0] },
+    { id: 'drop', label: 'Drop', type: 'color', textureInput: true, default: [0, 0, 0, 0] },
+  ],
+  outputs: [{ id: 'color', label: 'Color', type: 'color' }],
+  params: [],
+  multiPass: {
+    count: () => 1, // e.g. a layer stack with only one VISIBLE layer
+    from: 'color',
+    to: 'src',
+    routeEdge: (targetHandle) => targetHandle === 'keep',
+  },
+  glsl: (ctx) => `vec4 ${ctx.outputs.color} = vec4(0.0);`,
+  ir: () => ({ statements: [], uniforms: [], standardUniforms: new Set<string>() }),
+}
+nodeRegistry.register(testCountOneNode)
+
+const countOneNodes = [
+  n('csrc', 'checkerboard'), n('ckeep', 'gradient'), n('cdrop', 'checkerboard'),
+  n('cfx', 'test_count_one_routed'),
+  n('cout', 'fragment_output'),
+]
+const countOneEdges = [
+  e('c0', 'csrc', 'color', 'cfx', 'src'),
+  e('c1', 'ckeep', 'color', 'cfx', 'keep'),
+  e('c2', 'cdrop', 'color', 'cfx', 'drop'),
+  e('c3', 'cfx', 'color', 'cout', 'color'),
+]
+
+test('routeEdge still applies when count === 1 (a plan must form even without extra sub-passes)', () => {
+  const out = expandMultiPassNodes(countOneNodes as never, countOneEdges as never)
+  const chain = (out as unknown as { nodes: Node[] }).nodes
+    .filter((x) => (x.data as { type: string }).type === 'test_count_one_routed')
+  assert(chain.length === 1, `count: () => 1 should produce exactly 1 sub-pass node, got ${chain.length}`)
+  assert(chain[0].id === 'cfx', `sub-pass should keep the authored id, got ${chain[0].id}`)
+
+  const incoming = (out as unknown as { edges: Edge[] }).edges
+    .filter((x) => x.target === 'cfx' && (x.targetHandle === 'keep' || x.targetHandle === 'drop'))
+    .map((x) => x.targetHandle)
+  assert(incoming.includes('keep'),
+    `'keep' should reach the single pass, got incoming handles ${JSON.stringify(incoming)}`)
+  assert(!incoming.includes('drop'),
+    `'drop' should have been routed away, but it still reached the single pass — ` +
+    `routeEdge was skipped because count === 1 formed no plan`)
+})
+
 run('subpass-routing')

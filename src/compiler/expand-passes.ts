@@ -83,7 +83,15 @@ export function expandMultiPassNodes(
       if (!hasSource) continue
     }
     const count = Math.max(1, Math.floor(mp.count(node.data.params || {})))
-    if (count > 1) plans.set(node.id, { count, from: mp.from, to: mp.to, routeEdge: mp.routeEdge })
+    // A plan is needed whenever there is more than one sub-pass to expand into
+    // OR routing has something to filter — a node whose `count` counts VISIBLE
+    // sub-passes (e.g. layers, with some hidden) can land on count === 1 while
+    // several textures are still wired to it. Without a plan neither filter
+    // below applies, and every wired input binds straight into the single pass
+    // — the exact sampler pile-up per-sub-pass routing exists to prevent.
+    // Expansion itself (the k > 0 duplication loop) stays gated on count > 1;
+    // a count === 1 plan just runs one sub-pass keeping the authored id.
+    if (count > 1 || mp.routeEdge) plans.set(node.id, { count, from: mp.from, to: mp.to, routeEdge: mp.routeEdge })
   }
   if (plans.size === 0) return { nodes, edges, lastOf: new Map() }
 
