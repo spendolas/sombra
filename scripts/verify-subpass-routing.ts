@@ -230,4 +230,92 @@ test('a routed edge is routed, not dropped: each layer appears exactly once acro
   }
 })
 
+/**
+ * The whitelist idiom both fixtures above use (`handle === 'layer_' + passIndex`)
+ * rejects every handle it doesn't recognise — including a routed node's own
+ * GLOBAL connectable params, ones meant to reach every sub-pass rather than one
+ * step. This fixture adds a `gain` param alongside the per-sub-pass layers and
+ * wires it once, from a single float_constant, to prove: (a) a NAIVE whitelist
+ * silently drops that wire from every sub-pass — the hazard the routeEdge doc
+ * now warns about — and (b) the documented idiom (fall through to `true` for
+ * any handle the routing doesn't recognise) keeps it reaching every sub-pass.
+ */
+const testGlobalGainNode = (type: string, naive: boolean): NodeDefinition => ({
+  type,
+  label: 'Test Global Gain',
+  category: 'effect',
+  inputs: [
+    { id: 'src', label: 'Source', type: 'color', textureInput: true, default: [0, 0, 0, 0] },
+    layerPort(0), layerPort(1),
+  ],
+  outputs: [{ id: 'color', label: 'Color', type: 'color' }],
+  params: [
+    { id: 'gain', label: 'Gain', type: 'float', default: 1, connectable: true, updateMode: 'uniform' },
+  ],
+  multiPass: {
+    count: () => 2,
+    from: 'color',
+    to: 'src',
+    requiresWiredSource: false,
+    // naive: a whitelist that only recognises the per-sub-pass layer handles —
+    // this is what both earlier fixtures in this file use, and it is the
+    // pattern the routeEdge doc now warns against.
+    // correct: the same whitelist, but any OTHER handle (the global `gain`)
+    // falls through to true instead of being rejected.
+    routeEdge: naive
+      ? (targetHandle, passIndex) => targetHandle === `layer_${passIndex}`
+      : (targetHandle, passIndex) => targetHandle.startsWith('layer_') ? targetHandle === `layer_${passIndex}` : true,
+  },
+  glsl: (ctx) => `vec4 ${ctx.outputs.color} = vec4(0.0);`,
+  ir: () => ({ statements: [], uniforms: [], standardUniforms: new Set<string>() }),
+})
+nodeRegistry.register(testGlobalGainNode('test_global_gain_naive', true))
+nodeRegistry.register(testGlobalGainNode('test_global_gain_correct', false))
+
+const globalGainGraph = (type: string) => ({
+  nodes: [
+    n('gsrc', 'checkerboard'), n('gl0', 'gradient'), n('gl1', 'checkerboard'),
+    n('gnum', 'float_constant', { value: 2 }),
+    n(`gfx`, type),
+    n('gout', 'fragment_output'),
+  ],
+  edges: [
+    e('g0', 'gsrc', 'color', 'gfx', 'src'),
+    e('g1', 'gl0', 'color', 'gfx', 'layer_0'),
+    e('g2', 'gl1', 'color', 'gfx', 'layer_1'),
+    e('g3', 'gnum', 'value', 'gfx', 'gain'), // global param, wired ONCE
+    e('g4', 'gfx', 'color', 'gout', 'color'),
+  ],
+})
+
+test('a naive per-sub-pass whitelist silently drops a global connectable param (the documented hazard)', () => {
+  const { nodes: gnodes, edges: gedges } = globalGainGraph('test_global_gain_naive')
+  const out = expandMultiPassNodes(gnodes as never, gedges as never)
+  const chain = (out as unknown as { nodes: Node[] }).nodes
+    .filter((x) => (x.data as { type: string }).type === 'test_global_gain_naive')
+  assert(chain.length === 2, `expected 2 sub-passes, got ${chain.length}`)
+  const gainEdges = (out as unknown as { edges: Edge[] }).edges
+    .filter((x) => x.targetHandle === 'gain')
+  // This is the hazard, not the desired behaviour: a naive whitelist rejects
+  // `gain` at every index, so the edge is dropped entirely, not withheld from
+  // some sub-passes and kept on others.
+  assert(gainEdges.length === 0,
+    `expected the naive whitelist to DROP the gain edge from every sub-pass (0 remaining), ` +
+    `got ${gainEdges.length} — if this ever passes with edges present, the hazard this test ` +
+    `documents no longer reproduces and the test should be revisited`)
+})
+
+test('the documented idiom (fall through to true for unrecognised handles) keeps a global param on every sub-pass', () => {
+  const { nodes: gnodes, edges: gedges } = globalGainGraph('test_global_gain_correct')
+  const out = expandMultiPassNodes(gnodes as never, gedges as never)
+  const chain = (out as unknown as { nodes: Node[] }).nodes
+    .filter((x) => (x.data as { type: string }).type === 'test_global_gain_correct')
+  assert(chain.length === 2, `expected 2 sub-passes, got ${chain.length}`)
+  for (const node of chain) {
+    const fed = (out as unknown as { edges: Edge[] }).edges
+      .some((x) => x.target === node.id && x.targetHandle === 'gain' && x.source === 'gnum')
+    assert(fed, `sub-pass ${node.id} is missing the wired gain — the global param did not reach every sub-pass`)
+  }
+})
+
 run('subpass-routing')

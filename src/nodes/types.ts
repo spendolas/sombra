@@ -384,6 +384,17 @@ export interface NodeDefinition {
      * expand-passes.ts) AND for every sub-pass after it (the duplication
      * loop). Return false to withhold that edge from that sub-pass.
      *
+     * WARNING: because sub-pass 0 is filtered too, a handle rejected at EVERY
+     * index (0 and every later k) is not merely withheld from some sub-passes —
+     * the edge is dropped from the graph entirely, and the port silently falls
+     * back to its stored default. The natural idiom is a whitelist keyed on
+     * `passIndex` (e.g. `handle === \`layer_${passIndex}\``), but a whitelist
+     * rejects every handle it doesn't recognise — so a routed node with a
+     * GLOBAL connectable param meant to reach every sub-pass (a single `gain`
+     * wired once) would lose that wire with no error. A routing function must
+     * return `true` for any handle it does not recognise, unless it genuinely
+     * intends that input to be discarded.
+     *
      * `params` is the authored node instance's own params at both call sites —
      * NOT the per-sub-pass params the expander later injects `__subPass` into.
      * Use the `passIndex` argument to key routing decisions; `params.__subPass`
