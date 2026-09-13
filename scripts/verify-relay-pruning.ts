@@ -60,6 +60,43 @@ function convergingGraph(branches: number) {
   return { nodes, edges }
 }
 
+/**
+ * `branches` two-hop chains — gradient → brightness_contrast → pixelate —
+ * converging into a chain of mixes, same convergence shape as `convergingGraph`.
+ *
+ * `convergingGraph`'s per-branch boundary source (a gradient) is a LEAF: it has
+ * no upstream dependency inside its pass, so `nodesFeeding` returning just
+ * `{startNodeId}` happens to equal the correct transitive answer there. That
+ * fixture cannot tell a crippled `nodesFeeding` from a correct one. Inserting
+ * brightness_contrast between the gradient and the pixelate gives the relay's
+ * immediate source (brightness_contrast) its own upstream dependency
+ * (gradient) inside the same pass — the case the transitive walk exists for.
+ */
+function multiHopConvergingGraph(branches: number) {
+  const nodes: Node[] = []
+  const edges: Edge[] = []
+  const tips: string[] = []
+  for (let i = 0; i < branches; i++) {
+    nodes.push(n(`src${i}`, 'gradient', { angle: i * 15 }))
+    nodes.push(n(`bc${i}`, 'brightness_contrast'))
+    nodes.push(n(`fx${i}`, 'pixelate'))
+    edges.push(e(`ea${i}`, `src${i}`, 'color', `bc${i}`, 'color'))
+    edges.push(e(`eb${i}`, `bc${i}`, 'result', `fx${i}`, 'source'))
+    tips.push(`fx${i}`)
+  }
+  let acc = tips[0]
+  for (let i = 1; i < tips.length; i++) {
+    const mixId = `mix${i}`
+    nodes.push(n(mixId, 'mix'))
+    edges.push(e(`em${i}a`, acc, i === 1 ? 'color' : 'result', mixId, 'a'))
+    edges.push(e(`em${i}b`, tips[i], 'color', mixId, 'b'))
+    acc = mixId
+  }
+  nodes.push(n('out', 'fragment_output'))
+  edges.push(e('eout', acc, branches > 1 ? 'result' : 'color', 'out', 'color'))
+  return { nodes, edges }
+}
+
 // The two backends name their shader field DIFFERENTLY. RenderPass has
 // `fragmentShader` (glsl-generator.ts:56); WGSLPassOutput has `shaderCode`
 // (ir-compiler.ts:457) and no `fragmentShader` at all — reading the wrong one
@@ -124,6 +161,34 @@ test('every pass still declares its own fragColor exactly once', () => {
     assert(assignments === 1,
       `a pass assigns fragColor ${assignments} times — pruning broke pass assembly`)
     assert(!p.fragmentShader.includes('undefined'), 'pruned shader contains "undefined"')
+  }
+})
+
+test('GLSL: no pass references a node_ identifier it never declares', () => {
+  // Uses the MULTI-HOP fixture, not convergingGraph: a relay's immediate
+  // source there has its own upstream dependency inside the same pass, so an
+  // over-prune that keeps only the source's own line (dropping what it reads)
+  // shows up as a reference with no matching declaration. convergingGraph's
+  // per-branch source is a leaf and cannot distinguish a crippled
+  // `nodesFeeding` (`return new Set([startNodeId])`) from a correct one — a
+  // check built on it would be vacuous.
+  const { nodes, edges } = multiHopConvergingGraph(4)
+  const plan = compileGraph(nodes, edges)
+  assert(plan.success, 'compile failed')
+
+  const declType = '(?:vec2|vec3|vec4|float|int|bool|mat2|mat3|mat4)'
+  const declRe = new RegExp(`\\b${declType}\\s+(node_\\w+)\\s*=`, 'g')
+  const refRe = /\bnode_\w+\b/g
+
+  for (const p of plan.passes) {
+    const src = p.fragmentShader
+    const declared = new Set<string>()
+    for (const m of src.matchAll(declRe)) declared.add(m[1])
+    const referenced = new Set<string>()
+    for (const m of src.matchAll(refRe)) referenced.add(m[0])
+    const undeclared = [...referenced].filter((id) => !declared.has(id))
+    assert(undeclared.length === 0,
+      `pass ${p.index} references undeclared identifier(s): ${undeclared.join(', ')} — a relay dropped a declaration its own body still reads`)
   }
 })
 
