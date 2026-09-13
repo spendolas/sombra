@@ -277,6 +277,19 @@ export interface NodeDefinition {
   dynamicInputs?: (params: Record<string, unknown>) => PortDefinition[]
 
   /**
+   * Per-instance parameters, the counterpart to `dynamicInputs`.
+   *
+   * A node whose parameter COUNT varies per instance (one opacity per layer,
+   * say) cannot express that with the static `params` array. Declaring them here
+   * makes them real params: connectable, uniform-backed, and animatable, rather
+   * than literals baked into the shader on every edit.
+   *
+   * As with `dynamicInputs`, a static `params` array must ALSO be provided as a
+   * fallback — several call sites read it before a node instance exists.
+   */
+  dynamicParams?: (params: Record<string, unknown>) => NodeParameter[]
+
+  /**
    * Generate GLSL code for this node
    * @param ctx Context with node ID, port mappings, parameter values
    * @returns GLSL code snippet (variable declarations + calculations)

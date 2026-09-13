@@ -8,11 +8,11 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useGraphStore } from '../stores/graphStore'
 import { useCompilerStore } from '../stores/compilerStore'
 import { useSettingsStore } from '../stores/settingsStore'
-import { nodeRegistry } from '../nodes/registry'
 import type { UniformSpec } from '../nodes/types'
 import type { RenderPass } from './glsl-generator'
 import type { CompileResponse } from './compiler.worker'
 import CompilerWorker from './compiler.worker?worker'
+import { buildSemanticKey, buildUniformKey, buildRendererKey } from './param-keys'
 
 /**
  * Hook that automatically compiles the shader graph when it changes.
@@ -231,64 +231,13 @@ export function useLiveCompiler(
   }, [])
 
   // Derive semantic key from only structural (recompile-mode) data
-  const semanticKey = useMemo(() => {
-    const nk = nodes
-      .map((n) => {
-        const def = nodeRegistry.get(n.data.type)
-        const structural: Record<string, unknown> = {}
-        if (def?.params) {
-          for (const p of def.params) {
-            if (p.updateMode === 'recompile')
-              structural[p.id] = n.data.params?.[p.id] ?? p.default
-          }
-        }
-        return `${n.id}:${n.data.type}:${JSON.stringify(structural)}`
-      })
-      .join('|')
-    const ek = edges
-      .map(
-        (e) =>
-          `${e.source}:${e.sourceHandle}->${e.target}:${e.targetHandle}`
-      )
-      .join('|')
-    return nk + '||' + ek
-  }, [nodes, edges])
+  const semanticKey = useMemo(() => buildSemanticKey(nodes, edges), [nodes, edges])
 
   // Derive uniform key from uniform-mode param values only
-  const uniformKey = useMemo(() => {
-    return nodes
-      .map((n) => {
-        const def = nodeRegistry.get(n.data.type)
-        if (!def?.params) return ''
-        return def.params
-          .filter((p) => p.updateMode === 'uniform')
-          .map(
-            (p) =>
-              `${n.id}:${p.id}:${JSON.stringify(n.data.params?.[p.id] ?? p.default)}`
-          )
-          .join(',')
-      })
-      .filter(Boolean)
-      .join('|')
-  }, [nodes])
+  const uniformKey = useMemo(() => buildUniformKey(nodes), [nodes])
 
   // Derive renderer key from renderer-mode param values only
-  const rendererKey = useMemo(() => {
-    return nodes
-      .map((n) => {
-        const def = nodeRegistry.get(n.data.type)
-        if (!def?.params) return ''
-        return def.params
-          .filter((p) => p.updateMode === 'renderer')
-          .map(
-            (p) =>
-              `${n.id}:${p.id}:${JSON.stringify(n.data.params?.[p.id] ?? p.default)}`
-          )
-          .join(',')
-      })
-      .filter(Boolean)
-      .join('|')
-  }, [nodes])
+  const rendererKey = useMemo(() => buildRendererKey(nodes), [nodes])
 
   // Dispatch the current graph to the Worker. Shared by the semantic effect's
   // debounce timer and the crash-retry path; reassigned each render so it
