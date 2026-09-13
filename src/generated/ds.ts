@@ -225,6 +225,16 @@ export const ds = {
     icon: "text-warning",
     label: "text-param text-warning",
   },
+  compileErrorBanner: {
+    pill: "flex flex-row items-center bg-surface-alt/60 rounded-md p-md gap-md cursor-pointer backdrop-blur-[16px]",
+    panel: "flex flex-col bg-surface-alt/60 rounded-md p-md gap-sm cursor-pointer backdrop-blur-[16px]",
+    tint: "bg-error/10 absolute inset-0 pointer-events-none rounded-[inherit]",
+    header: "flex flex-row items-center gap-md",
+    icon: "text-error",
+    title: "text-section text-error uppercase",
+    count: "text-param text-fg-dim",
+    message: "text-param text-fg-dim",
+  },
 } as const;
 
 export type DSComponent = keyof typeof ds;
