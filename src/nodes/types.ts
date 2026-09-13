@@ -379,8 +379,15 @@ export interface NodeDefinition {
      * source onto every sub-pass binds all N textures into all N passes, which
      * is the sampler explosion a sequential chain exists to avoid.
      *
-     * Called once per (edge, sub-pass) pair for sub-passes after the first.
-     * Return false to withhold that edge from that sub-pass.
+     * Called once per (edge, sub-pass) pair — for sub-pass 0 (the initial-edge
+     * copy, filtering edges already targeting the authored node id, in
+     * expand-passes.ts) AND for every sub-pass after it (the duplication
+     * loop). Return false to withhold that edge from that sub-pass.
+     *
+     * `params` is the authored node instance's own params at both call sites —
+     * NOT the per-sub-pass params the expander later injects `__subPass` into.
+     * Use the `passIndex` argument to key routing decisions; `params.__subPass`
+     * is never present here.
      */
     routeEdge?: (
       targetHandle: string,
