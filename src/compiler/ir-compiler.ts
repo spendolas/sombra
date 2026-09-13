@@ -14,6 +14,7 @@ import type { IRNodeOutput, IRContext, IRSpatialTransform } from './ir/types'
 import { raw, declare, binary, variable, fragCoord } from './ir/types'
 import { emitSRT } from './ir/srt'
 import { nodeRegistry } from '../nodes/registry'
+import { resolveParams } from '../nodes/resolve-dynamic'
 import { topologicalSort, hasCycles } from './topological-sort'
 import {
   partitionPasses, findTextureBoundaries, outputTypeToFragColor,
@@ -205,54 +206,50 @@ export function generateNodeIR(
   })
 
   // Resolve connectable params
-  if (definition.params) {
-    for (const param of definition.params) {
-      if (!param.connectable) continue
+  for (const param of resolveParams(definition, node.data.params)) {
+    if (!param.connectable) continue
 
-      const edge = incomingEdges.find((e) => e.targetHandle === param.id)
+    const edge = incomingEdges.find((e) => e.targetHandle === param.id)
 
-      if (edge) {
-        const sourceNode = nodeMap.get(edge.source)
-        const sourceDefinition = sourceNode ? nodeRegistry.get(sourceNode.data.type) : undefined
-        const sourcePort = sourceDefinition?.outputs.find(
-          (p) => p.id === edge.sourceHandle,
+    if (edge) {
+      const sourceNode = nodeMap.get(edge.source)
+      const sourceDefinition = sourceNode ? nodeRegistry.get(sourceNode.data.type) : undefined
+      const sourcePort = sourceDefinition?.outputs.find(
+        (p) => p.id === edge.sourceHandle,
+      )
+      if (sourcePort) {
+        const sourceVarName = `node_${edge.source.replace(/-/g, '_')}_${edge.sourceHandle}`
+        inputs[param.id] = coerceTypeForIR(
+          sourceVarName,
+          sourcePort.type,
+          param.type as PortType,
         )
-        if (sourcePort) {
-          const sourceVarName = `node_${edge.source.replace(/-/g, '_')}_${edge.sourceHandle}`
-          inputs[param.id] = coerceTypeForIR(
-            sourceVarName,
-            sourcePort.type,
-            param.type as PortType,
-          )
-        } else {
-          // Invalid edge (see input resolution above) — fall back and report
-          resolveParamFallbackIR(param, node, sanitizedNodeId, inputs, userUniforms)
-          errors.push({
-            message: `Invalid connection into "${param.label}" on ${definition.label}: source port "${edge.sourceHandle}" not found`,
-            nodeId: node.id,
-          })
-        }
       } else {
+        // Invalid edge (see input resolution above) — fall back and report
         resolveParamFallbackIR(param, node, sanitizedNodeId, inputs, userUniforms)
+        errors.push({
+          message: `Invalid connection into "${param.label}" on ${definition.label}: source port "${edge.sourceHandle}" not found`,
+          nodeId: node.id,
+        })
       }
+    } else {
+      resolveParamFallbackIR(param, node, sanitizedNodeId, inputs, userUniforms)
     }
   }
 
   // Non-connectable uniform params
-  if (definition.params) {
-    for (const param of definition.params) {
-      if (param.connectable || param.updateMode !== 'uniform') continue
-      const uName = uniformName(sanitizedNodeId, param.id)
-      const paramValue = node.data.params?.[param.id] ?? param.default
-      userUniforms.push({
-        name: uName,
-        glslType: paramGlslType(param.type),
-        value: padColorUniformValue(param.type, paramValue),
-        nodeId: baseNodeId(node.id), // authored id — see resolveParamFallbackIR
-        paramId: param.id,
-      })
-      inputs[param.id] = uName
-    }
+  for (const param of resolveParams(definition, node.data.params)) {
+    if (param.connectable || param.updateMode !== 'uniform') continue
+    const uName = uniformName(sanitizedNodeId, param.id)
+    const paramValue = node.data.params?.[param.id] ?? param.default
+    userUniforms.push({
+      name: uName,
+      glslType: paramGlslType(param.type),
+      value: padColorUniformValue(param.type, paramValue),
+      nodeId: baseNodeId(node.id), // authored id — see resolveParamFallbackIR
+      paramId: param.id,
+    })
+    inputs[param.id] = uName
   }
 
   // Build output variable names
