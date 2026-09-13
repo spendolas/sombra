@@ -32,6 +32,9 @@ export function useLiveCompiler(
     qualityTier?: string
     passes?: RenderPass[]
     wgsl?: import('./glsl-generator').RenderPlan['wgsl']
+    /** Mirrors RenderPlan.slotCount (glsl-generator.ts) — see there. Needed by
+     *  the WebGL2 renderer to cap on slots, not passes. */
+    slotCount?: number
   }) => void,
   onUniformUpdate?: (
     uniforms: Array<{ name: string; value: number | number[] }>
@@ -170,6 +173,7 @@ export function useLiveCompiler(
           qualityTier: result.qualityTier,
           passes: result.passes,
           wgsl: result.wgsl,
+          slotCount: result.slotCount,
         })
 
         // Params may have moved while the compile was in flight — the plan
