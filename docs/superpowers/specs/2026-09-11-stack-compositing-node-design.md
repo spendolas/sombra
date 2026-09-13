@@ -166,11 +166,20 @@ receives a sampler. Both helpers are shared by all four compilers
 counterpart, per-layer opacity cannot be a real uniform, and baking it as an IR literal
 would make every drag a recompile — violating the animatable-slider rule from the blur work.
 
-Add `dynamicParams?: (params) => NodeParameter[]`, resolved in **all five** places that
-iterate `definition.params` today, or adding a layer dispatches no recompile at all:
+Add `dynamicParams?: (params) => NodeParameter[]`, resolved everywhere
+`definition.params` is iterated, or adding a layer dispatches no recompile at
+all. **This list is incomplete — the real count is nine**, and the four it misses
+are `rendererKey`, `partitionPasses`' connectable-depth loop, and the
+*connectable* param loops on both backends (it names only the non-connectable
+uniform-emission ones). See §13b and
+`docs/superpowers/plans/2026-09-13-dynamic-params.md` for the verified table:
 
 - `semanticKey` and `uniformKey` — `use-live-compiler.ts:234-264`
-- `collectCurrentUniformValues` — `use-live-compiler.ts:88-113`
+- ~~`collectCurrentUniformValues` — `use-live-compiler.ts:88-113`~~ **Not a site.**
+  It iterates the uniform *specs* codegen already produced and reads
+  `node.data.params?.[spec.paramId]` with a `spec.value` fallback, so it handles
+  dynamic params for free. Verified twice (2026-09-13). Changing it would be a
+  no-op.
 - uniform emission, IR — `ir-compiler.ts:241-256`
 - uniform emission, GLSL — `glsl-generator.ts:540-550`
 - param rendering — `ShaderNode.tsx:273`
