@@ -69,6 +69,55 @@ const edges = [
 const subPassNodes = (out: { nodes: Node[] }) =>
   out.nodes.filter((x) => (x.data as { type: string }).type === 'test_stackish')
 
+/**
+ * A SECOND fixture, expanding under the DEFAULT `requiresWiredSource` (the
+ * field is omitted entirely — exactly like blur), with `routeEdge` set. This
+ * exists so `requiresWiredSource` and `routeEdge` are independently
+ * observable: `test_stackish` above needs `requiresWiredSource: false` just
+ * to produce any sub-passes at all, so reverting that field there leaves
+ * nothing for routing to be checked on — one feature is a precondition for
+ * observing the other in that fixture. Here the chain input (`src`) IS wired
+ * by the graph, so expansion happens with no `requiresWiredSource` involved,
+ * and `tint_0`/`tint_1` each belong to one sub-pass only.
+ */
+const testWiredNode: NodeDefinition = {
+  type: 'test_wired_routed',
+  label: 'Test Wired Routed',
+  category: 'effect',
+  inputs: [
+    { id: 'src', label: 'Source', type: 'color', textureInput: true, default: [0, 0, 0, 0] },
+    { id: 'tint_0', label: 'Tint 0', type: 'color', textureInput: true, default: [0, 0, 0, 0] },
+    { id: 'tint_1', label: 'Tint 1', type: 'color', textureInput: true, default: [0, 0, 0, 0] },
+  ],
+  outputs: [{ id: 'color', label: 'Color', type: 'color' }],
+  params: [],
+  multiPass: {
+    count: () => 2,
+    from: 'color',
+    to: 'src',
+    // requiresWiredSource intentionally omitted — default true, same as blur.
+    routeEdge: (targetHandle, passIndex) => targetHandle === `tint_${passIndex}`,
+  },
+  glsl: (ctx) => `vec4 ${ctx.outputs.color} = vec4(0.0);`,
+  ir: () => ({ statements: [], uniforms: [], standardUniforms: new Set<string>() }),
+}
+nodeRegistry.register(testWiredNode)
+
+const wiredNodes = [
+  n('wsrc', 'checkerboard'), n('wt0', 'gradient'), n('wt1', 'checkerboard'),
+  n('wfx', 'test_wired_routed'),
+  n('wout', 'fragment_output'),
+]
+const wiredEdges = [
+  e('w0', 'wsrc', 'color', 'wfx', 'src'), // the chain input — wired by the fixture itself
+  e('w1', 'wt0', 'color', 'wfx', 'tint_0'),
+  e('w2', 'wt1', 'color', 'wfx', 'tint_1'),
+  e('w3', 'wfx', 'color', 'wout', 'color'),
+]
+
+const wiredSubPassNodes = (out: { nodes: Node[] }) =>
+  out.nodes.filter((x) => (x.data as { type: string }).type === 'test_wired_routed')
+
 test('expansion happens even though the chain input is unwired', () => {
   const out = expandMultiPassNodes(nodes as never, edges as never)
   const chain = subPassNodes(out as never)
@@ -100,6 +149,32 @@ test('each layer edge reaches only its own sub-pass', () => {
     assert(incoming.length === 1,
       `sub-pass ${passIndex} received ${incoming.length} layer edges (${JSON.stringify(incoming)}) — every layer was duplicated onto every sub-pass`)
     assert(incoming[0] === `layer_${passIndex}`,
+      `sub-pass ${passIndex} received ${incoming[0]}`)
+  }
+})
+
+test('a node that expands via the default requiresWiredSource still routes its other inputs per sub-pass', () => {
+  const out = expandMultiPassNodes(wiredNodes as never, wiredEdges as never)
+  const chain = wiredSubPassNodes(out as never)
+  assert(chain.length === 2,
+    `expected 2 sub-passes, got ${chain.length} — expansion was skipped even though 'src' is wired`)
+  const byIndex = new Map(chain.map((x) =>
+    [Number((x.data as { params: Record<string, unknown> }).params[SUB_PASS_PARAM] ?? 0), x.id]))
+
+  for (const passIndex of [0, 1]) {
+    const nodeId = byIndex.get(passIndex)
+    if (nodeId === undefined) {
+      assert(false,
+        `sub-pass ${passIndex} does not exist (only ${chain.length} sub-pass node(s) present) — ` +
+        `expansion was skipped, so per-sub-pass routing cannot be checked yet`)
+      continue
+    }
+    const incoming = (out as unknown as { edges: Edge[] }).edges
+      .filter((x) => x.target === nodeId && x.targetHandle?.startsWith('tint_'))
+      .map((x) => x.targetHandle)
+    assert(incoming.length === 1,
+      `sub-pass ${passIndex} received ${incoming.length} tint edges (${JSON.stringify(incoming)}) — every tint was duplicated onto every sub-pass`)
+    assert(incoming[0] === `tint_${passIndex}`,
       `sub-pass ${passIndex} received ${incoming[0]}`)
   }
 })
