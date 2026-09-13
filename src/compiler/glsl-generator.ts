@@ -10,6 +10,7 @@
 import type { Node, Edge } from '@xyflow/react'
 import type { NodeData, EdgeData, GLSLContext, UniformSpec } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
+import { resolveParams } from '../nodes/resolve-dynamic'
 import { topologicalSort, hasCycles } from './topological-sort'
 import { coerceType } from '../nodes/type-coercion'
 import { expandMultiPassNodes, baseNodeId } from './expand-passes'
@@ -199,13 +200,14 @@ export function partitionPasses(
     }
 
     // Connectable params are same-pass (not texture inputs)
-    if (def.params) {
-      for (const param of def.params) {
-        if (!param.connectable) continue
-        const edge = incoming.find(e => e.targetHandle === param.id)
-        if (!edge) continue
-        maxDepth = Math.max(maxDepth, depth.get(edge.source) ?? 0)
-      }
+    // Dynamic params can be connectable too, and a connectable param feeding
+    // this node contributes to its pass depth. Missing them here schedules the
+    // node into the wrong pass.
+    for (const param of resolveParams(def, node.data.params)) {
+      if (!param.connectable) continue
+      const edge = incoming.find(e => e.targetHandle === param.id)
+      if (!edge) continue
+      maxDepth = Math.max(maxDepth, depth.get(edge.source) ?? 0)
     }
 
     depth.set(nodeId, maxDepth)
@@ -510,58 +512,54 @@ export function generateNodeGlsl(
   })
 
   // Resolve connectable params
-  if (definition.params) {
-    for (const param of definition.params) {
-      if (!param.connectable) continue
+  for (const param of resolveParams(definition, node.data.params)) {
+    if (!param.connectable) continue
 
-      const edge = incomingEdges.find((e) => e.targetHandle === param.id)
+    const edge = incomingEdges.find((e) => e.targetHandle === param.id)
 
-      if (edge) {
-        const sourceNode = nodeMap.get(edge.source)
-        const sourceDefinition = sourceNode ? nodeRegistry.get(sourceNode.data.type) : undefined
-        const sourcePort = sourceDefinition?.outputs.find(
-          (p) => p.id === edge.sourceHandle
-        )
-        if (sourcePort) {
-          const sourceVarName = `node_${edge.source.replace(/-/g, '_')}_${edge.sourceHandle}`
-          if (sourcePort.type !== param.type) {
-            inputs[param.id] = coerceType(
-              sourceVarName,
-              sourcePort.type,
-              param.type as import('../nodes/types').PortType
-            )
-          } else {
-            inputs[param.id] = sourceVarName
-          }
+    if (edge) {
+      const sourceNode = nodeMap.get(edge.source)
+      const sourceDefinition = sourceNode ? nodeRegistry.get(sourceNode.data.type) : undefined
+      const sourcePort = sourceDefinition?.outputs.find(
+        (p) => p.id === edge.sourceHandle
+      )
+      if (sourcePort) {
+        const sourceVarName = `node_${edge.source.replace(/-/g, '_')}_${edge.sourceHandle}`
+        if (sourcePort.type !== param.type) {
+          inputs[param.id] = coerceType(
+            sourceVarName,
+            sourcePort.type,
+            param.type as import('../nodes/types').PortType
+          )
         } else {
-          // Invalid edge (see input resolution above) — fall back and report
-          resolveParamFallback(param, node, sanitizedNodeId, inputs, userUniforms)
-          errors.push({
-            message: `Invalid connection into "${param.label}" on ${definition.label}: source port "${edge.sourceHandle}" not found`,
-            nodeId: node.id,
-          })
+          inputs[param.id] = sourceVarName
         }
       } else {
+        // Invalid edge (see input resolution above) — fall back and report
         resolveParamFallback(param, node, sanitizedNodeId, inputs, userUniforms)
+        errors.push({
+          message: `Invalid connection into "${param.label}" on ${definition.label}: source port "${edge.sourceHandle}" not found`,
+          nodeId: node.id,
+        })
       }
+    } else {
+      resolveParamFallback(param, node, sanitizedNodeId, inputs, userUniforms)
     }
   }
 
   // Non-connectable uniform params
-  if (definition.params) {
-    for (const param of definition.params) {
-      if (param.connectable || param.updateMode !== 'uniform') continue
-      const uName = uniformName(sanitizedNodeId, param.id)
-      const paramValue = node.data.params?.[param.id] ?? param.default
-      userUniforms.push({
-        name: uName,
-        glslType: paramGlslType(param.type),
-        value: padColorUniformValue(param.type, paramValue),
-        nodeId: baseNodeId(node.id), // authored id — see resolveParamFallback
-        paramId: param.id,
-      })
-      inputs[param.id] = uName
-    }
+  for (const param of resolveParams(definition, node.data.params)) {
+    if (param.connectable || param.updateMode !== 'uniform') continue
+    const uName = uniformName(sanitizedNodeId, param.id)
+    const paramValue = node.data.params?.[param.id] ?? param.default
+    userUniforms.push({
+      name: uName,
+      glslType: paramGlslType(param.type),
+      value: padColorUniformValue(param.type, paramValue),
+      nodeId: baseNodeId(node.id), // authored id — see resolveParamFallback
+      paramId: param.id,
+    })
+    inputs[param.id] = uName
   }
 
   // Framework SRT injection + own-content coordinate (see ir-compiler for the
