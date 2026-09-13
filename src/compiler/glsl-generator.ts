@@ -17,6 +17,7 @@ import { expandMultiPassNodes, baseNodeId } from './expand-passes'
 import { resolvePassResolution } from './pass-resolution'
 import { emitSRT } from './ir/srt'
 import type { IRSpatialTransform } from './ir/types'
+import { nodesFeeding } from './reachability'
 
 export function uniformName(sanitizedNodeId: string, paramId: string): string {
   return `u_${sanitizedNodeId}_${paramId}`
@@ -788,6 +789,10 @@ function compileMultiPass(
     const functionRegistry = new Map<string, string>()
     const passUserUniforms: UniformSpec[] = []
     const glslLines: string[] = []
+    // Mirrors allOutputs/imageSamplers entry-for-entry so relay passes below
+    // can prune image samplers by node without drifting from what actually
+    // got emitted for that node.
+    const segments: Array<{ nodeId: string; lines: string[]; imageSamplers: string[] }> = []
     const passImageSamplers = new Set<string>()
 
     // Find cross-pass non-texture dependencies: nodes from earlier passes
@@ -851,12 +856,15 @@ function compileMultiPass(
     // Generate GLSL for each node in this pass
     const allErrors: Array<{ message: string; nodeId?: string }> = []
     for (const nodeId of combinedNodeIds) {
+      const nodeImageSamplers = new Set<string>()
       const result = generateNodeGlsl(
         nodeId, nodeMap, edgesByTarget,
         uniforms, functions, functionRegistry, passUserUniforms,
-        passBoundaries, passImageSamplers,
+        passBoundaries, nodeImageSamplers,
       )
       glslLines.push(...result.glslLines)
+      for (const name of nodeImageSamplers) passImageSamplers.add(name)
+      segments.push({ nodeId, lines: result.glslLines, imageSamplers: [...nodeImageSamplers] })
       allErrors.push(...result.errors)
     }
 
@@ -914,10 +922,39 @@ function compileMultiPass(
       for (let g = 1; g < groups.length; g++) {
         const resolved = resolveGroup(groups[g])
         if (!resolved) continue
-        const relayLines = [...bodyLines, resolved.fragLine]
+        // A relay computes ONE source output, so it needs only the nodes feeding
+        // that output. Re-emitting the whole body is what made shader text grow
+        // quadratically in converging branches.
+        const edge = resolveSourceEdge(groups[g][0], edgesByTarget)
+        const needed = edge
+          ? nodesFeeding(edge.source, edgesByTarget, new Set(combinedNodeIds))
+          : null
+        const pruned = needed !== null && needed.size > 0
+        const relayBody = pruned
+          ? segments.filter((s) => needed!.has(s.nodeId)).flatMap((s) => s.lines)
+          : bodyLines
+        const relayLines = [...relayBody, resolved.fragLine]
+        // Declarations must track the pruned body: a relay that no longer
+        // statically uses a boundary/image sampler must not declare it, or
+        // WebGPU's auto bind-group-layout omits the binding while the
+        // renderer still tries to fill it — silent black output. When the
+        // prune fell back to the full body, keep the full resource sets too.
+        const relaySamplerNames = pruned
+          ? passBoundaries.filter((b) => needed!.has(b.consumerId)).map((b) => b.samplerName)
+          : samplerNames
+        const relayInputTextures: Record<string, number> = pruned
+          ? Object.fromEntries(
+              passBoundaries
+                .filter((b) => needed!.has(b.consumerId))
+                .map((b) => [b.samplerName, samplerCompiledIndex.get(b.samplerName) ?? b.sourcePassIndex]),
+            )
+          : { ...inputTextures }
+        const relayImageSamplers = pruned
+          ? new Set(segments.filter((s) => needed!.has(s.nodeId)).flatMap((s) => s.imageSamplers))
+          : passImageSamplers
         const relayShader = assembleFragmentShader(
-          uniforms, functions, functionRegistry, relayLines, passUserUniforms, samplerNames,
-          passImageSamplers,
+          uniforms, functions, functionRegistry, relayLines, passUserUniforms, relaySamplerNames,
+          relayImageSamplers,
         )
         const relayIdx = passes.length
         for (const b of groups[g]) samplerCompiledIndex.set(b.samplerName, relayIdx)
@@ -926,7 +963,7 @@ function compileMultiPass(
           fragmentShader: relayShader,
           vertexShader: VERTEX_SHADER,
           userUniforms: passUserUniforms,
-          inputTextures,
+          inputTextures: relayInputTextures,
           isTimeLive: uniforms.has('u_time'),
           textureFilter: resolved.textureFilter,
           resolution: passResolution,
