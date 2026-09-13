@@ -26,6 +26,7 @@ import { assembleWGSL } from './ir/wgsl-assembler'
 import { expandMultiPassNodes, baseNodeId } from './expand-passes'
 import { resolvePassResolution } from './pass-resolution'
 import { nodesFeeding } from './reachability'
+import { assignTextureSlots, type PassLiveness } from './texture-slots'
 
 // ---------------------------------------------------------------------------
 // WGSL type coercion (IR-level, parallel to type-coercion.ts GLSL rules)
@@ -461,10 +462,14 @@ export interface WGSLPassOutput {
   textureFilter?: 'linear' | 'nearest'
   /** Mirrors RenderPass.resolution (glsl-generator.ts) — see there. */
   resolution?: number
+  /** Mirrors RenderPass.targetSlot (glsl-generator.ts) — see there. */
+  targetSlot?: number
 }
 
 export interface WGSLMultiPassOutput {
   passes: WGSLPassOutput[]
+  /** Mirrors RenderPlan.slotCount (glsl-generator.ts) — see there. */
+  slotCount?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -809,5 +814,13 @@ function compileMultiPassIR(
     }
   }
 
-  return { passes }
+  const liveness: PassLiveness[] = passes.map((p, index) => ({
+    index,
+    readsPassIndices: p.inputTextures.map((t) => t.passIndex),
+    sizeKey: `${p.resolution ?? 1}`,
+  }))
+  const { slotOfPass, slotCount } = assignTextureSlots(liveness)
+  passes.forEach((p, index) => { p.targetSlot = slotOfPass[index] })
+
+  return { passes, slotCount }
 }

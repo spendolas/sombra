@@ -10,6 +10,12 @@
  */
 import { assignTextureSlots, type PassLiveness } from '../src/compiler/texture-slots'
 import { test, run, assert } from './blur-bakeoff/lib/test-util'
+import { initializeNodeLibrary } from '../src/nodes'
+import { compileGraph } from '../src/compiler/glsl-generator'
+import { compileGraphIR } from '../src/compiler/ir-compiler'
+import type { Node, Edge } from '@xyflow/react'
+
+initializeNodeLibrary()
 
 const chain = (n: number): PassLiveness[] =>
   Array.from({ length: n }, (_, i) => ({
@@ -102,6 +108,74 @@ test('the final pass needs no slot', () => {
   const passes = chain(4)
   const { slotOfPass } = assignTextureSlots(passes)
   assert(slotOfPass[3] === -1, 'the last pass renders to the canvas and should own no intermediate')
+})
+
+// --- Step 3: a real compiled plan, not a hand-built PassLiveness list ---
+//
+// A chain of pixelates is a linear read-the-previous-pass chain (each
+// pixelate's textureInput 'source' reads the prior pass), so it exercises the
+// same shape as the hand-built `chain()` fixture above, but through the real
+// compiler on BOTH backends — proving the plan-assembly wiring (Step 2), not
+// just the algorithm (already covered above).
+const n = (id: string, t: string, p: Record<string, unknown> = {}) =>
+  ({ id, type: 'shaderNode', position: { x: 0, y: 0 }, data: { type: t, params: p } }) as unknown as Node
+const e = (id: string, s: string, sh: string, tg: string, th: string) =>
+  ({ id, source: s, sourceHandle: sh, target: tg, targetHandle: th }) as unknown as Edge
+
+const PIXELATE_COUNT = 4
+const chainNodes = [
+  n('src', 'gradient'),
+  ...Array.from({ length: PIXELATE_COUNT }, (_, i) => n(`px${i}`, 'pixelate')),
+  n('out', 'fragment_output'),
+]
+const chainEdges = [
+  e('e_src', 'src', 'color', 'px0', 'source'),
+  ...Array.from({ length: PIXELATE_COUNT - 1 }, (_, i) =>
+    e(`e_px${i}`, `px${i}`, 'color', `px${i + 1}`, 'source')),
+  e('e_out', `px${PIXELATE_COUNT - 1}`, 'color', 'out', 'color'),
+]
+
+// GLSL: RenderPass.inputTextures is Record<samplerName, passIndex> — read via
+// Object.values, mirroring the accessor used in glsl-generator.ts itself.
+const glslReadsPassIndices = (pass: { inputTextures: Record<string, number> }) =>
+  Object.values(pass.inputTextures ?? {})
+// IR/WGSL: WGSLPassOutput.inputTextures is Array<{passIndex, samplerName}> —
+// read via .map, mirroring the accessor used in ir-compiler.ts itself.
+const irReadsPassIndices = (pass: { inputTextures?: Array<{ passIndex: number }> }) =>
+  (pass.inputTextures ?? []).map((t) => t.passIndex)
+
+test('GLSL: a real multi-pass plan reuses slots and never aliases', () => {
+  const plan = compileGraph(chainNodes, chainEdges)
+  assert(plan.success, `compile failed: ${JSON.stringify(plan.errors)}`)
+  assert(plan.passes.length > 1, `expected a multi-pass plan, got ${plan.passes.length} pass(es)`)
+  assert(typeof plan.slotCount === 'number', 'plan.slotCount was not set by the compiler')
+
+  const liveness: PassLiveness[] = plan.passes.map((p) => ({
+    index: p.index,
+    readsPassIndices: glslReadsPassIndices(p),
+    sizeKey: `${p.resolution ?? 1}`,
+  }))
+  const slotOfPass = plan.passes.map((p) => p.targetSlot ?? -1)
+  assertNoAliasing(liveness, slotOfPass)
+  assert(plan.slotCount! < plan.passes.length,
+    `a linear chain of ${plan.passes.length} passes should need fewer than ${plan.passes.length} slots, got ${plan.slotCount}`)
+})
+
+test('WGSL: a real multi-pass plan reuses slots and never aliases', () => {
+  const plan = compileGraphIR(chainNodes, chainEdges)
+  assert(plan !== null, 'IR compile returned null (a node lacks ir(), or compilation threw)')
+  assert(plan!.passes.length > 1, `expected a multi-pass plan, got ${plan!.passes.length} pass(es)`)
+  assert(typeof plan!.slotCount === 'number', 'plan.slotCount was not set by the compiler')
+
+  const liveness: PassLiveness[] = plan!.passes.map((p, index) => ({
+    index,
+    readsPassIndices: irReadsPassIndices(p),
+    sizeKey: `${p.resolution ?? 1}`,
+  }))
+  const slotOfPass = plan!.passes.map((p) => p.targetSlot ?? -1)
+  assertNoAliasing(liveness, slotOfPass)
+  assert(plan!.slotCount! < plan!.passes.length,
+    `a linear chain of ${plan!.passes.length} passes should need fewer than ${plan!.passes.length} slots, got ${plan!.slotCount}`)
 })
 
 run('texture-slots')
