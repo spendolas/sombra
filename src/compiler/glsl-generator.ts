@@ -17,6 +17,7 @@ import { expandMultiPassNodes, baseNodeId } from './expand-passes'
 import { resolvePassResolution } from './pass-resolution'
 import { emitSRT } from './ir/srt'
 import type { IRSpatialTransform } from './ir/types'
+import { nodesFeeding } from './reachability'
 
 export function uniformName(sanitizedNodeId: string, paramId: string): string {
   return `u_${sanitizedNodeId}_${paramId}`
@@ -916,7 +917,17 @@ function compileMultiPass(
       for (let g = 1; g < groups.length; g++) {
         const resolved = resolveGroup(groups[g])
         if (!resolved) continue
-        const relayLines = [...bodyLines, resolved.fragLine]
+        // A relay computes ONE source output, so it needs only the nodes feeding
+        // that output. Re-emitting the whole body is what made shader text grow
+        // quadratically in converging branches.
+        const edge = resolveSourceEdge(groups[g][0], edgesByTarget)
+        const needed = edge
+          ? nodesFeeding(edge.source, edgesByTarget, new Set(combinedNodeIds))
+          : null
+        const relayBody = needed && needed.size > 0
+          ? segments.filter((s) => needed.has(s.nodeId)).flatMap((s) => s.lines)
+          : bodyLines
+        const relayLines = [...relayBody, resolved.fragLine]
         const relayShader = assembleFragmentShader(
           uniforms, functions, functionRegistry, relayLines, passUserUniforms, samplerNames,
           passImageSamplers,
