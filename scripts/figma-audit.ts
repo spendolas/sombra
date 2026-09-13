@@ -603,23 +603,29 @@ function resolveColor(
   let paintOpacity: number | null = null
   let paintBlendMode: string | null = null
 
-  if (!colorKey && paints?.length) {
+  // Opacity and blend mode must be read from the paint even when the COLOUR came
+  // from a bound variable — binding a fill to a variable does not carry its
+  // opacity. Skipping this block on a bound fill silently loses `fill.opacity`,
+  // which is how a 60% glass surface reported as fully opaque.
+  if (paints?.length) {
     const visiblePaints = paints.filter(p => p.visible !== false)
 
     // All paints hidden — return hidden marker
-    if (visiblePaints.length === 0 && paints.length > 0) {
+    if (!colorKey && visiblePaints.length === 0 && paints.length > 0) {
       return { color: '__hidden__', opacity: null, blendMode: null }
     }
 
     const first = visiblePaints[0]
     if (first) {
       if (first.type === 'SOLID' && first.color) {
-        const hex = figmaColorToHex(first.color).toLowerCase()
-        colorKey = maps.colorHexToKey.get(hex) ?? hex
+        if (!colorKey) {
+          const hex = figmaColorToHex(first.color).toLowerCase()
+          colorKey = maps.colorHexToKey.get(hex) ?? hex
+        }
         if (first.opacity != null && first.opacity < 1) {
           paintOpacity = Math.round(first.opacity * 100) / 100
         }
-      } else if (first.type.startsWith('GRADIENT_')) {
+      } else if (!colorKey && first.type.startsWith('GRADIENT_')) {
         colorKey = `gradient:${first.type.replace('GRADIENT_', '').toLowerCase()}`
       }
       // IMAGE and other fill types: no resolution, skip
