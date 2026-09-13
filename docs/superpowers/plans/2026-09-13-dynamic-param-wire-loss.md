@@ -154,10 +154,10 @@ test('a .sombra round trip keeps the wire into a dynamic param', () => {
 run('dynamic-param-edges')
 ```
 
-**Note on `exportToFile`'s signature:** read it at `src/utils/sombra-file.ts:45`
-before writing this call. If it takes more arguments or returns something other
-than a JSON string, adapt and report. The `typeof json === 'string'` hedge above
-is a guess and should be replaced by the real shape once you know it.
+**Correction (verified 2026-09-13):** `exportToFile(nodes, edges, thumbnail?)`
+returns a **`SombraFile` object**, not a JSON string (`sombra-file.ts:45-49`), so
+the `typeof json === 'string'` hedge above is dead code. Write
+`importFromFile(exportToFile(nodes, edges))` directly.
 
 - [ ] **Step 2: Register and run it**
 
@@ -275,14 +275,21 @@ and then vanishes in a build nobody connects to the loss.
 `migrate` is a closure inside the `persist` config and is not directly callable.
 Two options, in order of preference:
 
-1. **If `migrate` can be reached** — e.g. the store exposes it, or the persist
-   options object is exported — call it with a persisted-shaped object
-   `{ nodes, edges }` at an older version and assert `e2` survives.
-2. **If it cannot**, assert on the shared logic instead: extract the
+1. ~~**If `migrate` can be reached**~~ — **it cannot** (verified 2026-09-13).
+   `useGraphStore` exposes only `setState`/`getState`/`getInitialState`/
+   `subscribe`; `.persist` is `undefined` in a Node process despite zustand
+   5.0.11 and a standard `create()(persist(...))`. Skip to option 2.
+2. **Assert on the shared logic instead:** extract the
    `validHandles` construction into an exported helper
    (`buildValidHandles(def, nodeParams): Set<string>`) in `graphStore.ts`, call
    that from `migrate`, and have the gate assert the returned set contains
-   `gain_1`. State in your report which option you took and why.
+   `gain_1`.
+
+   **This option has a known failure shape and needs a second assertion.**
+   Testing the extracted helper tests the helper, not `migrate` — someone could
+   fix the helper and leave `migrate` on its old inline set, and the gate would
+   stay green. That is the plan-2 site-9 trap exactly. Add a source scan proving
+   `migrate` actually calls `buildValidHandles`.
 
 Either way the new case must **fail before Step 2** and be seen to.
 
