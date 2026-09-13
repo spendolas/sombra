@@ -60,22 +60,53 @@ export function expandMultiPassNodes(
   lastOf: Map<string, string>
 } {
   // Which nodes actually need expansion?
-  const plans = new Map<string, { count: number; from: string; to: string }>()
+  const plans = new Map<
+    string,
+    {
+      count: number
+      from: string
+      to: string
+      routeEdge?: (targetHandle: string, passIndex: number, params: Record<string, unknown>) => boolean
+    }
+  >()
   for (const node of nodes) {
     const def = nodeRegistry.get(node.data.type)
     const mp = def?.multiPass
     if (!mp) continue
     // A node with nothing wired into its chained input has no upstream texture to
     // filter, so extra passes would only re-read a blank target.
-    const hasSource = edges.some((e) => e.target === node.id && e.targetHandle === mp.to)
-    if (!hasSource) continue
+    // A node that FILTERS an upstream texture has nothing to do without one, so
+    // the default stands. A node that GENERATES its chain wires `to` during
+    // expansion, so requiring it wired first would never let it start.
+    if (mp.requiresWiredSource !== false) {
+      const hasSource = edges.some((e) => e.target === node.id && e.targetHandle === mp.to)
+      if (!hasSource) continue
+    }
     const count = Math.max(1, Math.floor(mp.count(node.data.params || {})))
-    if (count > 1) plans.set(node.id, { count, from: mp.from, to: mp.to })
+    // A plan is needed whenever there is more than one sub-pass to expand into
+    // OR routing has something to filter — a node whose `count` counts VISIBLE
+    // sub-passes (e.g. layers, with some hidden) can land on count === 1 while
+    // several textures are still wired to it. Without a plan neither filter
+    // below applies, and every wired input binds straight into the single pass
+    // — the exact sampler pile-up per-sub-pass routing exists to prevent.
+    // Expansion itself (the k > 0 duplication loop) stays gated on count > 1;
+    // a count === 1 plan just runs one sub-pass keeping the authored id.
+    if (count > 1 || mp.routeEdge) plans.set(node.id, { count, from: mp.from, to: mp.to, routeEdge: mp.routeEdge })
   }
   if (plans.size === 0) return { nodes, edges, lastOf: new Map() }
 
   const outNodes: Node<NodeData>[] = []
-  const outEdges: Edge<EdgeData>[] = [...edges]
+  // Sub-pass 0 keeps the authored node id, so an original edge targeting it is
+  // never touched by the k > 0 duplication loop below — it must be filtered
+  // here instead, or a routeEdge that withholds layer_1/layer_2 from sub-pass 0
+  // has no effect, because those edges already point at the authored id.
+  const outEdges: Edge<EdgeData>[] = edges.filter((e) => {
+    const plan = plans.get(e.target)
+    if (!plan || !plan.routeEdge) return true
+    if (e.targetHandle === plan.to) return true // that is the chain input
+    if (!e.targetHandle) return true
+    return plan.routeEdge(e.targetHandle, 0, nodes.find((n) => n.id === e.target)?.data.params || {})
+  })
   /** authored id → id of its final sub-pass (what downstream should read) */
   const lastOf = new Map<string, string>()
 
@@ -111,6 +142,11 @@ export function expandMultiPassNodes(
         for (const e of edges) {
           if (e.target !== node.id) continue
           if (e.targetHandle === plan.to) continue // that is the chain input
+          // Without a routing function every edge reaches every sub-pass, which
+          // is what a blur's connectable radius needs. With one, an input that
+          // belongs to a single step stays there instead of binding into all.
+          if (plan.routeEdge && e.targetHandle
+              && !plan.routeEdge(e.targetHandle, k, node.data.params || {})) continue
           outEdges.push({ ...e, id: `${e.id}${SUFFIX}${k}`, target: id } as Edge<EdgeData>)
         }
       }
