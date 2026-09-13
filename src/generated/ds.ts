@@ -220,8 +220,9 @@ export const ds = {
     segmentActive: "flex flex-row items-center justify-center bg-indigo rounded-sm text-param text-fg cursor-pointer transition-colors h-select-h hover:bg-indigo-hover flex-1",
   },
   amdWarning: {
-    pill: "flex flex-row items-center bg-surface-alt/60 rounded-md p-md gap-md backdrop-blur-[16px]",
+    pill: "flex flex-row items-center bg-surface-alt/60 rounded-md p-md backdrop-blur-[16px]",
     tint: "bg-warning/10 absolute inset-0 pointer-events-none rounded-[inherit]",
+    icon: "text-warning",
     label: "text-param text-warning",
   },
 } as const;
