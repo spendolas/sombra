@@ -159,7 +159,10 @@ function convergingGraph(branches: number) {
   const edges: Edge[] = []
   const tips: string[] = []
   for (let i = 0; i < branches; i++) {
-    nodes.push(n(`src${i}`, 'noise', { seed: i + 1 }))
+    // gradient, NOT noise: noise's only output is `value` (float), so a
+    // `color` edge from it is rejected before the bug can be reached
+    // (noise.ts:25, gradient.ts:43).
+    nodes.push(n(`src${i}`, 'gradient', { angle: i * 15 }))
     nodes.push(n(`fx${i}`, 'pixelate'))
     edges.push(e(`ea${i}`, `src${i}`, 'color', `fx${i}`, 'source'))
     tips.push(`fx${i}`)
@@ -168,12 +171,13 @@ function convergingGraph(branches: number) {
   for (let i = 1; i < tips.length; i++) {
     const mixId = `mix${i}`
     nodes.push(n(mixId, 'mix'))
-    edges.push(e(`em${i}a`, acc, 'color', mixId, 'a'))
+    // mix's output is `result`, not `color` (mix.ts:31). Its inputs are a/b.
+    edges.push(e(`em${i}a`, acc, i === 1 ? 'color' : 'result', mixId, 'a'))
     edges.push(e(`em${i}b`, tips[i], 'color', mixId, 'b'))
     acc = mixId
   }
   nodes.push(n('out', 'fragment_output'))
-  edges.push(e('eout', acc, 'color', 'out', 'color'))
+  edges.push(e('eout', acc, branches > 1 ? 'result' : 'color', 'out', 'color'))
   return { nodes, edges }
 }
 
@@ -181,8 +185,9 @@ const shaderChars = (plan: { passes: Array<{ fragmentShader: string }> }) =>
   plan.passes.reduce((sum, p) => sum + p.fragmentShader.length, 0)
 
 test('GLSL: total shader size grows sub-quadratically with converging branches', () => {
-  const two = compileGraph(...Object.values(convergingGraph(2)) as [Node[], Edge[]])
-  const six = compileGraph(...Object.values(convergingGraph(6)) as [Node[], Edge[]])
+  const g2 = convergingGraph(2), g6 = convergingGraph(6)
+  const two = compileGraph(g2.nodes, g2.edges)
+  const six = compileGraph(g6.nodes, g6.edges)
   assert(two.success && six.success, 'compile failed')
   const ratio = shaderChars(six) / shaderChars(two)
   // 3x the branches. Linear-ish growth lands near 3-5x; quadratic re-emission
@@ -205,9 +210,11 @@ test('GLSL: a relay contains fewer lines than the primary pass', () => {
 })
 
 test('WGSL: same, on the IR path', () => {
-  const two = compileGraphIR(...Object.values(convergingGraph(2)) as [Node[], Edge[]])
-  const six = compileGraphIR(...Object.values(convergingGraph(6)) as [Node[], Edge[]])
-  assert(two !== null && six !== null && two.success && six.success, 'IR compile failed')
+  const g2 = convergingGraph(2), g6 = convergingGraph(6)
+  const two = compileGraphIR(g2.nodes, g2.edges)
+  const six = compileGraphIR(g6.nodes, g6.edges)
+  // No `success` field on this path — null is the only failure signal.
+  assert(two !== null && six !== null, 'IR compile returned null')
   const ratio = shaderChars(six!) / shaderChars(two!)
   assert(ratio < 6,
     `WGSL shader size grew ${ratio.toFixed(1)}x for 3x the branches`)
@@ -224,7 +231,7 @@ test('every pass still declares its own fragColor exactly once', () => {
   }
 })
 
-run()
+run('relay-pruning')
 ```
 
 - [ ] **Step 2: Register and run it**
