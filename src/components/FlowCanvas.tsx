@@ -7,8 +7,7 @@ import { ReactFlow, MiniMap, useNodesInitialized, useReactFlow } from '@xyflow/r
 import type { Node, Edge, NodeTypes, OnNodesChange, OnEdgesChange, OnReconnect, Connection, IsValidConnection } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
-import { areTypesCompatible } from '../nodes/type-coercion'
-import { wouldCreateCycle } from '../compiler/topological-sort'
+import { isConnectionValid } from '../nodes/connection-validity'
 import { useGraphStore } from '../stores/graphStore'
 import { makeNodeId } from '../utils/node-id'
 import { ZoomSlider } from '@/components/zoom-slider'
@@ -249,40 +248,11 @@ export function FlowCanvas({
     [onEdgesChange]
   )
 
-  // Validate connection based on port types
+  // Validate connection based on port types. The rule itself lives in
+  // connection-validity.ts so it can be tested without rendering a canvas.
   const isValidConnection = useCallback(
-    (connection: Connection) => {
-      if (!connection.source || !connection.target) return false
-      if (!connection.sourceHandle || !connection.targetHandle) return false
-
-      // Find source and target nodes
-      const sourceNode = nodes.find((n) => n.id === connection.source)
-      const targetNode = nodes.find((n) => n.id === connection.target)
-      if (!sourceNode || !targetNode) return false
-
-      // Get node definitions
-      const sourceDef = nodeRegistry.get(sourceNode.data.type)
-      const targetDef = nodeRegistry.get(targetNode.data.type)
-      if (!sourceDef || !targetDef) return false
-
-      // Find the specific ports being connected
-      const sourcePort = sourceDef.outputs.find((p) => p.id === connection.sourceHandle)
-      // Check dynamic inputs (if available), then static inputs, then connectable params
-      const targetInputs = targetDef.dynamicInputs
-        ? targetDef.dynamicInputs(targetNode.data.params || {})
-        : targetDef.inputs
-      const targetPort = targetInputs.find((p) => p.id === connection.targetHandle)
-        ?? targetDef.params?.find((p) => p.connectable && p.id === connection.targetHandle)
-      if (!sourcePort || !targetPort) return false
-
-      // Check if types are compatible (with coercion)
-      if (!areTypesCompatible(sourcePort.type, targetPort.type as import('../nodes/types').PortType)) return false
-
-      // Refuse a wire that would close a loop. Compilation already reports
-      // "Graph contains cycles", but only after the fact, and topologicalSort
-      // itself has no cycle detection — it returns a mis-ordered list.
-      return !wouldCreateCycle(edges, { source: connection.source, target: connection.target })
-    },
+    (connection: Connection) =>
+      isConnectionValid(connection, nodes, edges, (type) => nodeRegistry.get(type)),
     [nodes, edges]
   )
 
