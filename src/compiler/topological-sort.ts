@@ -163,7 +163,7 @@ export function hasCycles(
  * other, which is why this looks only at `source`/`target` and ignores handles.
  */
 export function wouldCreateCycle(
-  edges: Edge<EdgeData>[],
+  edges: ReadonlyArray<{ source: string; target: string }>,
   candidate: { source: string; target: string },
 ): boolean {
   if (candidate.source === candidate.target) return true
