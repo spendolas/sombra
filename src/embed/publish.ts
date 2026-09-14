@@ -1,7 +1,7 @@
 import type { Node, Edge } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { compileGraph } from '../compiler/glsl-generator'
-import { compileGraphIR } from '../compiler/ir-compiler'
+import { compileGraphIR, toPlanWgsl } from '../compiler/ir-compiler'
 import { topologicalSort } from '../compiler/topological-sort'
 import { anchorToVec2 } from '../nodes/output/fragment-output'
 import { buildManifest } from './manifest'
@@ -45,7 +45,7 @@ export function publishScene(
   if (!plan.success) throw new Error('Shader compilation failed: ' + plan.errors.map((e) => e.message).join('; '))
   if (typeof navigator !== 'undefined' && navigator.gpu) {
     const wgsl = compileGraphIR(nodes, edges)
-    if (wgsl) plan.wgsl = { passes: wgsl.passes }
+    if (wgsl) plan.wgsl = toPlanWgsl(wgsl)
   }
   // NB: shader-source minification (strip comments/whitespace) was measured and
   // REJECTED here — it shrinks raw text ~6% but the artifact is deflated, and

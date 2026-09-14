@@ -16,7 +16,7 @@
  */
 
 import { compileGraph } from '../compiler/glsl-generator'
-import { compileGraphIR } from '../compiler/ir-compiler'
+import { compileGraphIR, toPlanWgsl } from '../compiler/ir-compiler'
 import { useGraphStore } from '../stores/graphStore'
 import { createExportRenderTarget, type ExportRenderTarget } from './export-renderer'
 import { decodeGraphImages } from './export-images'
@@ -75,7 +75,7 @@ export async function runExport(
   if (!ir) {
     throw new Error('[export] IR compile returned null')
   }
-  plan.wgsl = { passes: ir.passes }
+  plan.wgsl = toPlanWgsl(ir)
 
   // ---------------------------------------------------------------------
   // Acquire a dedicated GPUDevice for this export. v1 is WebGPU-only.

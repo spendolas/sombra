@@ -26,7 +26,7 @@ import { createShaderRenderer } from '../renderer/create-renderer'
 import type { ShaderRenderer, QualityTier } from '../renderer/types'
 import type { RenderPlan, RenderPass } from '../compiler/glsl-generator'
 import { compileGraph } from '../compiler'
-import { compileGraphIR } from '../compiler/ir-compiler'
+import { compileGraphIR, toPlanWgsl } from '../compiler/ir-compiler'
 import { compileNodePreview } from '../compiler/subgraph-compiler'
 import { compileNodePreviewIR } from '../compiler/ir-subgraph-compiler'
 import { useGraphStore } from '../stores/graphStore'
@@ -306,7 +306,7 @@ export class PerfSession {
     }
     if (wantWgsl) {
       const ir = compileGraphIR(nodes, edges)
-      if (ir) plan.wgsl = { passes: ir.passes }
+      if (ir) plan.wgsl = toPlanWgsl(ir)
     }
     return plan
   }
@@ -367,7 +367,7 @@ export class PerfSession {
     if (wantWgsl) {
       const ir = compileNodePreviewIR(nodes, edges, targetNodeId)
       if (ir.success && ir.wgslPasses.length) {
-        plan.wgsl = { passes: ir.wgslPasses }
+        plan.wgsl = toPlanWgsl({ passes: ir.wgslPasses })
       }
     }
     return plan

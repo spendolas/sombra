@@ -117,7 +117,7 @@ async function installHarness(page: Page, base: string): Promise<void> {
   await page.evaluate(async (b) => {
     const { initializeNodeLibrary } = await import(/* @vite-ignore */ `${b}src/nodes/index.ts`)
     const { compileGraph } = await import(/* @vite-ignore */ `${b}src/compiler/glsl-generator.ts`)
-    const { compileGraphIR } = await import(/* @vite-ignore */ `${b}src/compiler/ir-compiler.ts`)
+    const { compileGraphIR, toPlanWgsl } = await import(/* @vite-ignore */ `${b}src/compiler/ir-compiler.ts`)
     const { WebGL2ShaderRenderer } = await import(/* @vite-ignore */ `${b}src/webgl/renderer.ts`)
     const { WebGPUShaderRenderer } = await import(/* @vite-ignore */ `${b}src/webgpu/renderer.ts`)
     const { nodeRegistry } = await import(/* @vite-ignore */ `${b}src/nodes/registry.ts`)
@@ -150,7 +150,7 @@ async function installHarness(page: Page, base: string): Promise<void> {
       if (!plan.success) throw new Error(`compile failed: ${plan.errors.map((e: { message: string }) => e.message).join('; ')}`)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ir = compileGraphIR(nodes as any, edges as any)
-      if (ir) plan.wgsl = { passes: ir.passes }
+      if (ir) plan.wgsl = toPlanWgsl(ir)
       return plan
     }
 
@@ -257,7 +257,7 @@ async function installHarness(page: Page, base: string): Promise<void> {
       // The WGSL half, so the SAME graph can be handed to the WebGPU renderer.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const ir = compileGraphIR(nodes as any, edges as any)
-      if (ir) plan.wgsl = { passes: ir.passes }
+      if (ir) plan.wgsl = toPlanWgsl(ir)
       return plan
     }
 

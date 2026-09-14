@@ -98,7 +98,7 @@ async function main() {
       if (!plan.success) throw new Error(`GLSL compile failed: ${JSON.stringify(plan.errors)}`)
       const ir = compileGraphIR(graph.nodes, graph.edges)
       if (!ir) throw new Error('IR compile returned null')
-      plan.wgsl = { passes: ir.passes }
+      plan.wgsl = irMod.toPlanWgsl(ir)
       out.passCount = ir.passes.length
 
       const mkCanvas = () => {

@@ -142,7 +142,7 @@ async function installHarness(page: Page, base: string): Promise<{ webgpu: boole
       // (src/embed/publish.ts) — do the same so the WebGPU renderer has its passes.
       const ir = compileGraphIR(nodes as any, edges as any)
       if (!ir) throw new Error('IR compile returned null')
-      plan.wgsl = { passes: ir.passes }
+      plan.wgsl = irMod.toPlanWgsl(ir)
       return plan
     }
 

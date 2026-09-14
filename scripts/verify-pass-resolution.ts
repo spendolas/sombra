@@ -12,7 +12,7 @@
 import { initializeNodeLibrary } from '../src/nodes'
 import { nodeRegistry } from '../src/nodes/registry'
 import { compileGraph } from '../src/compiler/glsl-generator'
-import { compileGraphIR } from '../src/compiler/ir-compiler'
+import { compileGraphIR, toPlanWgsl } from '../src/compiler/ir-compiler'
 import { declare, variable, binary, textureSample } from '../src/compiler/ir/types'
 import { test, run, assert } from './blur-bakeoff/lib/test-util'
 import type { Node, Edge } from '@xyflow/react'
@@ -115,11 +115,10 @@ test('WGSL plan carries the same resolutions', () => {
   const plan = compileGraph(nodes, edges)
   // compileGraph() alone never populates plan.wgsl — every real caller
   // (compiler.worker.ts, viewer.ts, embed/publish.ts) merges compileGraphIR()
-  // into it manually, e.g. src/embed/publish.ts:48
-  // `if (wgsl) plan.wgsl = { passes: wgsl.passes }`. Mirror that here rather
-  // than assuming compileGraph does it.
+  // into it through `toPlanWgsl()`. Mirror that here, with the same helper,
+  // rather than assuming compileGraph does it or hand-rolling the shape.
   const wgslResult = compileGraphIR(nodes, edges)
-  if (wgslResult) plan.wgsl = { passes: wgslResult.passes }
+  if (wgslResult) plan.wgsl = toPlanWgsl(wgslResult)
   assert(!!plan.wgsl, 'no wgsl half in the plan')
   const glsl = plan.passes.map((p) => p.resolution ?? 1)
   const wgsl = plan.wgsl!.passes.map((p) => p.resolution ?? 1)

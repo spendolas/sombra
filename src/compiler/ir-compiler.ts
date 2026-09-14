@@ -824,3 +824,33 @@ function compileMultiPassIR(
 
   return { passes, slotCount }
 }
+
+/**
+ * The `plan.wgsl` half of a RenderPlan, built from an IR compile result.
+ *
+ * Every caller that wants WebGPU has to graft the IR output onto the GLSL
+ * `RenderPlan` by hand — `compileGraph()` never populates `plan.wgsl`. Written
+ * out inline, that is `{ passes: ir.passes }`, which silently drops
+ * `slotCount`: the WebGPU renderer then allocates one texture per pass and
+ * counts passes against its cap, while rendering stays correct because each
+ * pass's own `targetSlot` rides inside the pass object. An optimisation that is
+ * simply OFF everywhere, with nothing red. That drop happened at three separate
+ * boundaries on one branch, so the shape is built in one place now.
+ *
+ * `slotCount` falls back to the highest `targetSlot` in the set plus one. Slots
+ * are numbered from 0 with no gaps, so that equals the real count; it lets a
+ * caller holding passes from the SUBGRAPH compiler (which assigns per-pass
+ * slots but reports no total) pass a true count rather than nothing. Undefined
+ * when no pass carries a slot at all, which leaves the renderer's own
+ * one-per-pass fallback in charge rather than claiming zero.
+ */
+export function toPlanWgsl(
+  ir: { passes: WGSLPassOutput[]; slotCount?: number },
+): { passes: WGSLPassOutput[]; slotCount?: number } {
+  if (ir.slotCount !== undefined) return { passes: ir.passes, slotCount: ir.slotCount }
+  let maxSlot = -1
+  for (const p of ir.passes) {
+    if (p.targetSlot !== undefined && p.targetSlot > maxSlot) maxSlot = p.targetSlot
+  }
+  return maxSlot < 0 ? { passes: ir.passes } : { passes: ir.passes, slotCount: maxSlot + 1 }
+}

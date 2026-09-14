@@ -27,7 +27,7 @@ import { useEffect } from 'react'
 import type { RefObject } from 'react'
 import { useGraphStore } from '@/stores/graphStore'
 import { compileGraph } from '@/compiler/glsl-generator'
-import { compileGraphIR } from '@/compiler/ir-compiler'
+import { compileGraphIR, toPlanWgsl } from '@/compiler/ir-compiler'
 import { createExportRenderTarget, type ExportRenderTarget } from './export-renderer'
 import { decodeGraphImages } from './export-images'
 import type { FramingChoice } from './framing'
@@ -125,7 +125,7 @@ export function useExportPreview(
       if (!plan.success) return
       const ir = compileGraphIR(nodes, edges)
       if (!ir) return
-      plan.wgsl = { passes: ir.passes }
+      plan.wgsl = toPlanWgsl(ir)
 
       const adapter = await navigator.gpu.requestAdapter()
       if (!adapter || disposed) return

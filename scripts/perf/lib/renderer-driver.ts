@@ -20,7 +20,7 @@
  * The plan is compiled IN-PAGE from nodes+edges: the compiler's WGSL uniform
  * layout is a Map, which does not survive page.evaluate serialization, and the
  * renderer needs the real plan object anyway. This mirrors compiler.worker.ts:
- * compileGraph(nodes,edges) then attach plan.wgsl = compileGraphIR(...).passes.
+ * compileGraph(nodes,edges) then attach plan.wgsl = toPlanWgsl(compileGraphIR(...)).
  *
  * Boot scaffold copied from scripts/verify-pass-resolution-gpu.ts:886.
  */
@@ -134,7 +134,7 @@ async function installHarness(page: Page, base: string): Promise<void> {
       const plan = glslMod.compileGraph(nodes, edges)
       if (!plan.success) throw new Error('GLSL compile failed: ' + plan.errors.map((e: any) => e.message).join('; '))
       const ir = irMod.compileGraphIR(nodes, edges)
-      if (ir) plan.wgsl = { passes: ir.passes }
+      if (ir) plan.wgsl = irMod.toPlanWgsl(ir)
       return plan
     }
 
