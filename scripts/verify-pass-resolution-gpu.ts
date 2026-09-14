@@ -512,7 +512,7 @@ async function installHarness(page: Page, cfg: {
       // half in by hand (src/embed/publish.ts:48), so do the same here.
       const ir = compileGraphIR(nodes, edges)
       if (!ir) throw new Error('IR compile returned null')
-      plan.wgsl = { passes: ir.passes }
+      plan.wgsl = irMod.toPlanWgsl(ir)
       return plan
     }
 

@@ -1,6 +1,6 @@
 import { initializeNodeLibrary } from './nodes'
 import { compileGraph } from './compiler/glsl-generator'
-import { compileGraphIR } from './compiler/ir-compiler'
+import { compileGraphIR, toPlanWgsl } from './compiler/ir-compiler'
 import { buildManifest } from './embed/manifest'
 import { stripPlan, encodeArtifact, type SceneArtifact } from './embed/artifact'
 import { mount } from './embed/player'
@@ -11,7 +11,7 @@ const { nodes, edges } = createDefaultGraph()
 const plan = compileGraph(nodes, edges)
 if (typeof navigator !== 'undefined' && navigator.gpu) {
   const wgsl = compileGraphIR(nodes, edges)
-  if (wgsl) plan.wgsl = { passes: wgsl.passes }
+  if (wgsl) plan.wgsl = toPlanWgsl(wgsl)
 }
 const artifact: SceneArtifact = {
   v: 1, kind: 'frozen', plan: stripPlan(plan),

@@ -14,7 +14,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Node, Edge } from '@xyflow/react'
 import { compileGraph } from '@/compiler/glsl-generator'
-import { compileGraphIR } from '@/compiler/ir-compiler'
+import { compileGraphIR, toPlanWgsl } from '@/compiler/ir-compiler'
 import { createShaderRenderer } from '@/renderer/create-renderer'
 import { anchorToVec2 } from '@/nodes/output/fragment-output'
 import { FloatSlider, SegmentedControl } from '@/components/NodeParameters'
@@ -74,7 +74,7 @@ function compile(p: Params) {
   const result = compileGraph(nodes, edges)
   if (result.success && typeof navigator !== 'undefined' && navigator.gpu) {
     const wgsl = compileGraphIR(nodes, edges)
-    if (wgsl) result.wgsl = { passes: wgsl.passes }
+    if (wgsl) result.wgsl = toPlanWgsl(wgsl)
   }
   return result
 }
