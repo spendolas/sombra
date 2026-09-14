@@ -61,6 +61,14 @@ interface PassState {
    * passes may share a slot; see src/compiler/texture-slots.ts.
    */
   targetSlot?: number
+  /**
+   * True when NO other pass in the plan writes this pass's slot, so the slot's
+   * contents survive untouched across any frame in which this pass is skipped.
+   * Only such a pass may be skipped when clean — see the skip rule in
+   * renderMultiPass(). Computed once per plan in updateRenderPlan(), since it
+   * depends only on slot assignment.
+   */
+  soleWriterOfSlot: boolean
 }
 
 interface FBOSlot {
@@ -375,6 +383,52 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
     return slot === undefined ? passIndex : slot
   }
 
+  /**
+   * Mark each pass with whether it is the ONLY pass that writes its slot.
+   * Only those may be skipped when clean.
+   *
+   * The skip is a claim about the NEXT frame: "this pass's output is already
+   * sitting in its slot, so don't redraw it". Under one-texture-per-pass that
+   * was free — `fboPool[i]` could only ever hold pass i. Once a slot has more
+   * than one writer, neither half of the claim survives:
+   *
+   *   - A LATER writer of the same slot overwrites it before the frame ends,
+   *     so the skipped pass's image is already gone by the next frame.
+   *   - An EARLIER writer overwrites it at the top of the next frame, before
+   *     the skipped pass's consumer gets to sample it.
+   *
+   * Liveness only promises no one writes the slot between a pass and its last
+   * reader WITHIN one frame; it says nothing about the gap that spans the frame
+   * boundary, which is exactly the gap a skip opens. Both hazards vanish when a
+   * slot has a single writer, and that is the rule.
+   *
+   * Cost: in a deep linear chain every slot has two writers, so no intermediate
+   * pass is skippable there any more. Branch outputs — whose slots stay alive to
+   * the end and so are never reused — keep the fast path. Correctness outranks
+   * the saving, and the fallback backend is the only one with a skip to lose:
+   * WebGPU renders every pass every frame regardless.
+   *
+   * A pass with slot -1 (nothing reads it) writes no intermediate at all, so
+   * nothing can clobber it and it stays skippable. So does every pass on an
+   * un-migrated plan, where `slotForPass()` falls back to the pass's own index
+   * and no two passes can collide.
+   */
+  private computeSoleWriterOfSlot() {
+    const writers = new Map<number, number>()
+    for (let i = 0; i < this.passStates.length - 1; i++) {
+      const slot = this.slotForPass(i)
+      if (slot < 0) continue
+      writers.set(slot, (writers.get(slot) ?? 0) + 1)
+    }
+    for (let i = 0; i < this.passStates.length - 1; i++) {
+      const slot = this.slotForPass(i)
+      this.passStates[i].soleWriterOfSlot = slot < 0 || writers.get(slot) === 1
+    }
+    // The final pass targets the canvas, not a slot; its own skip rule applies.
+    const last = this.passStates[this.passStates.length - 1]
+    if (last) last.soleWriterOfSlot = true
+  }
+
   /** Number of physical intermediate textures this plan needs. Falls back to
    *  one per intermediate pass when `planSlotCount` is absent. */
   private effectiveSlotCount(): number {
@@ -625,11 +679,14 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
           textureFilter: glFilter,
           resolution: pass.resolution,
           targetSlot: pass.targetSlot,
+          // Provisional — computed for real below, once every pass's slot is known.
+          soleWriterOfSlot: true,
         })
       }
 
       // Clean up old multi-pass state
       this.passStates = newPassStates
+      this.computeSoleWriterOfSlot()
 
       // Build downstream map for dirty propagation [P3]
       this.buildDownstreamMap()
@@ -1004,8 +1061,15 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
       const ps = this.passStates[i]
       const isLast = i === this.passStates.length - 1
 
-      // [P3] Skip clean intermediate passes
-      if (!ps.dirty && !isLast) continue
+      // [P3] Skip clean intermediate passes — but ONLY when this pass is the
+      // sole writer of its slot, so nothing else can have overwritten the
+      // output we are claiming is still there. A slot with several writers ends
+      // the frame holding its LAST writer's output, and starts the next frame
+      // being rewritten by its FIRST — either way a skipped pass's image is not
+      // what its consumer reads. See computeSoleWriterOfSlot().
+      // (gradient → 4× pixelate gives slots [0,1,0,1,-1]: dirtying only pass 1
+      // downward used to leave pass 1 reading pass 3's previous frame.)
+      if (!ps.dirty && !isLast && ps.soleWriterOfSlot) continue
       // Last pass always renders (to screen)
       if (!ps.dirty && isLast && !this.animated) continue
 
@@ -1033,10 +1097,14 @@ export class WebGL2ShaderRenderer implements ShaderRenderer {
       // Bind input textures from earlier passes
       let texUnit = 0
       for (const [samplerName, sourcePassIdx] of Object.entries(ps.inputTextures)) {
-        // Read from the source pass's SLOT, not its own index — a shared
-        // slot may currently hold a different pass's later output, which is
-        // fine: liveness guarantees the source pass's own last reader is us
-        // or earlier, so nothing has overwritten it yet.
+        // Read from the source pass's SLOT, not its own index. Within a frame
+        // this is safe by liveness: the source's slot is not handed to another
+        // pass until after its last reader (us, or someone later) has run.
+        // ACROSS frames it is not — at end of frame a slot holds whichever of
+        // its writers ran LAST, and the next frame starts rewriting it from its
+        // FIRST. So a source that did not render this frame is only trustworthy
+        // when it is the slot's only writer. That is what the skip rule above
+        // guarantees: a pass sharing its slot is never skipped.
         const sourceSlot = this.slotForPass(sourcePassIdx)
         const sourceFbo = this.fboPool[sourceSlot]
         if (!sourceFbo) continue
