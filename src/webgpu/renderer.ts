@@ -1309,7 +1309,12 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
         targetView = this.context.getCurrentTexture().createView()
       } else {
         const slot = this.slotForPass(i)
-        if (slot < 0 || slot >= this.intermediateTextures.length) break
+        // SKIP the pass, do not abandon the frame. A non-final pass may legally
+        // carry slot -1 — the compiler emits that for a pass nothing reads — and
+        // a `break` here would drop the final canvas pass with it, leaving a
+        // black canvas where WebGL2 (which `continue`s at the same point)
+        // composites normally. Neither backend may diverge on the same plan.
+        if (slot < 0 || slot >= this.intermediateTextures.length) continue
         targetView = this.intermediateTextures[slot].createView()
       }
 
