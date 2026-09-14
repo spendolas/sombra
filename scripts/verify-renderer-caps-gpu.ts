@@ -11,13 +11,28 @@
  * success, with nothing reaching the UI. Reachable today without any new node:
  * Pyramid Blur at N=3 is already 7 passes.
  *
+ * The unit the cap is counted in is SLOTS, not passes. `assignTextureSlots`
+ * gives passes whose lifetimes never overlap the same physical texture, so
+ * "how many render targets does this plan need" is no longer "how many passes
+ * does it have". A deep chain of any length needs about two slots — each
+ * pass's output dies at the pass that reads it — so the fixtures below that
+ * must EXCEED the cap are wide fan-outs: N independent branches read by one
+ * final pass, where every branch has to stay alive until the merge and the
+ * slot count really is N. Each fixture's slot count is read back off the
+ * compiled plan, i.e. from the compiler's own `assignTextureSlots` run, so
+ * these gates pin the compiler's answer and not this script's arithmetic.
+ *
  * So the assertions here are on the CONTRACT, not on pixels:
- *   1. OVER CAP        cap+1 intermediates → success:false, and the error names
- *                      both the needed count and the cap.
- *   2. AT CAP          exactly cap intermediates → success:true AND the FBO
+ *   1. OVER CAP        a fan-out genuinely needing cap+1 live render targets →
+ *                      success:false, error naming both the count and the cap.
+ *   2. AT CAP          a fan-out needing exactly cap → success:true AND the FBO
  *                      pool really holds `cap` slots. Without this a guard that
  *                      rejected every multi-pass plan would score green on (1).
  *   3. SINGLE PASS     the one-pass fast path is untouched.
+ *   9. DEEP, NARROW    the converse, and this branch's own new behaviour: a
+ *                      41-pass chain whose slot count is ~2 must be ACCEPTED
+ *                      on both backends, with a slot-sized pool. It used to be
+ *                      rejected, correctly, when every pass owned a texture.
  *   5. OVER UNITS      one pass wanting more texture units than the GPU has
  *                      is rejected. A SECOND, unconnected ceiling: the FBO cap
  *                      bounds how many intermediates exist, never how many
@@ -53,6 +68,12 @@ interface CapProbe {
   cap: number
   /** MAX_TEXTURE_IMAGE_UNITS — the per-pass sampler ceiling. */
   units: number
+  /**
+   * `WebGPUShaderRenderer.MAX_INTERMEDIATE_TEXTURES`, read off the class so
+   * the WebGPU fixture is sized from the renderer's own constant rather than
+   * a number copied into this script that could drift from it.
+   */
+  gpuCap: number
 }
 
 interface UnitResult {
@@ -87,6 +108,13 @@ interface PlanResult {
   error: string
   /** Length of the renderer's FBO pool after the call — the mechanism proof. */
   fbos: number
+  /**
+   * `plan.slotCount` as the COMPILER computed it, by running the real
+   * `assignTextureSlots` over the real plan. Read back rather than
+   * hand-written, so the fixtures pin the compiler's liveness answer instead
+   * of this script's arithmetic about it.
+   */
+  slotCount: number
 }
 
 interface Harness {
@@ -94,6 +122,13 @@ interface Harness {
   /** Compile a chain of `n` pixelate nodes and hand the plan to the renderer. */
   apply(n: number): Promise<PlanResult>
   applyWebGPU(n: number): Promise<PlanResult | null>
+  /**
+   * `k` INDEPENDENT pixelate branches all read by one final pass — the only
+   * shape whose slot count actually grows with its size. Handed to WebGL2.
+   */
+  applyFanout(k: number): Promise<PlanResult>
+  /** The same fan-out, handed to the WebGPU renderer. */
+  fanoutWebGPU(k: number): Promise<PlanResult | null>
   /**
    * `k` pixelate branches plus `m` image nodes, all converging through a mix
    * tree into ONE final pass — so that pass wants k + m texture units.
@@ -163,7 +198,7 @@ async function installHarness(page: Page, base: string): Promise<void> {
     // sampler on the final pass) + `m` image nodes (one image sampler each),
     // folded together by a mix tree. Mix declares no textureInput port, so the
     // whole tree stays in the FINAL pass and every sampler lands on it.
-    const buildConverging = (k: number, m: number) => {
+    const buildConverging = (k: number, m: number, withWgsl = false) => {
       const nodes: unknown[] = []
       const edges: unknown[] = []
       const mk = (id: string, type: string, params: Record<string, unknown> = {}) =>
@@ -193,6 +228,11 @@ async function installHarness(page: Page, base: string): Promise<void> {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const plan = compileGraph(nodes as any, edges as any)
       if (!plan.success) throw new Error(`compile failed: ${plan.errors.map((e: { message: string }) => e.message).join('; ')}`)
+      if (withWgsl) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const ir = compileGraphIR(nodes as any, edges as any)
+        if (ir) plan.wgsl = toPlanWgsl(ir)
+      }
       return plan
     }
 
@@ -275,6 +315,20 @@ async function installHarness(page: Page, base: string): Promise<void> {
     let gpuRenderer: any = null
     let gpuTried = false
 
+    const ensureGpu = async () => {
+      if (!gpuTried) {
+        gpuTried = true
+        try {
+          if (navigator.gpu) {
+            const r = new WebGPUShaderRenderer()
+            await r.init(mkCanvas())
+            gpuRenderer = r
+          }
+        } catch { gpuRenderer = null }
+      }
+      return gpuRenderer !== null
+    }
+
     /**
      * Apply a plan, bind everything it wants, render, and report what the GPU
      * actually did — the unit each sampler was given (read back off the linked
@@ -345,7 +399,12 @@ async function installHarness(page: Page, base: string): Promise<void> {
         // comparing against `undefined`.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const r = glRenderer as any
-        return { cap: r?.maxIntermediateTextures, units: r?.maxTextureUnits }
+        return {
+          cap: r?.maxIntermediateTextures,
+          units: r?.maxTextureUnits,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          gpuCap: (WebGPUShaderRenderer as any).MAX_INTERMEDIATE_TEXTURES,
+        }
       },
       apply: async (n: number) => {
         const r = await gl()
@@ -356,6 +415,19 @@ async function installHarness(page: Page, base: string): Promise<void> {
           success: !!res.success,
           error: res.error ?? '',
           fbos: r.fboPool.length,
+          slotCount: plan.slotCount,
+        }
+      },
+      applyFanout: async (k: number) => {
+        const r = await gl()
+        const plan = buildConverging(k, 0)
+        const res = r.updateRenderPlan(plan)
+        return {
+          passes: plan.passes.length,
+          success: !!res.success,
+          error: res.error ?? '',
+          fbos: r.fboPool.length,
+          slotCount: plan.slotCount,
         }
       },
       applyUnits: async (k: number, m: number) => runPlan(await gl(), buildConverging(k, m)),
@@ -395,20 +467,28 @@ async function installHarness(page: Page, base: string): Promise<void> {
         return { available: true, success, error, uncaptured }
       },
       applyWebGPU: async (n: number) => {
-        if (!gpuTried) {
-          gpuTried = true
-          try {
-            if (navigator.gpu) {
-              const r = new WebGPUShaderRenderer()
-              await r.init(mkCanvas())
-              gpuRenderer = r
-            }
-          } catch { gpuRenderer = null }
-        }
-        if (!gpuRenderer) return null
+        if (!(await ensureGpu())) return null
         const plan = buildPlan(n)
         const res = gpuRenderer.updateRenderPlan(plan)
-        return { passes: plan.passes.length, success: !!res.success, error: res.error ?? '', fbos: 0 }
+        return {
+          passes: plan.passes.length,
+          success: !!res.success,
+          error: res.error ?? '',
+          fbos: 0,
+          slotCount: plan.wgsl?.slotCount,
+        }
+      },
+      fanoutWebGPU: async (k: number) => {
+        if (!(await ensureGpu())) return null
+        const plan = buildConverging(k, 0, true)
+        const res = gpuRenderer.updateRenderPlan(plan)
+        return {
+          passes: plan.passes.length,
+          success: !!res.success,
+          error: res.error ?? '',
+          fbos: 0,
+          slotCount: plan.wgsl?.slotCount,
+        }
       },
     }
   }, base)
@@ -452,28 +532,52 @@ async function main() {
     console.log(`  WebGL2: MAX_TEXTURE_IMAGE_UNITS=${caps.units}, maxIntermediateTextures=${caps.cap}`)
     assert(Number.isInteger(caps.cap) && caps.cap > 0,
       `renderer did not report an intermediate-texture cap (got ${String(caps.cap)}) — field renamed?`)
+    const GPU_CAP = caps.gpuCap
+    assert(Number.isInteger(GPU_CAP) && GPU_CAP > 0,
+      `WebGPUShaderRenderer.MAX_INTERMEDIATE_TEXTURES did not read back (got ${String(GPU_CAP)}) — renamed?`)
+    console.log(`  WebGPU: MAX_INTERMEDIATE_TEXTURES=${GPU_CAP}`)
 
-    const overCap = await page.evaluate((n) => globalThis.__caps.apply(n), caps.cap + 1)
-    const atCap = await page.evaluate((n) => globalThis.__caps.apply(n), caps.cap)
-    const gpuOver = await page.evaluate((n) => globalThis.__caps.applyWebGPU(n), 40)
+    // The over/at-cap fixtures are WIDE, not deep. A chain of any length needs
+    // about two slots — each pass's output dies at the next pass that reads it
+    // — so pass count stopped being a proxy for render-target count once
+    // `assignTextureSlots` landed. N independent branches read by ONE final
+    // pass is the shape whose slot count really is N: every branch must stay
+    // alive until the merge, so none of their slots can be recycled.
+    const overCap = await page.evaluate((k) => globalThis.__caps.applyFanout(k), caps.cap + 1)
+    const atCap = await page.evaluate((k) => globalThis.__caps.applyFanout(k), caps.cap)
+    // Deep but narrow: 41 passes, ~2 slots. Used by gate 9 on both backends.
+    const DEEP_PASSES = 40
+    const deepGl = await page.evaluate((n) => globalThis.__caps.apply(n), DEEP_PASSES)
+    const deepGpu = await page.evaluate((n) => globalThis.__caps.applyWebGPU(n), DEEP_PASSES)
+    const gpuOver = await page.evaluate(
+      (k) => globalThis.__caps.fanoutWebGPU(k), GPU_CAP + 1)
 
     test('1 · over-cap plan is REJECTED, not silently truncated', () => {
-      assert(overCap.passes === caps.cap + 2,
-        `expected ${caps.cap + 2} passes (${caps.cap + 1} intermediates), got ${overCap.passes}`)
+      // Mechanism first: this fixture is only testing the cap if the COMPILER
+      // (not this script) says it genuinely needs cap+1 live render targets.
+      assert(overCap.slotCount === caps.cap + 1,
+        `the fan-out fixture needs ${overCap.slotCount} slots as the compiler assigned them, `
+        + `expected ${caps.cap + 1} — it is not exercising the cap`)
       assert(overCap.success === false,
-        `updateRenderPlan returned success:true for ${caps.cap + 1} intermediates against a cap of ${caps.cap} — `
-        + `the over-cap passes render with an unset sampler uniform (texture unit 0)`)
+        `updateRenderPlan returned success:true for ${overCap.slotCount} live render targets against `
+        + `a cap of ${caps.cap} — the over-cap passes render with an unset sampler uniform (texture unit 0)`)
       assert(overCap.error.includes(String(caps.cap + 1)) && overCap.error.includes(String(caps.cap)),
         `error must name both the needed count (${caps.cap + 1}) and the cap (${caps.cap}); got: "${overCap.error}"`)
-      console.log(`  over-cap error: ${overCap.error}`)
+      console.log(`  over-cap: ${overCap.passes} passes / ${overCap.slotCount} slots — ${overCap.error}`)
     })
 
     test('2 · at-cap plan still succeeds AND allocates the full pool', () => {
+      assert(atCap.slotCount === caps.cap,
+        `the fan-out fixture needs ${atCap.slotCount} slots as the compiler assigned them, `
+        + `expected exactly ${caps.cap} — it is not sitting ON the cap`)
       assert(atCap.success === true, `at-cap plan was rejected: ${atCap.error}`)
       // The mechanism proof: the guard let this through and the FBOs exist, so
-      // gate 1 is a boundary, not a blanket refusal of multi-pass.
+      // gate 1 is a boundary, not a blanket refusal of multi-pass. The pool is
+      // sized by SLOT now, so the expected count is the slot count — which for
+      // this shape happens to equal the cap, and does NOT equal the pass count.
       assert(atCap.fbos === caps.cap,
         `expected ${caps.cap} FBO slots allocated, got ${atCap.fbos}`)
+      console.log(`  at-cap: ${atCap.passes} passes / ${atCap.slotCount} slots / ${atCap.fbos} FBOs`)
     })
 
     test('3 · single-pass fast path is unaffected', () => {
@@ -598,9 +702,44 @@ async function main() {
 
     test('4 · WebGPU rejects its own over-cap plan (backends agree)', () => {
       if (!gpuOver) { console.log('  (WebGPU unavailable — skipped)'); return }
+      assert(gpuOver.slotCount === GPU_CAP + 1,
+        `the WebGPU fan-out fixture needs ${gpuOver.slotCount} slots as the compiler assigned them, `
+        + `expected ${GPU_CAP + 1} — it is not exercising MAX_INTERMEDIATE_TEXTURES`)
       assert(gpuOver.success === false,
-        `WebGPU accepted a ${gpuOver.passes}-pass plan past MAX_INTERMEDIATE_TEXTURES`)
-      console.log(`  webgpu over-cap error: ${gpuOver.error}`)
+        `WebGPU accepted a plan needing ${gpuOver.slotCount} live render targets past `
+        + `MAX_INTERMEDIATE_TEXTURES=${GPU_CAP}`)
+      assert(gpuOver.error.includes(String(GPU_CAP + 1)) && gpuOver.error.includes(String(GPU_CAP)),
+        `error must name both the needed count (${GPU_CAP + 1}) and the cap (${GPU_CAP}); got: "${gpuOver.error}"`)
+      console.log(`  webgpu over-cap: ${gpuOver.passes} passes / ${gpuOver.slotCount} slots — ${gpuOver.error}`)
+    })
+
+    test('9 · a deep-but-narrow plan far past the cap is ACCEPTED (slots, not passes)', () => {
+      // This case USED to be rejected, and rejecting it was correct then: every
+      // pass owned its own full-canvas texture, so 41 passes meant 40 textures
+      // against a cap of 8. `assignTextureSlots` severed that: a linear chain's
+      // pass dies at the single pass that reads it, so the whole chain recycles
+      // through ~2 textures however long it gets. Rejecting it now would refuse
+      // a plan the backend can comfortably allocate. Nothing else in this gate
+      // asserts that, which would let a revert to pass-count comparison land
+      // green — so it is asserted here, on both backends.
+      assert(deepGl.passes === DEEP_PASSES + 1,
+        `expected ${DEEP_PASSES + 1} passes, got ${deepGl.passes}`)
+      assert(deepGl.slotCount !== undefined && deepGl.slotCount <= caps.cap,
+        `this fixture is only interesting if its slot count sits UNDER the cap; `
+        + `compiler assigned ${deepGl.slotCount} against ${caps.cap}`)
+      assert(deepGl.passes - 1 > caps.cap,
+        `and only if its intermediate-PASS count is over the cap (${deepGl.passes - 1} vs ${caps.cap})`)
+      assert(deepGl.success === true,
+        `WebGL2 rejected a ${deepGl.passes}-pass plan needing only ${deepGl.slotCount} render targets: ${deepGl.error}`)
+      // Mechanism: the pool really is slot-sized, not pass-sized or cap-sized.
+      assert(deepGl.fbos === deepGl.slotCount,
+        `expected the FBO pool to hold ${deepGl.slotCount} slots, got ${deepGl.fbos}`)
+      if (!deepGpu) { console.log('  (WebGPU unavailable — WebGL2 half only)'); return }
+      assert(deepGpu.slotCount !== undefined && deepGpu.slotCount <= GPU_CAP,
+        `WebGPU fixture slot count ${deepGpu.slotCount} is not under ${GPU_CAP}`)
+      assert(deepGpu.success === true,
+        `WebGPU rejected a ${deepGpu.passes}-pass plan needing only ${deepGpu.slotCount} render targets: ${deepGpu.error}`)
+      console.log(`  deep chain: ${deepGl.passes} passes / ${deepGl.slotCount} slots / ${deepGl.fbos} FBOs — accepted on both backends`)
     })
   } catch (err) {
     test('harness setup', () => {
