@@ -27,11 +27,13 @@
  *                 so hovering a handle over one must not walk the loop
  *                 forever. Checked out-of-process with a time limit, because
  *                 a hang inside the runner is a hung CI job, not a failure.
- *   - REACH       a source scan proving `isValidConnection` in FlowCanvas.tsx
- *                 calls it and depends on `edges`. A helper that passes its
- *                 own tests while nothing wires it into the canvas is the
- *                 failure mode this half exists for — FlowCanvas.tsx cannot
- *                 be imported in Node, so the scan stands in for it.
+ *   - REACH       a source scan proving the canvas still reaches this check:
+ *                 FlowCanvas delegates to `isConnectionValid` and depends on
+ *                 `edges`, and that predicate calls `wouldCreateCycle`. A
+ *                 helper that passes its own tests while nothing wires it into
+ *                 the canvas is the failure mode this half exists for —
+ *                 FlowCanvas.tsx cannot be imported in Node, so the scan
+ *                 stands in for it.
  *
  * Run: npx tsx scripts/verify-connection-cycles.ts
  */
@@ -210,17 +212,25 @@ test('13 · the walk terminates on a graph that is ALREADY cyclic', () => {
     `the probe did not complete: ${r.stderr.split('\n').slice(0, 3).join(' ')}`)
 })
 
-test('14 · isValidConnection in FlowCanvas.tsx actually calls it', () => {
-  const src = readFileSync(resolve(ROOT, 'src/components/FlowCanvas.tsx'), 'utf8')
-  const start = src.indexOf('const isValidConnection')
+test('14 · the canvas reaches the cycle check, through the predicate it delegates to', () => {
+  // Two links in one chain, asserted separately so a break names its own end.
+  // The rule moved out of FlowCanvas into connection-validity.ts; the scan
+  // followed it rather than being deleted, because what it guards is unchanged:
+  // a helper that passes its own tests while nothing wires it to the canvas.
+  const canvas = readFileSync(resolve(ROOT, 'src/components/FlowCanvas.tsx'), 'utf8')
+  const start = canvas.indexOf('const isValidConnection')
   assert(start >= 0, 'isValidConnection not found in FlowCanvas.tsx — renamed?')
   // Up to the end of that useCallback, i.e. its dependency array.
-  const end = src.indexOf('  )', src.indexOf('    },', start))
-  const body = src.slice(start, end)
-  assert(/wouldCreateCycle\s*\(/.test(body),
-    'isValidConnection does not call wouldCreateCycle — a cycle can still be drawn')
+  const end = canvas.indexOf('  )', start)
+  const body = canvas.slice(start, end)
+  assert(/isConnectionValid\s*\(/.test(body),
+    'isValidConnection does not call isConnectionValid — the canvas validates nothing')
   assert(/\[[^\]]*\bedges\b[^\]]*\]/.test(body),
     'isValidConnection must depend on `edges`, or it validates against a stale graph')
+
+  const predicate = readFileSync(resolve(ROOT, 'src/nodes/connection-validity.ts'), 'utf8')
+  assert(/wouldCreateCycle\s*\(/.test(predicate),
+    'connection-validity.ts does not call wouldCreateCycle — a cycle can still be drawn')
 })
 
 await run('connection-cycles')
