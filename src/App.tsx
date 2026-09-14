@@ -51,6 +51,9 @@ function applyCompileResult(
     qualityTier?: string
     passes?: RenderPass[]
     wgsl?: RenderPlan['wgsl']
+    /** Mirrors RenderPlan.slotCount (glsl-generator.ts) — the WebGL2 renderer
+     *  caps on this, not on pass count. */
+    slotCount?: number
   },
 ) {
   const plan: RenderPlan = {
@@ -70,6 +73,7 @@ function applyCompileResult(
     fragmentShader: result.fragmentShader,
     userUniforms: (result.userUniforms ?? []) as RenderPlan['userUniforms'],
     wgsl: result.wgsl,
+    slotCount: result.slotCount,
   }
 
   const updateResult = r.updateRenderPlan(plan)
@@ -504,6 +508,7 @@ function App() {
       qualityTier?: string
       passes?: RenderPass[]
       wgsl?: RenderPlan['wgsl']
+      slotCount?: number
     }) => {
       if (result.success) {
         // Store shaders for debug/export (GLSL always, WGSL when IR succeeds)

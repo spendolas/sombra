@@ -6,7 +6,7 @@
 
 import { initializeNodeLibrary } from './nodes'
 import { compileGraph } from './compiler/glsl-generator'
-import { compileGraphIR } from './compiler/ir-compiler'
+import { compileGraphIR, toPlanWgsl } from './compiler/ir-compiler'
 import { decodeGraphFromHash, decodeCompactHash } from './utils/sombra-file'
 import { createShaderRenderer } from './renderer/create-renderer'
 import { anchorToVec2 } from './nodes/output/fragment-output'
@@ -88,7 +88,7 @@ async function main() {
   if (typeof navigator !== 'undefined' && navigator.gpu) {
     const wgslResult = compileGraphIR(nodes, edges)
     if (wgslResult) {
-      result.wgsl = { passes: wgslResult.passes }
+      result.wgsl = toPlanWgsl(wgslResult)
     }
   }
 

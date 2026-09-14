@@ -18,6 +18,7 @@ import { resolvePassResolution } from './pass-resolution'
 import { emitSRT } from './ir/srt'
 import type { IRSpatialTransform } from './ir/types'
 import { nodesFeeding } from './reachability'
+import { assignTextureSlots, type PassLiveness } from './texture-slots'
 
 export function uniformName(sanitizedNodeId: string, paramId: string): string {
   return `u_${sanitizedNodeId}_${paramId}`
@@ -70,6 +71,12 @@ export interface RenderPass {
    * that is what keeps `auto_uv` and anchor pinning invariant.
    */
   resolution?: number
+  /**
+   * Physical intermediate this pass renders into, or -1 for the final pass,
+   * which targets the canvas. Renderers must index buffers by THIS, not by
+   * pass index — see src/compiler/texture-slots.ts.
+   */
+  targetSlot?: number
 }
 
 /**
@@ -82,6 +89,8 @@ export interface RenderPlan {
   errors: Array<{ message: string; nodeId?: string }>
   isTimeLiveAtOutput: boolean
   qualityTier: string
+  /** Count of physical intermediate textures needed — see RenderPass.targetSlot. */
+  slotCount?: number
   // Backward compat — final pass's shaders:
   vertexShader: string
   fragmentShader: string
@@ -90,6 +99,10 @@ export interface RenderPlan {
   /** Set when the IR/WGSL path was requested but failed while GLSL succeeded. */
   wgslError?: string
   wgsl?: {
+    /** Mirrors RenderPlan.slotCount above, computed from the WGSL pass set
+     *  (which can differ in structure from the GLSL passes above) — see
+     *  RenderPass.targetSlot. */
+    slotCount?: number
     passes: Array<{
       shaderCode: string
       uniformLayout: import('./ir/wgsl-assembler').UniformBufferLayout
@@ -100,6 +113,8 @@ export interface RenderPlan {
       textureFilter?: 'linear' | 'nearest'
       /** Mirrors RenderPass.resolution — see there. */
       resolution?: number
+      /** Mirrors RenderPass.targetSlot — see there. */
+      targetSlot?: number
     }>
   }
 }
@@ -993,12 +1008,21 @@ function compileMultiPass(
   const outputNode = nodes.find((n) => n.data.type === 'fragment_output')
   const qualityTier = (outputNode?.data.params?.quality as string) ?? 'adaptive'
 
+  const liveness: PassLiveness[] = passes.map((p) => ({
+    index: p.index,
+    readsPassIndices: Object.values(p.inputTextures),
+    sizeKey: `${p.resolution ?? 1}`,
+  }))
+  const { slotOfPass, slotCount } = assignTextureSlots(liveness)
+  for (const p of passes) p.targetSlot = slotOfPass[p.index]
+
   return {
     success: true,
     passes,
     errors: [],
     isTimeLiveAtOutput: passes.some(p => p.isTimeLive),
     qualityTier,
+    slotCount,
     vertexShader: VERTEX_SHADER,
     fragmentShader: lastPass.fragmentShader,
     userUniforms: allUserUniforms,
