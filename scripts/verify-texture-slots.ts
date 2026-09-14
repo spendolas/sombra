@@ -123,6 +123,16 @@ const e = (id: string, s: string, sh: string, tg: string, th: string) =>
   ({ id, source: s, sourceHandle: sh, target: tg, targetHandle: th }) as unknown as Edge
 
 const PIXELATE_COUNT = 4
+/**
+ * The answer, written down. `slotCount < passes.length` is satisfied by
+ * one-slot-per-pass with zero reuse (4 < 5), so a test named "reuses slots"
+ * would pass having proved no reuse at all. The chain reads only the previous
+ * pass, so each slot frees at the next pass and two slots alternate; the final
+ * pass renders to the canvas and owns none.
+ */
+const EXPECTED_PASSES = PIXELATE_COUNT + 1
+const EXPECTED_SLOTS = 2
+const EXPECTED_SLOT_OF_PASS = [0, 1, 0, 1, -1]
 const chainNodes = [
   n('src', 'gradient'),
   ...Array.from({ length: PIXELATE_COUNT }, (_, i) => n(`px${i}`, 'pixelate')),
@@ -144,6 +154,33 @@ const glslReadsPassIndices = (pass: { inputTextures: Record<string, number> }) =
 const irReadsPassIndices = (pass: { inputTextures?: Array<{ passIndex: number }> }) =>
   (pass.inputTextures ?? []).map((t) => t.passIndex)
 
+/**
+ * Every non-final pass's `targetSlot`, asserted PRESENT before it is read.
+ *
+ * `plan.passes.map(p => p.targetSlot ?? -1)` reads fine and is a trap: if the
+ * field went missing in transit — the exact failure this branch hit three times
+ * at three plan-assembly boundaries — every entry becomes -1, `assertNoAliasing`
+ * skips every writer via its own `if (slot === -1) continue`, and the test
+ * passes having executed ZERO assertions. The final pass is the one legitimate
+ * -1: nothing reads it, so it owns no intermediate.
+ */
+function slotsOf(
+  passes: Array<{ targetSlot?: number }>,
+  label: string,
+): number[] {
+  return passes.map((p, i) => {
+    const isFinal = i === passes.length - 1
+    assert(typeof p.targetSlot === 'number',
+      `${label}: pass ${i} carries no targetSlot — the field was dropped between ` +
+      `the compiler and here, and every slot assertion below would be vacuous`)
+    if (!isFinal) {
+      assert(p.targetSlot! >= 0,
+        `${label}: pass ${i} is not the final pass but targets no slot (${p.targetSlot})`)
+    }
+    return p.targetSlot!
+  })
+}
+
 test('GLSL: a real multi-pass plan reuses slots and never aliases', () => {
   const plan = compileGraph(chainNodes, chainEdges)
   assert(plan.success, `compile failed: ${JSON.stringify(plan.errors)}`)
@@ -155,10 +192,15 @@ test('GLSL: a real multi-pass plan reuses slots and never aliases', () => {
     readsPassIndices: glslReadsPassIndices(p),
     sizeKey: `${p.resolution ?? 1}`,
   }))
-  const slotOfPass = plan.passes.map((p) => p.targetSlot ?? -1)
+  const slotOfPass = slotsOf(plan.passes, 'GLSL')
   assertNoAliasing(liveness, slotOfPass)
-  assert(plan.slotCount! < plan.passes.length,
-    `a linear chain of ${plan.passes.length} passes should need fewer than ${plan.passes.length} slots, got ${plan.slotCount}`)
+  assert(plan.passes.length === EXPECTED_PASSES,
+    `expected ${EXPECTED_PASSES} passes from this fixture, got ${plan.passes.length}`)
+  assert(plan.slotCount === EXPECTED_SLOTS,
+    `a ${plan.passes.length}-pass linear chain needs exactly ${EXPECTED_SLOTS} slots ` +
+    `(alternating, since each pass dies at its single reader), got ${plan.slotCount}`)
+  assert(JSON.stringify(slotOfPass) === JSON.stringify(EXPECTED_SLOT_OF_PASS),
+    `expected slots ${JSON.stringify(EXPECTED_SLOT_OF_PASS)}, got ${JSON.stringify(slotOfPass)}`)
 })
 
 test('WGSL: a real multi-pass plan reuses slots and never aliases', () => {
@@ -172,10 +214,15 @@ test('WGSL: a real multi-pass plan reuses slots and never aliases', () => {
     readsPassIndices: irReadsPassIndices(p),
     sizeKey: `${p.resolution ?? 1}`,
   }))
-  const slotOfPass = plan!.passes.map((p) => p.targetSlot ?? -1)
+  const slotOfPass = slotsOf(plan!.passes, 'WGSL')
   assertNoAliasing(liveness, slotOfPass)
-  assert(plan!.slotCount! < plan!.passes.length,
-    `a linear chain of ${plan!.passes.length} passes should need fewer than ${plan!.passes.length} slots, got ${plan!.slotCount}`)
+  assert(plan!.passes.length === EXPECTED_PASSES,
+    `expected ${EXPECTED_PASSES} passes from this fixture, got ${plan!.passes.length}`)
+  assert(plan!.slotCount === EXPECTED_SLOTS,
+    `a ${plan!.passes.length}-pass linear chain needs exactly ${EXPECTED_SLOTS} slots ` +
+    `(alternating, since each pass dies at its single reader), got ${plan!.slotCount}`)
+  assert(JSON.stringify(slotOfPass) === JSON.stringify(EXPECTED_SLOT_OF_PASS),
+    `expected slots ${JSON.stringify(EXPECTED_SLOT_OF_PASS)}, got ${JSON.stringify(slotOfPass)}`)
 })
 
 run('texture-slots')
