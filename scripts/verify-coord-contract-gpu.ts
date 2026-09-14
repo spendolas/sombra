@@ -99,7 +99,7 @@ async function installHarness(page: Page, base: string): Promise<{ webgpu: boole
       if (!plan.success) throw new Error(`glsl: ${JSON.stringify(plan.errors)}`)
       const ir = compileGraphIR(nodes as any, edges as any)
       if (!ir) throw new Error('ir null')
-      plan.wgsl = { passes: ir.passes }
+      plan.wgsl = irMod.toPlanWgsl(ir)
       return plan
     }
 

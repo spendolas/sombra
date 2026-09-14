@@ -5,7 +5,7 @@
 
 import { compileGraph } from './glsl-generator'
 import type { RenderPlan } from './glsl-generator'
-import { compileGraphIR } from './ir-compiler'
+import { compileGraphIR, toPlanWgsl } from './ir-compiler'
 import { compileNodePreview } from './subgraph-compiler'
 import { compileNodePreviewIR } from './ir-subgraph-compiler'
 import type { IRPreviewCompilationResult } from './ir-subgraph-compiler'
@@ -160,7 +160,7 @@ self.onmessage = (event: MessageEvent<CompileRequest | PreviewRequest | PreviewI
     if (data.useIR && result.success) {
       const wgslResult = compileGraphIR(nodes, edges)
       if (wgslResult) {
-        result.wgsl = { passes: wgslResult.passes }
+        result.wgsl = toPlanWgsl(wgslResult)
       } else {
         // IR failure with GLSL success: on a WebGPU renderer the canvas keeps
         // the previous shader — surface it instead of reporting clean success
