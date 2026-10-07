@@ -4,7 +4,7 @@
  * Mounts the real StackLayerList inside a node-shaped shell at the real node
  * width (212), with fixtures for every state the Figma boards cover: rest,
  * hidden middle, hidden bottom (greying by effect), a single layer, empty, and
- * names long enough to truncate. Every handler is live, so add / remove / hide
+ * a source label long enough to truncate. Every handler is live, so add / remove / hide
  * / reorder / blend / opacity all work and can be checked against the design.
  *
  * Handles are static dots here — real React Flow handles only exist inside a
@@ -47,8 +47,11 @@ const FIXTURES: Record<string, { label: string; layers: StackLayerItem[] }> = {
     L('2', { blendMode: 'overlay', source: 'Gradient.color', opacitySource: 'LFO.value', maskSource: 'Noise.value' }),
     L('1', { source: 'Image.color' }),
   ] },
-  longNames: { label: 'Long names (truncate, full on hover)', layers: [
-    L('2', { name: 'Background texture with a long name', source: 'Checkerboard Pattern Generator.color' }),
+  // Layer names are always "Layer N" — there is no rename. What can run long is the
+  // SOURCE: the wired node's own label plus its output. Brightness/Contrast is the
+  // longest node label in the library.
+  longSource: { label: 'Long source (truncates, full on hover)', layers: [
+    L('2', { source: 'Brightness/Contrast.color', maskSource: 'Polar Coordinates.color' }),
     L('1', { source: 'Image.color' }),
   ] },
   single: { label: 'One layer', layers: [L('1', { source: 'Image.color' })] },
