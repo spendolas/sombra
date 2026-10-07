@@ -155,7 +155,7 @@ const alphaByte = (p: Px) => Math.round(p.a * 255)
 
 // ---------------------------------------------------------------------------
 
-interface PassInfo { glslInputs: number; wgslBindings: string[]; glslHelpers: string[]; wgslHelpers: string[] }
+interface PassInfo { glslInputs: number; glslReads: number[]; wgslBindings: string[]; glslHelpers: string[]; wgslHelpers: string[] }
 interface Result {
   ok: boolean
   error?: string
@@ -228,7 +228,7 @@ async function main() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(window as any).__stack = async (req: { backend: string; nodes: unknown[]; edges: unknown[] }) => {
         const uncaptured: string[] = []
-        let passes: Array<{ glslInputs: number; wgslBindings: string[]; glslHelpers: string[]; wgslHelpers: string[] }> = []
+        let passes: Array<{ glslInputs: number; glslReads: number[]; wgslBindings: string[]; glslHelpers: string[]; wgslHelpers: string[] }> = []
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const plan: any = glslMod.compileGraph(req.nodes as any, req.edges as any)
@@ -242,6 +242,7 @@ async function main() {
             const w = plan.wgsl.passes[i]
             return {
               glslInputs: Object.keys(p.inputTextures ?? {}).length,
+              glslReads: Object.values(p.inputTextures ?? {}) as number[],
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               wgslBindings: w ? w.textureBindings.map((b: any) => b.samplerName) : ['<missing wgsl pass>'],
               glslHelpers: [...p.fragmentShader.matchAll(helperRe.glsl)].map((m: RegExpMatchArray) => m[1]),
@@ -286,7 +287,27 @@ async function main() {
       page.evaluate((r) => (window as unknown as { __stack: (q: unknown) => Promise<Result> }).__stack(r),
         { backend, ...buildGraph(layers, space) })
 
-    /** Passes that composite (sample the backdrop or hold a blend), by elimination: the last N. */
+    /**
+     * The composite passes, bottom first, found by walking back from the output
+     * pass: each composite reads its source (a pass that reads nothing) and,
+     * above the bottom, the previous composite.
+     */
+    const chainBottomUp = (res: Result, n: number): PassInfo[] => {
+      const out: PassInfo[] = []
+      let cur = res.passes.length - 1
+      for (let k = 0; k < n; k++) {
+        out.unshift(res.passes[cur])
+        const prev = res.passes[cur].glslReads.filter((r) => res.passes[r].glslReads.length > 0)
+        if (k < n - 1) {
+          assert(prev.length === 1, `composite at pass ${cur} reads ${JSON.stringify(res.passes[cur].glslReads)} — no single previous composite`)
+          cur = prev[0]
+        } else {
+          assert(prev.length === 0, `the bottom composite (pass ${cur}) reads a backdrop`)
+        }
+      }
+      return out
+    }
+    /** Pass count and the ≤2-textures rule, independent of pass order. */
     const assertChainShape = (label: string, res: Result, sources: number, composites: number) => {
       assert(res.passes.length === sources + composites,
         `${label}: ${res.passes.length} passes, expected ${sources} source + ${composites} composite`)
@@ -329,9 +350,9 @@ async function main() {
             const n = layers.length
             assertChainShape(label, res, n, n)
             // Sub-pass 0 has nothing beneath it: no blend helper. Every later
-            // composite defines exactly its layer's mode. Pass order: sources
-            // first, then composites (depth-partitioned).
-            const comps = res.passes.slice(n)
+            // composite defines exactly its layer's mode. Passes are emitted in
+            // consumer order, so the chain is walked from the output pass down.
+            const comps = chainBottomUp(res, n)
             assert(comps[0].glslHelpers.length === 0 && comps[0].wgslHelpers.length === 0,
               `${label}: the bottom composite emitted blend helpers ${JSON.stringify(comps[0].wgslHelpers)} — it has no backdrop`)
             comps.slice(1).forEach((p, i) => {

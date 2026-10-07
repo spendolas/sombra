@@ -13,8 +13,8 @@
  * the two plans must agree pass for pass — reads, resolution, slot count.
  *
  *   N layers     2, 4, 8: 2N passes; each composite reads exactly the previous
- *                composite and its own source; N+1 texture slots (the
- *                liveness column of spec §4, measured, not hand-built).
+ *                composite and its own source; 2 / 3 / 3 texture slots under
+ *                consumer-ordered emission (was N+1 before pass-order.ts).
  *   blur layer   a multi-pass blur as one layer: every pass ≤ 2 textures, the
  *                blur keeps its own reduced-resolution sub-pass, the top
  *                composite reads the blur's LAST sub-pass.
@@ -78,22 +78,45 @@ function plans(g: G): Plan {
   return a
 }
 
+/**
+ * Slots the compiler must reach for an N-layer Stack. Consumer-ordered pass
+ * emission (pass-order.ts, f22c340) puts each layer's source immediately
+ * before the composite that reads it, so liveness keeps three textures alive
+ * at any depth: running result, next source, next result. Two at N = 2. This
+ * read N+1 before that ordering landed — spec §4's "+ liveness" column; the
+ * number moved because the pass ORDER changed, not the allocator.
+ */
+const expectedSlots = (N: number) => (N <= 2 ? 2 : 3)
+
 for (const N of [2, 4, 8]) {
-  test(`${N} layers: 2N passes, a strict chain, N+1 slots, both backends identical`, () => {
+  test(`${N} layers: 2N passes, a strict chain, ${expectedSlots(N)} slots, both backends identical`, () => {
     const g = new G().node('stk', 'stack', { layers: Array.from({ length: N }, (_, i) => L(`a${i}`, i % 2 ? 'screen' : 'multiply')) })
       .node('out', 'fragment_output').wire('stk', 'color', 'out', 'color')
     for (let i = 0; i < N; i++) g.node(`s${i}`, i % 2 ? 'gradient' : 'checkerboard').wire(`s${i}`, 'color', 'stk', `layer_a${i}`)
     const p = plans(g)
     assert(p.passes.length === 2 * N, `${p.passes.length} passes, expected ${2 * N}`)
-    // Sources occupy passes 0..N-1 (depth 0, primary + relays) and read nothing.
-    for (let i = 0; i < N; i++) assert(p.passes[i].reads.length === 0, `source pass ${i} reads ${JSON.stringify(p.passes[i].reads)}`)
-    // Composite k (pass N+k) reads its own source and, for k > 0, composite k-1.
-    for (let k = 0; k < N; k++) {
-      const want = k === 0 ? [0] : [k, N + k - 1].sort((x, y) => x - y)
-      assert(JSON.stringify(p.passes[N + k].reads) === JSON.stringify(want),
-        `composite ${k} (pass ${N + k}) reads ${JSON.stringify(p.passes[N + k].reads)}, expected ${JSON.stringify(want)}`)
+    // Order-independent: N sources read nothing; N composites form one chain.
+    // Walk it from the last pass (the output) down to the bottom composite.
+    const sources = p.passes.map((x, i) => (x.reads.length === 0 ? i : -1)).filter((i) => i >= 0)
+    assert(sources.length === N, `${sources.length} source passes, expected ${N}`)
+    const seenSources = new Set<number>()
+    let cur = p.passes.length - 1
+    for (let k = N - 1; k >= 0; k--) {
+      const reads = p.passes[cur].reads
+      const src = reads.filter((r) => sources.includes(r))
+      const prev = reads.filter((r) => !sources.includes(r))
+      assert(src.length === 1, `composite ${k} (pass ${cur}) reads ${JSON.stringify(reads)} — expected exactly one source`)
+      assert(!seenSources.has(src[0]), `source pass ${src[0]} is composited twice`)
+      seenSources.add(src[0])
+      if (k === 0) {
+        assert(prev.length === 0, `the bottom composite (pass ${cur}) reads a backdrop ${JSON.stringify(prev)}`)
+      } else {
+        assert(prev.length === 1 && prev[0] < cur, `composite ${k} (pass ${cur}) reads ${JSON.stringify(reads)} — expected its source and the previous composite`)
+        cur = prev[0]
+      }
     }
-    assert(p.slotCount === N + 1, `slotCount ${p.slotCount}, expected N+1 = ${N + 1} (spec §4 liveness column)`)
+    assert(seenSources.size === N, `${seenSources.size} sources reached the chain, expected ${N}`)
+    assert(p.slotCount === expectedSlots(N), `slotCount ${p.slotCount}, expected ${expectedSlots(N)} (consumer-ordered emission)`)
     assert(p.passes.every((x) => x.resolution === undefined), 'a plain Stack must render every pass at full resolution')
   })
 }
@@ -131,12 +154,17 @@ test('a Stack nested in a Stack: the outer chain reads the inner chain\'s last c
   const p = plans(g)
   // 3 sources, 2 inner composites, 2 outer composites.
   assert(p.passes.length === 7, `${p.passes.length} passes, expected 7`)
-  const innerTop = p.passes.findIndex((x, i) => i > 0 && x.reads.length === 2) // inner composite 1
-  assert(innerTop > 0, 'no inner top composite found')
-  const outerBottom = p.passes.findIndex((x) => x.reads.length === 1 && x.reads[0] === innerTop)
-  assert(outerBottom > innerTop, `the outer chain's bottom composite does not read the inner chain's top (pass ${innerTop}): ${JSON.stringify(p.passes.map((x) => x.reads))}`)
-  assert(p.passes[6].reads.includes(outerBottom), 'the outer top composite does not read the outer bottom composite')
-  assert(p.slotCount === 4, `slotCount ${p.slotCount}, expected 4`)
+  const last = p.passes.length - 1
+  // Outer top reads the outer bottom composite and the dots source.
+  const outerBottom = p.passes[last].reads.find((r) => p.passes[r].reads.length > 0)
+  assert(outerBottom !== undefined, `the outer top composite reads no composite: ${JSON.stringify(p.passes.map((x) => x.reads))}`)
+  // The outer bottom composite's only input is the inner chain's top.
+  assert(p.passes[outerBottom!].reads.length === 1, `outer bottom composite reads ${JSON.stringify(p.passes[outerBottom!].reads)}`)
+  const innerTop = p.passes[outerBottom!].reads[0]
+  assert(p.passes[innerTop].reads.length === 2, `the outer chain's bottom reads pass ${innerTop}, which is not the inner top composite`)
+  // Inner at outer position 0: consumer order needs 3 (was 4 before
+  // pass-order.ts landed). Deeper positions need more — see verify-pass-order.
+  assert(p.slotCount === 3, `slotCount ${p.slotCount}, expected 3`)
 })
 
 test('full-res pin (KNOWN, spec §10): a Stack beside a Gaussian blur pins the blur\'s first half-size pass', () => {

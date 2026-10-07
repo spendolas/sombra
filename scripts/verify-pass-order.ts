@@ -12,10 +12,10 @@
  * pass lists gave optimistic slot counts three separate times during this work
  * (docs/superpowers/plans/2026-09-14-consumer-ordered-emission.md).
  *
- * TODO(stack): the Stack-shaped cases use `test_pass_order_stack`, a
- * test-registered copy of the `test_stackish` fixture in
- * verify-subpass-routing.ts with a param-driven layer count. Re-point them at
- * the real Stack node once it lands (docs/superpowers/plans/2026-10-07-stack-node.md).
+ * The Stack-shaped cases run the REAL Stack node (src/nodes/color/stack.ts) —
+ * they used a test-registered stand-in until it landed. The stand-in emitted
+ * no texture reads at all; the real node samples its backdrop and layer, so
+ * the "permutation only / same shader texts" checks now cover real shaders.
  *
  * Run: npx tsx scripts/verify-pass-order.ts
  */
@@ -24,8 +24,6 @@ import * as path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Node, Edge } from '@xyflow/react'
 import { initializeNodeLibrary } from '../src/nodes'
-import { nodeRegistry } from '../src/nodes/registry'
-import type { NodeDefinition } from '../src/nodes/types'
 import { compileGraph, type RenderPlan } from '../src/compiler/glsl-generator'
 import { compileGraphIR, toPlanWgsl, type WGSLMultiPassOutput } from '../src/compiler/ir-compiler'
 import { encodeArtifact, decodeArtifact, stripPlan, reconstructPlan, type SceneArtifact } from '../src/embed/artifact'
@@ -38,37 +36,12 @@ initializeNodeLibrary()
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 // ---------------------------------------------------------------------------
-// Fixture: a Stack-shaped multiPass chain (see TODO(stack) above)
+// The real Stack node. Layers are stored bottom-first with stable ids; layer k
+// gets id `l<k>` and port `layer_l<k>`.
 // ---------------------------------------------------------------------------
 
-const MAX_LAYERS = 16
-const layerPort = (i: number) => ({
-  id: `layer_${i}`, label: `Layer ${i}`, type: 'color' as const,
-  textureInput: true, default: [0, 0, 0, 0] as [number, number, number, number],
-})
-
-const stackNode: NodeDefinition = {
-  type: 'test_pass_order_stack',
-  label: 'Test Pass-Order Stack',
-  category: 'effect',
-  inputs: [
-    { id: 'backdrop', label: 'Backdrop', type: 'color', textureInput: true, default: [0, 0, 0, 0] },
-    ...Array.from({ length: MAX_LAYERS }, (_, i) => layerPort(i)),
-  ],
-  outputs: [{ id: 'color', label: 'Color', type: 'color' }],
-  params: [{ id: 'layers', label: 'Layers', type: 'float', default: 2, hidden: true }],
-  multiPass: {
-    count: (p) => Number(p.layers ?? 2),
-    from: 'color',
-    to: 'backdrop',
-    requiresWiredSource: false,
-    routeEdge: (targetHandle, passIndex) =>
-      targetHandle.startsWith('layer_') ? targetHandle === `layer_${passIndex}` : true,
-  },
-  glsl: (ctx) => `vec4 ${ctx.outputs.color} = vec4(0.0);`,
-  ir: () => ({ statements: [], uniforms: [], standardUniforms: new Set<string>() }),
-}
-nodeRegistry.register(stackNode)
+const stackLayers = (count: number) =>
+  Array.from({ length: count }, (_, k) => ({ id: `l${k}`, name: `Layer ${k + 1}`, blendMode: k % 2 ? 'screen' : 'normal', visible: true }))
 
 const n = (id: string, t: string, p: Record<string, unknown> = {}) =>
   ({ id, type: 'shaderNode', position: { x: 0, y: 0 }, data: { type: t, params: p } }) as unknown as Node
@@ -85,14 +58,14 @@ function stackGraph(
 ): Graph & { out: string } {
   const g: Graph = { nodes: [], edges: [] }
   const stack = `${prefix}stack`
-  g.nodes.push(n(stack, 'test_pass_order_stack', { layers }))
+  g.nodes.push(n(stack, 'stack', { layers: stackLayers(layers) }))
   for (let k = 0; k < layers; k++) {
     let src = feed(k, g)
     if (src === null) {
       src = `${prefix}src${k}`
       g.nodes.push(n(src, k % 2 ? 'gradient' : 'checkerboard'))
     }
-    g.edges.push(e(`${prefix}e${k}`, src, 'color', stack, `layer_${k}`))
+    g.edges.push(e(`${prefix}e${k}`, src, 'color', stack, `layer_l${k}`))
   }
   return { ...g, out: stack }
 }
