@@ -7,6 +7,7 @@ import { ReactFlow, MiniMap, useNodesInitialized, useReactFlow } from '@xyflow/r
 import type { Node, Edge, NodeTypes, OnNodesChange, OnEdgesChange, OnReconnect, Connection, IsValidConnection } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
+import { defaultParams } from '../nodes/default-params'
 import { isConnectionValid } from '../nodes/connection-validity'
 import { useGraphStore } from '../stores/graphStore'
 import { makeNodeId } from '../utils/node-id'
@@ -64,11 +65,7 @@ function descriptorsFromDataTransfer(dataTransfer: DataTransfer): DropFileDescri
 }
 
 function defaultParamsFor(nodeType: string): Record<string, unknown> {
-  const params: Record<string, unknown> = {}
-  for (const param of nodeRegistry.get(nodeType)?.params ?? []) {
-    if (param.default !== undefined) params[param.id] = param.default
-  }
-  return params
+  return defaultParams(nodeRegistry.get(nodeType))
 }
 
 interface FlowCanvasProps {

@@ -1,6 +1,7 @@
 import type { Edge, Node } from '@xyflow/react'
 import type { EdgeData, NodeData } from '@/nodes/types'
 import { nodeRegistry } from '@/nodes/registry'
+import { defaultParams } from '@/nodes/default-params'
 import { makeNodeId } from '@/utils/node-id'
 import { processImageFile, type ProcessedImage } from '@/utils/process-image'
 import { extractSombraThumbnail, type SombraThumbnail } from '@/utils/sombra-file'
@@ -33,11 +34,7 @@ export interface DroppedProjectImportDependencies<FileType extends NamedDropFile
 }
 
 function imageDefaultParams(): Record<string, unknown> {
-  const params: Record<string, unknown> = {}
-  for (const param of nodeRegistry.get('image')?.params ?? []) {
-    if (param.default !== undefined) params[param.id] = param.default
-  }
-  return params
+  return defaultParams(nodeRegistry.get('image'))
 }
 
 /**

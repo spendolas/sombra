@@ -34,6 +34,7 @@ import { icons, type IconName } from '@/components/icons'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
 import { getPortColor } from '@/utils/port-colors'
+import { defaultParams } from '@/nodes/default-params'
 
 // ─── Token Definitions ──────────────────────────────────────────────────────
 
@@ -699,10 +700,7 @@ function NodeCardGrid() {
   // Build node entries once
   const entries = useMemo(() =>
     ALL_NODES.map((def) => {
-      const params: Record<string, unknown> = {}
-      if (def.params) {
-        for (const p of def.params) params[p.id] = p.default
-      }
+      const params = defaultParams(def)
       const data: NodeData = { type: def.type, params }
       const est = estimateNodeSize(data)
       return { def, data, estimatedHeight: est.height }

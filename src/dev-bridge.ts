@@ -10,6 +10,7 @@ import { useGraphStore } from './stores/graphStore'
 import { useCompilerStore } from './stores/compilerStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { nodeRegistry } from './nodes/registry'
+import { defaultParams } from './nodes/default-params'
 import { compileGraph } from './compiler/glsl-generator'
 import { compileGraphIR } from './compiler/ir-compiler'
 import { compileNodePreviewIR } from './compiler/ir-subgraph-compiler'
@@ -55,10 +56,7 @@ function createNode(
   if (!def) throw new Error(`Unknown node type: "${type}". Use sombra.listNodeTypes() to see available types.`)
 
   // Build default params from definition
-  const params: Record<string, unknown> = {}
-  for (const p of def.params ?? []) {
-    params[p.id] = p.default
-  }
+  const params = defaultParams(def)
   Object.assign(params, paramOverrides)
 
   const id = uid('n')

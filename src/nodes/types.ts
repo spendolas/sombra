@@ -37,6 +37,10 @@ export interface NodeParameter {
   // `bool` params store a JS boolean, always `updateMode: 'recompile'` — read via
   // ctx.params.<id> in glsl()/ir() to branch codegen, like `enum`. Never a uniform.
   default: number | string | boolean | [number, number] | [number, number, number] | [number, number, number, number]
+    // A structured default (Stack's layer list) for a `hidden` recompile param
+    // that carries real data. Materialised through `defaultParams` /
+    // `cloneParamDefault` (default-params.ts), which deep-clone it.
+    | ReadonlyArray<Readonly<Record<string, unknown>>>
   min?: number                  // For numeric types
   max?: number                  // For numeric types
   step?: number                 // Step increment for sliders
