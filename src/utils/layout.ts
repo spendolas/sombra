@@ -15,6 +15,7 @@ const Dagre = unwrapDagre(DagreModule)
 import type { Node, Edge } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
+import { resolveParams } from '../nodes/resolve-dynamic'
 
 /** Estimated dimension constants (px) */
 const HEADER_H = 36
@@ -34,8 +35,11 @@ export function estimateNodeSize(data: NodeData): { width: number; height: numbe
 
   const params = data.params || {}
   const inputs = def.dynamicInputs ? def.dynamicInputs(params) : def.inputs
-  const connectableParams = (def.params || []).filter((p) => p.connectable)
-  const regularParams = (def.params || []).filter((p) => !p.connectable && !p.hidden)
+  // This instance's params, not the static list — a connectable param that
+  // exists only through dynamicParams still draws a row and a handle.
+  const nodeParams = resolveParams(def, params)
+  const connectableParams = nodeParams.filter((p) => p.connectable)
+  const regularParams = nodeParams.filter((p) => !p.connectable && !p.hidden)
 
   let h = HEADER_H + NODE_PADDING
   h += def.outputs.length * ROW_H                           // outputs
@@ -107,12 +111,12 @@ export function layoutGraph(
  * Get ordered handle IDs for the left (input) side of a node:
  * pure inputs first, then connectable params — matching ShaderNode render order.
  */
-function getInputHandleOrder(data: NodeData): string[] {
+export function getInputHandleOrder(data: NodeData): string[] {
   const def = nodeRegistry.get(data.type)
   if (!def) return []
   const params = data.params || {}
   const inputs = def.dynamicInputs ? def.dynamicInputs(params) : def.inputs
-  const connectableParams = (def.params || []).filter((p) => p.connectable)
+  const connectableParams = resolveParams(def, params).filter((p) => p.connectable)
   return [...inputs.map((p) => p.id), ...connectableParams.map((p) => p.id)]
 }
 
