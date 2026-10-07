@@ -27,6 +27,7 @@ import { expandMultiPassNodes, baseNodeId } from './expand-passes'
 import { resolvePassResolution } from './pass-resolution'
 import { nodesFeeding } from './reachability'
 import { assignTextureSlots, type PassLiveness } from './texture-slots'
+import { orderPassesByConsumer } from './pass-order'
 
 // ---------------------------------------------------------------------------
 // WGSL type coercion (IR-level, parallel to type-coercion.ts GLSL rules)
@@ -814,15 +815,26 @@ function compileMultiPassIR(
     }
   }
 
-  const liveness: PassLiveness[] = passes.map((p, index) => ({
+  // Same permutation as glsl-generator.ts, on the finished array (relays
+  // included), before slot assignment — the two must order identically.
+  const ordered = orderPassesByConsumer(
+    passes,
+    (p) => p.inputTextures.map((t) => t.passIndex),
+    (p, oldToNew) => ({
+      ...p,
+      inputTextures: p.inputTextures.map((t) => ({ ...t, passIndex: oldToNew[t.passIndex] })),
+    }),
+  )
+
+  const liveness: PassLiveness[] = ordered.map((p, index) => ({
     index,
     readsPassIndices: p.inputTextures.map((t) => t.passIndex),
     sizeKey: `${p.resolution ?? 1}`,
   }))
   const { slotOfPass, slotCount } = assignTextureSlots(liveness)
-  passes.forEach((p, index) => { p.targetSlot = slotOfPass[index] })
+  ordered.forEach((p, index) => { p.targetSlot = slotOfPass[index] })
 
-  return { passes, slotCount }
+  return { passes: ordered, slotCount }
 }
 
 /**
