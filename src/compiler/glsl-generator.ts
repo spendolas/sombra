@@ -19,6 +19,7 @@ import { emitSRT } from './ir/srt'
 import type { IRSpatialTransform } from './ir/types'
 import { nodesFeeding } from './reachability'
 import { assignTextureSlots, type PassLiveness } from './texture-slots'
+import { orderPassesByConsumer } from './pass-order'
 
 export function uniformName(sanitizedNodeId: string, paramId: string): string {
   return `u_${sanitizedNodeId}_${paramId}`
@@ -1004,23 +1005,38 @@ function compileMultiPass(
     allUserUniforms.push(...passUserUniforms)
   }
 
-  const lastPass = passes[passes.length - 1]
+  // Every pass exists now, relays included — reorder the FINISHED array so
+  // each source sits next to its consumer, then assign slots on that order.
+  // Must match ir-compiler.ts exactly, or the backends render different plans.
+  const ordered = orderPassesByConsumer(
+    passes,
+    (p) => Object.values(p.inputTextures),
+    (p, oldToNew) => ({
+      ...p,
+      index: oldToNew[p.index],
+      inputTextures: Object.fromEntries(
+        Object.entries(p.inputTextures).map(([sampler, src]) => [sampler, oldToNew[src]]),
+      ),
+    }),
+  )
+
+  const lastPass = ordered[ordered.length - 1]
   const outputNode = nodes.find((n) => n.data.type === 'fragment_output')
   const qualityTier = (outputNode?.data.params?.quality as string) ?? 'adaptive'
 
-  const liveness: PassLiveness[] = passes.map((p) => ({
+  const liveness: PassLiveness[] = ordered.map((p) => ({
     index: p.index,
     readsPassIndices: Object.values(p.inputTextures),
     sizeKey: `${p.resolution ?? 1}`,
   }))
   const { slotOfPass, slotCount } = assignTextureSlots(liveness)
-  for (const p of passes) p.targetSlot = slotOfPass[p.index]
+  for (const p of ordered) p.targetSlot = slotOfPass[p.index]
 
   return {
     success: true,
-    passes,
+    passes: ordered,
     errors: [],
-    isTimeLiveAtOutput: passes.some(p => p.isTimeLive),
+    isTimeLiveAtOutput: ordered.some(p => p.isTimeLive),
     qualityTier,
     slotCount,
     vertexShader: VERTEX_SHADER,
