@@ -21,18 +21,19 @@
  *   shared src   one source feeding two layers is rendered ONCE.
  *   nested       a Stack as a layer of a Stack: the outer chain reads the
  *                inner chain's last composite.
- *   full-res pin a Gaussian or pyramid blur as a layer beside a plain layer.
- *                KNOWN (spec §10): Stack's bottom composite lands in the
- *                blur's first depth group and pins that half-size pass to
- *                full size.
- *                Pinned here as a tripwire — see the test for what to do when
- *                it goes red.
+ *   full-res pin a Gaussian or pyramid blur as a layer beside a plain layer
+ *                keeps every sub-pass at its declared scale. Spec §10's
+ *                hazard: Stack's bottom composite lands in the blur's first
+ *                depth group, which used to pin that half-size pass to full
+ *                size; scales now resolve per emitted pass.
  *
  * Run: npm run verify:stack-convergence
  */
 import { initializeNodeLibrary } from '../src/nodes'
 import { compileGraph } from '../src/compiler/glsl-generator'
 import { compileGraphIR, toPlanWgsl } from '../src/compiler/ir-compiler'
+import { compileNodePreview } from '../src/compiler/subgraph-compiler'
+import { compileNodePreviewIR } from '../src/compiler/ir-subgraph-compiler'
 import { test, run, assert } from './blur-bakeoff/lib/test-util'
 import type { Node, Edge } from '@xyflow/react'
 
@@ -167,45 +168,71 @@ test('a Stack nested in a Stack: the outer chain reads the inner chain\'s last c
   assert(p.slotCount === 3, `slotCount ${p.slotCount}, expected 3`)
 })
 
-test('full-res pin (KNOWN, spec §10): a Stack beside a Gaussian blur pins the blur\'s first half-size pass', () => {
-  const alone = plans(new G().node('cb', 'checkerboard').node('bl', 'blur', { radius: 16 }).node('out', 'fragment_output')
-    .wire('cb', 'color', 'bl', 'source').wire('bl', 'color', 'out', 'color'))
-  assert(alone.passes[1].resolution === 0.5, `fixture assumption broken: blur sub-pass 0 is ${alone.passes[1].resolution}, expected 0.5`)
-  const p = plans(new G().node('stk', 'stack', { layers: [L('a'), L('b', 'screen')] }).node('out', 'fragment_output')
-    .node('gr', 'gradient').node('cb', 'checkerboard').node('bl', 'blur', { radius: 16 })
-    .wire('gr', 'color', 'stk', 'layer_a').wire('cb', 'color', 'bl', 'source').wire('bl', 'color', 'stk', 'layer_b').wire('stk', 'color', 'out', 'color'))
-  // Blur sub-pass 0 shares depth 1 with Stack's bottom composite; the group's
-  // primary (reading both sources) is the blur's first pass, at full size.
-  const shared = p.passes.findIndex((x) => JSON.stringify(x.reads) === '[0,1]')
-  assert(shared >= 0, `fixture changed shape: no depth-1 pass reads both sources: ${JSON.stringify(p.passes)}`)
-  // TRIPWIRE — asserts the BROKEN behaviour. When this goes red, the pin is
-  // fixed for this shape: flip it to assert 0.5. Never delete it to go green.
-  assert(p.passes[shared].resolution === undefined,
-    'blur sub-pass 0 beside a Stack composite now keeps its half size — the anyFullRes pin appears FIXED; flip this test to assert 0.5')
-})
+/**
+ * The blur's sub-passes, first to last, in a Stack plan: start from the top
+ * composite's input that carries a declared scale (the blur's last sub-pass)
+ * and walk back while each pass reads exactly one texture that is not a
+ * source.
+ */
+function blurChain(p: Plan): number[] {
+  const top = p.passes[p.passes.length - 1]
+  const lastSub = top.reads.find((r) => p.passes[r].resolution !== undefined)
+  assert(lastSub !== undefined, `the top composite reads no scaled pass: ${JSON.stringify(p.passes)}`)
+  const chain = [lastSub!]
+  for (;;) {
+    const reads = p.passes[chain[0]].reads
+    const prev = reads.filter((r) => p.passes[r].reads.length > 0)
+    if (prev.length !== 1) break
+    chain.unshift(prev[0])
+  }
+  return chain
+}
 
-test('full-res pin (KNOWN, spec §10): a Stack beside a pyramid blur pins the pyramid\'s first downsample', () => {
-  // The pyramid alone: its first sub-pass renders at half size.
-  const alone = plans(new G().node('cb', 'checkerboard').node('py', 'pyramid_blur', { radius: 64 }).node('out', 'fragment_output')
-    .wire('cb', 'color', 'py', 'source').wire('py', 'color', 'out', 'color'))
-  assert(alone.passes[1].resolution === 0.5, `fixture assumption broken: the pyramid's first sub-pass is ${alone.passes[1].resolution}, expected 0.5`)
-  // The same pyramid as a Stack layer beside a gradient layer. Stack's bottom
-  // composite (reads only the gradient) sits at the pyramid's first depth, so
-  // both land in one depth group, and the composite — which declares no
-  // resolution — pins the group to full size.
+for (const [type, radius] of [['blur', 16], ['pyramid_blur', 64]] as const) {
+  test(`full-res pin fixed: a ${type} layer beside another layer keeps every declared scale`, () => {
+    // Spec §10's hazard, fixed: Stack's bottom composite shares the blur's
+    // first depth group, but each emitted pass now resolves its scale from the
+    // nodes feeding ITS output — so the composite no longer pins the blur.
+    const alone = plans(new G().node('cb', 'checkerboard').node('bl', type, { radius }).node('out', 'fragment_output')
+      .wire('cb', 'color', 'bl', 'source').wire('bl', 'color', 'out', 'color'))
+    // Alone, the blur's sub-passes are passes 1..n-1; the last is the canvas
+    // pass, forced to full size, so compare all but that one.
+    const aloneScales = alone.passes.slice(1, -1).map((x) => x.resolution)
+    assert(aloneScales.length > 0 && aloneScales[0] === 0.5, `fixture assumption broken: ${type} alone starts at ${aloneScales[0]}`)
+    const p = plans(new G().node('stk', 'stack', { layers: [L('a'), L('b', 'screen')] }).node('out', 'fragment_output')
+      .node('gr', 'gradient').node('cb', 'checkerboard').node('bl', type, { radius })
+      .wire('gr', 'color', 'stk', 'layer_a').wire('cb', 'color', 'bl', 'source').wire('bl', 'color', 'stk', 'layer_b').wire('stk', 'color', 'out', 'color'))
+    const chain = blurChain(p)
+    const scales = chain.map((i) => p.passes[i].resolution)
+    assert(JSON.stringify(scales.slice(0, aloneScales.length)) === JSON.stringify(aloneScales),
+      `${type} beside a Stack composite renders its sub-passes at ${JSON.stringify(scales)}, alone at ${JSON.stringify(aloneScales)} — a scale was pinned`)
+    // The bottom composite (the top composite's other input) stays full size.
+    const top = p.passes[p.passes.length - 1]
+    const bottom = top.reads.find((r) => !chain.includes(r))
+    assert(bottom !== undefined && p.passes[bottom].resolution === undefined,
+      `the Stack's bottom composite was downscaled: ${JSON.stringify(bottom !== undefined ? p.passes[bottom] : top)}`)
+  })
+}
+
+test('preview compilers resolve the same per-pass scales as the main compilers', () => {
+  // The node thumbnails compile through their own two compilers; a fix in the
+  // main pair alone would leave a Stack's thumbnail pinning its blur layer.
   const g = new G().node('stk', 'stack', { layers: [L('a'), L('b', 'screen')] }).node('out', 'fragment_output')
-    .node('gr', 'gradient').node('cb', 'checkerboard').node('py', 'pyramid_blur', { radius: 64 })
-    .wire('gr', 'color', 'stk', 'layer_a').wire('cb', 'color', 'py', 'source').wire('py', 'color', 'stk', 'layer_b').wire('stk', 'color', 'out', 'color')
-  const p = plans(g)
-  const downsample = p.passes.findIndex((x) => x.reads.length === 2 && x.resolution === undefined && p.passes.some((y) => y.resolution === 0.25 && y.reads.includes(p.passes.indexOf(x))))
-  // TRIPWIRE. This asserts the BROKEN behaviour so that fixing it is noticed:
-  // when the pyramid's first downsample keeps its 0.5 here, this goes red —
-  // flip it to assert 0.5 and drop the pin. Never delete it to go green.
-  assert(downsample >= 0,
-    'the pyramid\'s first downsample is no longer pinned to full resolution beside a Stack — the anyFullRes pin appears FIXED for this shape; '
-    + `flip this test to assert its 0.5. Plan: ${JSON.stringify(p.passes)}`)
-  assert(!p.passes.some((x) => x.resolution === 0.5 && x.reads.length === 1 && x.reads[0] === 1),
-    'fixture changed shape: a half-size downsample exists after all')
+    .node('gr', 'gradient').node('cb', 'checkerboard').node('bl', 'blur', { radius: 16 })
+    .wire('gr', 'color', 'stk', 'layer_a').wire('cb', 'color', 'bl', 'source').wire('bl', 'color', 'stk', 'layer_b').wire('stk', 'color', 'out', 'color')
+  const main = plans(g)
+  const pv = compileNodePreview(g.nodes as never, g.edges as never, 'stk')
+  assert(pv.success && !pv.depthExceeded, `GLSL preview failed: ${JSON.stringify(pv.errors)}`)
+  const pvIr = compileNodePreviewIR(g.nodes as never, g.edges as never, 'stk')
+  assert(pvIr.success && !pvIr.depthExceeded, `IR preview failed: ${JSON.stringify(pvIr.errors)}`)
+  const asPlan = (passes: Array<{ reads: number[]; resolution: number | undefined }>): Plan => ({ passes, slotCount: -1 })
+  const a = asPlan(pv.passes.map((x) => ({ reads: Object.values(x.inputTextures).sort((m, n) => m - n), resolution: x.resolution })))
+  const b = asPlan(pvIr.wgslPasses.map((x) => ({ reads: x.inputTextures.map((t) => t.passIndex).sort((m, n) => m - n), resolution: x.resolution })))
+  const scales = (p: Plan) => blurChain(p).map((i) => p.passes[i].resolution)
+  const want = scales(main)
+  assert(want[0] === 0.5, `fixture assumption broken: main plan blur chain ${JSON.stringify(want)}`)
+  assert(JSON.stringify(scales(a)) === JSON.stringify(want), `GLSL preview renders the blur at ${JSON.stringify(scales(a))}, main at ${JSON.stringify(want)}`)
+  assert(JSON.stringify(scales(b)) === JSON.stringify(want), `IR preview renders the blur at ${JSON.stringify(scales(b))}, main at ${JSON.stringify(want)}`)
 })
 
 await run('stack-convergence')

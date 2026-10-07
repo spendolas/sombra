@@ -155,7 +155,7 @@ const alphaByte = (p: Px) => Math.round(p.a * 255)
 
 // ---------------------------------------------------------------------------
 
-interface PassInfo { glslInputs: number; glslReads: number[]; wgslBindings: string[]; glslHelpers: string[]; wgslHelpers: string[] }
+interface PassInfo { glslInputs: number; glslReads: number[]; resolution: number | null; wgslBindings: string[]; glslHelpers: string[]; wgslHelpers: string[] }
 interface Result {
   ok: boolean
   error?: string
@@ -165,6 +165,8 @@ interface Result {
   height?: number
   uncaptured: string[]
   passes: PassInfo[]
+  /** Per pass: the render target the renderer ACTUALLY allocated ("WxH"), or "canvas". */
+  targetSizes?: string[]
 }
 
 async function main() {
@@ -228,7 +230,7 @@ async function main() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ;(window as any).__stack = async (req: { backend: string; nodes: unknown[]; edges: unknown[] }) => {
         const uncaptured: string[] = []
-        let passes: Array<{ glslInputs: number; glslReads: number[]; wgslBindings: string[]; glslHelpers: string[]; wgslHelpers: string[] }> = []
+        let passes: Array<{ glslInputs: number; glslReads: number[]; resolution: number | null; wgslBindings: string[]; glslHelpers: string[]; wgslHelpers: string[] }> = []
         try {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const plan: any = glslMod.compileGraph(req.nodes as any, req.edges as any)
@@ -243,6 +245,7 @@ async function main() {
             return {
               glslInputs: Object.keys(p.inputTextures ?? {}).length,
               glslReads: Object.values(p.inputTextures ?? {}) as number[],
+              resolution: p.resolution ?? null,
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               wgslBindings: w ? w.textureBindings.map((b: any) => b.samplerName) : ['<missing wgsl pass>'],
               glslHelpers: [...p.fragmentShader.matchAll(helperRe.glsl)].map((m: RegExpMatchArray) => m[1]),
@@ -269,7 +272,18 @@ async function main() {
           const black = over(rr.canvas, '#000')
           const white = over(rr.canvas, '#fff')
           if (dev) { await dev.queue.onSubmittedWorkDone(); dev.removeEventListener('uncapturederror', onErr) }
-          return { ok: true, black, white, width: rr.canvas.width, height: rr.canvas.height, uncaptured, passes }
+          // What each pass really rendered into: the renderer's pool is indexed
+          // by the compiler's target slot (-1 = the canvas).
+          const pool = req.backend === 'webgpu' ? rr.renderer.intermediateTextures : rr.renderer.fboPool
+          const planPasses = req.backend === 'webgpu' ? plan.wgsl.passes : plan.passes
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const targetSizes = planPasses.map((pp: any) => {
+            const slot = pp.targetSlot
+            if (slot === undefined || slot < 0) return 'canvas'
+            const t = pool?.[slot]
+            return t ? `${t.width}x${t.height}` : `<slot ${slot} unallocated>`
+          })
+          return { ok: true, black, white, width: rr.canvas.width, height: rr.canvas.height, uncaptured, passes, targetSizes }
         } catch (e) {
           return { ok: false, error: String((e as Error)?.message ?? e), uncaptured, passes }
         }
@@ -507,6 +521,55 @@ async function main() {
         assert(spread(res.black!) > 40, `the composite is flat (spread ${spread(res.black!)}) — the blurred layer did not reach it`)
         blurred[backend] = res.black!
       })
+    }
+    // ---- per-pass scale beside a Stack composite (the full-res pin) -------------
+    // A blur layer beside another layer shares its first depth group with the
+    // Stack's bottom composite. Each sub-pass must still render into a target
+    // of the size it declares — read off the renderer's allocated textures, not
+    // inferred from pixels — and, for the pyramid, the image must be exactly
+    // the blur's own.
+    for (const backend of backends) {
+      for (const type of ['blur', 'pyramid_blur'] as const) {
+        test(`${backend} · ${type} beside a Stack composite: every sub-pass renders at its declared size${type === 'pyramid_blur' ? ', image byte-identical' : ''}`, async () => {
+          const radius = type === 'blur' ? 4 : 24
+          const alone = await rawRender(backend, [nd('c', 'gradient', RAMP), nd('bl', type, { radius }), nd('out', 'fragment_output')],
+            [wr(0, 'c', 'color', 'bl', 'source'), wr(1, 'bl', 'color', 'out', 'color')])
+          const inStack = await rawRender(backend,
+            [nd('g', 'gradient', GRADIENT_PARAMS), nd('c', 'gradient', RAMP), nd('bl', type, { radius }),
+              nd('stk', 'stack', { layers: [{ id: 'a', name: 'Layer 1', blendMode: 'normal', visible: true }, { id: 'b', name: 'Layer 2', blendMode: 'normal', visible: true }] }),
+              nd('out', 'fragment_output')],
+            [wr(0, 'g', 'color', 'stk', 'layer_a'), wr(1, 'c', 'color', 'bl', 'source'), wr(2, 'bl', 'color', 'stk', 'layer_b'), wr(3, 'stk', 'color', 'out', 'color')])
+          assert(alone.ok && inStack.ok, `${alone.error ?? ''} ${inStack.error ?? ''}`)
+          assert(inStack.uncaptured.length === 0, `uncaptured: ${JSON.stringify(inStack.uncaptured.slice(0, 1))}`)
+          // The blur's sub-passes in the Stack plan: walk back from the top
+          // composite's scaled input.
+          const ps = inStack.passes
+          const top = ps[ps.length - 1]
+          const chain = [top.glslReads.find((r) => ps[r].resolution !== null)!]
+          assert(chain[0] !== undefined, 'the top composite reads no scaled pass')
+          for (;;) {
+            const prev = ps[chain[0]].glslReads.filter((r) => ps[r].glslReads.length > 0)
+            if (prev.length !== 1) break
+            chain.unshift(prev[0])
+          }
+          // Alone: the blur's sub-passes are passes 1..n-2 (the last is the canvas).
+          const aloneSizes = alone.targetSizes!.slice(1, -1)
+          const stackSizes = chain.map((i) => inStack.targetSizes![i])
+          const half = `${W / 2}x${H / 2}`
+          assert(aloneSizes[0] === half, `fixture assumption broken: ${type} alone renders its first sub-pass into ${aloneSizes[0]}, expected ${half}`)
+          assert(JSON.stringify(stackSizes.slice(0, aloneSizes.length)) === JSON.stringify(aloneSizes),
+            `beside a Stack composite the blur rendered into ${JSON.stringify(stackSizes)}, alone into ${JSON.stringify(aloneSizes)}`)
+          // The bottom composite (the top's other input) stays full size.
+          const bottom = top.glslReads.find((r) => !chain.includes(r))!
+          assert(inStack.targetSizes![bottom] === `${W}x${H}`, `the bottom composite rendered into ${inStack.targetSizes![bottom]}`)
+          if (type === 'pyramid_blur') {
+            // Opaque Normal top layer at opacity 1: the composite IS the blur.
+            const d = maxDiff(alone.black!, inStack.black!)
+            assert(spread(alone.black!) > 40, 'the blur rendered flat')
+            assert(d === 0, `the pyramid in a 2-layer Stack differs from the pyramid alone by up to ${d} LSB`)
+          }
+        })
+      }
     }
     test('the Gaussian-blurred composite agrees across backends', () => {
       assert(blurred.webgpu && blurred.webgl2, 'one backend did not produce the blurred composite')

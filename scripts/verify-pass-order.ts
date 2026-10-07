@@ -204,7 +204,35 @@ function assertNoAliasing(reads: number[][], slots: Array<number | undefined>, l
   })
 }
 
-interface Measured { passes: number; before: number; after: number; floor: number; optimum: number | null }
+interface Measured {
+  passes: number; before: number; after: number; floor: number; optimum: number | null
+  /** Ordered plan's intermediate memory in full-canvas units: Σ over slots of scale². */
+  units: number
+  /** True when the ordered plan's slots hold more than one target size. */
+  mixed: boolean
+}
+
+/**
+ * Intermediate memory of a compiled plan in FULL-CANVAS UNITS: each slot costs
+ * its target's scale squared (a half-size slot is 0.25). A slot count is a
+ * stand-in for memory only while every target is the same size; the allocator
+ * never lets two sizes share a slot, so once sizes mix (a blur layer's
+ * half-size sub-passes) the count can rise while memory falls. This is the
+ * number that measures the right thing.
+ */
+function canvasUnits(passes: Array<{ targetSlot?: number; resolution?: number }>, label: string): { units: number; mixed: boolean } {
+  const scaleOf = new Map<number, number>()
+  for (const p of passes) {
+    if (p.targetSlot === undefined || p.targetSlot < 0) continue
+    const scale = p.resolution ?? 1
+    const prior = scaleOf.get(p.targetSlot)
+    assert(prior === undefined || prior === scale,
+      `${label}: slot ${p.targetSlot} holds targets of scale ${prior} and ${scale} — the allocator must not share a slot across sizes`)
+    scaleOf.set(p.targetSlot, scale)
+  }
+  const scales = [...scaleOf.values()]
+  return { units: scales.reduce((a, r) => a + r * r, 0), mixed: new Set(scales).size > 1 }
+}
 
 const OPTIMUM_MAX_PASSES = 18
 
@@ -275,15 +303,19 @@ function measure(g: Graph, label: string): Measured {
   assert(after.glslSlots >= floor, `${label}: ${after.glslSlots} slots is below the structural floor ${floor} — aliasing`)
   const optimum = optimumSlots(after.glsl.map(glslReads))
   if (optimum !== null) {
+    // Size-agnostic, so still a valid LOWER bound when sizes mix.
     assert(after.glslSlots >= optimum, `${label}: ${after.glslSlots} slots is below the optimum ${optimum} — aliasing`)
   }
-  return { passes: after.glsl.length, before: before.glslSlots, after: after.glslSlots, floor, optimum }
+  const gu = canvasUnits(after.glsl, `${label} GLSL`)
+  const wu = canvasUnits(after.wgsl, `${label} WGSL`)
+  assert(Math.abs(gu.units - wu.units) < 1e-9, `${label}: GLSL plan needs ${gu.units} canvas units, WGSL ${wu.units}`)
+  return { passes: after.glsl.length, before: before.glslSlots, after: after.glslSlots, floor, optimum, units: gu.units, mixed: gu.mixed }
 }
 
 const table: string[] = []
 const record = (shape: string, m: Measured) => table.push(
   `  ${shape.padEnd(34)} ${String(m.passes).padStart(6)} ${String(m.passes - 1).padStart(10)} ` +
-  `${String(m.before).padStart(10)} ${String(m.after).padStart(10)} ${String(m.optimum ?? '—').padStart(8)}`,
+  `${String(m.before).padStart(10)} ${String(m.after).padStart(10)} ${String(m.optimum ?? '—').padStart(8)} ${String(m.units).padStart(7)}`,
 )
 
 // ---------------------------------------------------------------------------
@@ -368,23 +400,38 @@ const LAYER_COUNTS = [2, 4, 8, 16]
  * The answers, written down — measured on these compiler-produced plans. A
  * bound alone is satisfied by a lucky small case; a pinned number moves the
  * moment ordering, partitioning or relay grouping changes, and then has to be
- * re-measured on purpose. Each entry is [depth order + liveness, + ordering].
+ * re-measured on purpose. Each entry is [depth order + liveness, + ordering,
+ * ordered plan's canvas units (see canvasUnits)].
+ *
+ * Canvas units equal the slot count wherever every target is full size. The
+ * one shape where they differ is the blur layer: its two sub-passes render at
+ * their declared half size (since per-emitted-pass resolution — a Stack's
+ * bottom composite used to pin the first one to full size), the allocator
+ * gives them a half-size slot of their own, and the plan needs 5 slots but
+ * 3 full + 2 quarter = 3.5 canvas units, where the pinned plan needed 4 full
+ * slots = 4.0. Pinned exactly, not as a ceiling: a blur that silently fell
+ * back to full size could pack into fewer slots and pass a ≤ bound.
  */
-const EXPECTED: Record<string, [number, number]> = {
-  'stack×2': [3, 2], 'stack×4': [5, 3], 'stack×8': [9, 3], 'stack×16': [17, 3],
-  'fan-out': [9, 4],
-  'blur-layer': [9, 4],
-  'nested@0': [8, 3], 'nested@1': [8, 4], 'nested@2': [8, 5], 'nested@3': [8, 5],
+const EXPECTED: Record<string, [number, number, number]> = {
+  'stack×2': [3, 2, 2], 'stack×4': [5, 3, 3], 'stack×8': [9, 3, 3], 'stack×16': [17, 3, 3],
+  'fan-out': [9, 4, 4],
+  // Depth order 9 → 11 for the same reason: half-size targets take slots of their own.
+  'blur-layer': [11, 5, 3 * 1 + 2 * 0.5 * 0.5],
+  'nested@0': [8, 3, 3], 'nested@1': [8, 4, 4], 'nested@2': [8, 5, 5], 'nested@3': [8, 5, 5],
 }
 
 function expectSlots(label: string, m: Measured) {
-  // Where the optimum is computable, the ordering must reach it exactly.
-  if (m.optimum !== null) {
+  // Where the optimum is computable, the ordering must reach it exactly — for
+  // single-size plans only: optimumSlots is one-size-class by its own
+  // documentation, so with mixed sizes it is a lower bound (asserted in
+  // measure()), not a reachable target.
+  if (m.optimum !== null && !m.mixed) {
     assert(m.after === m.optimum, `${label}: ordered plan needs ${m.after} slots, the best valid order needs ${m.optimum} — ordering left slack`)
   }
-  const [before, after] = EXPECTED[label]
+  const [before, after, units] = EXPECTED[label]
   assert(m.before === before, `${label}: depth order needs ${m.before} slots, expected ${before} — re-measure`)
   assert(m.after === after, `${label}: ordered plan needs ${m.after} slots, expected ${after} — re-measure`)
+  assert(Math.abs(m.units - units) < 1e-9, `${label}: ordered plan needs ${m.units} canvas units, expected ${units} — re-measure`)
 }
 
 test('plain stack: valid on both backends, ≤ 3 slots, and CONSTANT from 4 to 16 layers', () => {
@@ -418,10 +465,12 @@ test('fan-out: 8 layers, one source feeding two layers — ≤ 4 slots', () => {
   expectSlots('fan-out', m)
 })
 
-test('multi-pass blur feeding layer 3 of 8 — ≤ 4 slots', () => {
+test('multi-pass blur feeding layer 3 of 8 — 5 slots, 3.5 canvas units (blur sub-passes at half size)', () => {
   const m = measure(blurLayer(), 'blur-layer')
   record('8 layers, layer 3 via multi-pass blur', m)
-  assert(m.after <= IRREGULAR_BOUND, `blur-layer: ${m.after} slots, bound is ${IRREGULAR_BOUND}`)
+  // The mechanism, not just the total: the plan must really mix sizes — both
+  // blur sub-passes at their declared half size.
+  assert(m.mixed, 'blur-layer: every slot is full size — the blur\'s half-size sub-passes were pinned to full size')
   expectSlots('blur-layer', m)
 })
 
@@ -513,7 +562,7 @@ test('real saved graphs: valid, backends agree, and slot counts UNCHANGED', () =
 })
 
 test('summary', () => {
-  console.log('  shape                              passes  one-per-pass  +liveness  +ordering  optimum')
+  console.log('  shape                              passes  one-per-pass  +liveness  +ordering  optimum   units')
   for (const row of table) console.log(row)
 })
 
