@@ -2,6 +2,12 @@
  * Stack — N layers composited bottom-up, each with its own blend mode, opacity
  * and mask. Spec: docs/superpowers/specs/2026-09-11-stack-compositing-node-design.md.
  *
+ * STORAGE ORDER: `params.layers` is BOTTOM-FIRST. Index 0 is the bottom layer,
+ * composited first (sub-pass 0); the last entry is the top. The layer list UI
+ * (StackLayerList) shows and reports layers TOP-FIRST, Photoshop order — so
+ * the editor must flip between the two in exactly one place, mapping reorder
+ * indices through the same flip. An off-by-one there is a silent wrong image.
+ *
  * ALPHA. Stack COMPUTES alpha, and that is correct. The "don't invent alpha"
  * rule (NODE_AUTHORING_GUIDE.md) is for mask/effect primitives that must pass
  * `color.a` through. Stack is a BLEND: its output coverage is the alpha-aware
@@ -47,6 +53,7 @@ import { SUB_PASS_PARAM } from '../../compiler/expand-passes'
 import { BLEND_MODES, addBlendGLSL, blendFunctionName, blendIRFunctions, isBlendMode, type BlendMode } from '../shared/blend-modes'
 import { COLOR_GLSL_HELPERS, COLOR_IR_HELPERS } from '../shared/color-space'
 
+/** One entry of `params.layers`, which is stored bottom-first. */
 export interface StackLayer {
   /** Stable, never reused. Ports derive from this — never from the array index. */
   id: string
@@ -59,7 +66,7 @@ export interface StackLayer {
 
 export type BlendSpace = 'srgb' | 'linear'
 
-/** Bottom first. Ids are only unique per node, so fixed ids are fine here. */
+/** Bottom-first, like every `layers` array. Ids are only unique per node, so fixed ids are fine here. */
 export const DEFAULT_STACK_LAYERS: readonly StackLayer[] = [
   { id: 'l1', name: 'Layer 1', blendMode: 'normal', visible: true },
   { id: 'l2', name: 'Layer 2', blendMode: 'normal', visible: true },
@@ -76,7 +83,8 @@ const BACKDROP = 'backdrop'
 const ID_RE = /^[A-Za-z0-9]+$/
 
 /**
- * The node's layers, bottom first. A missing or non-array value falls back to
+ * The node's layers, BOTTOM-FIRST: index 0 is the bottom layer and sub-pass 0
+ * (see the header — the layer list UI is top-first). A missing or non-array value falls back to
  * the default; malformed entries are dropped, so a hand-edited file or an old
  * share URL cannot crash codegen. An EMPTY array is a real state — the layer
  * list's designed empty state — and stays empty.
