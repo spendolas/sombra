@@ -235,6 +235,32 @@ export const ds = {
     count: "text-param text-fg-dim",
     message: "text-param text-fg-dim",
   },
+  stackLayer: {
+    root: "flex flex-col py-md gap-md relative",
+    card: "bg-white/4 rounded-md absolute pointer-events-none inset-y-0 right-0 left-1.5",
+    cardHover: "bg-white/8 rounded-md absolute pointer-events-none inset-y-0 right-0 left-1.5",
+    cardDragging: "bg-surface-elevated rounded-md absolute pointer-events-none inset-y-0 right-0 left-1.5",
+    cardHidden: "bg-overlay-scrim/10 rounded-md absolute pointer-events-none inset-y-0 right-0 left-1.5",
+    layerLine: "flex flex-row items-center pr-xs relative",
+    nameStack: "flex flex-col gap-2xs",
+    name: "text-handle text-fg",
+    source: "text-param text-fg-muted",
+    blendLine: "flex flex-row items-center pr-xs relative",
+    blendDisabled: "opacity-40",
+    dimmed: "opacity-50",
+    lineContent: "flex flex-row items-center pl-handle-offset gap-sm",
+    header: "flex flex-row items-center justify-between pl-handle-offset pr-xs",
+    grip: "text-fg-dim cursor-grab touch-none shrink-0",
+  },
+  stackEmpty: {
+    root: "flex flex-col items-center justify-center bg-surface-alt rounded-sm px-md py-xl gap-xs cursor-pointer transition-colors hover:bg-surface-raised hover:text-fg",
+    rootHover: "flex flex-col items-center justify-center bg-surface-raised rounded-sm px-md py-xl gap-xs cursor-pointer",
+    label: "text-body text-fg-subtle",
+    labelHover: "text-body text-fg",
+  },
+  stackDropSlot: {
+    slot: "bg-surface-alt rounded-md",
+  },
 } as const;
 
 export type DSComponent = keyof typeof ds;
