@@ -772,8 +772,11 @@ function extractFigmaProps(node: FigmaNode, maps: Maps, dbPart: ComponentPart): 
   if (node.clipsContent) props['overflow'] = 'hidden'
 
   // ── Opacity ──
+  // Whole percent, the same unit as `fill.opacity` / the DB's `fillOpacity`, because
+  // the generator emits `opacity-${part.opacity}` — Tailwind's scale is 0–100, so a
+  // fraction like 0.4 becomes `opacity-0.4`, which compiles to nothing.
   if (node.opacity != null && node.opacity < 1) {
-    props['opacity'] = Math.round(node.opacity * 100) / 100
+    props['opacity'] = Math.round(node.opacity * 100)
   }
 
   // ── Node-level blend mode ──
@@ -1009,7 +1012,7 @@ function extractDbProps(part: ComponentPart, db: DB, maps: Maps): PropMap {
   if (part.overflow === 'hidden') props['overflow'] = 'hidden'
 
   // ── Opacity ──
-  if (part.opacity != null && part.opacity < 1) {
+  if (part.opacity != null && part.opacity < 100) {
     props['opacity'] = part.opacity
   }
 
@@ -1254,7 +1257,7 @@ function patchDb(
         part.overflow = String(val)
         patchCount++
       } else if (diff.key === 'opacity') {
-        part.opacity = Math.round(Number(val) * 100) / 100
+        part.opacity = Math.round(Number(val))
         patchCount++
       } else if (diff.key === 'blendMode') {
         part.blendMode = String(val)

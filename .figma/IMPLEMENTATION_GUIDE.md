@@ -190,6 +190,7 @@ Complete mapping of every Figma component to its React source:
 | Color Input | `106:292` | `src/components/NodeParameters.tsx` | `ColorInput` |
 | Connectable Param Row | `106:311` | `src/components/ShaderNode.tsx` | (inline) |
 | Preview Toolbar | `106:352` | `src/components/PreviewToolbar.tsx` | `PreviewToolbar` |
+| Stack Layer / Stack Empty / Stack Drop Slot | `982:5693` · `982:5702` · `982:5703` | `src/components/StackLayerList.tsx` | `StackLayerList` |
 
 ### Organisms (V2 IDs)
 | Figma Component | Node ID | Source File | React Component |
