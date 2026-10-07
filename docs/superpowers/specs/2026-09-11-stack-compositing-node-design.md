@@ -27,7 +27,7 @@ An ordered list of layers, composited **bottom-up** — layer 1 is the bottom. E
 | Control | Kind | Notes |
 |---|---|---|
 | **Source** | `color` port, `textureInput: true` | A whole upstream branch, rendered to its own pass — so a layer may itself contain blur, pixelate or any multi-pass effect. |
-| **Blend mode** | enum, `recompile` | 22 modes (§5). **Greyed on the bottom layer** — nothing beneath to blend against. |
+| **Blend mode** | enum, `recompile` | 24 modes (§5). **Greyed on the bottom layer** — nothing beneath to blend against. |
 | **Opacity** | float, `uniform`, `connectable` | Slider plus handle. Drag hits the uniform fast path; never recompiles. |
 | **Mask** | float, `connectable` | Handle only. Unconnected = 1.0. Same pass as its composite step — costs no extra boundary. |
 | **Visible** | bool, `recompile` | Eye toggle. Hidden layer is dropped from codegen entirely. |
@@ -153,16 +153,21 @@ Measured through the real compiler and expander, both backends agreeing:
 
 | layers | passes | textures today | + liveness | + consumer-ordered emission |
 |---|---|---|---|---|
-| 2 | 4 | 3 | 3 | 2 |
-| 4 | 8 | 7 | 5 | 2 |
-| 8 | 16 | 15 | 9 | 2 |
-| 16 | 32 | 31 | 17 | 2 |
-| 32 | 64 | 63 | 33 | 2 |
+| 2 | 4 | 3 | 3 | 3 |
+| 4 | 8 | 7 | 5 | 3 |
+| 8 | 16 | 15 | 9 | 3 |
+| 16 | 32 | 31 | 17 | 3 |
+| 32 | 64 | 63 | 33 | 3 |
 
 So today costs 2N−1 textures and liveness alone costs N+1 — a near-halving, still linear.
 **Constant memory needs the pass ORDER to change**, not the allocator: emit each layer's
 source immediately before the composite that consumes it, and the same liveness analysis
-returns 2 slots at any N.
+returns a constant 3 slots at any N.
+
+*Corrected 2026-10-07: this column read 2, from a hand-built pass list. The real plan needs 3
+because of the primary-plus-relay structure at the source depth — measured on
+compiler-produced plans in `docs/superpowers/plans/2026-09-14-consumer-ordered-emission.md`,
+which carries the correction. The spec had not been updated to match.*
 
 This is concrete rather than theoretical on the WebGL2 fallback, capped at 8 intermediates:
 a Stack tops out at **4 layers today**, reaches **7** with liveness, and is **unbounded**
@@ -171,7 +176,10 @@ with consumer-ordered emission. The difference between raising a limit and remov
 Pairwise compositing was chosen to avoid the sampler explosion, and it does avoid that —
 it simply does not deliver the memory property §4 originally claimed for it.
 
-## 5. Blend modes (22)
+## 5. Blend modes (24)
+
+*Corrected 2026-10-07: this section was titled 22, but the list below has always been
+20 separable + 4 non-separable = 24.*
 
 **Separable** (per channel): Normal, Darken, Multiply, Colour Burn, Linear Burn, Lighten,
 Screen, Colour Dodge, Linear Dodge (Add), Overlay, Soft Light, Hard Light, Vivid Light,
@@ -182,7 +190,7 @@ Linear Light, Pin Light, Hard Mix, Difference, Exclusion, Subtract, Divide.
 
 **No runtime branch.** Each layer's mode is a compile-time enum, so codegen emits only the
 helper that layer actually uses; the shader contains only the modes present in the graph,
-not all 22. `ifStmt` is not needed for mode selection, and the WGSL
+not all 24. `ifStmt` is not needed for mode selection, and the WGSL
 non-uniform-branch hazards do not arise. Helpers are shared via `ctx.addFunction`, so
 repeated modes cost one definition.
 
@@ -298,7 +306,13 @@ past the 16-unit ceiling after a program that linked cleanly. No shipped node ca
 Stack can. The one-line fix (skip the bind and the increment together when nothing reads the
 sampler) landed in Phase A (`f9d8c72`) with a synthetic unread-port node gating it.
 
-**The WebGPU half is confirmed and still open.** The same synthetic node shows
+**The WebGPU half is confirmed and still open — and it blocks Stack (2026-10-07).** Hidden
+layers are dropped from codegen (`count` is the visible count), so **hiding any wired layer
+leaves its source binding unread**. That is not an edge case; it is clicking an eye. It must
+be fixed at the source — the WGSL assembler — before the node ships, not worked around inside
+Stack.
+
+ The same synthetic node shows
 `updateRenderPlan` returning success while the draw raises `"No bind group set at group
 index 1."`, invalidating the command encoder. That is P0.2 reproduced end to end, and it is
 Phase B work on the WGSL assembler — Stack hits it the moment a layer port is wired but not
@@ -355,11 +369,17 @@ real array in `node.data.params`). It persists free: `NodeData.params` is
 ```ts
 interface StackLayer {
   id: string             // stable, uuid, never reused — ports derive from this
+  name: string           // "Layer N", assigned at creation, travels with the layer; no rename UI
   blendMode: BlendMode   // baked
   visible: boolean       // baked; false → layer omitted from codegen
   // opacity and mask are dynamicParams uniforms, keyed from id
 }
 ```
+
+Plus one node-level param, `nextLayerNumber` (hidden, never decreases), so a new layer is
+named one higher than any ever made — removing Layer 2 and adding one gives Layer 4, not a
+second Layer 2. *Added 2026-10-07: the designed UI shows names that stay with a layer when
+it is dragged (Figma drag-state board); deriving the name from position would rename it.*
 
 Ports derive from the array:
 `dynamicInputs: (params) => layers.map(l => ({ id: `layer_${l.id}`, type: 'color', textureInput: true, default: [0,0,0,0] }))`,
@@ -411,7 +431,7 @@ blend is skipped entirely, because the output then equals the backdrop. Assert p
 bound-texture count, and that the selected mode's helper appears in the emitted shader —
 then perturb the implementation and confirm the gate fails.
 
-Exercise all 22 modes, both blend spaces, and every wiring combination including the
+Exercise all 24 modes, both blend spaces, and every wiring combination including the
 partially-wired case. Defaults prove least.
 
 ## 11. Commit sequence
@@ -439,7 +459,7 @@ partially-wired case. Defaults prove least.
 
 | # | Commit |
 |---|---|
-| C1 | `feat(nodes): blend-mode helper library` — 22 modes, both backends, verified standalone |
+| C1 | `feat(nodes): blend-mode helper library` — 24 modes, both backends, verified standalone |
 | C2 | `feat(nodes): stack compositing node` — chain codegen + layer model. Verifiable via `window.__sombra.setParams`; **not human-usable**, the layer list has no generic UI |
 | C3 | `feat(compiler): convergence verification gate` (§10) |
 
@@ -447,9 +467,9 @@ partially-wired case. Defaults prove least.
 
 | # | Step |
 |---|---|
-| D1 | Figma: layer row, list header, all reorder states |
-| D2 | Sandbox harness, real React on real tokens — sign-off here |
-| D3 | DS pipeline: `sombra.ds.json` → `npm run tokens` → `ds.*` → `tokens:audit` |
+| D1 | Figma: layer row, list header, all reorder states — **done 2026-10-07** |
+| D2 | Sandbox harness, real React on real tokens — sign-off here — **done, signed off** |
+| D3 | DS pipeline: `sombra.ds.json` → `npm run tokens` → `ds.*` → `tokens:audit` — **done** (`stackLayer`, `stackEmpty`, `stackDropSlot`) |
 | D4 | `feat(ui): stack layer list editor` — `portsRenderedByComponent`, atomic layer store action, `updateNodeInternals` |
 
 **Staging.** Stack can ship before every enabler lands, with a layer cap that rises as they
@@ -489,13 +509,18 @@ Ranked by how routinely they fire (verified 2026-09-13):
 
 | Severity | Site | What happens |
 |---|---|---|
-| **Blocking** | `src/components/FlowCanvas.tsx:271-275` | `isValidConnection` has the identical two-line asymmetry — `dynamicInputs` resolved, then `targetDef.params?.find(p => p.connectable …)`. It runs on **every drag-to-connect**, and `ShaderNode` already resolves params, so **the handle renders and then silently refuses every wire**. Worst-placed of the set: no error, no explanation, and it makes the two fixes below invisible to anyone not driving the dev bridge. Found 2026-09-13 by the sweep this section asked for. Needs the same pure-predicate extraction `migrate` needed — `isValidConnection` is an inline `useCallback` — so it is a task, not a line. **Land before the Stack node.** |
+| **Fixed 2026-10-06** | `src/components/FlowCanvas.tsx:271-275` | `isValidConnection` has the identical two-line asymmetry — `dynamicInputs` resolved, then `targetDef.params?.find(p => p.connectable …)`. It runs on **every drag-to-connect**, and `ShaderNode` already resolves params, so **the handle renders and then silently refuses every wire**. Worst-placed of the set: no error, no explanation, and it makes the two fixes below invisible to anyone not driving the dev bridge. Found 2026-09-13 by the sweep this section asked for. Needs the same pure-predicate extraction `migrate` needed — `isValidConnection` is an inline `useCallback` — so it is a task, not a line. **Land before the Stack node.** |
 | **Fixed 2026-09-13** | `src/utils/sombra-file.ts:374-386` | The load-time dangling-handle prune accepts `(tgtDef.params ?? []).some(p => p.connectable …)` — **static params only**, though it *is* `dynamicInputs`-aware two lines above. Save a Stack with a wired layer opacity, reopen the `.sombra` file, and **the wire is silently gone.** Runs on every file open; nothing gates it. |
 | **Fixed 2026-09-13** | `src/stores/graphStore.ts:468` | The same gap in `validHandles`. Lives inside `migrate:`, which zustand calls only when the persisted schema version differs — so it fires on a **schema bump**, not on every reload. Rarer than the file path, equally silent, and a bump is routine when shipping. |
 | Visible | `src/utils/layout.ts:37-38, 115` | `getInputHandleOrder` resolves `dynamicInputs` but reads static `def.params` for connectable ones — the same asymmetry, one module over. A connectable dynamic param gets no handle position. Fails *visibly*: a handle in the wrong place. |
 | Graceful | `src/utils/sombra-file.ts:366, 584` | Definition defaults not merged → the "bakes NaN garbage" path its own comment warns about. Note `:584` needs a reorder: the defaults loop runs before `Object.assign(params, cn.p)`. |
 | Graceful | `src/embed/manifest.ts:81` | A dynamic param never becomes an embed knob. |
 | Minor | `src/dev-bridge.ts:59, 277` · `src/components/CommandPalette.tsx:129` · `src/components/PreviewGizmoOverlay.tsx:156` | Param listing for automation; defaults on node creation; gizmo. |
+
+*Update 2026-10-06:* the `FlowCanvas` predicate now resolves `dynamicParams`
+(extracted to `src/nodes/connection-validity.ts`, gated by `verify:connection-validity`).
+`layout.ts` (handle positions for connectable dynamic params) is the one remaining entry
+that a Stack user would see — a handle drawn in the wrong place — and is in the Phase C plan.
 
 The two data-deleting sites were fixed on 2026-09-13
 (`docs/superpowers/plans/2026-09-13-dynamic-param-wire-loss.md`). **`FlowCanvas`
