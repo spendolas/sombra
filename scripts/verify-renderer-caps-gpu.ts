@@ -128,6 +128,10 @@ interface GpuPhantomResult {
   declared: string[]
   /** Whether the renderer built a group-1 bind group for the last pass. */
   hasBindGroup: boolean
+  /** The last pass's WGSL module. */
+  shaderCode: string
+  /** Error messages from compiling that module on this device. */
+  compileErrors: string[]
 }
 
 interface Harness {
@@ -159,7 +163,7 @@ interface Harness {
    * no imageData — a sampler the module registers but never samples, and one
    * the renderer has no texture for.
    */
-  phantomWebGPU(k: number, m: number, shape?: 'phantom' | 'emptyImage'): Promise<GpuPhantomResult>
+  phantomWebGPU(k: number, m: number, shape?: 'phantom' | 'emptyImage' | 'helperRead'): Promise<GpuPhantomResult>
 }
 
 declare global {
@@ -174,7 +178,8 @@ async function installHarness(page: Page, base: string): Promise<void> {
     const { WebGL2ShaderRenderer } = await import(/* @vite-ignore */ `${b}src/webgl/renderer.ts`)
     const { WebGPUShaderRenderer } = await import(/* @vite-ignore */ `${b}src/webgpu/renderer.ts`)
     const { nodeRegistry } = await import(/* @vite-ignore */ `${b}src/nodes/registry.ts`)
-    const { declare, literal } = await import(/* @vite-ignore */ `${b}src/compiler/ir/types.ts`)
+    const { declare, literal, call, variable, raw } = await import(/* @vite-ignore */ `${b}src/compiler/ir/types.ts`)
+    const { addFunction } = await import(/* @vite-ignore */ `${b}src/nodes/types.ts`)
     initializeNodeLibrary()
 
     const mkCanvas = () => {
@@ -342,6 +347,64 @@ async function installHarness(page: Page, base: string): Promise<void> {
       return plan
     }
 
+    // A node whose texture port IS read — but only inside a helper function
+    // added through `functions` (IR) / `addFunction` (GLSL), never in the entry
+    // point body. The other direction of the declared==read rule: an
+    // assembler that scanned only the body would drop a texture the module
+    // samples, and Tint rejects the module outright. No shipped node samples
+    // inside a helper today, so without this fixture nothing would notice.
+    nodeRegistry.register({
+      type: 'test_helper_sampler',
+      label: 'Test Helper Sampler',
+      category: 'effect',
+      inputs: [{ id: 'src', label: 'Src', type: 'color', textureInput: true, default: [0, 0, 0, 1] }],
+      outputs: [{ id: 'color', label: 'Color', type: 'color' }],
+      params: [],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      glsl: (ctx: any) => {
+        const s = ctx.textureSamplers?.src
+        if (!s) return `vec4 ${ctx.outputs.color} = vec4(0.0);`
+        addFunction(ctx, `helper_read_${s}`, `vec4 helper_read_${s}(vec2 uv) {\n  return texture(${s}, uv);\n}`)
+        return `vec4 ${ctx.outputs.color} = helper_read_${s}(v_uv);`
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ir: (ctx: any) => {
+        const s = ctx.textureSamplers?.src
+        if (!s) {
+          return { statements: [declare(ctx.outputs.color, 'vec4', literal('vec4', [0, 0, 0, 0]))], uniforms: [], standardUniforms: new Set<string>() }
+        }
+        return {
+          statements: [declare(ctx.outputs.color, 'vec4', call(`helper_read_${s}`, [variable('v_uv', 'vec2')], 'vec4'))],
+          functions: [{
+            key: `helper_read_${s}`, name: `helper_read_${s}`,
+            params: [{ name: 'uv', type: 'vec2' }], returnType: 'vec4',
+            // Single-arg raw: one text, mechanically translated per backend.
+            body: [raw(`  return texture(${s}, uv);`)],
+          }],
+          uniforms: [], standardUniforms: new Set<string>(),
+        }
+      },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any)
+
+    const buildHelperRead = () => {
+      const mk = (id: string, type: string) =>
+        ({ id, type: 'shaderNode', position: { x: 0, y: 0 }, data: { type, params: {} } })
+      const nodes = [mk('cb', 'checkerboard'), mk('px', 'pixelate'), mk('hs', 'test_helper_sampler'), mk('out', 'fragment_output')]
+      const edges = [
+        { id: 'e0', source: 'cb', sourceHandle: 'color', target: 'px', targetHandle: 'source' },
+        { id: 'e1', source: 'px', sourceHandle: 'color', target: 'hs', targetHandle: 'src' },
+        { id: 'e2', source: 'hs', sourceHandle: 'color', target: 'out', targetHandle: 'color' },
+      ]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const plan = compileGraph(nodes as any, edges as any)
+      if (!plan.success) throw new Error(`compile failed: ${plan.errors.map((e: { message: string }) => e.message).join('; ')}`)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ir = compileGraphIR(nodes as any, edges as any)
+      if (ir) plan.wgsl = toPlanWgsl(ir)
+      return plan
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let glRenderer: any = null
     const gl = async () => {
@@ -473,7 +536,7 @@ async function installHarness(page: Page, base: string): Promise<void> {
       },
       applyUnits: async (k: number, m: number) => runPlan(await gl(), buildConverging(k, m)),
       applyPhantom: async (k: number, m: number) => runPlan(await gl(), buildPhantom(k, m)),
-      phantomWebGPU: async (k: number, m: number, shape: 'phantom' | 'emptyImage' = 'phantom') => {
+      phantomWebGPU: async (k: number, m: number, shape: 'phantom' | 'emptyImage' | 'helperRead' = 'phantom') => {
         if (!gpuTried) {
           gpuTried = true
           try {
@@ -484,7 +547,7 @@ async function installHarness(page: Page, base: string): Promise<void> {
             }
           } catch { gpuRenderer = null }
         }
-        if (!gpuRenderer) return { available: false, success: false, error: '', uncaptured: [], boundarySamplers: [], declared: [], hasBindGroup: false }
+        if (!gpuRenderer) return { available: false, success: false, error: '', uncaptured: [], boundarySamplers: [], declared: [], hasBindGroup: false, shaderCode: '', compileErrors: [] }
         // `createRenderPipeline` does NOT throw on a validation failure — it
         // returns an invalid pipeline and fires an uncaptured error — so a
         // try/catch alone would report success on a broken pass.
@@ -497,8 +560,13 @@ async function installHarness(page: Page, base: string): Promise<void> {
         let boundarySamplers: string[] = []
         let declared: string[] = []
         let hasBindGroup = false
+        let shaderCode = ''
+        let compileErrors: string[] = []
         try {
-          const plan = shape === 'phantom' ? buildPhantom(k, m) : buildEmptyImage()
+          const plan = shape === 'phantom' ? buildPhantom(k, m) : shape === 'emptyImage' ? buildEmptyImage() : buildHelperRead()
+          shaderCode = plan.wgsl.passes[plan.wgsl.passes.length - 1].shaderCode
+          const info = await dev.createShaderModule({ code: shaderCode }).getCompilationInfo()
+          compileErrors = info.messages.filter((msg) => msg.type === 'error').map((msg) => msg.message)
           const lastWgsl = plan.wgsl.passes[plan.wgsl.passes.length - 1]
           boundarySamplers = lastWgsl.inputTextures.map((t: { samplerName: string }) => t.samplerName)
           declared = lastWgsl.textureBindings.map((b: { samplerName: string }) => b.samplerName)
@@ -530,7 +598,7 @@ async function installHarness(page: Page, base: string): Promise<void> {
           error = e instanceof Error ? e.message : String(e)
         }
         dev.removeEventListener('uncapturederror', onErr)
-        return { available: true, success, error, uncaptured, boundarySamplers, declared, hasBindGroup }
+        return { available: true, success, error, uncaptured, boundarySamplers, declared, hasBindGroup, shaderCode, compileErrors }
       },
       applyWebGPU: async (n: number) => {
         if (!(await ensureGpu())) return null
@@ -782,6 +850,36 @@ async function main() {
       assert(emptyImgGpu.uncaptured.length === 0,
         `WebGPU raised ${emptyImgGpu.uncaptured.length} uncaptured error(s): ${JSON.stringify(emptyImgGpu.uncaptured.slice(0, 2))}`)
       console.log(`  webgpu empty image: declared ${JSON.stringify(emptyImgGpu.declared)}, bind group set, 0 uncaptured`)
+    })
+
+    const helperGpu = await page.evaluate(() => globalThis.__caps.phantomWebGPU(0, 0, 'helperRead'))
+
+    test('8c · a texture read ONLY inside a helper function stays declared', () => {
+      if (!helperGpu.available) { console.log('  (WebGPU unavailable — skipped)'); return }
+      // Mechanism: the fixture really samples in a helper and nowhere in the
+      // entry point — otherwise a body-only scan would pass this for free.
+      const [sampler] = helperGpu.boundarySamplers
+      assert(helperGpu.boundarySamplers.length === 1,
+        `fixture should hand the last pass exactly one boundary, got ${JSON.stringify(helperGpu.boundarySamplers)}`)
+      const fsAt = helperGpu.shaderCode.indexOf('@fragment fn fs_main')
+      assert(fsAt > 0, 'could not find fs_main in the emitted module')
+      const ref = new RegExp(`\\b${sampler}_tex\\b`)
+      const declAt = helperGpu.shaderCode.indexOf(`var ${sampler}_tex`)
+      const beforeEntry = helperGpu.shaderCode.slice(0, fsAt).replace(`var ${sampler}_tex`, '')
+      assert(ref.test(beforeEntry),
+        `fixture broken: ${sampler} is not sampled in any helper function`)
+      assert(!ref.test(helperGpu.shaderCode.slice(fsAt)),
+        `fixture broken: ${sampler} is sampled in fs_main itself, so a body-only scan would still find it`)
+      assert(declAt >= 0 && helperGpu.declared.includes(sampler),
+        `${sampler} is sampled in a helper but was NOT declared — the assembler only scans the entry point. `
+        + `declared: ${JSON.stringify(helperGpu.declared)}`)
+      assert(helperGpu.compileErrors.length === 0,
+        `the module does not compile on WebGPU: ${JSON.stringify(helperGpu.compileErrors.slice(0, 2))}`)
+      assert(helperGpu.hasBindGroup, `no group-1 bind group for the last pass: ${helperGpu.error}`)
+      assert(helperGpu.success === true, `the plan was rejected: ${helperGpu.error}`)
+      assert(helperGpu.uncaptured.length === 0,
+        `WebGPU raised ${helperGpu.uncaptured.length} uncaptured error(s): ${JSON.stringify(helperGpu.uncaptured.slice(0, 2))}`)
+      console.log(`  webgpu helper read: ${sampler} sampled only in a helper, declared, module compiles, 0 uncaptured`)
     })
 
     test('4 · WebGPU rejects its own over-cap plan (backends agree)', () => {
