@@ -445,6 +445,54 @@ async function main() {
       })
     }
 
+    // ---- blurred layers -------------------------------------------------------
+    // Stack composites blurred layers routinely, and WebGL2 has a known blank
+    // render for blur → pixelate. A raw graph, not buildGraph: the source is a
+    // multi-pass blur, not a constant.
+    const rawRender = (backend: string, nodes: unknown[], edges: unknown[]) =>
+      page.evaluate((r) => (window as unknown as { __stack: (q: unknown) => Promise<Result> }).__stack(r), { backend, nodes, edges })
+    const nd = (id: string, type: string, params: Record<string, unknown> = {}) => ({ id, type: 'shaderNode', position: { x: 0, y: 0 }, data: { type, params } })
+    const wr = (i: number, s: string, sh: string, t: string, th: string) => ({ id: `w${i}`, source: s, sourceHandle: sh, target: t, targetHandle: th })
+    const spread = (px: number[][]) => { const v = px.map((p) => p[0]); return Math.max(...v) - Math.min(...v) }
+    const maxDiff = (a: number[][], b: number[][]) => Math.max(...a.map((p, i) => Math.max(...p.map((v, c) => Math.abs(v - b[i][c])))))
+    const blurred: Record<string, number[][]> = {}
+    // A full-range horizontal ramp: survives any blur radius at this size.
+    const RAMP = { ...GRADIENT_PARAMS, stops: [{ position: 0, color: [0, 0, 0, 1] }, { position: 1, color: [1, 1, 1, 1] }] }
+    for (const backend of backends) {
+      test(`${backend} · a pyramid-blurred layer composites exactly what the blur renders alone`, async () => {
+        // Pyramid's final sub-pass is full size, so as an intermediate it is the
+        // same image it is as the final pass; one opaque Normal layer at
+        // opacity 1 must reproduce it. (Gaussian/Kawase declare a reduced final
+        // scale that only takes effect as an intermediate, so they cannot be
+        // compared this way.)
+        const alone = await rawRender(backend, [nd('c', 'gradient', RAMP), nd('py', 'pyramid_blur', { radius: 6 }), nd('out', 'fragment_output')],
+          [wr(0, 'c', 'color', 'py', 'source'), wr(1, 'py', 'color', 'out', 'color')])
+        const inStack = await rawRender(backend,
+          [nd('c', 'gradient', RAMP), nd('py', 'pyramid_blur', { radius: 6 }), nd('stk', 'stack', { layers: [{ id: 'b', name: 'Layer 1', blendMode: 'normal', visible: true }] }), nd('out', 'fragment_output')],
+          [wr(0, 'c', 'color', 'py', 'source'), wr(1, 'py', 'color', 'stk', 'layer_b'), wr(2, 'stk', 'color', 'out', 'color')])
+        assert(alone.ok && inStack.ok, `${alone.error ?? ''} ${inStack.error ?? ''}`)
+        assert(inStack.uncaptured.length === 0, `uncaptured: ${JSON.stringify(inStack.uncaptured.slice(0, 1))}`)
+        assert(spread(alone.black!) > 40, `the blur rendered flat (spread ${spread(alone.black!)}) — nothing to compare`)
+        const d = maxDiff(alone.black!, inStack.black!)
+        assert(d <= 1, `the Stack changed the blurred layer by up to ${d} LSB`)
+      })
+      test(`${backend} · a Gaussian-blurred layer in a 2-layer Stack renders (not blank)`, async () => {
+        const res = await rawRender(backend,
+          [nd('g', 'gradient'), nd('c', 'checkerboard'), nd('bl', 'blur', { radius: 12 }),
+            nd('stk', 'stack', { layers: [{ id: 'a', name: 'Layer 1', blendMode: 'normal', visible: true }, { id: 'b', name: 'Layer 2', blendMode: 'screen', visible: true }] }), nd('out', 'fragment_output')],
+          [wr(0, 'g', 'color', 'stk', 'layer_a'), wr(1, 'c', 'color', 'bl', 'source'), wr(2, 'bl', 'color', 'stk', 'layer_b'), wr(3, 'stk', 'color', 'out', 'color')])
+        assert(res.ok, res.error ?? '')
+        assert(res.uncaptured.length === 0, `uncaptured: ${JSON.stringify(res.uncaptured.slice(0, 1))}`)
+        assert(spread(res.black!) > 40, `the composite is flat (spread ${spread(res.black!)}) — the blurred layer did not reach it`)
+        blurred[backend] = res.black!
+      })
+    }
+    test('the Gaussian-blurred composite agrees across backends', () => {
+      assert(blurred.webgpu && blurred.webgl2, 'one backend did not produce the blurred composite')
+      const d = maxDiff(blurred.webgpu, blurred.webgl2)
+      assert(d <= 2, `WebGPU and WebGL2 differ by up to ${d} LSB on the blurred-layer composite`)
+    })
+
     await run('stack-gpu')
   } finally {
     await browser?.close()

@@ -269,6 +269,50 @@ for (const texNode of TEXTURE_NODES) {
   }
 }
 
+// 4b. Stack — not reachable through TEXTURE_NODES: its texture ports are
+// per-layer (`layer_<id>`, from dynamicInputs), never `source`, and its chain
+// port is wired by the expansion. Every blend mode in both blend spaces, plus
+// the hidden / none / nested shapes, with the pass count each must produce.
+console.log('\n--- Stack (every blend mode × blend space, hidden / none / nested) ---')
+{
+  const { BLEND_MODES } = await import('../src/nodes/shared/blend-modes')
+  const layer = (id: string, blendMode: string, visible = true) => ({ id, name: id, blendMode, visible })
+  const stackCase = (label: string, layers: Array<ReturnType<typeof layer>>, space: string, expectPasses: number, nest = false) => {
+    const outId = uid()
+    const stkId = uid()
+    const nodes: Node<NodeData>[] = [makeNode(stkId, 'stack', { layers, blendSpace: space }), makeNode(outId, 'fragment_output')]
+    const edges: Edge<EdgeData>[] = []
+    layers.forEach((l, i) => {
+      const nz = uid(), ramp = uid()
+      nodes.push(makeNode(nz, 'noise', { noiseType: NOISE_TYPES[i % NOISE_TYPES.length] }), makeNode(ramp, 'color_ramp'))
+      edges.push(makeEdge(nz, ramp, 'value', 'value'), makeEdge(ramp, stkId, 'color', `layer_${l.id}`))
+    })
+    let top = stkId
+    if (nest) {
+      const outer = uid(), dots = uid()
+      nodes.push(makeNode(outer, 'stack', { layers: [layer('x', 'normal'), layer('y', 'overlay')], blendSpace: space }), makeNode(dots, 'dots'))
+      edges.push(makeEdge(stkId, outer, 'color', 'layer_x'), makeEdge(dots, outer, 'color', 'layer_y'))
+      top = outer
+    }
+    edges.push(makeEdge(top, outId, 'color', 'color'))
+    const r = runTest(label, nodes, edges)
+    if (r.wgslOk && r.wgslPassCount !== expectPasses) {
+      r.wgslOk = false
+      r.errors.push(`expected ${expectPasses} passes, got ${r.wgslPassCount}`)
+    }
+    results.push(r)
+    totalTests++
+    if (r.wgslOk) { passed++; console.log(`  ✓ ${r.name} [${r.wgslPassCount} passes]`) }
+    else { failed++; console.log(`  ✗ ${r.name} [${r.wgslPassCount} passes]`); r.errors.forEach(e => console.log(`    ${e}`)) }
+  }
+  for (const space of ['srgb', 'linear']) {
+    for (const m of BLEND_MODES) stackCase(`Stack ${m.id} [${space}]`, [layer('a', 'normal'), layer('b', m.id)], space, 4)
+  }
+  stackCase('Stack 3 layers, middle hidden', [layer('a', 'normal'), layer('b', 'screen', false), layer('c', 'hue')], 'linear', 4)
+  stackCase('Stack, every layer hidden', [layer('a', 'normal', false), layer('b', 'screen', false)], 'srgb', 1)
+  stackCase('Stack nested in a Stack', [layer('a', 'normal'), layer('b', 'multiply')], 'srgb', 7, true)
+}
+
 // 5. Image node single-pass
 console.log('\n--- Image node ---')
 {
