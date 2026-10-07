@@ -117,6 +117,19 @@ interface PlanResult {
   slotCount: number
 }
 
+interface GpuPhantomResult {
+  available: boolean
+  success: boolean
+  error: string
+  uncaptured: string[]
+  /** Inter-pass samplers the LAST pass's WGSL plan lists as inputs (read or not). */
+  boundarySamplers: string[]
+  /** Samplers the assembler actually DECLARED for the last pass (`textureBindings`). */
+  declared: string[]
+  /** Whether the renderer built a group-1 bind group for the last pass. */
+  hasBindGroup: boolean
+}
+
 interface Harness {
   probe(): CapProbe
   /** Compile a chain of `n` pixelate nodes and hand the plan to the renderer. */
@@ -140,8 +153,13 @@ interface Harness {
    * spends a unit per unread boundary.
    */
   applyPhantom(k: number, m: number): Promise<UnitResult>
-  /** The same unread-boundary graph, handed to the WebGPU renderer. */
-  phantomWebGPU(k: number, m: number): Promise<{ available: boolean; success: boolean; error: string; uncaptured: string[] }>
+  /**
+   * The same unread-boundary graph, handed to the WebGPU renderer.
+   * `emptyImage` instead builds one READ pass texture beside an image node with
+   * no imageData — a sampler the module registers but never samples, and one
+   * the renderer has no texture for.
+   */
+  phantomWebGPU(k: number, m: number, shape?: 'phantom' | 'emptyImage'): Promise<GpuPhantomResult>
 }
 
 declare global {
@@ -301,6 +319,29 @@ async function installHarness(page: Page, base: string): Promise<void> {
       return plan
     }
 
+    // One READ pass texture (pixelate → mix.a) beside an image node with NO
+    // imageData (→ mix.b). The image node registers its sampler and never
+    // samples it, and nothing is ever uploaded for it — the image-side twin of
+    // the phantom boundary, in a pass that does need group 1.
+    const buildEmptyImage = () => {
+      const mk = (id: string, type: string, params: Record<string, unknown> = {}) =>
+        ({ id, type: 'shaderNode', position: { x: 0, y: 0 }, data: { type, params } })
+      const nodes = [mk('cb', 'checkerboard'), mk('px', 'pixelate'), mk('im', 'image'), mk('mx', 'mix'), mk('out', 'fragment_output')]
+      const edges = [
+        { id: 'e0', source: 'cb', sourceHandle: 'color', target: 'px', targetHandle: 'source' },
+        { id: 'e1', source: 'px', sourceHandle: 'color', target: 'mx', targetHandle: 'a' },
+        { id: 'e2', source: 'im', sourceHandle: 'color', target: 'mx', targetHandle: 'b' },
+        { id: 'e3', source: 'mx', sourceHandle: 'result', target: 'out', targetHandle: 'color' },
+      ]
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const plan = compileGraph(nodes as any, edges as any)
+      if (!plan.success) throw new Error(`compile failed: ${plan.errors.map((e: { message: string }) => e.message).join('; ')}`)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ir = compileGraphIR(nodes as any, edges as any)
+      if (ir) plan.wgsl = toPlanWgsl(ir)
+      return plan
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let glRenderer: any = null
     const gl = async () => {
@@ -432,7 +473,7 @@ async function installHarness(page: Page, base: string): Promise<void> {
       },
       applyUnits: async (k: number, m: number) => runPlan(await gl(), buildConverging(k, m)),
       applyPhantom: async (k: number, m: number) => runPlan(await gl(), buildPhantom(k, m)),
-      phantomWebGPU: async (k: number, m: number) => {
+      phantomWebGPU: async (k: number, m: number, shape: 'phantom' | 'emptyImage' = 'phantom') => {
         if (!gpuTried) {
           gpuTried = true
           try {
@@ -443,7 +484,7 @@ async function installHarness(page: Page, base: string): Promise<void> {
             }
           } catch { gpuRenderer = null }
         }
-        if (!gpuRenderer) return { available: false, success: false, error: '', uncaptured: [] }
+        if (!gpuRenderer) return { available: false, success: false, error: '', uncaptured: [], boundarySamplers: [], declared: [], hasBindGroup: false }
         // `createRenderPipeline` does NOT throw on a validation failure — it
         // returns an invalid pipeline and fires an uncaptured error — so a
         // try/catch alone would report success on a broken pass.
@@ -453,18 +494,43 @@ async function installHarness(page: Page, base: string): Promise<void> {
         dev.addEventListener('uncapturederror', onErr)
         let success = false
         let error = ''
+        let boundarySamplers: string[] = []
+        let declared: string[] = []
+        let hasBindGroup = false
         try {
-          const plan = buildPhantom(k, m)
+          const plan = shape === 'phantom' ? buildPhantom(k, m) : buildEmptyImage()
+          const lastWgsl = plan.wgsl.passes[plan.wgsl.passes.length - 1]
+          boundarySamplers = lastWgsl.inputTextures.map((t: { samplerName: string }) => t.samplerName)
+          declared = lastWgsl.textureBindings.map((b: { samplerName: string }) => b.samplerName)
           const res = gpuRenderer.updateRenderPlan(plan)
           success = !!res.success
           error = res.error ?? ''
+          // Upload every image the plan's nodes CARRY data for, and wait for
+          // the async upload to land. Without this a missing image also nulls
+          // the bind group, and the gate could not tell that apart from P0.2.
+          const want = shape === 'phantom' ? Array.from({ length: m }, (_, j) => `u_im${j}_image`) : []
+          if (want.length) {
+            const img = new Image()
+            img.src = PIXEL_PNG
+            await img.decode()
+            for (const name of want) gpuRenderer.uploadImageTexture(name, img)
+            const t0 = performance.now()
+            while (want.some((n) => !gpuRenderer.imageTextures.has(n)) && performance.now() - t0 < 5000) {
+              await new Promise((r) => setTimeout(r, 10))
+            }
+            if (want.some((n) => !gpuRenderer.imageTextures.has(n))) throw new Error('image uploads never landed')
+          }
           gpuRenderer.render()
           await dev.queue.onSubmittedWorkDone()
+          // Read AFTER the render: intermediates are allocated on first draw,
+          // and the bind groups are rebuilt then.
+          const ps = gpuRenderer.passStates[gpuRenderer.passStates.length - 1]
+          hasBindGroup = !!ps?.textureBindGroup
         } catch (e) {
           error = e instanceof Error ? e.message : String(e)
         }
         dev.removeEventListener('uncapturederror', onErr)
-        return { available: true, success, error, uncaptured }
+        return { available: true, success, error, uncaptured, boundarySamplers, declared, hasBindGroup }
       },
       applyWebGPU: async (n: number) => {
         if (!(await ensureGpu())) return null
@@ -673,31 +739,49 @@ async function main() {
     const phantomGpu = await page.evaluate((a) => globalThis.__caps.phantomWebGPU(a[0], a[1]),
       [phantomK, caps.units - 2])
 
-    test('8 · WebGPU + unread texture ports is KNOWN BROKEN (audit P0.2) — pinned', () => {
+    test('8a · WebGPU renders a pass whose wired texture ports go unread (audit P0.2)', () => {
       if (!phantomGpu.available) { console.log('  (WebGPU unavailable — skipped)'); return }
-      // Checked rather than assumed, and the answer is that WebGPU is NOT
-      // unaffected — it fails worse than WebGL2 did. A wired-but-unread
-      // texture port makes `layout:'auto'` omit the binding, `createBindGroup`
-      // throws, `buildPassTextureBindGroup` swallows it and returns null,
-      // `setBindGroup(1, …)` is skipped, and the draw invalidates the whole
-      // command encoder — while `updateRenderPlan` reports success. That is
-      // audit P0.2, it is out of Phase A's scope, and fixing it is framework
-      // work on the WGSL assembler, not a one-line accounting change.
+      // This gate used to PIN the broken behaviour: `layout:'auto'` omitted
+      // the unread bindings, `createBindGroup` failed, group 1 was never set,
+      // and the draw raised "No bind group set at group index 1." while
+      // `updateRenderPlan` reported success. The assembler now declares only
+      // what the module reads.
       //
-      // So this gate PINS the broken behaviour rather than asserting the good
-      // one. It is a tripwire: when P0.2 is fixed it goes red, and whoever
-      // fixes it flips it to `uncaptured.length === 0`. It must never be
-      // deleted to make a run green.
-      console.log(`  webgpu phantom (P0.2): success=${phantomGpu.success} uncaptured=${phantomGpu.uncaptured.length}`)
-      assert(phantomGpu.success === true,
-        `WebGPU now REJECTS the plan (${phantomGpu.error}) — if P0.2 was fixed, flip this gate to assert no uncaptured errors`)
-      assert(phantomGpu.uncaptured.length > 0,
-        'WebGPU no longer raises a validation error on unread texture ports — P0.2 appears FIXED; '
-        + 'flip this gate to assert uncaptured.length === 0 and drop the pin')
-      assert(phantomGpu.uncaptured.some((m) => /bind group/i.test(m)),
-        `expected the documented P0.2 signature ("No bind group set at group index 1"), got: `
-        + JSON.stringify(phantomGpu.uncaptured.slice(0, 2)))
-      console.log(`  ↳ pinned: "${phantomGpu.uncaptured[0].split('\n')[0]}"`)
+      // Mechanism first — an absence of errors also passes when the fixture
+      // simply stopped producing unread boundaries.
+      assert(phantomGpu.boundarySamplers.length === phantomK,
+        `the WGSL plan lists ${phantomGpu.boundarySamplers.length} boundary inputs on the last pass, expected ${phantomK} — `
+        + `the fixture is not producing wired-but-unread ports`)
+      const leaked = phantomGpu.boundarySamplers.filter((n) => phantomGpu.declared.includes(n))
+      assert(leaked.length === 0,
+        `the assembler still DECLARES ${leaked.length} unread boundary sampler(s): ${JSON.stringify(leaked)}`)
+      const imagesDeclared = phantomGpu.declared.filter((n) => n.endsWith('_image')).length
+      assert(imagesDeclared === caps.units - 2,
+        `expected all ${caps.units - 2} READ image samplers declared, got ${imagesDeclared} — over-pruning`)
+      assert(phantomGpu.hasBindGroup, `the renderer built no group-1 bind group for the last pass: ${phantomGpu.error}`)
+      assert(phantomGpu.success === true, `the plan was rejected: ${phantomGpu.error}`)
+      assert(phantomGpu.uncaptured.length === 0,
+        `WebGPU raised ${phantomGpu.uncaptured.length} uncaptured error(s): ${JSON.stringify(phantomGpu.uncaptured.slice(0, 2))}`)
+      console.log(`  webgpu phantom: ${phantomGpu.boundarySamplers.length} unread boundaries undeclared, ${imagesDeclared} images declared, bind group set, 0 uncaptured`)
+    })
+
+    const emptyImgGpu = await page.evaluate(() => globalThis.__caps.phantomWebGPU(0, 0, 'emptyImage'))
+
+    test('8b · WebGPU renders a pass beside an unread, never-uploaded image sampler', () => {
+      if (!emptyImgGpu.available) { console.log('  (WebGPU unavailable — skipped)'); return }
+      // The image-side twin: an image node with no data registers a sampler it
+      // never samples, and nothing is uploaded for it. Declared, the renderer
+      // finds no texture, returns no bind group, and the READ pass texture
+      // beside it goes unbound.
+      assert(emptyImgGpu.boundarySamplers.length === 1,
+        `fixture should have exactly one read pass texture on the last pass, got ${emptyImgGpu.boundarySamplers.length}`)
+      assert(emptyImgGpu.declared.length === 1 && emptyImgGpu.declared[0] === emptyImgGpu.boundarySamplers[0],
+        `expected only the read pass texture declared, got ${JSON.stringify(emptyImgGpu.declared)}`)
+      assert(emptyImgGpu.hasBindGroup, `no group-1 bind group for the last pass: ${emptyImgGpu.error}`)
+      assert(emptyImgGpu.success === true, `the plan was rejected: ${emptyImgGpu.error}`)
+      assert(emptyImgGpu.uncaptured.length === 0,
+        `WebGPU raised ${emptyImgGpu.uncaptured.length} uncaptured error(s): ${JSON.stringify(emptyImgGpu.uncaptured.slice(0, 2))}`)
+      console.log(`  webgpu empty image: declared ${JSON.stringify(emptyImgGpu.declared)}, bind group set, 0 uncaptured`)
     })
 
     test('4 · WebGPU rejects its own over-cap plan (backends agree)', () => {

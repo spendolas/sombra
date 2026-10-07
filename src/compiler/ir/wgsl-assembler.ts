@@ -278,12 +278,25 @@ export function assembleWGSL(
   functionsCode = rewriteVaryingReferences(functionsCode)
 
   // 6. Build texture bindings (inter-pass textures first, then image nodes)
+  //
+  // Declare ONLY the resources the module actually reads. The renderers build
+  // pipelines with `layout: 'auto'`, which keeps a binding only if the entry
+  // point statically uses it — so a texture declared here but never sampled
+  // (a wired texture port its consumer ignores, e.g. a hidden Stack layer) is
+  // absent from the layout while the renderer still fills it from
+  // `textureBindings`. `createBindGroup` then fails, group 1 is never set, and
+  // the draw invalidates the whole command buffer while the plan reports
+  // success (audit P0.2). GLSL gets this for free: the linker strips unused
+  // samplers. Here the declared set is made equal to the read set instead.
+  const allCode = functionsCode + '\n' + bodyCode
+  const isRead = (samplerName: string) =>
+    new RegExp(`\\b${samplerName}_(?:tex|samp)\\b`).test(allCode)
   const textureBindings: TextureBinding[] = []
   const textureDeclarations: string[] = []
   let bindingIndex = 0
 
   // Inter-pass texture inputs (from previous passes)
-  for (const samplerName of passInputSamplers) {
+  for (const samplerName of passInputSamplers.filter(isRead)) {
     const texBinding = bindingIndex
     const sampBinding = bindingIndex + 1
     textureBindings.push({
@@ -300,7 +313,7 @@ export function assembleWGSL(
   }
 
   // Image node textures
-  for (const samplerName of imageSamplerNames) {
+  for (const samplerName of imageSamplerNames.filter(isRead)) {
     const texBinding = bindingIndex
     const sampBinding = bindingIndex + 1
     textureBindings.push({
@@ -323,7 +336,6 @@ export function assembleWGSL(
   // regex. Previously this scanned for `sombra_mod(vec2f(`-shaped text, which a
   // vector mod written any other way missed → the helper was omitted and Tint
   // rejected the module silently (F7; the b56c19c silent-fail class).
-  const allCode = functionsCode + '\n' + bodyCode
   const modVariants: Array<[RegExp, string]> = [
     [/\bsombra_mod\(/, 'fn sombra_mod(x: f32, y: f32) -> f32 { return x - y * floor(x / y); }'],
     [/\bsombra_mod_v2\(/, 'fn sombra_mod_v2(x: vec2f, y: vec2f) -> vec2f { return x - y * floor(x / y); }'],
