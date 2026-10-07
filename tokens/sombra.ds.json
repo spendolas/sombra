@@ -2561,6 +2561,214 @@
           "figmaNodeId": "954:2140"
         }
       }
+    },
+    "982:5693": {
+      "name": "Stack Layer",
+      "type": "molecule",
+      "dsKey": "stackLayer",
+      "codeFile": "src/components/StackLayerList.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "982:5499",
+          "position": "relative",
+          "layout": "vertical",
+          "padding": {
+            "y": "md"
+          },
+          "gap": "md"
+        },
+        "card": {
+          "figmaNodeId": "982:5484",
+          "position": "absolute",
+          "pointerEvents": "none",
+          "extra": "inset-y-0 right-0 left-1.5",
+          "fill": "white",
+          "radius": "md",
+          "fillOpacity": 4,
+          "auditIgnore": [
+            "width",
+            "height"
+          ]
+        },
+        "cardHover": {
+          "figmaNodeId": "982:5518",
+          "position": "absolute",
+          "pointerEvents": "none",
+          "extra": "inset-y-0 right-0 left-1.5",
+          "fill": "white",
+          "radius": "md",
+          "fillOpacity": 8,
+          "auditIgnore": [
+            "width",
+            "height"
+          ]
+        },
+        "cardDragging": {
+          "figmaNodeId": "982:5570",
+          "position": "absolute",
+          "pointerEvents": "none",
+          "extra": "inset-y-0 right-0 left-1.5",
+          "fill": "surface/elevated",
+          "radius": "md",
+          "auditIgnore": [
+            "width",
+            "height"
+          ]
+        },
+        "cardHidden": {
+          "figmaNodeId": "982:5660",
+          "position": "absolute",
+          "pointerEvents": "none",
+          "extra": "inset-y-0 right-0 left-1.5",
+          "fill": "overlay/scrim",
+          "radius": "md",
+          "fillOpacity": 10,
+          "auditIgnore": [
+            "width",
+            "height"
+          ]
+        },
+        "layerLine": {
+          "figmaNodeId": "982:5485",
+          "position": "relative",
+          "layout": "horizontal",
+          "align": "center",
+          "padding": {
+            "right": "xs"
+          }
+        },
+        "nameStack": {
+          "figmaNodeId": "982:5489",
+          "layout": "vertical",
+          "gap": "2xs"
+        },
+        "name": {
+          "figmaNodeId": "982:5490",
+          "textColor": "fg",
+          "textStyle": "text-handle"
+        },
+        "source": {
+          "figmaNodeId": "982:5491",
+          "textColor": "fg-muted",
+          "textStyle": "text-param"
+        },
+        "blendLine": {
+          "figmaNodeId": "982:5493",
+          "position": "relative",
+          "layout": "horizontal",
+          "align": "center",
+          "padding": {
+            "right": "xs"
+          }
+        },
+        "blendDisabled": {
+          "figmaNodeId": "982:5513",
+          "opacity": 40,
+          "auditIgnore": [
+            "layout",
+            "gap",
+            "overflow"
+          ]
+        },
+        "dimmed": {
+          "figmaNodeId": "982:5665",
+          "opacity": 50,
+          "auditIgnore": [
+            "layout",
+            "gap",
+            "overflow"
+          ]
+        },
+        "lineContent": {
+          "figmaNodeId": null,
+          "layout": "horizontal",
+          "align": "center",
+          "padding": {
+            "left": "handle-offset"
+          },
+          "gap": "sm"
+        },
+        "header": {
+          "figmaNodeId": null,
+          "layout": "horizontal",
+          "align": "center",
+          "justify": "between",
+          "padding": {
+            "left": "handle-offset",
+            "right": "xs"
+          }
+        },
+        "grip": {
+          "figmaNodeId": null,
+          "textColor": "fg-dim",
+          "cursor": "grab",
+          "extra": "touch-none shrink-0"
+        }
+      }
+    },
+    "982:5702": {
+      "name": "Stack Empty",
+      "type": "molecule",
+      "dsKey": "stackEmpty",
+      "codeFile": "src/components/StackLayerList.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "982:5700",
+          "cursor": "pointer",
+          "transition": "colors",
+          "hover": {
+            "fill": "surface/raised",
+            "textColor": "fg"
+          },
+          "layout": "vertical",
+          "fill": "surface/alt",
+          "justify": "center",
+          "align": "center",
+          "padding": {
+            "x": "md",
+            "y": "xl"
+          },
+          "radius": "sm",
+          "gap": "xs"
+        },
+        "rootHover": {
+          "figmaNodeId": "982:5701",
+          "cursor": "pointer",
+          "layout": "vertical",
+          "fill": "surface/raised",
+          "justify": "center",
+          "align": "center",
+          "padding": {
+            "x": "md",
+            "y": "xl"
+          },
+          "radius": "sm",
+          "gap": "xs"
+        },
+        "label": {
+          "figmaNodeId": "982:5696",
+          "textColor": "fg-subtle",
+          "textStyle": "text-body"
+        },
+        "labelHover": {
+          "figmaNodeId": "982:5699",
+          "textColor": "fg",
+          "textStyle": "text-body"
+        }
+      }
+    },
+    "982:5703": {
+      "name": "Stack Drop Slot",
+      "type": "atom",
+      "dsKey": "stackDropSlot",
+      "codeFile": "src/components/StackLayerList.tsx",
+      "parts": {
+        "slot": {
+          "figmaNodeId": "982:5703",
+          "fill": "surface/alt",
+          "radius": "md"
+        }
+      }
     }
   },
   "nodeTemplates": {
