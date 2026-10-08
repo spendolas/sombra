@@ -4,10 +4,11 @@
  * Shared by the GLSL and IR compilers so the two paths cannot disagree about
  * pass geometry — the failure mode this whole feature is most exposed to.
  */
-import type { Node } from '@xyflow/react'
+import type { Node, Edge } from '@xyflow/react'
 import type { NodeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { SUB_PASS_PARAM } from './expand-passes'
+import { nodesFeeding } from './reachability'
 
 /**
  * A pass is a DEPTH GROUP, not a single node (see `partitionIntoPasses`), so
@@ -72,4 +73,32 @@ export function resolvePassResolution(
     )
   }
   return best
+}
+
+/**
+ * The scale for ONE emitted intermediate pass — a depth group's primary or one
+ * of its relays — resolved from the nodes feeding the single output that pass
+ * writes, not from the whole depth group.
+ *
+ * A depth group can hold unrelated branches: a Stack's bottom composite and a
+ * blur's first half-size sub-pass both land at depth 1 whenever a blurred
+ * layer sits beside any other layer. Resolved per group, the composite (which
+ * declares no scale) pinned the blur to full size: 4x its declared fragments,
+ * and up to 5 LSB of image change for a pyramid. Each pass writes only its own
+ * output, so only the nodes feeding it can be affected by its scale — the
+ * full-resolution pin still applies, but among THOSE nodes.
+ *
+ * Falls back to the whole group when the output cannot be traced to a node in
+ * this pass, which is the old, conservative answer.
+ */
+export function resolveOutputPassResolution(
+  outputNodeId: string | undefined,
+  passNodeIds: string[],
+  nodeMap: Map<string, Node<NodeData>>,
+  edgesByTarget: Map<string, Edge[]>,
+): number | undefined {
+  if (!outputNodeId) return resolvePassResolution(passNodeIds, nodeMap)
+  const needed = nodesFeeding(outputNodeId, edgesByTarget, new Set(passNodeIds))
+  if (needed.size === 0) return resolvePassResolution(passNodeIds, nodeMap)
+  return resolvePassResolution(passNodeIds.filter((id) => needed.has(id)), nodeMap)
 }

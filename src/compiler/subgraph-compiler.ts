@@ -21,7 +21,7 @@ import {
 } from './glsl-generator'
 import type { TextureBoundaryEdge } from './glsl-generator'
 import { expandMultiPassNodes } from './expand-passes'
-import { resolvePassResolution } from './pass-resolution'
+import { resolvePassResolution, resolveOutputPassResolution } from './pass-resolution'
 
 /** Maximum passes for preview rendering. Beyond this, show placeholder. [P8] */
 const MAX_PREVIEW_PASSES = 6
@@ -199,6 +199,13 @@ function compileMultiPassPreview(
     // Resolved once per pass: relay passes below share the primary's geometry,
     // because they render the same fragment into a same-sized target.
     const passResolution = resolvePassResolution(passNodeIds, nodeMap)
+    // Each intermediate pass (primary or relay) writes ONE output: resolve its
+    // scale from the nodes feeding that output, not the whole depth group.
+    const outputResolution = (group: TextureBoundaryEdge[] | undefined) =>
+      resolveOutputPassResolution(
+        group ? resolveSourceEdge(group[0], edgesByTarget)?.source : undefined,
+        passNodeIds, nodeMap, edgesByTarget,
+      )
 
     const uniforms = new Set<string>()
     const functions: string[] = []
@@ -302,7 +309,7 @@ function compileMultiPassPreview(
         for (const b of groups[0]) samplerCompiledIndex.set(b.samplerName, primaryIdx)
       }
 
-      passes.push({ fragmentShader, userUniforms: passUserUniforms, inputTextures, resolution: passResolution })
+      passes.push({ fragmentShader, userUniforms: passUserUniforms, inputTextures, resolution: outputResolution(groups[0]) })
 
       // --- Relay passes (remaining groups) ---
       for (let g = 1; g < groups.length; g++) {
@@ -314,7 +321,7 @@ function compileMultiPassPreview(
         )
         const relayIdx = passes.length
         for (const b of groups[g]) samplerCompiledIndex.set(b.samplerName, relayIdx)
-        passes.push({ fragmentShader: relayShader, userUniforms: passUserUniforms, inputTextures, resolution: passResolution })
+        passes.push({ fragmentShader: relayShader, userUniforms: passUserUniforms, inputTextures, resolution: outputResolution(groups[g]) })
       }
     } else {
       // Last pass: output target node's value

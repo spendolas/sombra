@@ -22,6 +22,13 @@ export interface PortDefinition {
   type: PortType       // Data type
   default?: unknown    // Default value when port is unconnected
   textureInput?: boolean  // When true + wired, triggers a pass boundary (multi-pass rendering)
+  /**
+   * Wired by the framework, never by the user — a multiPass chain input that
+   * the expansion connects itself (Stack's `backdrop`). Refused on connect and
+   * pruned on load (`userInputs` in resolve-dynamic.ts); never drawn as a
+   * handle.
+   */
+  internal?: boolean
 }
 
 /**
@@ -37,6 +44,10 @@ export interface NodeParameter {
   // `bool` params store a JS boolean, always `updateMode: 'recompile'` — read via
   // ctx.params.<id> in glsl()/ir() to branch codegen, like `enum`. Never a uniform.
   default: number | string | boolean | [number, number] | [number, number, number] | [number, number, number, number]
+    // A structured default (Stack's layer list) for a `hidden` recompile param
+    // that carries real data. Materialised through `defaultParams` /
+    // `cloneParamDefault` (default-params.ts), which deep-clone it.
+    | ReadonlyArray<Readonly<Record<string, unknown>>>
   min?: number                  // For numeric types
   max?: number                  // For numeric types
   step?: number                 // Step increment for sliders
@@ -305,6 +316,20 @@ export interface NodeDefinition {
   ir?: (ctx: import('../compiler/ir/types').IRContext) => import('../compiler/ir/types').IRNodeOutput
 
   /**
+   * The node's body component draws its own INPUT handles (and the controls
+   * beside them), so the generic chrome must not: ShaderNode then skips the
+   * pure-input handle rows, the `inputCount` +/- row, and every connectable
+   * param row, and renders the node's body component in their place — above
+   * the generic parameter section, which still draws the node's remaining
+   * visible, non-connectable params at the bottom. Output handles stay
+   * generic. The component's handle ids must equal the port / param ids, or
+   * edges drop on reload. The component itself is looked up UI-side
+   * (src/components/node-bodies.ts) so node definitions stay free of React —
+   * the compile worker imports them.
+   */
+  portsRenderedByComponent?: boolean
+
+  /**
    * Optional custom React component for node body
    * If not provided, default UI with parameter controls is used
    */
@@ -333,6 +358,15 @@ export interface NodeDefinition {
    * is only meaningful when a visual pattern is wired in.
    */
   conditionalPreview?: boolean
+
+  /**
+   * For `conditionalPreview` nodes: which of THIS instance's input ports count
+   * as content when deciding whether to show the preview. Default: every input
+   * port. A port can exist and stay wired without contributing — a hidden
+   * Stack layer keeps its wire but is not composited — and a preview of
+   * nothing should not show.
+   */
+  previewPorts?: (params: Record<string, unknown>) => string[]
 
   /**
    * Texture filtering for this node's FBO output in multi-pass chains.

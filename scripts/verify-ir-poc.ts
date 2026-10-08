@@ -73,6 +73,7 @@ import { imageNode } from '../src/nodes/input/image'
 // Output (1)
 // ---------------------------------------------------------------------------
 import { fragmentOutputNode } from '../src/nodes/output/fragment-output'
+import { stackNode } from '../src/nodes/color/stack'
 
 // ---------------------------------------------------------------------------
 // Noise (2)
@@ -2288,6 +2289,66 @@ function verify(
   } else {
     failed++
   }
+}
+
+// Stack. Its glsl() LOWERS its own ir(), so a GLSL-vs-IR text comparison would
+// match by construction and prove nothing — it is deliberately not run through
+// verify(). What can drift is what each path REGISTERS and what the composite
+// actually computes, so those are asserted instead, for the top composite
+// (backdrop wired, linear space) and the bottom one (no backdrop).
+{
+  testNum++
+  console.log(`\n  ${testNum}. Stack — composite structure, blend + colour-helper registration on both paths`)
+  let ok = true
+  const fail = (m: string) => { console.log(`  [FAIL] ${m}`); ok = false }
+  const layers = [
+    { id: 'a', name: 'Layer 1', blendMode: 'normal', visible: true },
+    { id: 'b', name: 'Layer 2', blendMode: 'overlay', visible: true },
+  ]
+  const inputs = {
+    backdrop: 'vec4(0.0)', layer_a: 'vec4(0.0)', layer_b: 'vec4(0.0)',
+    opacity_a: 'u_stk_opacity_a', mask_a: 'u_stk_mask_a', opacity_b: 'u_stk_opacity_b', mask_b: 'node_nz_value',
+  }
+  // Top composite: sub-pass 1, backdrop + layer_b sampled, linear.
+  const [g1, i1] = ctx({
+    nodeId: 'stk-sp1', inputs, outputs: { color: 'node_stk_sp1_color' },
+    params: { layers, blendSpace: 'linear', __subPass: 1 },
+    textureSamplers: { backdrop: 'u_pass3_tex', layer_b: 'u_pass2_tex' },
+  })
+  const glsl1 = stackNode.glsl(g1)
+  const ir1 = stackNode.ir!(i1)
+  const wgsl1 = lowerNodeOutputToWGSL(ir1).join('\n')
+  for (const [side, text, sample] of [
+    ['GLSL', glsl1, /textureLod\(u_pass3_tex,[^)]*0\.0\)/],
+    ['WGSL', wgsl1, /textureSampleLevel\(u_pass3_tex_tex, u_pass3_tex_samp,/],
+  ] as const) {
+    if (!sample.test(text)) fail(`${side}: the backdrop is not sampled at explicit LOD`)
+    if (!/sombra_blend_overlay\(stk_cb_stk_sp1, stk_cs_stk_sp1\)/.test(text)) fail(`${side}: B(c_b, c_s) is not overlay(backdrop, source)`)
+    if (!/sombra_toLin\(/.test(text) || !/sombra_toSrgb\(/.test(text)) fail(`${side}: linear space does not convert in and out`)
+    if (!/node_nz_value/.test(text)) fail(`${side}: the wired mask input is not read`)
+    // WGSL lowering parenthesises every binary op; compare with parens stripped.
+    if (!/stk_ao_stk_sp1(?:: f32)? = stk_as_stk_sp1 \+ stk_ab_stk_sp1 \* 1\.0 - stk_as_stk_sp1;/.test(text.replace(/[()]/g, ''))) fail(`${side}: alpha is not the alpha-aware over`)
+  }
+  const wIssues = validateWGSL(wgsl1)
+  if (wIssues.length) fail(`WGSL structural issues: ${wIssues.join('; ')}`)
+  // Registration: same function keys on both paths; the GLSL colour helpers
+  // under the blurs' single key, so a blur in the same pass dedups with them.
+  const glslKeys = [...g1.functionRegistry.keys()].sort()
+  const irKeys = (ir1.functions ?? []).map((f) => f.key).sort()
+  if (JSON.stringify(glslKeys) !== JSON.stringify(['sombra_blend_overlay', 'sombra_color_helpers'])) fail(`GLSL registered ${JSON.stringify(glslKeys)}`)
+  if (JSON.stringify(irKeys) !== JSON.stringify(['sombra_blend_overlay', 'sombra_dither', 'sombra_toLin', 'sombra_toSrgb'])) fail(`IR registered ${JSON.stringify(irKeys)}`)
+  if (!g1.uniforms.has('u_viewport')) fail('GLSL did not register u_viewport for the sample UV')
+  // Bottom composite: no backdrop sampler → no blend at all, sRGB → no helpers.
+  const [g0, i0] = ctx({
+    nodeId: 'stk', inputs, outputs: { color: 'node_stk_color' },
+    params: { layers, blendSpace: 'srgb', __subPass: 0 },
+    textureSamplers: { layer_a: 'u_pass0_tex' },
+  })
+  const glsl0 = stackNode.glsl(g0)
+  const ir0 = stackNode.ir!(i0)
+  if (/sombra_blend_/.test(glsl0) || g0.functionRegistry.size !== 0 || (ir0.functions ?? []).length !== 0) fail('the bottom composite registered or called a blend helper')
+  if (!/vec4 node_stk_color = vec4\(stk_cs_stk, stk_as_stk\);/.test(glsl0)) fail(`bottom composite should output the layer itself: ${normalize(glsl0)}`)
+  if (ok) { console.log('  [PASS] stack: overlay over a sampled backdrop in linear, alpha-aware over, matching registration on both paths; bottom composite emits no blend'); passed++ } else failed++
 }
 
 // ---------------------------------------------------------------------------

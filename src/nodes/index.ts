@@ -50,6 +50,7 @@ import { colorRampNode } from './color/color-ramp'
 import { invertNode } from './color/invert'
 import { grayscaleNode } from './color/grayscale'
 import { posterizeNode } from './color/posterize'
+import { stackNode } from './color/stack'
 
 // Pattern nodes
 import { checkerboardNode } from './pattern/checkerboard'
@@ -119,6 +120,7 @@ export const ALL_NODES = [
   invertNode,
   grayscaleNode,
   posterizeNode,
+  stackNode,
 
   // Pattern
   checkerboardNode,

@@ -14,7 +14,7 @@ import { resolveParams } from '../nodes/resolve-dynamic'
 import { topologicalSort, hasCycles } from './topological-sort'
 import { coerceType } from '../nodes/type-coercion'
 import { expandMultiPassNodes, baseNodeId } from './expand-passes'
-import { resolvePassResolution } from './pass-resolution'
+import { resolvePassResolution, resolveOutputPassResolution } from './pass-resolution'
 import { emitSRT } from './ir/srt'
 import type { IRSpatialTransform } from './ir/types'
 import { nodesFeeding } from './reachability'
@@ -799,6 +799,13 @@ function compileMultiPass(
     // Resolved once per pass: relay passes below share the primary's geometry,
     // because they render the same fragment into a same-sized target.
     const passResolution = resolvePassResolution(passNodeIds, nodeMap)
+    // Each intermediate pass (primary or relay) writes ONE output: resolve its
+    // scale from the nodes feeding that output, not the whole depth group.
+    const outputResolution = (group: TextureBoundaryEdge[] | undefined) =>
+      resolveOutputPassResolution(
+        group ? resolveSourceEdge(group[0], edgesByTarget)?.source : undefined,
+        passNodeIds, nodeMap, edgesByTarget,
+      )
 
     const uniforms = new Set<string>()
     const functions: string[] = []
@@ -931,7 +938,7 @@ function compileMultiPass(
         inputTextures,
         isTimeLive: uniforms.has('u_time'),
         textureFilter: primaryResolved?.textureFilter,
-        resolution: passResolution,
+        resolution: outputResolution(groups[0]),
       })
 
       // --- Relay passes (remaining groups) ---
@@ -982,7 +989,7 @@ function compileMultiPass(
           inputTextures: relayInputTextures,
           isTimeLive: uniforms.has('u_time'),
           textureFilter: resolved.textureFilter,
-          resolution: passResolution,
+          resolution: outputResolution(groups[g]),
         })
       }
     } else {
