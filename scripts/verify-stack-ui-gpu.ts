@@ -262,6 +262,116 @@ async function main() {
       assert(bridge.defaultHandle === 'layer_l1', `connect(src, stack) wired ${bridge.defaultHandle}, expected layer_l1 (the bottom layer), never backdrop`)
     })
 
+    // ---- real connection drags onto handles INSIDE the layer list -------------
+    // Stack is the first node whose target handles live in a component-drawn
+    // body. Everything above wires through the bridge; here the user's path:
+    // pointer-drag from an output handle onto layer_<id> / opacity_<id> /
+    // mask_<id>, through React Flow's own connection drag and FlowCanvas's
+    // isValidConnection — nothing from __sombra but the fixture's base wiring.
+    const GREEN: [number, number, number, number] = [0.1, 0.9, 0.1, 1]
+    await page.evaluate(({ RED, GREEN }) => {
+      const s = (window as unknown as { __sombra: any }).__sombra // eslint-disable-line @typescript-eslint/no-explicit-any
+      s.clearGraph()
+      const out = s.createNode('fragment_output', { x: 560, y: 0 })
+      const red = s.createNode('color_constant', { x: 0, y: 0 }, { color: RED })
+      const green = s.createNode('color_constant', { x: 0, y: 260 }, { color: GREEN })
+      const num = s.createNode('float_constant', { x: 0, y: 520 }, { value: 0.3 })
+      const nz = s.createNode('noise', { x: 0, y: 640 })
+      const stk = s.createNode('stack', { x: 280, y: 0 })
+      s.connect(red, stk, 'color', 'layer_l1')
+      s.connect(stk, out, 'color', 'color')
+      Object.assign(window as unknown as Record<string, string>, { __stk: stk, __green: green, __num: num, __nz: nz })
+    }, { RED, GREEN })
+    await settle(page)
+    // Fit everything in view: zoom out around the Stack until every node is on screen.
+    await page.evaluate(async () => {
+      const pane = document.querySelector('.react-flow__pane')!
+      const all = () => [...document.querySelectorAll('.react-flow__node')].map((n) => n.getBoundingClientRect())
+      for (let i = 0; i < 80; i++) {
+        const rs = all()
+        const top = Math.min(...rs.map((r) => r.top)), bottom = Math.max(...rs.map((r) => r.bottom))
+        const left = Math.min(...rs.map((r) => r.left)), right = Math.max(...rs.map((r) => r.right))
+        const fits = top > 20 && bottom < innerHeight - 20 && left > 560 && right < innerWidth - 20
+        if (fits) break
+        const tooBig = bottom - top > innerHeight - 60 || right - left > innerWidth - 600
+        if (tooBig) pane.dispatchEvent(new WheelEvent('wheel', { deltaY: 20, ctrlKey: true, clientX: (left + right) / 2, clientY: (top + bottom) / 2, bubbles: true, cancelable: true }))
+        else pane.dispatchEvent(new WheelEvent('wheel', { deltaX: left < 560 ? -(580 - left) : (right > innerWidth - 20 ? right - innerWidth + 40 : 0), deltaY: top < 20 ? -(40 - top) : (bottom > innerHeight - 20 ? bottom - innerHeight + 40 : 0), clientX: 900, clientY: 400, bubbles: true, cancelable: true }))
+        await new Promise((r) => setTimeout(r, 40))
+      }
+    })
+    await page.waitForTimeout(400)
+    /**
+     * `sel` is a CSS selector, or `card:<stackId>:<layer name>:<0|1|2>` — the
+     * source / opacity / mask handle of that layer's card, found by WHERE it
+     * sits rather than by its id, so a handle whose id drifted from its port
+     * id is still the one the drag lands on (and the edge check catches it).
+     */
+    const centre = (sel: string) => page.evaluate((q) => {
+      let el: Element | null
+      if (q.startsWith('card:')) {
+        const [, stk, name, idx] = q.split(':')
+        let card: Element | null = [...document.querySelectorAll(`.react-flow__node[data-id="${stk}"] span[title^="Layer"]`)].find((x) => x.textContent === name) ?? null
+        while (card && card.querySelectorAll('.react-flow__handle').length < 3) card = card.parentElement
+        el = card ? card.querySelectorAll('.react-flow__handle')[Number(idx)] ?? null : null
+      } else el = document.querySelector(q)
+      if (!el) return null
+      const r = el.getBoundingClientRect()
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2, on: r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth }
+    }, sel)
+    const ids = await page.evaluate(() => {
+      const w = window as unknown as Record<string, string>
+      return { stk: w.__stk, green: w.__green, num: w.__num, nz: w.__nz }
+    })
+    const handle = (node: string, h: string, kind: 'source' | 'target') =>
+      `.react-flow__node[data-id="${node}"] .react-flow__handle.${kind}[data-handleid="${h}"]`
+    /** A real pointer drag from one handle to another; returns the Stack's incoming edges after. */
+    const drag = async (from: string, to: string) => {
+      const a = await centre(from), b = await centre(to)
+      if (!a || !b) return { ok: false, why: `${!a ? from : to} not found`, edges: [] as string[] }
+      if (!a.on || !b.on) return { ok: false, why: `handle off screen: ${JSON.stringify({ a, b })}`, edges: [] as string[] }
+      await page.mouse.move(a.x, a.y)
+      await page.mouse.down()
+      await page.mouse.move((a.x + b.x) / 2, (a.y + b.y) / 2, { steps: 8 })
+      await page.mouse.move(b.x, b.y, { steps: 8 })
+      await page.mouse.up()
+      await page.waitForTimeout(700)
+      const edges = await page.evaluate((stk) => {
+        const s = (window as unknown as { __sombra: any }).__sombra // eslint-disable-line @typescript-eslint/no-explicit-any
+        return s.stores.graph.getState().edges.filter((e: { target: string }) => e.target === stk).map((e: { source: string; targetHandle: string }) => `${e.source}>${e.targetHandle}`)
+      }, ids.stk)
+      return { ok: true, why: '', edges }
+    }
+    const beforeDrag = await view(page)
+    const card = (port: 0 | 1 | 2) => `card:${ids.stk}:Layer 2:${port}`
+    const dLayer = await drag(handle(ids.green, 'color', 'source'), card(0))
+    await settle(page)
+    const afterLayer = await view(page)
+    const dOpacity = await drag(handle(ids.num, 'value', 'source'), card(1))
+    const opacityShows = await page.evaluate((stk) => document.querySelector(`.react-flow__node[data-id="${stk}"]`)!.textContent!.includes('← Number.value'), ids.stk)
+    const dMask = await drag(handle(ids.nz, 'value', 'source'), card(2))
+    // Refused: the Stack's own output onto one of its layer handles closes a loop.
+    const dLoop = await drag(handle(ids.stk, 'color', 'source'), handle(ids.stk, 'layer_l1', 'target'))
+    test('drag an output onto a layer handle: the edge lands on layer_l2 and the composite changes', () => {
+      assert(dLayer.ok, dLayer.why)
+      assert(dLayer.edges.includes(`${ids.green}>layer_l2`), `no edge into layer_l2 after the drag: ${JSON.stringify(dLayer.edges)}`)
+      assert(isRed(beforeDrag.pixel), `fixture: composite ${beforeDrag.pixel} before the drag, expected red`)
+      assert(afterLayer.pixel[1] > 180 && afterLayer.pixel[0] < 60, `composite ${afterLayer.pixel} after the drag — expected the green top layer`)
+    })
+    test('drag a float onto opacity_l2: the edge lands and the row shows "← Number.value"', () => {
+      assert(dOpacity.ok, dOpacity.why)
+      assert(dOpacity.edges.includes(`${ids.num}>opacity_l2`), `no edge into opacity_l2: ${JSON.stringify(dOpacity.edges)}`)
+      assert(opacityShows, 'the opacity row did not switch to the "← source" display')
+    })
+    test('drag onto mask_l2: the edge lands', () => {
+      assert(dMask.ok, dMask.why)
+      assert(dMask.edges.includes(`${ids.nz}>mask_l2`), `no edge into mask_l2: ${JSON.stringify(dMask.edges)}`)
+    })
+    test('a refused drag (a loop: Stack output onto its own layer) creates no edge', () => {
+      assert(dLoop.ok, dLoop.why)
+      assert(!dLoop.edges.some((e) => e.startsWith(`${ids.stk}>`)), `a loop edge was created: ${JSON.stringify(dLoop.edges)}`)
+      assert(dLoop.edges.length === dMask.edges.length, `the edge count changed on a refused drag: ${dMask.edges.length} → ${dLoop.edges.length}`)
+    })
+
     test('no page errors', () => assert(pageErrors.length === 0, pageErrors.join(' | ')))
     await run('stack-ui-gpu')
   } finally {
