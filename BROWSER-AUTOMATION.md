@@ -188,6 +188,7 @@ does **not** push its plan into this renderer (see above) — call
 | `addNodes(nodes)` | Atomic multi-add — one history entry (used by multi-image file drops) |
 | `replaceEdge(oldEdgeId, newEdge)` | Atomic reconnect (enforces single-wire-per-input) |
 | `updateNodeData(id, {params})` | What `setParams` calls under the hood |
+| `editStackLayers(stackId, edit)` | Every Stack layer change — `{kind:'add'}`, `{kind:'remove', id}`, `{kind:'reorder', from, to}` (TOP-first indices, as the layer list shows them), `{kind:'toggleVisible', id}`, `{kind:'blend', id, blendMode}`. Writes the layer list AND strips a removed layer's wires in one entry, so one undo restores both. `params.layers` itself is stored BOTTOM-first. Opacity is an ordinary param: `setParams(id, {opacity_<layerId>: v})` |
 
 ### Forcing the WebGL2 backend
 

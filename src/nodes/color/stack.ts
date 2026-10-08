@@ -136,7 +136,9 @@ const STATIC_PARAMS: NodeParameter[] = [
   // Never decreases, so a new layer is named one higher than any ever made.
   { id: 'nextLayerNumber', label: 'Next Layer Number', type: 'float', default: 3, hidden: true, updateMode: 'recompile' },
   {
-    id: 'blendSpace', label: 'Blend Space', type: 'enum', default: 'srgb',
+    // Drawn by the generic parameter section, at the very bottom of the node
+    // under its divider (Figma 983:5896, column B).
+    id: 'blendSpace', label: 'Blend space', type: 'enum', default: 'srgb', control: 'segmented',
     options: [{ value: 'srgb', label: 'sRGB' }, { value: 'linear', label: 'Linear' }],
     updateMode: 'recompile',
   },
@@ -277,6 +279,8 @@ export const stackNode: NodeDefinition = {
   category: 'Color',
   description: 'Composite layers bottom-up, each with its own blend mode, opacity and mask',
   hidePreview: false,
+  // The layer list draws every input handle (src/components/StackNodeBody.tsx).
+  portsRenderedByComponent: true,
 
   inputs: layerInputs({}),
   dynamicInputs: layerInputs,

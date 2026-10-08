@@ -309,6 +309,20 @@ export interface NodeDefinition {
   ir?: (ctx: import('../compiler/ir/types').IRContext) => import('../compiler/ir/types').IRNodeOutput
 
   /**
+   * The node's body component draws its own INPUT handles (and the controls
+   * beside them), so the generic chrome must not: ShaderNode then skips the
+   * pure-input handle rows, the `inputCount` +/- row, and every connectable
+   * param row, and renders the node's body component in their place — above
+   * the generic parameter section, which still draws the node's remaining
+   * visible, non-connectable params at the bottom. Output handles stay
+   * generic. The component's handle ids must equal the port / param ids, or
+   * edges drop on reload. The component itself is looked up UI-side
+   * (src/components/node-bodies.ts) so node definitions stay free of React —
+   * the compile worker imports them.
+   */
+  portsRenderedByComponent?: boolean
+
+  /**
    * Optional custom React component for node body
    * If not provided, default UI with parameter controls is used
    */
