@@ -15,6 +15,7 @@ import { migrateOffsetSpace } from '../utils/srt-migration'
 import { anchorToVec2 } from '../nodes/output/fragment-output'
 import { REFERENCE_SIZE } from '../renderer/constants'
 import { previewCanvasSize } from '../utils/preview-canvas-size'
+import { applyStackEdit, type StackEdit } from '../nodes/color/stack-edit'
 
 /** Schema version — bump when persisted shape changes.
  *  v4: one-time dedupe of duplicate node ids left by the old
@@ -92,6 +93,10 @@ interface GraphState {
    *  SINGLE commit, so they hold their on-screen position (no jump) while still
    *  pinning to the anchor on resize. Atomic = one render = no intermediate jump. */
   setOutputAnchor: (nodeId: string, anchor: string) => void
+  /** Every Stack layer mutation (add, remove, reorder, visibility, blend): the
+   *  node's params AND its edges in ONE set, ONE history entry — so one undo
+   *  restores a removed layer together with its wires. */
+  editStackLayers: (nodeId: string, edit: StackEdit) => void
 
   addEdge: (edge: Edge<EdgeData>) => void
   removeEdge: (edgeId: string) => void
@@ -308,6 +313,27 @@ export const useGraphStore = create<GraphState>()(
               }),
           _lastActionKey: key,
           _lastActionTime: now,
+        })
+      },
+
+      editStackLayers: (nodeId, edit) => {
+        const state = get()
+        const node = state.nodes.find((n) => n.id === nodeId)
+        if (!node) return
+        const result = applyStackEdit(nodeId, node.data.params ?? {}, state.edges, edit)
+        if (!result.changed) return
+        // Modelled on removeElements: one snapshot, and `_lastActionKey`
+        // cleared so a following slider drag on this node cannot coalesce into
+        // (and so be undone together with) this structural edit.
+        set({
+          nodes: state.nodes.map((n) =>
+            n.id === nodeId ? { ...n, data: { ...n.data, params: result.params } } : n),
+          edges: result.edges,
+          _past: pushHistory(state._past, snapshot(state)),
+          _future: [],
+          _lastActionKey: null,
+          canUndo: true,
+          canRedo: false,
         })
       },
 

@@ -20,6 +20,7 @@ import { IconButton } from '@/components/IconButton'
 import { icons } from '@/components/icons'
 import { RgbaColorPicker, type Rgba } from '@/components/RgbaColorPicker'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { NODE_BODIES } from '@/components/node-bodies'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
 
@@ -302,11 +303,16 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   // its own control — colors render as swatch pickers, not sliders.
   // color_constant's `color` param is excluded — its node body IS the inline
   // picker (rendered below), so it must not also appear as a generic row.
+  // A node whose body component draws its own input handles also draws the
+  // connectable params beside them; the generic section keeps the rest.
+  const portsByComponent = !!definition.portsRenderedByComponent
+  const PortsBody = portsByComponent ? NODE_BODIES[definition.type] : undefined
   const bodyParams = allParams.filter(
     (p) =>
       !p.id.startsWith('srt_') &&
       isParamVisible(p, currentValues, allParams) &&
-      !(definition.type === 'color_constant' && p.type === 'color')
+      !(definition.type === 'color_constant' && p.type === 'color') &&
+      !(portsByComponent && p.connectable)
   )
 
   const connectableIds = new Set(
@@ -318,8 +324,9 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   // Pure inputs: those NOT shadowed by a connectable param
   const pureInputs = resolvedInputs.filter((inp) => !connectableIds.has(inp.id))
 
-  // Dynamic input flag
-  const hasDynamicInputs = !!definition.dynamicInputs
+  // Dynamic input flag — the generic +/- row is `inputCount`-shaped, so a node
+  // that draws its own ports never gets it.
+  const hasDynamicInputs = !!definition.dynamicInputs && !portsByComponent
 
   // color_constant: resolve the `color` param as an RGBA tuple for the
   // inline picker below (pad legacy 3-tuple saves with a=1).
@@ -395,8 +402,18 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
           />
         ))}
 
+        {/* Ports drawn by the node's own body component, in place of the
+            generic input rows — and above the parameter section below. */}
+        {PortsBody && (
+          <div className="w-full nodrag nowheel">
+            <ErrorBoundary label={definition.type} fallback={<div className="text-fg-subtle text-xs px-2 py-1">⚠ display unavailable</div>}>
+              <PortsBody nodeId={id} data={currentValues} />
+            </ErrorBoundary>
+          </div>
+        )}
+
         {/* Pure input handles */}
-        {pureInputs.map((input) => (
+        {!portsByComponent && pureInputs.map((input) => (
           <LabeledHandle
             key={input.id}
             type="target"
