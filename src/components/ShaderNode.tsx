@@ -209,7 +209,12 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
     const runAnimation = (from: number, to: number) => {
       let start = 0
       const duration = 300
-      const expanding = to > from
+      // Direction comes from intent, not from the two heights: when the effect
+      // re-runs on an already-open wrapper (React StrictMode re-runs effects on
+      // mount in dev; any quick false→true flip before the collapse moves) the
+      // expand goes from h to h, `to > from` read it as a collapse, and the
+      // opacity faded to 0 — an open but invisible thumbnail.
+      const expanding = showPreview
 
       const tick = (now: number) => {
         if (!start) start = now
