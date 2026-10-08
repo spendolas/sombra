@@ -353,6 +353,15 @@ export interface NodeDefinition {
   conditionalPreview?: boolean
 
   /**
+   * For `conditionalPreview` nodes: which of THIS instance's input ports count
+   * as content when deciding whether to show the preview. Default: every input
+   * port. A port can exist and stay wired without contributing — a hidden
+   * Stack layer keeps its wire but is not composited — and a preview of
+   * nothing should not show.
+   */
+  previewPorts?: (params: Record<string, unknown>) => string[]
+
+  /**
    * Texture filtering for this node's FBO output in multi-pass chains.
    * 'nearest' preserves hard edges (e.g., pixel blocks from Pixelate).
    * Defaults to 'linear' if not set.

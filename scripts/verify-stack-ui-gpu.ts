@@ -184,6 +184,66 @@ async function main() {
       for (const w of undone.wireOffsets) assert(w.dy <= 1.5, `after undo the wire into ${w.handle} is ${w.dy.toFixed(1)} off`)
     })
 
+    // ---- thumbnail: shown only when a VISIBLE layer has content ----------------
+    // An empty Stack, or one with every layer hidden, outputs transparent by
+    // construction and shows no thumbnail (Figma 979:4841, column B "Empty").
+    // Measured as the preview wrapper's rendered height after its collapse /
+    // expand animation, which runs on requestAnimationFrame.
+    const SHOTS = process.env.STACK_UI_SHOTS
+    const thumbState = async (label: string, edit: () => Promise<void>) => {
+      await edit()
+      await page.waitForTimeout(2500)
+      const { h, op, px } = await page.evaluate(() => {
+        const id = (window as unknown as { __stk: string }).__stk
+        const cv = document.querySelector(`.react-flow__node[data-id="${id}"] canvas`) as HTMLCanvasElement | null
+        if (!cv) return { h: -1, op: 0, px: [] as number[] }
+        const c = document.createElement('canvas'); c.width = cv.width; c.height = cv.height
+        const ctx = c.getContext('2d')!; ctx.drawImage(cv, 0, 0)
+        const w = cv.parentElement!
+        return { h: Math.round(w.getBoundingClientRect().height), op: Number(getComputedStyle(w).opacity), px: [...ctx.getImageData(cv.width >> 1, cv.height >> 1, 1, 1).data] }
+      })
+      if (SHOTS) {
+        const id = await page.evaluate(() => (window as unknown as { __stk: string }).__stk)
+        // The thumbnail sits ABOVE the node's box (negative margin), so clip
+        // to the union of the node and its preview canvas.
+        const box = await page.evaluate((nid) => {
+          const el = document.querySelector(`.react-flow__node[data-id="${nid}"]`)!
+          const rs = [el.getBoundingClientRect(), el.querySelector('canvas')!.getBoundingClientRect()]
+          const x = Math.min(...rs.map((r) => r.left)), y = Math.min(...rs.map((r) => r.top))
+          return { x: x - 8, y: y - 8, width: Math.max(...rs.map((r) => r.right)) - x + 16, height: Math.max(...rs.map((r) => r.bottom)) - y + 16 }
+        }, id)
+        await page.screenshot({ path: `${SHOTS}/stack-${label}.png`, clip: box })
+      }
+      return { h, op, px }
+    }
+    const store = (fn: string) => page.evaluate(fn)
+    const oneVisible = await thumbState('one-visible', async () => {
+      // Back to the original two layers (undo above), drop the top one: one
+      // visible, wired layer remains.
+      await store(`(() => { const s = window.__sombra; const G = s.stores.graph.getState(); const id = window.__stk;
+        const top = G.nodes.find((n) => n.id === id).data.params.layers.at(-1).id; G.editStackLayers(id, { kind: 'remove', id: top }) })()`)
+    })
+    const allHidden = await thumbState('all-hidden', async () => {
+      await store(`(() => { const s = window.__sombra; const G = s.stores.graph.getState(); const id = window.__stk;
+        for (const l of G.nodes.find((n) => n.id === id).data.params.layers) G.editStackLayers(id, { kind: 'toggleVisible', id: l.id }) })()`)
+    })
+    const hiddenWires = await page.evaluate(() => {
+      const s = (window as unknown as { __sombra: any }).__sombra // eslint-disable-line @typescript-eslint/no-explicit-any
+      return s.stores.graph.getState().edges.filter((e: { target: string }) => e.target === (window as unknown as { __stk: string }).__stk).length
+    })
+    const empty = await thumbState('empty', async () => {
+      await store(`(() => { const s = window.__sombra; const G = s.stores.graph.getState(); const id = window.__stk;
+        for (const l of G.nodes.find((n) => n.id === id).data.params.layers) s.stores.graph.getState().editStackLayers(id, { kind: 'remove', id: l.id }) })()`)
+    })
+    test('thumbnail: shown with one visible wired layer, hidden when every layer is hidden or the list is empty', () => {
+      assert(oneVisible.h > 40, `one visible wired layer: thumbnail height ${oneVisible.h} — it should show`)
+      assert(oneVisible.op === 1, `one visible wired layer: thumbnail is open but its opacity is ${oneVisible.op} — invisible`)
+      assert(isRed(oneVisible.px), `the thumbnail shows ${oneVisible.px}, expected the red layer`)
+      assert(hiddenWires >= 1, 'fixture: the hidden layer lost its wire, so "all hidden" would not test the hidden-port rule')
+      assert(allHidden.h === 0, `every layer hidden (wires kept): thumbnail height ${allHidden.h} — it should not show`)
+      assert(empty.h === 0, `empty Stack: thumbnail height ${empty.h} — it should not show`)
+    })
+
     test('no page errors', () => assert(pageErrors.length === 0, pageErrors.join(' | ')))
     await run('stack-ui-gpu')
   } finally {
