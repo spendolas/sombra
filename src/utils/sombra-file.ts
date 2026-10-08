@@ -12,7 +12,7 @@ import type { Node, Edge } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { defaultParams, cloneParamDefault } from '../nodes/default-params'
-import { resolveParams } from '../nodes/resolve-dynamic'
+import { resolveParams, userInputs } from '../nodes/resolve-dynamic'
 import { migrateOffsetSpace } from './srt-migration'
 import { SOMBRA_FILE_MIME_TYPE } from './file-type-constants'
 import type { ShaderThumbnail } from '../renderer/capture-thumbnail'
@@ -381,7 +381,9 @@ export function importFromFile(json: unknown): {
     const tgtDef = nodeRegistry.get(tgt.data.type)
     if (!srcDef || !tgtDef) return false
     const srcOk = !e.sourceHandle || srcDef.outputs.some((p) => p.id === e.sourceHandle)
-    const tgtInputs = tgtDef.dynamicInputs ? tgtDef.dynamicInputs(tgt.data.params || {}) : tgtDef.inputs
+    // Internal ports (a multiPass chain input) are wired only by expansion —
+    // a saved edge into one is dropped like any dangling handle.
+    const tgtInputs = userInputs(tgtDef, tgt.data.params as Record<string, unknown> | undefined)
     // Params must be resolved exactly as inputs are: a handle that exists only
     // through dynamicParams is still a real handle, and treating it as invalid
     // deletes the user's wire on every file open.
@@ -634,6 +636,14 @@ export function decodeCompactHash(hash: string): {
         sourcePortType,
       },
     }
+  }).filter((e) => {
+    // A shared link must not reach a port only multi-pass expansion may wire
+    // (Stack's `backdrop`) — the same rule as connect and .sombra import.
+    const tgt = nodes.find((n) => n.id === e.target)
+    const def = tgt ? nodeRegistry.get(tgt.data.type) : undefined
+    if (!def || !e.targetHandle) return true
+    const inputs = def.dynamicInputs ? def.dynamicInputs(tgt!.data.params || {}) : def.inputs
+    return !inputs.some((p) => p.id === e.targetHandle && p.internal)
   })
 
   return { nodes, edges }

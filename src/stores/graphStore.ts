@@ -9,7 +9,7 @@ import type { Node, Edge, OnNodesChange, OnEdgesChange } from '@xyflow/react'
 import { applyNodeChanges, applyEdgeChanges } from '@xyflow/react'
 import type { NodeData, EdgeData, NodeDefinition } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
-import { resolveParams } from '../nodes/resolve-dynamic'
+import { resolveParams, userInputs } from '../nodes/resolve-dynamic'
 import { dedupeNodeIds } from '../utils/node-id'
 import { migrateOffsetSpace } from '../utils/srt-migration'
 import { anchorToVec2 } from '../nodes/output/fragment-output'
@@ -30,11 +30,13 @@ const GRAPH_SCHEMA_VERSION = 4
  * as invalid deletes the user's wire.
  */
 export function buildValidHandles(def: NodeDefinition, nodeParams: Record<string, unknown> | undefined): Set<string> {
+  // Internal ports (wired only by multi-pass expansion) are never valid
+  // targets for a stored edge.
   return new Set([
-    ...def.inputs.map(i => i.id),
+    ...def.inputs.filter(i => !i.internal).map(i => i.id),
     ...def.outputs.map(o => o.id),
     ...resolveParams(def, nodeParams).filter(p => p.connectable).map(p => p.id),
-    ...(def.dynamicInputs?.(nodeParams || {}).map(i => i.id) ?? []),
+    ...userInputs(def, nodeParams).map(i => i.id),
   ])
 }
 

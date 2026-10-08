@@ -244,6 +244,24 @@ async function main() {
       assert(empty.h === 0, `empty Stack: thumbnail height ${empty.h} — it should not show`)
     })
 
+    const bridge = await page.evaluate(() => {
+      const s = (window as unknown as { __sombra: any }).__sombra // eslint-disable-line @typescript-eslint/no-explicit-any
+      const src = s.createNode('checkerboard', { x: 0, y: 600 })
+      const stk = s.createNode('stack', { x: 320, y: 600 })
+      let refused = ''
+      try { s.connect(src, stk, 'color', 'backdrop') } catch (e) { refused = String((e as Error).message) }
+      let id = ''
+      try { id = s.connect(src, stk) } catch (e) { return { refused, defaultHandle: `<threw: ${String((e as Error).message)}>`, intoBackdrop: -1 } }
+      const edge = s.stores.graph.getState().edges.find((x: { id: string }) => x.id === id)
+      const intoBackdrop = s.stores.graph.getState().edges.filter((x: { target: string; targetHandle: string }) => x.target === stk && x.targetHandle === 'backdrop').length
+      return { refused, defaultHandle: edge?.targetHandle, intoBackdrop }
+    })
+    test('bridge: connect into backdrop throws; the default target is the first USER port', () => {
+      assert(/not allowed/.test(bridge.refused), `connect(…, 'backdrop') did not throw: "${bridge.refused}"`)
+      assert(bridge.intoBackdrop === 0, `${bridge.intoBackdrop} edge(s) into backdrop exist`)
+      assert(bridge.defaultHandle === 'layer_l1', `connect(src, stack) wired ${bridge.defaultHandle}, expected layer_l1 (the bottom layer), never backdrop`)
+    })
+
     test('no page errors', () => assert(pageErrors.length === 0, pageErrors.join(' | ')))
     await run('stack-ui-gpu')
   } finally {

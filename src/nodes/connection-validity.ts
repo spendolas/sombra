@@ -15,7 +15,7 @@
  */
 
 import type { NodeData, NodeDefinition, PortType } from './types'
-import { resolveParams } from './resolve-dynamic'
+import { resolveParams, userInputs } from './resolve-dynamic'
 import { areTypesCompatible } from './type-coercion'
 import { wouldCreateCycle } from '../compiler/topological-sort'
 
@@ -52,7 +52,8 @@ function targetPorts(
   def: NodeDefinition,
   nodeParams: Record<string, unknown> | undefined,
 ): Array<{ id: string; type: PortType }> {
-  const inputs = def.dynamicInputs ? def.dynamicInputs(nodeParams ?? {}) : def.inputs
+  // Internal ports (a multiPass chain input) are wired by the expansion only.
+  const inputs = userInputs(def, nodeParams)
   const connectableParams = resolveParams(def, nodeParams)
     .filter((p) => p.connectable)
     .map((p) => ({ id: p.id, type: p.type as PortType }))

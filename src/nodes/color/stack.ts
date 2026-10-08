@@ -113,6 +113,8 @@ export const visibleLayers = (params: Record<string, unknown>) => getLayers(para
 
 const backdropPort: PortDefinition = {
   id: BACKDROP, label: 'Backdrop', type: 'color', textureInput: true, default: [0, 0, 0, 0],
+  // Wired by the expansion, never by the user: refused on connect, pruned on load.
+  internal: true,
 }
 
 function layerInputs(params: Record<string, unknown>): PortDefinition[] {

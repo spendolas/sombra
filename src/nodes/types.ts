@@ -22,6 +22,13 @@ export interface PortDefinition {
   type: PortType       // Data type
   default?: unknown    // Default value when port is unconnected
   textureInput?: boolean  // When true + wired, triggers a pass boundary (multi-pass rendering)
+  /**
+   * Wired by the framework, never by the user — a multiPass chain input that
+   * the expansion connects itself (Stack's `backdrop`). Refused on connect and
+   * pruned on load (`userInputs` in resolve-dynamic.ts); never drawn as a
+   * handle.
+   */
+  internal?: boolean
 }
 
 /**

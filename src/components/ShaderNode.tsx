@@ -326,8 +326,9 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
       .map((p) => p.id)
   )
 
-  // Pure inputs: those NOT shadowed by a connectable param
-  const pureInputs = resolvedInputs.filter((inp) => !connectableIds.has(inp.id))
+  // Pure inputs: those NOT shadowed by a connectable param, and never an
+  // internal port (wired only by multi-pass expansion).
+  const pureInputs = resolvedInputs.filter((inp) => !connectableIds.has(inp.id) && !inp.internal)
 
   // Dynamic input flag — the generic +/- row is `inputCount`-shaped, so a node
   // that draws its own ports never gets it.

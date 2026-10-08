@@ -205,4 +205,36 @@ test('getLayers drops malformed, duplicate and non-identifier ids; missing falls
   assert(getLayers({ layers: [] }).length === 0, 'an empty layer list was replaced by the defaults')
 })
 
+test('backdrop is internal: refused on connect, dropped on .sombra import, share-URL decode and persisted-state migrate', async () => {
+  const { isConnectionValid } = await import('../src/nodes/connection-validity')
+  const { importFromFile, encodeCompactHash, decodeCompactHash } = await import('../src/utils/sombra-file')
+  const { buildValidHandles } = await import('../src/stores/graphStore')
+  const params = { layers: [L('aa'), L('bb', 'screen')] }
+  const nodes = [n('src', 'checkerboard'), n('stk', 'stack', params), n('out', 'fragment_output')]
+  const lookup = (t: string) => nodeRegistry.get(t)
+  const vnodes = nodes.map((x) => ({ id: x.id, data: x.data as { type: string; params?: Record<string, unknown> } }))
+  // The port really exists on the instance — otherwise "refused" proves nothing.
+  assert(def.dynamicInputs!(params).some((p) => p.id === 'backdrop' && p.internal === true), 'fixture: backdrop is not an internal port of the instance')
+  assert(!isConnectionValid({ source: 'src', sourceHandle: 'color', target: 'stk', targetHandle: 'backdrop' }, vnodes, [], lookup),
+    'a wire into backdrop was ACCEPTED')
+  // The mirror: a real layer port on the same node is still accepted.
+  assert(isConnectionValid({ source: 'src', sourceHandle: 'color', target: 'stk', targetHandle: 'layer_aa' }, vnodes, [], lookup),
+    'a wire into layer_aa was refused — the rule is too broad')
+  assert(!buildValidHandles(def, params).has('backdrop') && buildValidHandles(def, params).has('layer_bb'),
+    'persisted-state migrate: backdrop must be invalid, layer ports valid')
+  const edges = [
+    e('bad', 'src', 'color', 'stk', 'backdrop'),
+    e('good', 'src', 'color', 'stk', 'layer_aa'),
+    e('eo', 'stk', 'color', 'out', 'color'),
+  ]
+  const file = { sombra: 3, nodes, edges }
+  const imported = importFromFile(JSON.parse(JSON.stringify(file)))
+  const ih = imported.edges.filter((x) => x.target === 'stk').map((x) => x.targetHandle)
+  assert(!ih.includes('backdrop'), `.sombra import kept the edge into backdrop: ${JSON.stringify(ih)}`)
+  assert(ih.includes('layer_aa'), `.sombra import dropped the legitimate layer edge: ${JSON.stringify(ih)}`)
+  const decoded = decodeCompactHash(encodeCompactHash(nodes as never, edges as never))
+  const dh = decoded.edges.filter((x) => x.target === 'stk').map((x) => x.targetHandle)
+  assert(!dh.includes('backdrop') && dh.includes('layer_aa'), `share-URL decode kept ${JSON.stringify(dh)}`)
+})
+
 await run('stack')
