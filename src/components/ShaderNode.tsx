@@ -171,7 +171,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
       const def = data?.type ? nodeRegistry.get(data.type) : undefined
       if (!def) return []
       const ports = def.dynamicInputs ? def.dynamicInputs(data?.params ?? {}) : def.inputs
-      const portIds = new Set(ports.map(p => p.id))
+      const portIds = new Set(def.previewPorts ? def.previewPorts(data?.params ?? {}) : ports.map(p => p.id))
       return edges
         .filter(e => e.target === nodeId && portIds.has(e.targetHandle ?? ''))
         .map(e => e.source)

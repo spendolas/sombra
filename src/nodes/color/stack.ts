@@ -279,6 +279,11 @@ export const stackNode: NodeDefinition = {
   category: 'Color',
   description: 'Composite layers bottom-up, each with its own blend mode, opacity and mask',
   hidePreview: false,
+  // No thumbnail unless a VISIBLE layer has content wired in: an empty Stack,
+  // or one with every layer hidden, outputs transparent by construction
+  // (Figma 979:4841, column B "Empty" shows no thumbnail).
+  conditionalPreview: true,
+  previewPorts: (params) => visibleLayers(params).map((l) => layerPortId(l.id)),
   // The layer list draws every input handle (src/components/StackNodeBody.tsx).
   portsRenderedByComponent: true,
 
