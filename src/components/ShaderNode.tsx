@@ -20,6 +20,7 @@ import { IconButton } from '@/components/IconButton'
 import { icons } from '@/components/icons'
 import { RgbaColorPicker, type Rgba } from '@/components/RgbaColorPicker'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { NODE_BODIES } from '@/components/node-bodies'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
 
@@ -170,7 +171,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
       const def = data?.type ? nodeRegistry.get(data.type) : undefined
       if (!def) return []
       const ports = def.dynamicInputs ? def.dynamicInputs(data?.params ?? {}) : def.inputs
-      const portIds = new Set(ports.map(p => p.id))
+      const portIds = new Set(def.previewPorts ? def.previewPorts(data?.params ?? {}) : ports.map(p => p.id))
       return edges
         .filter(e => e.target === nodeId && portIds.has(e.targetHandle ?? ''))
         .map(e => e.source)
@@ -208,7 +209,12 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
     const runAnimation = (from: number, to: number) => {
       let start = 0
       const duration = 300
-      const expanding = to > from
+      // Direction comes from intent, not from the two heights: when the effect
+      // re-runs on an already-open wrapper (React StrictMode re-runs effects on
+      // mount in dev; any quick false→true flip before the collapse moves) the
+      // expand goes from h to h, `to > from` read it as a collapse, and the
+      // opacity faded to 0 — an open but invisible thumbnail.
+      const expanding = showPreview
 
       const tick = (now: number) => {
         if (!start) start = now
@@ -302,11 +308,16 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
   // its own control — colors render as swatch pickers, not sliders.
   // color_constant's `color` param is excluded — its node body IS the inline
   // picker (rendered below), so it must not also appear as a generic row.
+  // A node whose body component draws its own input handles also draws the
+  // connectable params beside them; the generic section keeps the rest.
+  const portsByComponent = !!definition.portsRenderedByComponent
+  const PortsBody = portsByComponent ? NODE_BODIES[definition.type] : undefined
   const bodyParams = allParams.filter(
     (p) =>
       !p.id.startsWith('srt_') &&
       isParamVisible(p, currentValues, allParams) &&
-      !(definition.type === 'color_constant' && p.type === 'color')
+      !(definition.type === 'color_constant' && p.type === 'color') &&
+      !(portsByComponent && p.connectable)
   )
 
   const connectableIds = new Set(
@@ -315,11 +326,13 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
       .map((p) => p.id)
   )
 
-  // Pure inputs: those NOT shadowed by a connectable param
-  const pureInputs = resolvedInputs.filter((inp) => !connectableIds.has(inp.id))
+  // Pure inputs: those NOT shadowed by a connectable param, and never an
+  // internal port (wired only by multi-pass expansion).
+  const pureInputs = resolvedInputs.filter((inp) => !connectableIds.has(inp.id) && !inp.internal)
 
-  // Dynamic input flag
-  const hasDynamicInputs = !!definition.dynamicInputs
+  // Dynamic input flag — the generic +/- row is `inputCount`-shaped, so a node
+  // that draws its own ports never gets it.
+  const hasDynamicInputs = !!definition.dynamicInputs && !portsByComponent
 
   // color_constant: resolve the `color` param as an RGBA tuple for the
   // inline picker below (pad legacy 3-tuple saves with a=1).
@@ -395,8 +408,18 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
           />
         ))}
 
+        {/* Ports drawn by the node's own body component, in place of the
+            generic input rows — and above the parameter section below. */}
+        {PortsBody && (
+          <div className="w-full nodrag nowheel">
+            <ErrorBoundary label={definition.type} fallback={<div className="text-fg-subtle text-xs px-2 py-1">⚠ display unavailable</div>}>
+              <PortsBody nodeId={id} data={currentValues} />
+            </ErrorBoundary>
+          </div>
+        )}
+
         {/* Pure input handles */}
-        {pureInputs.map((input) => (
+        {!portsByComponent && pureInputs.map((input) => (
           <LabeledHandle
             key={input.id}
             type="target"

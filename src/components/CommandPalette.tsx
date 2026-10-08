@@ -7,6 +7,7 @@ import { useReactFlow } from '@xyflow/react'
 import type { Node } from '@xyflow/react'
 import type { NodeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
+import { defaultParams as defaultParamsOf } from '../nodes/default-params'
 import { useGraphStore } from '../stores/graphStore'
 import { makeNodeId } from '../utils/node-id'
 import { searchNodes, groupByCategory, type SearchResult } from '../utils/fuzzy-search'
@@ -125,14 +126,7 @@ export function CommandPalette({ onClose, mousePosition }: CommandPaletteProps) 
 
       const position = screenToFlowPosition(mousePosition)
 
-      const defaultParams: Record<string, unknown> = {}
-      if (def.params) {
-        for (const p of def.params) {
-          if (p.default !== undefined) {
-            defaultParams[p.id] = p.default
-          }
-        }
-      }
+      const defaultParams = defaultParamsOf(def)
 
       const newNode: Node<NodeData> = {
         id: makeNodeId(nodeType),

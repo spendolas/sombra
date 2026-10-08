@@ -487,6 +487,26 @@ snippet + a JS toolkit. Full spec/plan in `docs/superpowers/`; runtime docs in `
 
 ---
 
+## Phase 8 — Stack compositing node ✅ Complete
+
+A layering node: N layers composited bottom-up, each with its own blend mode
+(24 — the 20 separable modes plus Hue, Saturation, Colour, Luminosity), opacity
+and mask, in sRGB or linear blend space. Spec:
+`docs/superpowers/specs/2026-09-11-stack-compositing-node-design.md`; plan:
+`docs/superpowers/plans/2026-10-07-stack-node.md`.
+
+- Composited as a multiPass chain — one sub-pass per visible layer, at most two
+  textures bound per pass, three texture slots at any layer count under
+  consumer-ordered emission.
+- Framework work it needed: unread texture and uniform bindings no longer
+  invalidate a WebGPU frame; pass scale resolved per emitted pass (a blur layer
+  beside another layer keeps its half-size passes); parameter defaults
+  deep-cloned at every node-creation site; internal ports (`backdrop`).
+- Layer list editor designed in Figma first and signed off in the sandbox;
+  every layer edit is one atomic, undoable store action.
+
+**Node count: 46.**
+
 ## Future work
 
 These happen when specific conditions are met, not on a timeline:

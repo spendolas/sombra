@@ -11,6 +11,7 @@
  * and snap-to-static behavior.
  */
 
+import { declaresUniformBinding } from '../renderer/uniform-binding'
 import { REFERENCE_SIZE as SHARED_REFERENCE_SIZE } from '../renderer/constants'
 import { captureCanvasThumbnail } from '../renderer/capture-thumbnail'
 import type { RenderPlan } from '../compiler/glsl-generator'
@@ -43,6 +44,8 @@ interface PassState {
   uniformLayout: UniformBufferLayout
   textureBindingsMeta: TextureBinding[]
   uniformBindGroup: GPUBindGroup | null
+  /** The module declares group 0 — when false there is no group 0 to bind. */
+  readsUniforms: boolean
   textureBindGroup: GPUBindGroup | null
   inputTextures: Array<{ passIndex: number; samplerName: string }>
   isTimeLive: boolean
@@ -146,6 +149,8 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
   private uniformLayout: UniformBufferLayout | null = null
   private pipeline: GPURenderPipeline | null = null
   private uniformBindGroup: GPUBindGroup | null = null
+  /** Single-pass module declares group 0 (see declaresUniformBinding). */
+  private singleReadsUniforms = true
   private textureBindGroup: GPUBindGroup | null = null
   private textureBindingsMeta: TextureBinding[] = []
 
@@ -534,6 +539,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
   private updateSinglePass(wgslPass: NonNullable<RenderPlan['wgsl']>['passes'][number]): { success: boolean; error?: string } {
     const { shaderCode, uniformLayout, textureBindings } = wgslPass
 
+    this.singleReadsUniforms = declaresUniformBinding(shaderCode)
     this.uniformLayout = uniformLayout
     this.textureBindingsMeta = textureBindings
     this.createUniformBuffer(uniformLayout.totalSize)
@@ -664,6 +670,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
         uniformLayout: wp.uniformLayout,
         textureBindingsMeta: wp.textureBindings,
         uniformBindGroup: null,
+        readsUniforms: declaresUniformBinding(wp.shaderCode),
         textureBindGroup: null,
         inputTextures: wp.inputTextures,
         isTimeLive: wp.isTimeLive,
@@ -841,14 +848,16 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
     for (let i = 0; i < this.passStates.length; i++) {
       const ps = this.passStates[i]
 
-      // Group 0: uniform buffer
-      ps.uniformBindGroup = this.device.createBindGroup({
-        layout: ps.pipeline.getBindGroupLayout(0),
-        entries: [{
-          binding: 0,
-          resource: { buffer: ps.uniformBuffer },
-        }],
-      })
+      // Group 0: uniform buffer — only when the module declares it.
+      ps.uniformBindGroup = ps.readsUniforms
+        ? this.device.createBindGroup({
+            layout: ps.pipeline.getBindGroupLayout(0),
+            entries: [{
+              binding: 0,
+              resource: { buffer: ps.uniformBuffer },
+            }],
+          })
+        : null
 
       // Group 1: textures (inter-pass + image)
       ps.textureBindGroup = this.buildPassTextureBindGroup(i, ps)
@@ -931,13 +940,15 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
   private rebuildBindGroups(): void {
     if (!this.pipeline || !this.uniformBuffer) return
 
-    this.uniformBindGroup = this.device.createBindGroup({
-      layout: this.pipeline.getBindGroupLayout(0),
-      entries: [{
-        binding: 0,
-        resource: { buffer: this.uniformBuffer },
-      }],
-    })
+    this.uniformBindGroup = this.singleReadsUniforms
+      ? this.device.createBindGroup({
+          layout: this.pipeline.getBindGroupLayout(0),
+          entries: [{
+            binding: 0,
+            resource: { buffer: this.uniformBuffer },
+          }],
+        })
+      : null
 
     this.rebuildTextureBindGroup()
   }
@@ -1232,7 +1243,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
   }
 
   private renderSinglePass(w: number, h: number, dpr: number, time: number): void {
-    if (!this.pipeline || !this.uniformBindGroup) return
+    if (!this.pipeline || (this.singleReadsUniforms && !this.uniformBindGroup)) return
 
     this.writeSinglePassBuiltinUniforms(w, h, dpr, time)
 
@@ -1264,7 +1275,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
 
     if (this.opaqueBackground && this.compositeChecker) this.drawChecker(pass, dpr)
     pass.setPipeline(this.pipeline)
-    pass.setBindGroup(0, this.uniformBindGroup)
+    if (this.uniformBindGroup) pass.setBindGroup(0, this.uniformBindGroup)
     if (this.textureBindGroup) {
       pass.setBindGroup(1, this.textureBindGroup)
     }
@@ -1337,7 +1348,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
 
       if (isLastPass && this.opaqueBackground && this.compositeChecker) this.drawChecker(pass, dpr)
       pass.setPipeline(ps.pipeline)
-      pass.setBindGroup(0, ps.uniformBindGroup!)
+      if (ps.uniformBindGroup) pass.setBindGroup(0, ps.uniformBindGroup)
       if (ps.textureBindGroup) {
         pass.setBindGroup(1, ps.textureBindGroup)
       }
@@ -1523,20 +1534,23 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
 
     let pipeline: GPURenderPipeline | null
     let uniformBindGroup: GPUBindGroup | null
+    let readsUniforms: boolean
     let textureBindGroup: GPUBindGroup | null
     if (this.isMultiPass) {
       this.writeMultiPassBuiltinUniforms(SIZE, SIZE, 1, time)
       const last = this.passStates[this.passStates.length - 1]
       pipeline = last?.pipeline ?? null
       uniformBindGroup = last?.uniformBindGroup ?? null
+      readsUniforms = last?.readsUniforms ?? true
       textureBindGroup = last?.textureBindGroup ?? null
     } else {
       this.writeSinglePassBuiltinUniforms(SIZE, SIZE, 1, time)
       pipeline = this.pipeline
       uniformBindGroup = this.uniformBindGroup
+      readsUniforms = this.singleReadsUniforms
       textureBindGroup = this.textureBindGroup
     }
-    if (!pipeline || !uniformBindGroup) return true // can't probe → assume alpha (safe)
+    if (!pipeline || (readsUniforms && !uniformBindGroup)) return true // can't probe → assume alpha (safe)
 
     const encoder = this.device.createCommandEncoder()
     const pass = encoder.beginRenderPass({
@@ -1548,7 +1562,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
       }],
     })
     pass.setPipeline(pipeline)
-    pass.setBindGroup(0, uniformBindGroup)
+    if (uniformBindGroup) pass.setBindGroup(0, uniformBindGroup)
     if (textureBindGroup) pass.setBindGroup(1, textureBindGroup)
     pass.setVertexBuffer(0, this.quadBuffer)
     pass.draw(6)

@@ -24,7 +24,7 @@ import {
 import type { TextureBoundaryEdge } from './glsl-generator'
 import { assembleWGSL } from './ir/wgsl-assembler'
 import { expandMultiPassNodes, baseNodeId } from './expand-passes'
-import { resolvePassResolution } from './pass-resolution'
+import { resolvePassResolution, resolveOutputPassResolution } from './pass-resolution'
 import { nodesFeeding } from './reachability'
 import { assignTextureSlots, type PassLiveness } from './texture-slots'
 import { orderPassesByConsumer } from './pass-order'
@@ -610,6 +610,13 @@ function compileMultiPassIR(
     // Resolved once per pass: relay passes below share the primary's geometry,
     // because they render the same fragment into a same-sized target.
     const passResolution = resolvePassResolution(passNodeIds, nodeMap)
+    // Each intermediate pass (primary or relay) writes ONE output: resolve its
+    // scale from the nodes feeding that output, not the whole depth group.
+    const outputResolution = (group: TextureBoundaryEdge[] | undefined) =>
+      resolveOutputPassResolution(
+        group ? resolveSourceEdge(group[0], edgesByTarget)?.source : undefined,
+        passNodeIds, nodeMap, edgesByTarget,
+      )
 
     const standardUniforms = new Set<string>()
     const passUserUniforms: UniformSpec[] = []
@@ -745,7 +752,7 @@ function compileMultiPassIR(
         shaderCode: assembled.shaderCode, uniformLayout: assembled.uniformLayout,
         textureBindings: assembled.textureBindings, inputTextures,
         isTimeLive: standardUniforms.has('u_time'), textureFilter: primaryResolved?.textureFilter,
-        resolution: passResolution,
+        resolution: outputResolution(groups[0]),
       })
 
       // --- Relay passes ---
@@ -796,7 +803,7 @@ function compileMultiPassIR(
           shaderCode: relayAssembled.shaderCode, uniformLayout: relayAssembled.uniformLayout,
           textureBindings: relayAssembled.textureBindings, inputTextures: relayInputTextures,
           isTimeLive: standardUniforms.has('u_time'), textureFilter: resolved.textureFilter,
-          resolution: passResolution,
+          resolution: outputResolution(groups[g]),
         })
       }
     } else {

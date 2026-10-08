@@ -11,7 +11,8 @@ import pako from 'pako'
 import type { Node, Edge } from '@xyflow/react'
 import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
-import { resolveParams } from '../nodes/resolve-dynamic'
+import { defaultParams, cloneParamDefault } from '../nodes/default-params'
+import { resolveParams, userInputs } from '../nodes/resolve-dynamic'
 import { migrateOffsetSpace } from './srt-migration'
 import { SOMBRA_FILE_MIME_TYPE } from './file-type-constants'
 import type { ShaderThumbnail } from '../renderer/capture-thumbnail'
@@ -365,7 +366,7 @@ export function importFromFile(json: unknown): {
     if (!def) return node
     const params = { ...(node.data.params || {}) }
     for (const p of def.params ?? []) {
-      if (!(p.id in params)) params[p.id] = p.default
+      if (!(p.id in params)) params[p.id] = cloneParamDefault(p.default)
     }
     return { ...node, data: { ...node.data, params } }
   })
@@ -380,7 +381,9 @@ export function importFromFile(json: unknown): {
     const tgtDef = nodeRegistry.get(tgt.data.type)
     if (!srcDef || !tgtDef) return false
     const srcOk = !e.sourceHandle || srcDef.outputs.some((p) => p.id === e.sourceHandle)
-    const tgtInputs = tgtDef.dynamicInputs ? tgtDef.dynamicInputs(tgt.data.params || {}) : tgtDef.inputs
+    // Internal ports (a multiPass chain input) are wired only by expansion —
+    // a saved edge into one is dropped like any dangling handle.
+    const tgtInputs = userInputs(tgtDef, tgt.data.params as Record<string, unknown> | undefined)
     // Params must be resolved exactly as inputs are: a handle that exists only
     // through dynamicParams is still a real handle, and treating it as invalid
     // deletes the user's wire on every file open.
@@ -585,12 +588,7 @@ export function decodeCompactHash(hash: string): {
     if (!def) throw new Error(`Unknown node type "${cn.t}"`)
 
     // Merge definition defaults with stored non-default params
-    const params: Record<string, unknown> = {}
-    if (def.params) {
-      for (const p of def.params) {
-        if (p.default !== undefined) params[p.id] = p.default
-      }
-    }
+    const params = defaultParams(def)
     if (cn.p) Object.assign(params, cn.p)
 
     // v1 hash: encode strips default params, so a seeded srt_translateSpace
@@ -638,6 +636,14 @@ export function decodeCompactHash(hash: string): {
         sourcePortType,
       },
     }
+  }).filter((e) => {
+    // A shared link must not reach a port only multi-pass expansion may wire
+    // (Stack's `backdrop`) — the same rule as connect and .sombra import.
+    const tgt = nodes.find((n) => n.id === e.target)
+    const def = tgt ? nodeRegistry.get(tgt.data.type) : undefined
+    if (!def || !e.targetHandle) return true
+    const inputs = def.dynamicInputs ? def.dynamicInputs(tgt!.data.params || {}) : def.inputs
+    return !inputs.some((p) => p.id === e.targetHandle && p.internal)
   })
 
   return { nodes, edges }

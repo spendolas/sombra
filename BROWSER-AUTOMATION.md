@@ -61,8 +61,9 @@ const noise = sombra.createNode('noise', {x: 200, y: 100}, {
 Connects an output port to an input port. Returns the new edge's string ID.
 
 - **sourcePort** — defaults to the first output of the source node
-- **targetPort** — defaults to the first input of the target node
+- **targetPort** — defaults to the first input of the target node that a user may wire (internal ports such as Stack's `backdrop` are skipped)
 - If the target input already has a connection, the old one is replaced (single-wire-per-input)
+- **Throws** when the canvas would refuse the same drag: no such port, an internal port, types that cannot coerce, or a wire that closes a loop
 
 ```js
 sombra.connect(noiseId, outputId, 'value', 'color')
@@ -188,6 +189,7 @@ does **not** push its plan into this renderer (see above) — call
 | `addNodes(nodes)` | Atomic multi-add — one history entry (used by multi-image file drops) |
 | `replaceEdge(oldEdgeId, newEdge)` | Atomic reconnect (enforces single-wire-per-input) |
 | `updateNodeData(id, {params})` | What `setParams` calls under the hood |
+| `editStackLayers(stackId, edit)` | Every Stack layer change — `{kind:'add'}`, `{kind:'remove', id}`, `{kind:'reorder', from, to}` (TOP-first indices, as the layer list shows them), `{kind:'toggleVisible', id}`, `{kind:'blend', id, blendMode}`. Writes the layer list AND strips a removed layer's wires in one entry, so one undo restores both. `params.layers` itself is stored BOTTOM-first. Opacity is an ordinary param: `setParams(id, {opacity_<layerId>: v})` |
 
 ### Forcing the WebGL2 backend
 
@@ -260,7 +262,7 @@ are documented in [`docs/file-drop-formats.md`](docs/file-drop-formats.md).
 
 ---
 
-## Node Types (45 total)
+## Node Types (46 total)
 
 ### Input
 
@@ -306,6 +308,7 @@ are documented in [`docs/file-drop-formats.md`](docs/file-drop-formats.md).
 | `invert` | Invert | `color` (color) | `result` (color) | `preserveAlpha` (bool, default false — when true, only rgb channels are inverted and alpha passes through unchanged) |
 | `grayscale` | Grayscale | `color` (color, RGBA in) | `result` (float, unchanged) | `mode` (enum: luminance/average/lightness) |
 | `posterize` | Posterize | `color` (color) | `result` (color) | `levels` (connectable), `preserveAlpha` (bool, default false — when true, only rgb channels are posterized and alpha passes through unchanged) |
+| `stack` | Stack | `layer_<id>` per layer (color, `textureInput`, default transparent — hidden layers keep their port); `backdrop` is **internal** (wired by multi-pass expansion only — refused on connect, pruned on load) | `color` (color, RGBA — composited alpha) | `layers` (hidden; see **Stack Layers**), `nextLayerNumber` (hidden), `blendSpace` (enum: srgb/linear, segmented), per layer `opacity_<id>` and `mask_<id>` (connectable, 0..1, uniform) |
 
 ### Distort
 
@@ -437,6 +440,32 @@ sombra.setParams(rampId, {
   ]
 })
 ```
+
+### Stack Layers
+
+A Stack composites its layers bottom-up as a chain of passes (one per VISIBLE
+layer; spec `docs/superpowers/specs/2026-09-11-stack-compositing-node-design.md`).
+`params.layers` is stored **bottom-first** (index 0 composites first); the node's
+layer list shows it top-first. Each layer: `{ id, name, blendMode, visible }` —
+`id` is alphanumeric and stable (ports are `layer_<id>`, `opacity_<id>`, `mask_<id>`),
+`name` is assigned at creation and never derived from position. Blend modes:
+normal, darken, multiply, colorBurn, linearBurn, lighten, screen, colorDodge,
+linearDodge, overlay, softLight, hardLight, vividLight, linearLight, pinLight,
+hardMix, difference, exclusion, subtract, divide, hue, saturation, color, luminosity.
+
+Change layers through `editStackLayers` (see **Store actions**) rather than
+`setParams`, so wires and undo stay right:
+
+```js
+const G = sombra.stores.graph.getState()
+G.editStackLayers(stackId, { kind: 'add' })                    // new top layer, "Layer N"
+G.editStackLayers(stackId, { kind: 'blend', id: 'l2', blendMode: 'multiply' })
+G.editStackLayers(stackId, { kind: 'reorder', from: 0, to: 2 }) // TOP-first indices
+sombra.connect(srcId, stackId, 'color', 'layer_l2')
+sombra.setParams(stackId, { opacity_l2: 0.6 })                  // uniform fast path
+```
+
+An empty list (or every layer hidden) outputs transparent and shows no thumbnail.
 
 ### Fragment Output: Color, Alpha & Premultiplication
 

@@ -10,6 +10,9 @@ import { useGraphStore } from './stores/graphStore'
 import { useCompilerStore } from './stores/compilerStore'
 import { useSettingsStore } from './stores/settingsStore'
 import { nodeRegistry } from './nodes/registry'
+import { userInputs } from './nodes/resolve-dynamic'
+import { isConnectionValid } from './nodes/connection-validity'
+import { defaultParams } from './nodes/default-params'
 import { compileGraph } from './compiler/glsl-generator'
 import { compileGraphIR } from './compiler/ir-compiler'
 import { compileNodePreviewIR } from './compiler/ir-subgraph-compiler'
@@ -55,10 +58,7 @@ function createNode(
   if (!def) throw new Error(`Unknown node type: "${type}". Use sombra.listNodeTypes() to see available types.`)
 
   // Build default params from definition
-  const params: Record<string, unknown> = {}
-  for (const p of def.params ?? []) {
-    params[p.id] = p.default
-  }
+  const params = defaultParams(def)
   Object.assign(params, paramOverrides)
 
   const id = uid('n')
@@ -103,14 +103,22 @@ function connect(
   if (!srcDef) throw new Error(`No definition for source type "${sourceNode.data.type}"`)
   if (!tgtDef) throw new Error(`No definition for target type "${targetNode.data.type}"`)
 
-  // Resolve ports
+  // Resolve ports — the default target is the first port a USER may wire,
+  // never an internal one (Stack's `backdrop`).
   const srcPort = sourcePort ?? srcDef.outputs[0]?.id
-  const tgtPort = targetPort ?? (tgtDef.dynamicInputs
-    ? tgtDef.dynamicInputs(targetNode.data.params as Record<string, unknown>)[0]?.id
-    : tgtDef.inputs[0]?.id)
+  const tgtPort = targetPort ?? userInputs(tgtDef, targetNode.data.params as Record<string, unknown>)[0]?.id
 
   if (!srcPort) throw new Error(`Source node "${srcDef.type}" has no outputs`)
   if (!tgtPort) throw new Error(`Target node "${tgtDef.type}" has no inputs`)
+
+  // The same rule the canvas applies to a drag: an internal port, a missing
+  // port, a type that cannot coerce, or a loop is refused — loudly.
+  if (!isConnectionValid(
+    { source: sourceId, target: targetId, sourceHandle: srcPort, targetHandle: tgtPort },
+    graph.nodes, graph.edges, (t) => nodeRegistry.get(t),
+  )) {
+    throw new Error(`Connection ${srcDef.type}.${srcPort} → ${tgtDef.type}.${tgtPort} is not allowed (no such port, an internal port, incompatible types, or a loop)`)
+  }
 
   // Look up source port type for edge coloring
   const srcPortDef = srcDef.outputs.find(p => p.id === srcPort)

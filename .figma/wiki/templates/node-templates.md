@@ -34,6 +34,7 @@
 | Hue Shift | `802:1951` | Color | 1 (color) | 1 (result) | 1 (shift) | 0 | — |
 | Brightness/Contrast | `123:1833` | Color | 1 (color) | 1 (result) | 2 (brightness, contrast) | 0 | — |
 | Color Ramp | `123:1834` | Color | 1 (value) | 1 (color) | 0 | 1 (interpolation) | ColorRampEditor |
+| Stack | `987:2111` | Color | 1 per layer (`layer_<id>`, color; drawn by the layer list) | 1 (color) | 2 per layer (opacity, mask; drawn by the layer list) | 1 (Blend space, segmented) | StackLayerList (`portsRenderedByComponent`) |
 | Dither | `123:1825` | Effect | 1 (color) | 1 (result) | 2 (pixelSize, dither) | 1 (shape) | — |
 | Quantize UV | `123:1827` | Transform | 0 | 1 (uv) | 1 (pixelSize) | 0 | — |
 | Fragment Output | `123:1835` | Output | 1 (color) | 0 | 0 | 0 | — |
@@ -45,6 +46,9 @@ Full node card with: header "Noise", output (Value float), inputs (Coords vec2, 
 
 ### Color Ramp Template
 Full node card with: header "Color Ramp", output (Color vec3), input (Value float), regular param (Interpolation enum), custom component (ColorRampEditor with gradient bar, stops, +/- buttons, preset dropdown).
+
+### Stack Template (`987:2111`, Templates page, Color section)
+Full node card with: header "Stack", preview (shown only when a visible layer has content — none when empty or every layer is hidden), output (Color), then the **layer list** in place of input rows: a "Layers" header with `+`, one card per layer top-first (layer line with source handle, name, "← source", eye; blend-mode select, greyed on the bottom visible layer; opacity row with handle + slider; mask row with handle), or the "Add a layer" hole when empty. Below a divider: **Blend space** segmented control (sRGB | Linear), spanning the text column. Components: Stack Layer `982:5693`, Stack Empty `982:5702`, Stack Drop Slot `982:5703`, Segmented Control `983:5889`; placement board `983:5896` (column B), empty-state board `979:4841` (column B).
 
 ## Structure
 
@@ -59,6 +63,12 @@ Every template follows this internal structure:
    - Regular Params (FloatSlider, EnumSelect, ColorInput)
    - Custom Component (if `definition.component` exists)
 
+**Nodes with `portsRenderedByComponent` (Stack):** the body component replaces the input
+LabeledHandles, the dynamic-input `+`/`-` row and every connectable param row — it draws
+those handles itself — and sits directly under the outputs. The generic regular-params
+section (divider + rows) still follows it, so such a node's remaining params render at the
+bottom exactly as on any other node.
+
 ## Variable Binding Status
 
 All 23 templates audited:
@@ -69,3 +79,5 @@ All 23 templates audited:
 - **Float Sliders:** SombraSlider style — filled track with no visible thumb, indigo range fill
 
 ## Parity: ✅ All 24 templates match app source
+
+Stack (node 46): template `987:2111` built from the Stack boards on the Components page.
