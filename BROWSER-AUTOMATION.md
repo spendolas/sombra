@@ -61,8 +61,9 @@ const noise = sombra.createNode('noise', {x: 200, y: 100}, {
 Connects an output port to an input port. Returns the new edge's string ID.
 
 - **sourcePort** — defaults to the first output of the source node
-- **targetPort** — defaults to the first input of the target node
+- **targetPort** — defaults to the first input of the target node that a user may wire (internal ports such as Stack's `backdrop` are skipped)
 - If the target input already has a connection, the old one is replaced (single-wire-per-input)
+- **Throws** when the canvas would refuse the same drag: no such port, an internal port, types that cannot coerce, or a wire that closes a loop
 
 ```js
 sombra.connect(noiseId, outputId, 'value', 'color')
