@@ -21,6 +21,7 @@
  */
 import * as fs from 'node:fs'
 import * as path from 'node:path'
+import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import type { Node, Edge } from '@xyflow/react'
 import { initializeNodeLibrary } from '../src/nodes'
@@ -549,7 +550,27 @@ test('a reordered plan survives the embed artifact round trip with every read in
 // The real corpus: ordering must change NOTHING here
 // ---------------------------------------------------------------------------
 
-test('real saved graphs: valid, backends agree, and slot counts UNCHANGED', () => {
+/**
+ * Per-graph baseline for the real corpus: each graph's ordered slot count and
+ * canvas units, pinned EXACTLY, plus a hash of the graph file so a re-saved
+ * graph is re-measured on purpose rather than compared against stale numbers
+ * (a new or re-saved graph only warns — it is the owner's work, not a regression).
+ *
+ * Why units and not just slots: a slot count stands in for memory only while
+ * every target is one size. Graphs with reduced-size passes (blurs, pyramids)
+ * get slots of their own per size, so their memory can move while the slot
+ * count does not — or the reverse. Units (Σ scale² over slots) are the number
+ * that measures it.
+ *
+ * shaders/ is gitignored; this file holds only the numbers. Re-measure with
+ *   npx tsx scripts/verify-pass-order.ts --rebaseline
+ * and commit the diff deliberately.
+ */
+const CORPUS_BASELINE = path.join(ROOT, 'scripts', 'baselines', 'pass-order-corpus.json')
+interface CorpusEntry { sha256: string; slots: number; units: number }
+const REBASELINE = process.argv.includes('--rebaseline')
+
+test('real saved graphs: valid, backends agree, slot counts UNCHANGED, and slots + canvas units pinned per graph', () => {
   const dir = path.join(ROOT, 'shaders')
   const files = fs.existsSync(dir)
     ? fs.readdirSync(dir).filter((f) => f.endsWith('.sombra') || f.endsWith('.json')).sort()
@@ -561,9 +582,20 @@ test('real saved graphs: valid, backends agree, and slot counts UNCHANGED', () =
       'Copy it from the main checkout to run it.')
     return
   }
-  let before = 0, after = 0, multiPass = 0, reordered = 0
+  const baseline: Record<string, CorpusEntry> = fs.existsSync(CORPUS_BASELINE)
+    ? JSON.parse(fs.readFileSync(CORPUS_BASELINE, 'utf8'))
+    : {}
+  const measured: Record<string, CorpusEntry> = {}
+  const drift: string[] = []
+  // New or re-saved graphs are the owner's everyday work in shaders/, not a
+  // regression: report them, don't fail. Only an UNCHANGED graph whose memory
+  // moved means the compiler changed.
+  const unpinned: string[] = []
+  let before = 0, after = 0, multiPass = 0, reordered = 0, scaled = 0
   for (const f of files) {
-    const payload = decodeSombraPackage(new Uint8Array(fs.readFileSync(path.join(dir, f))))
+    const bytes = fs.readFileSync(path.join(dir, f))
+    const sha256 = createHash('sha256').update(bytes).digest('hex').slice(0, 16)
+    const payload = decodeSombraPackage(new Uint8Array(bytes))
     const { nodes, edges } = importFromFile(payload)
     const g = { nodes: nodes as unknown as Node[], edges: edges as unknown as Edge[] }
     const m = measure(g, `corpus:${f}`)
@@ -573,12 +605,35 @@ test('real saved graphs: valid, backends agree, and slot counts UNCHANGED', () =
     before += m.before
     after += m.after
     if (m.passes > 1) multiPass++
+    if (m.mixed || Math.abs(m.units - m.after) > 1e-9) scaled++
+    measured[f] = { sha256, slots: m.after, units: m.units }
+    const want = baseline[f]
+    if (!want) unpinned.push(`${f} (new)`)
+    else if (want.sha256 !== sha256) unpinned.push(`${f} (re-saved)`)
+    else {
+      if (want.slots !== m.after) drift.push(`${f}: ${m.after} slots, baseline ${want.slots}`)
+      if (Math.abs(want.units - m.units) > 1e-9) drift.push(`${f}: ${m.units} canvas units, baseline ${want.units}`)
+    }
     const plain = compileOnce(g, false, f).glsl.map((p) => p.fragmentShader).join('\0')
     const ord = compileOnce(g, true, f).glsl.map((p) => p.fragmentShader).join('\0')
     if (plain !== ord) reordered++
   }
-  console.log(`  corpus: ${files.length} graphs (${multiPass} multi-pass, ${reordered} reordered) — ` +
+  console.log(`  corpus: ${files.length} graphs (${multiPass} multi-pass, ${reordered} reordered, ${scaled} with reduced-size targets) — ` +
     `slots ${before} → ${after}`)
+  if (REBASELINE) {
+    fs.mkdirSync(path.dirname(CORPUS_BASELINE), { recursive: true })
+    fs.writeFileSync(CORPUS_BASELINE, JSON.stringify(measured, null, 2) + '\n')
+    console.log(`  REBASELINED ${Object.keys(measured).length} graphs → ${path.relative(ROOT, CORPUS_BASELINE)} — review and commit the diff`)
+    return
+  }
+  // A baselined graph that is no longer in shaders/ is not a regression, but
+  // it is no longer being checked — say so.
+  const gone = Object.keys(baseline).filter((f) => !(f in measured))
+  if (gone.length) console.warn(`  WARN: ${gone.length} baselined graph(s) absent from shaders/: ${gone.join(', ')}`)
+  if (unpinned.length) console.warn(`  WARN: ${unpinned.length} graph(s) not checked against the baseline — run --rebaseline to pin them: ${unpinned.join(', ')}`)
+  assert(drift.length === 0,
+    `corpus memory moved — re-measure deliberately (npx tsx scripts/verify-pass-order.ts --rebaseline) only if this is intended:\n      ` +
+    drift.join('\n      '))
 })
 
 test('summary', () => {
