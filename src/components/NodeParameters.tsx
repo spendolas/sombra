@@ -180,15 +180,17 @@ interface EnumSelectProps {
   param: NodeParameter
   value: string
   onChange: (value: string) => void
+  /** The option being hovered while open, or null — see `Select`'s onPreview. */
+  onPreview?: (value: string | null) => void
 }
 
-export function EnumSelect({ param, value, onChange }: EnumSelectProps) {
+export function EnumSelect({ param, value, onChange, onPreview }: EnumSelectProps) {
   return (
     <div className={ds.enumSelect.root}>
       <Label className={ds.enumSelect.label}>
         {param.label}
       </Label>
-      <Select value={value} onValueChange={onChange}>
+      <Select value={value} onValueChange={onChange} onPreview={onPreview}>
         <SelectTrigger>
           <SelectValue />
         </SelectTrigger>
