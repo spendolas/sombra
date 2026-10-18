@@ -795,3 +795,51 @@ export function createNoiseTestGraph(): {
     edges,
   }
 }
+
+/**
+ * Stack preset — the compositing node's key capabilities in one graph:
+ * a gradient on the bottom layer, dots on the top layer in SCREEN at 85%
+ * opacity, the top layer cut by an animated noise MASK (a wired connectable
+ * param, so the mask drives a uniform-free per-pixel input while opacity stays
+ * on the uniform fast path). Layer ids are the node's defaults (`l1`, `l2`;
+ * `params.layers` is stored bottom-first).
+ */
+export function createStackTestGraph(): {
+  nodes: Node<NodeData>[]
+  edges: Edge<EdgeData>[]
+} {
+  const node = (id: string, type: string, params: Record<string, unknown>): Node<NodeData> =>
+    ({ id, type: 'shaderNode', position: { x: 0, y: 0 }, data: { type, params } })
+  const nodes: Node<NodeData>[] = [
+    node('stk-gradient', 'gradient', {
+      gradientType: 'linear', drawMode: 'stretch', interpolation: 'smooth',
+      stops: [
+        { position: 0.0, color: [0.05, 0.07, 0.22] },
+        { position: 1.0, color: [0.95, 0.45, 0.20] },
+      ],
+    }),
+    node('stk-dots', 'dots', {}),
+    node('stk-time', 'time', { speed: 0.4 }),
+    node('stk-noise', 'noise', { srt_scale: 1 / 3, noiseType: 'simplex' }),
+    node('stk-stack', 'stack', {
+      layers: [
+        { id: 'l1', name: 'Layer 1', blendMode: 'normal', visible: true },
+        { id: 'l2', name: 'Layer 2', blendMode: 'screen', visible: true },
+      ],
+      nextLayerNumber: 3,
+      blendSpace: 'srgb',
+      opacity_l2: 0.85,
+    }),
+    node('stk-output', 'fragment_output', {}),
+  ]
+  const edge = (id: string, s: string, sh: string, t: string, th: string, type: string): Edge<EdgeData> =>
+    ({ id, source: s, target: t, sourceHandle: sh, targetHandle: th, type: 'typed', data: { sourcePort: sh, targetPort: th, sourcePortType: type as never } })
+  const edges: Edge<EdgeData>[] = [
+    edge('stk-e1', 'stk-gradient', 'color', 'stk-stack', 'layer_l1', 'color'),
+    edge('stk-e2', 'stk-dots', 'color', 'stk-stack', 'layer_l2', 'color'),
+    edge('stk-e3', 'stk-time', 'time', 'stk-noise', 'phase', 'float'),
+    edge('stk-e4', 'stk-noise', 'value', 'stk-stack', 'mask_l2', 'float'),
+    edge('stk-e5', 'stk-stack', 'color', 'stk-output', 'color', 'color'),
+  ]
+  return { nodes: layoutGraph(nodes, edges), edges }
+}

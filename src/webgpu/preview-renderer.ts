@@ -12,6 +12,7 @@
 import type { PreviewRenderer as IPreviewRenderer, UniformUpload } from '../renderer/types'
 import type { UniformBufferLayout, TextureBinding } from '../compiler/ir/wgsl-assembler'
 import { passTargetSize, type PassTargetSize } from '../renderer/pass-size'
+import { declaresUniformBinding } from '../renderer/uniform-binding'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -91,7 +92,8 @@ interface PreviewPassState {
   uniformFloat32: Float32Array
   uniformLayout: UniformBufferLayout
   textureBindingsMeta: TextureBinding[]
-  uniformBindGroup: GPUBindGroup
+  /** Null when the module declares no group 0 (see declaresUniformBinding). */
+  uniformBindGroup: GPUBindGroup | null
   textureBindGroup: GPUBindGroup | null
   inputTextures: Array<{ passIndex: number; samplerName: string }>
 }
@@ -232,11 +234,13 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
     this.writeUserUniforms(uniformFloat32, pass.uniformLayout, pass.userUniforms)
     this.device.queue.writeBuffer(uniformBuffer, 0, uniformFloat32.buffer)
 
-    // Create bind groups
-    const uniformBindGroup = this.device.createBindGroup({
-      layout: pipeline.getBindGroupLayout(0),
-      entries: [{ binding: 0, resource: { buffer: uniformBuffer } }],
-    })
+    // Create bind groups — group 0 only when the module declares it.
+    const uniformBindGroup = declaresUniformBinding(pass.shaderCode)
+      ? this.device.createBindGroup({
+          layout: pipeline.getBindGroupLayout(0),
+          entries: [{ binding: 0, resource: { buffer: uniformBuffer } }],
+        })
+      : null
 
     // Image-node textures (group 1) — shader declares them, so the draw is
     // invalid without a complete bind group. Texture may not be uploaded yet
@@ -273,7 +277,7 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
     })
 
     renderPass.setPipeline(pipeline)
-    renderPass.setBindGroup(0, uniformBindGroup)
+    if (uniformBindGroup) renderPass.setBindGroup(0, uniformBindGroup)
     if (textureBindGroup) renderPass.setBindGroup(1, textureBindGroup)
     renderPass.setVertexBuffer(0, this.quadBuffer)
     renderPass.draw(6)
@@ -343,10 +347,12 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
       this.writeUserUniforms(uniformFloat32, pass.uniformLayout, pass.userUniforms)
       this.device.queue.writeBuffer(uniformBuffer, 0, uniformData)
 
-      const uniformBindGroup = this.device.createBindGroup({
-        layout: pipeline.getBindGroupLayout(0),
-        entries: [{ binding: 0, resource: { buffer: uniformBuffer } }],
-      })
+      const uniformBindGroup = declaresUniformBinding(pass.shaderCode)
+        ? this.device.createBindGroup({
+            layout: pipeline.getBindGroupLayout(0),
+            entries: [{ binding: 0, resource: { buffer: uniformBuffer } }],
+          })
+        : null
 
       // Build texture bind group: inter-pass textures + image-node textures.
       // The shader's group(1) layout requires EVERY declared binding — a
@@ -434,7 +440,7 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
       })
 
       renderPass.setPipeline(ps.pipeline)
-      renderPass.setBindGroup(0, ps.uniformBindGroup)
+      if (ps.uniformBindGroup) renderPass.setBindGroup(0, ps.uniformBindGroup)
       if (ps.textureBindGroup) {
         renderPass.setBindGroup(1, ps.textureBindGroup)
       }

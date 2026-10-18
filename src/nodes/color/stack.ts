@@ -113,6 +113,8 @@ export const visibleLayers = (params: Record<string, unknown>) => getLayers(para
 
 const backdropPort: PortDefinition = {
   id: BACKDROP, label: 'Backdrop', type: 'color', textureInput: true, default: [0, 0, 0, 0],
+  // Wired by the expansion, never by the user: refused on connect, pruned on load.
+  internal: true,
 }
 
 function layerInputs(params: Record<string, unknown>): PortDefinition[] {
@@ -136,7 +138,9 @@ const STATIC_PARAMS: NodeParameter[] = [
   // Never decreases, so a new layer is named one higher than any ever made.
   { id: 'nextLayerNumber', label: 'Next Layer Number', type: 'float', default: 3, hidden: true, updateMode: 'recompile' },
   {
-    id: 'blendSpace', label: 'Blend Space', type: 'enum', default: 'srgb',
+    // Drawn by the generic parameter section, at the very bottom of the node
+    // under its divider (Figma 983:5896, column B).
+    id: 'blendSpace', label: 'Blend space', type: 'enum', default: 'srgb', control: 'segmented',
     options: [{ value: 'srgb', label: 'sRGB' }, { value: 'linear', label: 'Linear' }],
     updateMode: 'recompile',
   },
@@ -277,6 +281,13 @@ export const stackNode: NodeDefinition = {
   category: 'Color',
   description: 'Composite layers bottom-up, each with its own blend mode, opacity and mask',
   hidePreview: false,
+  // No thumbnail unless a VISIBLE layer has content wired in: an empty Stack,
+  // or one with every layer hidden, outputs transparent by construction
+  // (Figma 979:4841, column B "Empty" shows no thumbnail).
+  conditionalPreview: true,
+  previewPorts: (params) => visibleLayers(params).map((l) => layerPortId(l.id)),
+  // The layer list draws every input handle (src/components/StackNodeBody.tsx).
+  portsRenderedByComponent: true,
 
   inputs: layerInputs({}),
   dynamicInputs: layerInputs,
