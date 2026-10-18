@@ -372,6 +372,35 @@ async function main() {
       assert(dLoop.edges.length === dMask.edges.length, `the edge count changed on a refused drag: ${dMask.edges.length} → ${dLoop.edges.length}`)
     })
 
+    // Hovering a layer shows its remove button. The node sizes to its content, so
+    // a button that is mounted only on hover widens the whole node mid-hover.
+    const nodeWidth = () => page.evaluate((stk) => document.querySelector(`.react-flow__node[data-id="${stk}"]`)!.getBoundingClientRect().width, ids.stk)
+    const removeShown = () => page.evaluate((stk) => [...document.querySelectorAll(`.react-flow__node[data-id="${stk}"] [aria-label="Remove Layer 2"]`)]
+      .some((b) => getComputedStyle(b).visibility === 'visible'), ids.stk)
+    // A long source name, so the content (not the minimum width) sets the node's width.
+    await page.evaluate((stk) => {
+      const s = (window as unknown as { __sombra: any }).__sombra // eslint-disable-line @typescript-eslint/no-explicit-any
+      s.connect(s.createNode('brightness_contrast', { x: 0, y: 600 }), stk, 'result', 'layer_l2')
+    }, ids.stk)
+    await page.mouse.move(5, 5)
+    await page.waitForTimeout(400)
+    const restWidth = await nodeWidth(), restShown = await removeShown()
+    const nameAt = await page.evaluate((stk) => {
+      const n = [...document.querySelectorAll(`.react-flow__node[data-id="${stk}"] span[title^="Layer"]`)].find((x) => x.textContent === 'Layer 2')!
+      const r = n.getBoundingClientRect()
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+    }, ids.stk)
+    await page.mouse.move(nameAt.x, nameAt.y, { steps: 4 })
+    await page.waitForTimeout(200)
+    const hoverWidth = await nodeWidth(), hoverShown = await removeShown()
+    const minWidth = await page.evaluate((stk) => parseFloat(getComputedStyle(document.querySelector(`.react-flow__node[data-id="${stk}"]`)!.firstElementChild!).minWidth), ids.stk)
+    const zoom = await page.evaluate(() => new DOMMatrix(getComputedStyle(document.querySelector('.react-flow__viewport')!).transform).a)
+    test('hovering a layer shows its remove button without resizing the node', () => {
+      assert(!restShown && hoverShown, `remove button visibility rest/hover = ${restShown}/${hoverShown}, expected hidden/shown`)
+      assert(restWidth / zoom > minWidth + 1, `fixture: node is at its minimum width (${(restWidth / zoom).toFixed(1)} ≤ ${minWidth}) — content no longer drives its width, so this cannot catch a resize`)
+      assert(Math.abs(hoverWidth - restWidth) < 0.5, `node width ${restWidth.toFixed(1)} → ${hoverWidth.toFixed(1)} on hover`)
+    })
+
     test('no page errors', () => assert(pageErrors.length === 0, pageErrors.join(' | ')))
     await run('stack-ui-gpu')
   } finally {
