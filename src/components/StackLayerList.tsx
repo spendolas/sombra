@@ -243,9 +243,13 @@ function LayerCard({
               {layer.source ? `← ${layer.source}` : 'No source'}
             </span>
           </div>
-          {hovered && !dragging && (
-            <IconButton icon="minus" onClick={() => onRemove(layer.id)} aria-label={`Remove ${layer.name}`} />
-          )}
+          {/* Always laid out, only shown on hover — mounting it on hover widened the node. */}
+          <IconButton
+            icon="minus"
+            className={cn(ds.button.ghost, !(hovered && !dragging) && 'invisible')}
+            onClick={() => onRemove(layer.id)}
+            aria-label={`Remove ${layer.name}`}
+          />
           <IconButton
             icon={hidden ? 'eyeOff' : 'eye'}
             onClick={() => onToggleVisible(layer.id)}
