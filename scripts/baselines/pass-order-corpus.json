@@ -1,0 +1,207 @@
+{
+  "Mar 6.sombra": {
+    "sha256": "f35299f2be312e8e",
+    "slots": 2,
+    "units": 2
+  },
+  "Rosa .sombra": {
+    "sha256": "6a3ba4f45a9a1a6c",
+    "slots": 0,
+    "units": 0
+  },
+  "bioluminescence.sombra": {
+    "sha256": "acae3e776d2b7ea5",
+    "slots": 1,
+    "units": 1
+  },
+  "bug1.sombra": {
+    "sha256": "4a99db95f0807479",
+    "slots": 4,
+    "units": 4
+  },
+  "bug11.sombra": {
+    "sha256": "bcf71ef06943ce85",
+    "slots": 4,
+    "units": 4
+  },
+  "debug-graph.json": {
+    "sha256": "81349382483d3d0d",
+    "slots": 5,
+    "units": 5
+  },
+  "face dr.sombra": {
+    "sha256": "a3b0cf39722384a0",
+    "slots": 3,
+    "units": 1.5
+  },
+  "face off.sombra": {
+    "sha256": "2eb697685ee91681",
+    "slots": 4,
+    "units": 2.5
+  },
+  "face.sombra": {
+    "sha256": "739fe43d8a6918c4",
+    "slots": 1,
+    "units": 1
+  },
+  "for Joao 1-2.sombra": {
+    "sha256": "f4cd2d894ff30ce9",
+    "slots": 3,
+    "units": 3
+  },
+  "for Joao 1-3.sombra": {
+    "sha256": "204c61012bbc3d29",
+    "slots": 3,
+    "units": 3
+  },
+  "for Joao 1.sombra": {
+    "sha256": "386575d2dc6e219e",
+    "slots": 2,
+    "units": 2
+  },
+  "for Joao 2.sombra": {
+    "sha256": "ae3fb632e596ec67",
+    "slots": 2,
+    "units": 2
+  },
+  "for Joao 3.sombra": {
+    "sha256": "ff7ecc7007bd0ce3",
+    "slots": 3,
+    "units": 3
+  },
+  "grain-rot.sombra": {
+    "sha256": "4870e420871b6c41",
+    "slots": 2,
+    "units": 2
+  },
+  "graph (1).sombra": {
+    "sha256": "897f77b464086eae",
+    "slots": 0,
+    "units": 0
+  },
+  "graph (10).sombra": {
+    "sha256": "adfeb44678a508d6",
+    "slots": 5,
+    "units": 3.5
+  },
+  "graph (2).sombra": {
+    "sha256": "0c89911086a18b64",
+    "slots": 2,
+    "units": 2
+  },
+  "graph (3).sombra": {
+    "sha256": "a2a6382da1b937a6",
+    "slots": 1,
+    "units": 1
+  },
+  "graph (4).sombra": {
+    "sha256": "56cd92f016c538be",
+    "slots": 2,
+    "units": 2
+  },
+  "graph (5).sombra": {
+    "sha256": "5e1bef07a4a36a50",
+    "slots": 3,
+    "units": 3
+  },
+  "graph (6).sombra": {
+    "sha256": "59ec7f7ae0175a84",
+    "slots": 3,
+    "units": 3
+  },
+  "graph (7).sombra": {
+    "sha256": "00178b057a77b016",
+    "slots": 3,
+    "units": 3
+  },
+  "graph (8).sombra": {
+    "sha256": "a7260a20eaf9142f",
+    "slots": 1,
+    "units": 1
+  },
+  "graph (9).sombra": {
+    "sha256": "0397d3d0cd903394",
+    "slots": 5,
+    "units": 3.5
+  },
+  "graph(11).sombra": {
+    "sha256": "94739c08da288581",
+    "slots": 1,
+    "units": 1
+  },
+  "graph(12).sombra": {
+    "sha256": "96fde303e7692d48",
+    "slots": 3,
+    "units": 2.25
+  },
+  "graph-thumbed.sombra": {
+    "sha256": "acf46888a0d807e0",
+    "slots": 3,
+    "units": 2.25
+  },
+  "graph.sombra": {
+    "sha256": "94b0ff3b1117ab09",
+    "slots": 1,
+    "units": 1
+  },
+  "joao - final.sombra": {
+    "sha256": "ce392f8a4f662065",
+    "slots": 4,
+    "units": 4
+  },
+  "listening-manifesto.sombra": {
+    "sha256": "408150e1a7cf5540",
+    "slots": 4,
+    "units": 4
+  },
+  "living noise v2.sombra": {
+    "sha256": "435f0acf0adf3f73",
+    "slots": 5,
+    "units": 5
+  },
+  "living noise v3.sombra": {
+    "sha256": "362b8a0f30c6726f",
+    "slots": 5,
+    "units": 5
+  },
+  "living noise v4.sombra": {
+    "sha256": "e6a06207ac4b68c9",
+    "slots": 5,
+    "units": 5
+  },
+  "living noise.sombra": {
+    "sha256": "8040dd4ee636f406",
+    "slots": 4,
+    "units": 4
+  },
+  "mar9.sombra": {
+    "sha256": "e379b81f3a82ff4e",
+    "slots": 1,
+    "units": 1
+  },
+  "new file format (1).sombra": {
+    "sha256": "e480fc3bdd5aa692",
+    "slots": 4,
+    "units": 3.25
+  },
+  "new file format (2).sombra": {
+    "sha256": "121ee92eb6f73088",
+    "slots": 4,
+    "units": 3.25
+  },
+  "quantum.sombra": {
+    "sha256": "473b3f14387dddb4",
+    "slots": 3,
+    "units": 3
+  },
+  "sombra-bioluminescence.json": {
+    "sha256": "3a7a6aee7f4fc273",
+    "slots": 1,
+    "units": 1
+  },
+  "underwear.sombra": {
+    "sha256": "6042d75781155ac8",
+    "slots": 2,
+    "units": 2
+  }
+}
