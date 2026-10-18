@@ -1,3 +1,4 @@
+import { createContext, useContext } from "react"
 import { Select as SelectPrimitive } from "radix-ui"
 import { icons } from "@/components/icons"
 import { cn } from "@/lib/utils"
@@ -5,8 +6,32 @@ import { ds } from "@/generated/ds"
 
 const ChevronDown = icons.chevronDown
 
-function Select(props: React.ComponentProps<typeof SelectPrimitive.Root>) {
-  return <SelectPrimitive.Root {...props} />
+/**
+ * Reports the option being TRIED while the menu is open — highlighted by
+ * pointer or arrow keys — and `null` when nothing is (pointer left the list,
+ * or the menu closed, picked or not). Choosing still goes through
+ * `onValueChange`; a preview never changes the value.
+ */
+const PreviewContext = createContext<((value: string | null) => void) | undefined>(undefined)
+
+function Select({
+  onPreview,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof SelectPrimitive.Root> & {
+  onPreview?: (value: string | null) => void
+}) {
+  return (
+    <PreviewContext.Provider value={onPreview}>
+      <SelectPrimitive.Root
+        onOpenChange={(open) => {
+          if (!open) onPreview?.(null)
+          onOpenChange?.(open)
+        }}
+        {...props}
+      />
+    </PreviewContext.Provider>
+  )
 }
 
 function SelectValue(props: React.ComponentProps<typeof SelectPrimitive.Value>) {
@@ -66,10 +91,16 @@ function SelectContent({
 function SelectItem({
   className,
   children,
+  onFocus,
+  onBlur,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Item>) {
+  const onPreview = useContext(PreviewContext)
   return (
     <SelectPrimitive.Item
+      // Radix highlights an item by focusing it, for pointer and keys alike.
+      onFocus={(e) => { onPreview?.(props.value); onFocus?.(e) }}
+      onBlur={(e) => { onPreview?.(null); onBlur?.(e) }}
       className={cn(
         ds.enumSelect.item,
         "text-fg outline-none rounded-sm px-sm py-xs",
