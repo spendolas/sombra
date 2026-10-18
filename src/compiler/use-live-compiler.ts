@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useGraphStore } from '../stores/graphStore'
 import { useCompilerStore } from '../stores/compilerStore'
 import { useSettingsStore } from '../stores/settingsStore'
+import { useParamPreviewStore, withParamPreview } from '../stores/paramPreviewStore'
 import type { UniformSpec } from '../nodes/types'
 import type { RenderPass } from './glsl-generator'
 import type { CompileResponse } from './compiler.worker'
@@ -43,7 +44,11 @@ export function useLiveCompiler(
   /** When true, the worker also produces WGSL output via the IR path. */
   useIR?: boolean,
 ) {
-  const nodes = useGraphStore((state) => state.nodes)
+  const graphNodes = useGraphStore((state) => state.nodes)
+  // A dropdown option being hovered is compiled as if chosen — here only, so
+  // the viewport shows it while the graph, undo and thumbnails do not.
+  const paramPreview = useParamPreviewStore((state) => state.preview)
+  const nodes = useMemo(() => withParamPreview(graphNodes, paramPreview), [graphNodes, paramPreview])
   const edges = useGraphStore((state) => state.edges)
   const autoCompile = useSettingsStore((state) => state.autoCompile)
   const initialDebounceMs = useSettingsStore((state) => state.compileDebounceMs)

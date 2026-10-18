@@ -23,9 +23,10 @@ import { Position, useUpdateNodeInternals } from '@xyflow/react'
 import { StackLayerList, type StackLayerItem, type StackPort } from '@/components/StackLayerList'
 import { BaseHandle } from '@/components/base-handle'
 import { useGraphStore } from '@/stores/graphStore'
+import { useParamPreviewStore } from '@/stores/paramPreviewStore'
 import { nodeRegistry } from '@/nodes/registry'
 import { getLayers, layerPortId, maskParamId, opacityParamId, STACK_BLEND_OPTIONS } from '@/nodes/color/stack'
-import { toTopFirst } from '@/nodes/color/stack-edit'
+import { applyStackEdit, toTopFirst } from '@/nodes/color/stack-edit'
 import { isBlendMode } from '@/nodes/shared/blend-modes'
 import { getPortColor } from '@/utils/port-colors'
 
@@ -38,6 +39,15 @@ export function StackNodeBody({ nodeId, data }: { nodeId: string; data: Record<s
   const editStackLayers = useGraphStore((s) => s.editStackLayers)
   const updateNodeData = useGraphStore((s) => s.updateNodeData)
   const updateNodeInternals = useUpdateNodeInternals()
+  const setParamPreview = useParamPreviewStore((s) => s.setPreview)
+  const clearParamPreview = useParamPreviewStore((s) => s.clearPreview)
+
+  /** A hovered blend mode, shown in the viewport only: the same edit, never committed. */
+  const previewBlend = useCallback((id: string, mode: string | null) => {
+    if (mode === null || !isBlendMode(mode)) { clearParamPreview(); return }
+    const { params } = applyStackEdit(nodeId, data, edges, { kind: 'blend', id, blendMode: mode })
+    setParamPreview({ nodeId, params: { layers: params.layers } })
+  }, [nodeId, data, edges, setParamPreview, clearParamPreview])
 
   const layers = useMemo(() => getLayers(data), [data])
 
@@ -74,6 +84,7 @@ export function StackNodeBody({ nodeId, data }: { nodeId: string; data: Record<s
       onRemove={(id) => editStackLayers(nodeId, { kind: 'remove', id })}
       onToggleVisible={(id) => editStackLayers(nodeId, { kind: 'toggleVisible', id })}
       onBlendChange={(id, mode) => { if (isBlendMode(mode)) editStackLayers(nodeId, { kind: 'blend', id, blendMode: mode }) }}
+      onBlendPreview={previewBlend}
       onOpacityChange={(id, opacity) => updateNodeData(nodeId, { params: { ...data, [opacityParamId(id)]: opacity } })}
       onReorder={(from, to) => editStackLayers(nodeId, { kind: 'reorder', from, to })}
       renderHandle={({ layerId, port, connected }) => (
