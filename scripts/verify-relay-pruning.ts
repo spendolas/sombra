@@ -198,27 +198,27 @@ test('GLSL: relay-pruned BODY size grows sub-quadratically with converging branc
     `body size grew ${ratio.toFixed(2)}x for 3x the branches — relays are still re-emitting whole bodies`)
 })
 
-test('GLSL: only ONE pass carries the full body', () => {
+test('GLSL: no pass carries another branch\'s code', () => {
   const { nodes, edges } = convergingGraph(4)
   const plan = compileGraph(nodes, edges)
   assert(plan.success, 'compile failed')
-  const lens = plan.passes.map((p) => p.fragmentShader.split('\n').length)
-  const max = Math.max(...lens)
-  const atMax = lens.filter((l) => l === max).length
-  // Today the primary and all 3 relays tie at the maximum because each re-emits
-  // the entire pass body. After pruning, exactly one pass should carry it.
+  // This used to assert that exactly ONE pass ties at the maximum line count:
+  // relays were pruned, the primary still carried the whole depth group. Since
+  // primaries are pruned too (scripts/verify-primary-pruning.ts), no pass
+  // carries the full body and all four branch passes tie at the same pruned
+  // size — so count tied lengths no longer distinguishes anything. Count the
+  // branches each pass actually contains instead: per-node outputs are named
+  // `node_<id>_<port>`, so a pass that carries branch i mentions `node_src<i>_`.
   //
-  // This replaces an earlier `relays.some(l => l < max)` shape that looked
-  // plausible but was satisfiable by an unrelated cheap pass: for 4 branches
-  // the actual line counts are [162, 162, 162, 162, 72] — four passes tied at
-  // the bloated maximum (the bug) plus one small combining pass that exists
-  // regardless of whether relays are pruned. `some(l < max)` was trivially
-  // true because of that combiner, so it passed on unfixed source. Counting
-  // ties at the max is the assertion that actually distinguishes "N passes
-  // duplicate the body" from "one pass is naturally cheaper." Do not revert to
-  // the tidier-looking `some()` form — it measures nothing.
-  assert(atMax === 1,
-    `${atMax} passes tie at ${max} lines — relays still carry the full body (lines: ${JSON.stringify(lens)})`)
+  // Do not revert to a `some(l < max)` shape: for 4 branches the unpruned line
+  // counts were [162, 162, 162, 162, 72], and the cheap combining pass made
+  // `some()` true on unfixed source.
+  const branchesIn = (src: string) => new Set([...src.matchAll(/\bnode_src(\d+)_/g)].map((m) => m[1]))
+  const counts = plan.passes.map((p) => branchesIn(p.fragmentShader).size)
+  assert(counts.filter((c) => c === 1).length === 4,
+    `expected 4 passes carrying exactly one branch each, got branch counts ${JSON.stringify(counts)}`)
+  assert(counts.every((c) => c <= 1),
+    `a pass carries code from several branches — relays or the primary still carry the whole depth group (branch counts: ${JSON.stringify(counts)})`)
 })
 
 test('WGSL: same, on the IR path', () => {

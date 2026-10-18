@@ -735,75 +735,57 @@ function compileMultiPassIR(
         }
       }
 
-      // --- Primary pass ---
-      const primaryResolved = groups.length > 0 ? resolveGroup(groups[0]) : null
-      if (primaryResolved) allOutputs.push(primaryResolved.fragOutput)
-
-      const assembled = assembleWGSL(
-        allOutputs, standardUniforms,
-        passUserUniforms.map(u => ({ name: u.name, glslType: u.glslType })),
-        [...imageSamplers], passInputSamplers,
-      )
-      const primaryIdx = passes.length
-      if (groups.length > 0) {
-        for (const b of groups[0]) samplerCompiledIndex.set(b.samplerName, primaryIdx)
-      }
-      passes.push({
-        shaderCode: assembled.shaderCode, uniformLayout: assembled.uniformLayout,
-        textureBindings: assembled.textureBindings, inputTextures,
-        isTimeLive: standardUniforms.has('u_time'), textureFilter: primaryResolved?.textureFilter,
-        resolution: outputResolution(groups[0]),
-      })
-
-      // --- Relay passes ---
-      for (let g = 1; g < groups.length; g++) {
-        const resolved = resolveGroup(groups[g])
-        if (!resolved) continue
-        // A relay computes ONE source output, so it needs only the nodes
-        // feeding that output — mirrors the same prune in glsl-generator.ts.
-        // Falls back to the full body when the edge can't be resolved or
-        // when the walk comes back empty, to always fall back toward
-        // correctness.
-        const edge = resolveSourceEdge(groups[g][0], edgesByTarget)
+      // Every intermediate pass — primary or relay — computes ONE source
+      // output, so it needs only the nodes feeding that output — mirrors the
+      // same prune in glsl-generator.ts. Falls back to the full body when the
+      // edge can't be resolved or the walk comes back empty, to always fall
+      // back toward correctness.
+      const pruneTo = (group: TextureBoundaryEdge[] | undefined) => {
+        const edge = group ? resolveSourceEdge(group[0], edgesByTarget) : undefined
         const needed = edge
           ? nodesFeeding(edge.source, edgesByTarget, new Set(combinedNodeIds))
           : null
-        const pruned = needed !== null && needed.size > 0
-        const relayBody = pruned
-          ? segments.filter((s) => needed!.has(s.nodeId)).map((s) => s.output)
-          : bodyOutputs
-        const relayOutputs = [...relayBody, resolved.fragOutput]
-        // Declarations must track the pruned body: a relay that no longer
+        if (needed === null || needed.size === 0) {
+          return {
+            body: bodyOutputs, inputSamplers: passInputSamplers, inputTextures,
+            imageSamplers: [...imageSamplers],
+          }
+        }
+        // Declarations must track the pruned body: a pass that no longer
         // statically uses a boundary/image sampler must not declare it, or
         // WebGPU's auto bind-group-layout omits the binding while the
-        // renderer still tries to fill it — silent black output. When the
-        // prune fell back to the full body, keep the full resource sets too.
-        const relayInputSamplers = pruned
-          ? passBoundaries.filter((b) => needed!.has(b.consumerId)).map((b) => b.samplerName)
-          : passInputSamplers
-        const relayInputTextures: Array<{ passIndex: number; samplerName: string }> = pruned
-          ? passBoundaries
-              .filter((b) => needed!.has(b.consumerId))
-              .map((b) => ({
-                passIndex: samplerCompiledIndex.get(b.samplerName) ?? b.sourcePassIndex,
-                samplerName: b.samplerName,
-              }))
-          : inputTextures
-        const relayImageSamplers = pruned
-          ? [...new Set(segments.filter((s) => needed!.has(s.nodeId)).flatMap((s) => s.imageSamplers))]
-          : [...imageSamplers]
-        const relayAssembled = assembleWGSL(
-          relayOutputs, standardUniforms,
+        // renderer still tries to fill it — silent black output.
+        const kept = passBoundaries.filter((b) => needed.has(b.consumerId))
+        return {
+          body: segments.filter((s) => needed.has(s.nodeId)).map((s) => s.output),
+          inputSamplers: kept.map((b) => b.samplerName),
+          inputTextures: kept.map((b) => ({
+            passIndex: samplerCompiledIndex.get(b.samplerName) ?? b.sourcePassIndex,
+            samplerName: b.samplerName,
+          })),
+          imageSamplers: [...new Set(segments.filter((s) => needed.has(s.nodeId)).flatMap((s) => s.imageSamplers))],
+        }
+      }
+
+      // --- Primary pass (first group), then relay passes (remaining groups) ---
+      for (let g = 0; g < Math.max(groups.length, 1); g++) {
+        const group = groups[g] as TextureBoundaryEdge[] | undefined
+        const resolved = group ? resolveGroup(group) : null
+        if (g > 0 && !resolved) continue
+        const out = pruneTo(group)
+        const outputs = resolved ? [...out.body, resolved.fragOutput] : out.body
+        const assembled = assembleWGSL(
+          outputs, standardUniforms,
           passUserUniforms.map(u => ({ name: u.name, glslType: u.glslType })),
-          relayImageSamplers, relayInputSamplers,
+          out.imageSamplers, out.inputSamplers,
         )
-        const relayIdx = passes.length
-        for (const b of groups[g]) samplerCompiledIndex.set(b.samplerName, relayIdx)
+        const idx = passes.length
+        if (group) for (const b of group) samplerCompiledIndex.set(b.samplerName, idx)
         passes.push({
-          shaderCode: relayAssembled.shaderCode, uniformLayout: relayAssembled.uniformLayout,
-          textureBindings: relayAssembled.textureBindings, inputTextures: relayInputTextures,
-          isTimeLive: standardUniforms.has('u_time'), textureFilter: resolved.textureFilter,
-          resolution: outputResolution(groups[g]),
+          shaderCode: assembled.shaderCode, uniformLayout: assembled.uniformLayout,
+          textureBindings: assembled.textureBindings, inputTextures: out.inputTextures,
+          isTimeLive: standardUniforms.has('u_time'), textureFilter: resolved?.textureFilter,
+          resolution: outputResolution(group),
         })
       }
     } else {

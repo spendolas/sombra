@@ -916,80 +916,59 @@ function compileMultiPass(
         }
       }
 
-      // --- Primary pass (first group) ---
-      const primaryResolved = groups.length > 0 ? resolveGroup(groups[0]) : null
-      if (primaryResolved) glslLines.push(primaryResolved.fragLine)
-
-      const fragmentShader = assembleFragmentShader(
-        uniforms, functions, functionRegistry, glslLines, passUserUniforms, samplerNames,
-        passImageSamplers,
-      )
-
-      const primaryIdx = passes.length
-      if (groups.length > 0) {
-        for (const b of groups[0]) samplerCompiledIndex.set(b.samplerName, primaryIdx)
-      }
-
-      passes.push({
-        index: primaryIdx,
-        fragmentShader,
-        vertexShader: VERTEX_SHADER,
-        userUniforms: passUserUniforms,
-        inputTextures,
-        isTimeLive: uniforms.has('u_time'),
-        textureFilter: primaryResolved?.textureFilter,
-        resolution: outputResolution(groups[0]),
-      })
-
-      // --- Relay passes (remaining groups) ---
-      for (let g = 1; g < groups.length; g++) {
-        const resolved = resolveGroup(groups[g])
-        if (!resolved) continue
-        // A relay computes ONE source output, so it needs only the nodes feeding
-        // that output. Re-emitting the whole body is what made shader text grow
-        // quadratically in converging branches.
-        const edge = resolveSourceEdge(groups[g][0], edgesByTarget)
+      // Every intermediate pass — primary or relay — computes ONE source
+      // output, so it needs only the nodes feeding that output. Re-emitting
+      // the whole depth group is what made relays grow quadratically and made
+      // primaries run (then discard) their neighbours' code. Falls back to the
+      // full body when the edge can't be resolved or the walk comes back empty.
+      const pruneTo = (group: TextureBoundaryEdge[] | undefined) => {
+        const edge = group ? resolveSourceEdge(group[0], edgesByTarget) : undefined
         const needed = edge
           ? nodesFeeding(edge.source, edgesByTarget, new Set(combinedNodeIds))
           : null
-        const pruned = needed !== null && needed.size > 0
-        const relayBody = pruned
-          ? segments.filter((s) => needed!.has(s.nodeId)).flatMap((s) => s.lines)
-          : bodyLines
-        const relayLines = [...relayBody, resolved.fragLine]
-        // Declarations must track the pruned body: a relay that no longer
+        if (needed === null || needed.size === 0) {
+          return {
+            body: bodyLines, samplerNames, inputTextures: { ...inputTextures },
+            imageSamplers: passImageSamplers,
+          }
+        }
+        // Declarations must track the pruned body: a pass that no longer
         // statically uses a boundary/image sampler must not declare it, or
         // WebGPU's auto bind-group-layout omits the binding while the
-        // renderer still tries to fill it — silent black output. When the
-        // prune fell back to the full body, keep the full resource sets too.
-        const relaySamplerNames = pruned
-          ? passBoundaries.filter((b) => needed!.has(b.consumerId)).map((b) => b.samplerName)
-          : samplerNames
-        const relayInputTextures: Record<string, number> = pruned
-          ? Object.fromEntries(
-              passBoundaries
-                .filter((b) => needed!.has(b.consumerId))
-                .map((b) => [b.samplerName, samplerCompiledIndex.get(b.samplerName) ?? b.sourcePassIndex]),
-            )
-          : { ...inputTextures }
-        const relayImageSamplers = pruned
-          ? new Set(segments.filter((s) => needed!.has(s.nodeId)).flatMap((s) => s.imageSamplers))
-          : passImageSamplers
-        const relayShader = assembleFragmentShader(
-          uniforms, functions, functionRegistry, relayLines, passUserUniforms, relaySamplerNames,
-          relayImageSamplers,
+        // renderer still tries to fill it — silent black output.
+        const kept = passBoundaries.filter((b) => needed.has(b.consumerId))
+        return {
+          body: segments.filter((s) => needed.has(s.nodeId)).flatMap((s) => s.lines),
+          samplerNames: kept.map((b) => b.samplerName),
+          inputTextures: Object.fromEntries(
+            kept.map((b) => [b.samplerName, samplerCompiledIndex.get(b.samplerName) ?? b.sourcePassIndex]),
+          ) as Record<string, number>,
+          imageSamplers: new Set(segments.filter((s) => needed.has(s.nodeId)).flatMap((s) => s.imageSamplers)),
+        }
+      }
+
+      // --- Primary pass (first group), then relay passes (remaining groups) ---
+      for (let g = 0; g < Math.max(groups.length, 1); g++) {
+        const group = groups[g] as TextureBoundaryEdge[] | undefined
+        const resolved = group ? resolveGroup(group) : null
+        if (g > 0 && !resolved) continue
+        const out = pruneTo(group)
+        const lines = resolved ? [...out.body, resolved.fragLine] : out.body
+        const fragmentShader = assembleFragmentShader(
+          uniforms, functions, functionRegistry, lines, passUserUniforms, out.samplerNames,
+          out.imageSamplers,
         )
-        const relayIdx = passes.length
-        for (const b of groups[g]) samplerCompiledIndex.set(b.samplerName, relayIdx)
+        const idx = passes.length
+        if (group) for (const b of group) samplerCompiledIndex.set(b.samplerName, idx)
         passes.push({
-          index: relayIdx,
-          fragmentShader: relayShader,
+          index: idx,
+          fragmentShader,
           vertexShader: VERTEX_SHADER,
           userUniforms: passUserUniforms,
-          inputTextures: relayInputTextures,
+          inputTextures: out.inputTextures,
           isTimeLive: uniforms.has('u_time'),
-          textureFilter: resolved.textureFilter,
-          resolution: outputResolution(groups[g]),
+          textureFilter: resolved?.textureFilter,
+          resolution: outputResolution(group),
         })
       }
     } else {
