@@ -57,6 +57,8 @@ export interface StackLayerListProps {
   onRemove: (id: string) => void
   onToggleVisible: (id: string) => void
   onBlendChange: (id: string, blendMode: string) => void
+  /** The blend mode hovered in an open menu, or null — shown, not applied. */
+  onBlendPreview?: (id: string, blendMode: string | null) => void
   onOpacityChange: (id: string, opacity: number) => void
   /** Move the layer at `from` to `to` (indices into `layers`, top-first). */
   onReorder: (from: number, to: number) => void
@@ -207,7 +209,7 @@ interface LayerCardProps extends StackLayerListProps {
 
 function LayerCard({
   layer, index, blendDisabled, dragging, cardRef, onGripDown,
-  blendModes, onRemove, onToggleVisible, onBlendChange, onOpacityChange, renderHandle,
+  blendModes, onRemove, onToggleVisible, onBlendChange, onBlendPreview, onOpacityChange, renderHandle,
 }: LayerCardProps) {
   const [hovered, setHovered] = useState(false)
   const lifted = hovered || dragging
@@ -262,7 +264,7 @@ function LayerCard({
       <div className={ds.stackLayer.blendLine}>
         <div className={cn(ds.stackLayer.lineContent, 'flex-1 min-w-0', hidden && ds.stackLayer.dimmed)}>
           <div className={cn('flex-1 min-w-0', blendDisabled && ds.stackLayer.blendDisabled)}>
-            <Select value={layer.blendMode} onValueChange={(v) => onBlendChange(layer.id, v)} disabled={blendDisabled}>
+            <Select value={layer.blendMode} onValueChange={(v) => onBlendChange(layer.id, v)} onPreview={(v) => onBlendPreview?.(layer.id, v)} disabled={blendDisabled}>
               <SelectTrigger aria-label={`${layer.name} blend mode`}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {blendModes.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}

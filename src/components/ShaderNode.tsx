@@ -12,6 +12,7 @@ import { worldOffsetToNode, nodeOffsetToWorld } from '../compiler/ir/srt'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useGraphStore } from '../stores/graphStore'
 import { usePreviewStore } from '../stores/previewStore'
+import { useParamPreview } from '../stores/paramPreviewStore'
 import { useCompilerStore } from '../stores/compilerStore'
 import { BaseNode, BaseNodeHeader, BaseNodeHeaderTitle, BaseNodeContent } from '@/components/base-node'
 import { LabeledHandle } from '@/components/labeled-handle'
@@ -103,6 +104,9 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
     },
     [id, nodeData.params, updateNodeData]
   )
+
+  // A dropdown option hovered while open: shown in the viewport, not applied.
+  const handleParamPreview = useParamPreview(id)
 
   // Multi-param write in ONE update — two sequential handleParamChange calls
   // would clobber each other through the stale nodeData.params closure.
@@ -510,7 +514,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                 ) : param.control === 'segmented' ? (
                   <SegmentedControl param={param} value={(currentValues[param.id] as string) ?? (param.default as string)} onChange={(v) => handleParamChange(param.id, v)} />
                 ) : (
-                  <EnumSelect param={param} value={(currentValues[param.id] as string) ?? (param.default as string)} onChange={(v) => handleParamChange(param.id, v)} />
+                  <EnumSelect param={param} value={(currentValues[param.id] as string) ?? (param.default as string)} onChange={(v) => handleParamChange(param.id, v)} onPreview={(v) => handleParamPreview(param.id, v)} />
                 )
               } else if (param.type === 'bool') {
                 control = (
@@ -588,7 +592,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                 control = param.control === 'segmented' ? (
                   <SegmentedControl param={param} value={(currentValues[param.id] as string) ?? (param.default as string)} onChange={(v) => handleParamChange(param.id, v)} />
                 ) : (
-                  <EnumSelect param={param} value={(currentValues[param.id] as string) ?? (param.default as string)} onChange={(v) => handleParamChange(param.id, v)} />
+                  <EnumSelect param={param} value={(currentValues[param.id] as string) ?? (param.default as string)} onChange={(v) => handleParamChange(param.id, v)} onPreview={(v) => handleParamPreview(param.id, v)} />
                 )
               } else if (param.type === 'bool') {
                 control = (

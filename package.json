@@ -46,6 +46,7 @@
     "verify:renderer-caps:gpu": "tsx scripts/verify-renderer-caps-gpu.ts",
     "verify:stack:gpu": "tsx scripts/verify-stack-gpu.ts",
     "verify:stack-ui:gpu": "tsx scripts/verify-stack-ui-gpu.ts",
+    "verify:dropdown-preview:gpu": "tsx scripts/verify-dropdown-preview-gpu.ts",
     "verify:blend-modes:gpu": "tsx scripts/verify-blend-modes-gpu.ts",
     "verify:coord-contract:gpu": "tsx scripts/verify-coord-contract-gpu.ts",
     "verify:frame-scale-invariance": "tsx scripts/verify-frame-scale-invariance.ts",
