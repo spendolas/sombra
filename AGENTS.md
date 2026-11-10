@@ -125,7 +125,7 @@ npm run verify:sandbox    # Assert sandbox stays out of the prod build (input al
 npm run build:embed         # build the standalone UMD player → dist/embed/sombra-player.<version>.umd.js
 npm run verify:embed        # pure offline checks: artifact roundtrip + manifest + snippets
 npm run verify:embed:bundle # post-build gate: player pulls in no React/xyflow/compiler/nodes, under size budget
-npm run verify:embed:smoke  # playwright end-to-end smoke (needs dev server + Chromium)
+npm run verify:embed:smoke  # playwright end-to-end smoke + lifecycle (own dev server + Chrome)
 npm run verify:embed:clock  # player clock + play/pause contract, both backends (own dev server + Chrome)
 ```
 
