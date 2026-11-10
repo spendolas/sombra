@@ -27,6 +27,10 @@ export interface MountOptions {
 }
 
 export interface SceneHandle {
+  /** false for the no-op handle returned on any mount failure. */
+  readonly ok: boolean
+  /** The failure, when ok === false. */
+  readonly error?: Error
   /** Set a knob by its flat key, e.g. set('noise-scale', 3). */
   set(key: string, value: number | number[]): void
   /** Set a knob by stable node id + param, e.g. set(nodeId, 'scale', 3). */
@@ -57,7 +61,7 @@ export interface SceneHandle {
   on(event: 'load' | 'error' | 'contextlost', cb: (...a: unknown[]) => void): void
 }
 
-const NOOP_HANDLE: SceneHandle = {
+const NOOP_HANDLE: Omit<SceneHandle, 'ok' | 'error'> = {
   set() {}, get() { return undefined }, variables() { return [] }, nodes() { return [] },
   play() {}, pause() {}, resize() {}, destroy() {}, on() {},
   isPlaying() { return false }, getTime() { return 0 }, setTime() {},
@@ -79,21 +83,39 @@ async function fetchArtifact(ref: string): Promise<SceneArtifact> {
   return decodeArtifactBytes(new Uint8Array(await res.arrayBuffer()))
 }
 
-export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneHandle> {
-  if (typeof window === 'undefined' || !el) return NOOP_HANDLE
+/** The no-op handle for a failed mount: ok === false, `error` set, and
+ *  on('error', cb) calls cb(error) at once (the failure already happened).
+ *  destroy() runs `cleanup` (removes the fallback) once. */
+function failedHandle(error: Error, cleanup?: () => void): SceneHandle {
+  let done = false
+  return {
+    ...NOOP_HANDLE, ok: false, error,
+    destroy: () => { if (!done) { done = true; cleanup?.() } },
+    on: (ev, cb) => { if (ev === 'error') cb(error) },
+  }
+}
 
-  // Any failure ends here: log, notify, and (unless opted out) show the bouncing
+export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneHandle> {
+  if (typeof window === 'undefined' || !el) {
+    return failedHandle(new Error(typeof window === 'undefined' ? 'no DOM (server-side render)' : 'mount requires an element'))
+  }
+
+  // Report a failure to the host: log, onError, and a DOM event mirror of
+  // 'sombra:load' so host pages can react to a failed embed (e.g. a 404 /
+  // CORS-blocked hosted .ombra file) without a JS callback.
+  const notify = (e: Error) => {
+    console.error('[Sombra]', e.message)
+    opts.onError?.(e)
+    try { el.dispatchEvent(new CustomEvent('sombra:error', { detail: { error: e } })) } catch { /* no CustomEvent */ }
+  }
+
+  // Any mount failure ends here: notify and (unless opted out) show the bouncing
   // "SOMBRA" fallback in the container. The returned handle is a no-op except
   // destroy(), which removes the fallback.
   const fail = (e: Error): SceneHandle => {
-    console.error('[Sombra]', e.message)
-    opts.onError?.(e)
-    // DOM event mirror of 'sombra:load' so host pages can react to a failed embed
-    // (e.g. a 404 / CORS-blocked hosted .sombra file) without a JS callback.
-    try { el.dispatchEvent(new CustomEvent('sombra:error', { detail: { error: e } })) } catch { /* no CustomEvent */ }
-    if (opts.fallback === false) return NOOP_HANDLE
-    const stop = showFallback(el, opts.debug ? e.message : undefined)
-    return { ...NOOP_HANDLE, destroy: stop }
+    notify(e)
+    if (opts.fallback === false) return failedHandle(e)
+    return failedHandle(e, showFallback(el, opts.debug ? e.message : undefined))
   }
 
   let artifact: SceneArtifact
@@ -243,7 +265,16 @@ export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneH
   // Re-apply GPU state after device/context loss (all GPU state is gone) — restore
   // the LIVE values, not just baked defaults, so host overrides survive.
   renderer.onDeviceLost(() => {
-    renderer.updateRenderPlan(plan)
+    const res = renderer.updateRenderPlan(plan)
+    if (!res.success) {
+      // Nothing valid to draw on the restored context: stop and tell the host.
+      running = false
+      renderer.stopAnimation()
+      const e = new Error(`context restore failed: ${res.error ?? 'updateRenderPlan failed'}`)
+      notify(e)
+      emit('error', e)
+      return
+    }
     renderer.updateUniforms([...values].map(([name, value]) => ({ name, value })))
     for (const [s, img] of images) renderer.uploadImageTexture(s, img)
     // The renderer restarts its loop on restore whenever the scene is time-live;
@@ -268,10 +299,12 @@ export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneH
     img.src = asset.dataUrl
   }
 
-  renderer.render()
-  ready = true
+  // Animation mode and quality tier set the DPR scale, so apply both before the
+  // first frame — otherwise it is drawn at the wrong resolution, then redrawn.
   renderer.setAnimated(isAnimated)
   renderer.setQualityTier((plan.qualityTier ?? 'adaptive') as QualityTier)
+  renderer.render()
+  ready = true
 
   // The loop runs iff the scene is time-live, the host wants it (autoplay /
   // play()), and the harness allows it (in view, tab visible, no reduced motion).
@@ -293,6 +326,7 @@ export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneH
   harness.start()
 
   const handle: SceneHandle = {
+    ok: true,
     set: setImpl,
     get: getImpl,
     variables: () => manifest.map(withValue),
@@ -311,7 +345,17 @@ export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneH
     setTimeScale: (k) => { clock(); timeScale = Math.max(0, k) || 0 },
     render: () => { if (!dead) renderer.render() },
     resize: repaint,
-    destroy: () => { dead = true; running = false; unregisterHandle(el); harness.stop(); renderer.stopAnimation(); renderer.dispose(); canvas.remove() },
+    destroy: () => {
+      if (dead) return
+      dead = true; running = false
+      unregisterHandle(el); harness.stop(); renderer.stopAnimation(); renderer.dispose()
+      // Release the WebGL context now, not at GC: browsers cap live contexts per
+      // page and evict the OLDEST one — possibly the host's. A loss forced through
+      // WEBGL_lose_context is never auto-restored, so the renderer's restore path
+      // stays idle. (WebGPU's dispose() already destroys its device.)
+      if (renderer.backend === 'webgl2') canvas.getContext('webgl2')?.getExtension('WEBGL_lose_context')?.loseContext()
+      canvas.remove()
+    },
     on: (ev, cb) => {
       (listeners[ev] ??= []).push(cb)
       // 'load' already fired synchronously during mount() — replay it for late
