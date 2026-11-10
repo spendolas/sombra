@@ -44,12 +44,15 @@ const S = () => useGraphStore.getState()
 const nz = () => S().nodes.find((n) => n.id === 'nz')!
 const keys = () => [buildSemanticKey(S().nodes, S().edges), buildUniformKey(S().nodes), buildRendererKey(S().nodes)]
 
-test('normaliser: trims, caps at 40, empty / whitespace / non-string mean "no label"', () => {
-  assert(NODE_LABEL_MAX === 40, `limit is ${NODE_LABEL_MAX}, spec says 40`)
+test('normaliser: trims, silently caps at 120, empty / whitespace / non-string mean "no label"', () => {
+  // Owner decision 2026-11-10: no 40-char design limit; 120 is a silent safety cap.
+  assert(NODE_LABEL_MAX === 120, `cap is ${NODE_LABEL_MAX}, expected the 120-char safety cap`)
   assert(normalizeNodeLabel('  site.balance  ') === 'site.balance', 'not trimmed')
-  const long = 'x'.repeat(41)
-  assert(normalizeNodeLabel(long) === 'x'.repeat(40), `41 chars kept ${normalizeNodeLabel(long)?.length}`)
-  assert(normalizeNodeLabel(`${'a'.repeat(39)} b`) === 'a'.repeat(39), 'a cut that ends in a space must be trimmed again')
+  const sixty = 'm'.repeat(60)
+  assert(normalizeNodeLabel(sixty) === sixty, 'a 60-char label was cut — the old 40-char limit is back')
+  const long = 'x'.repeat(121)
+  assert(normalizeNodeLabel(long) === 'x'.repeat(120), `121 chars kept ${normalizeNodeLabel(long)?.length}`)
+  assert(normalizeNodeLabel(`${'a'.repeat(119)} b`) === 'a'.repeat(119), 'a cut that ends in a space must be trimmed again')
   for (const v of ['', '   ', undefined, null, 42, {}]) {
     assert(normalizeNodeLabel(v) === undefined, `${JSON.stringify(v)} should mean no label`)
   }
@@ -58,8 +61,8 @@ test('normaliser: trims, caps at 40, empty / whitespace / non-string mean "no la
 test('renameNode stores the normalised label on that node only, params untouched', () => {
   fixture()
   const paramsBefore = nz().data.params
-  S().renameNode('nz', `  ${'q'.repeat(50)}  `)
-  assert(nz().data.label === 'q'.repeat(40), `stored ${JSON.stringify(nz().data.label)}`)
+  S().renameNode('nz', `  ${'q'.repeat(130)}  `)
+  assert(nz().data.label === 'q'.repeat(120), `stored ${JSON.stringify(nz().data.label)}`)
   assert(nz().data.params === paramsBefore, 'rename replaced the params object')
   assert(!('label' in S().nodes.find((n) => n.id === 'out')!.data), 'another node gained a label')
 })

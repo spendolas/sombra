@@ -8,12 +8,15 @@
  * label means the same thing wherever it was set or read.
  */
 
-/** Longest custom label kept. Longer input is cut, not rejected. */
-export const NODE_LABEL_MAX = 40
+/**
+ * Silent safety cap, not a design limit: longer input is cut, never rejected,
+ * and no UI counts toward it (owner decision 2026-11-10; was 40).
+ */
+export const NODE_LABEL_MAX = 120
 
 /**
- * The stored form of a custom label: trimmed and capped at NODE_LABEL_MAX
- * characters. `undefined` means "no custom label" — the node shows its type
+ * The stored form of a custom label: trimmed and silently capped at NODE_LABEL_MAX
+ * (120) characters. `undefined` means "no custom label" — the node shows its type
  * label — and is what an empty, whitespace-only or non-string input becomes.
  */
 export function normalizeNodeLabel(label: unknown): string | undefined {

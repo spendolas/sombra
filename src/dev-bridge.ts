@@ -180,8 +180,8 @@ function setParams(nodeId: string, params: Record<string, unknown>): void {
 /**
  * Give a node a custom label (or clear it with '' / undefined). The label is
  * the name an embed host binds knob keys to: a Number node labelled
- * `site.balance` publishes `site-balance-value`. Trimmed and capped at 40
- * chars; one undo step; never triggers a recompile. Returns the stored label.
+ * `site.balance` publishes `site-balance-value`. Trimmed (silently capped at
+ * 120 chars); one undo step; never triggers a recompile. Returns the stored label.
  *
  * @example
  *   sombra.renameNode(id, 'site.palette')

@@ -10,8 +10,8 @@ What already exists to build against:
 
 | Piece | Where |
 |---|---|
-| Store action `renameNode(nodeId, label \| undefined)` — trims, caps at 40 chars, empty/undefined clears, one undo step, no-op when unchanged | `src/stores/graphStore.ts` |
-| Label normaliser + the 40-char limit (`NODE_LABEL_MAX`) | `src/nodes/node-label.ts` |
+| Store action `renameNode(nodeId, label \| undefined)` — trims, empty/undefined clears (120-char silent safety cap), one undo step, no-op when unchanged | `src/stores/graphStore.ts` |
+| Label normaliser (`NODE_LABEL_MAX` = 120, a safety cap only) | `src/nodes/node-label.ts` |
 | Dev-bridge `__sombra.renameNode(id, label)` | `src/dev-bridge.ts`, `BROWSER-AUTOMATION.md` |
 | Manifest: custom labels claim their key slug first; `named: true` on their knobs; duplicate labels become `Label`, `Label 2`, … in graph order | `src/embed/manifest.ts`, `EMBED.md` §2 |
 
@@ -30,14 +30,14 @@ Behaviour to design:
 - **Enter edit mode** by double-clicking the title. Single click keeps selecting
   / dragging the node as now.
 - **Editing.** Inline text field in the title's place, pre-filled with the
-  current label (or the type label). Max 40 characters (the store truncates,
-  so the field should stop input or show the limit).
+  current label (or the type label). No design length limit and no character counter
+  (owner decision 2026-11-10); the store silently cuts at 120 as a safety cap.
 - **Commit / cancel.** Enter or blur commits; Escape cancels and restores.
   Committing an empty string clears the custom label and the title falls back
   to the type label.
 - **Undo.** One rename = one undo step (already true in the store).
-- States to draw: idle (type label), idle (custom label), editing, editing at
-  the 40-char limit, and how a long label truncates in a narrow node.
+- States to draw: idle (type label), idle (custom label), editing, and how a long
+  label truncates (ellipsis?) in a narrow node header.
 
 ## 2. Knob table in the Embed modal
 
