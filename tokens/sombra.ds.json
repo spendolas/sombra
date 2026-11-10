@@ -2769,6 +2769,104 @@
           "radius": "md"
         }
       }
+    },
+    "993:3749": {
+      "name": "Inline Text Field",
+      "type": "atom",
+      "dsKey": "inlineTextField",
+      "codeFile": "src/components/NodeTitle.tsx",
+      "parts": {
+        "field": {
+          "figmaNodeId": "993:3735",
+          "layout": "horizontal",
+          "align": "center",
+          "fill": "surface/default",
+          "stroke": {
+            "color": "interactive/active",
+            "weight": 1
+          },
+          "radius": "sm",
+          "padding": {
+            "x": "sm"
+          },
+          "gap": "xs",
+          "height": "input-h",
+          "extra": "min-w-0 outline-none selection:bg-highlight placeholder:text-fg-muted",
+          "overflow": "hidden"
+        },
+        "value": {
+          "figmaNodeId": "993:3739",
+          "textStyle": "text-node-title",
+          "textColor": "fg"
+        },
+        "selection": {
+          "figmaNodeId": "993:3738",
+          "fill": "interactive/highlight",
+          "auditIgnore": [
+            "fill.opacity",
+            "width",
+            "height"
+          ]
+        },
+        "placeholder": {
+          "figmaNodeId": "I993:3946;993:3739",
+          "textStyle": "text-node-title",
+          "textColor": "fg-muted"
+        }
+      }
+    },
+    "nt:1": {
+      "name": "Node Title",
+      "type": "molecule",
+      "dsKey": "nodeTitle",
+      "codeFile": "src/components/NodeTitle.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "993:3897",
+          "layout": "horizontal",
+          "align": "center",
+          "gap": "md",
+          "extra": "flex-1 min-w-0",
+          "auditIgnore": [
+            "padding",
+            "width",
+            "height"
+          ]
+        },
+        "name": {
+          "figmaNodeId": "993:3898",
+          "textStyle": "text-node-title",
+          "textColor": "fg",
+          "userSelect": "none",
+          "extra": "flex-1 min-w-0 truncate"
+        },
+        "typeTag": {
+          "figmaNodeId": "993:3899",
+          "textStyle": "text-param",
+          "textColor": "fg-subtle",
+          "userSelect": "none",
+          "extra": "shrink-0"
+        },
+        "warning": {
+          "figmaNodeId": null,
+          "textColor": "warning",
+          "extra": "shrink-0"
+        },
+        "pencil": {
+          "figmaNodeId": null,
+          "layout": "vertical",
+          "align": "center",
+          "justify": "center",
+          "radius": "sm",
+          "textColor": "fg-subtle",
+          "cursor": "pointer",
+          "hover": {
+            "fill": "interactive/hover",
+            "textColor": "fg"
+          },
+          "extra": "shrink-0 -mx-xs"
+        }
+      }
     }
   },
   "nodeTemplates": {
