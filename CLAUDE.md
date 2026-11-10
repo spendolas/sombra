@@ -48,6 +48,7 @@ npm run build:embed          # build the standalone UMD player → dist/embed/so
 npm run verify:embed         # pure offline checks: artifact roundtrip + manifest + snippets
 npm run verify:embed:bundle  # post-build gate: player pulls in no React/xyflow/compiler/nodes, under size budget
 npm run verify:embed:smoke   # playwright end-to-end smoke (needs dev server + Chromium)
+npm run verify:embed:clock   # player clock + play/pause contract, both backends (own dev server + Chrome)
 ```
 
 There are no unit tests. Verification = the scripts above + manual testing via dev server + browser automation through `window.__sombra` (see `BROWSER-AUTOMATION.md`).
