@@ -37,6 +37,7 @@ npm run verify:sandbox  # Assert sandbox stays out of the prod build (input allo
 npx tsx scripts/verify-ir-poc.ts              # GLSL vs IR-generated output parity (--verbose for full output)
 npx tsx scripts/validate-wgsl-multipass.ts    # WGSL GPU compilation tests for all nodes/passes
 npx tsx scripts/schema.ts                     # Zod validation of tokens/sombra.ds.json
+npm run verify:node-rename                    # node labels (SR-1): one undo step, normalised, never in a compile key
 
 npm run verify:pass-size          # per-pass sizing maths: the u_frame_scale rule that keeps auto_uv scale-invariant
 npm run verify:frame-scale-invariance  # GPU: a scene-locked feature's reference-unit size is constant across resolution/framing/dpr (guards the u_frame_scale split)
