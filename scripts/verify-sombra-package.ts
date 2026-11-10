@@ -4,9 +4,12 @@
  * Proves the binary container is self-identifying, actually compressed,
  * lossless, corruption-sensitive, and backward-compatible with legacy JSON.
  */
+import pako from 'pako'
 import {
   SOMBRA_PACKAGE_VERSION,
+  decodeCompactHash,
   decodeSombraPackage,
+  encodeCompactHash,
   encodeSombraPackage,
   exportToFile,
   extractSombraThumbnail,
@@ -141,6 +144,52 @@ check(
   'thumbnail missing mimeType is rejected',
   extractSombraThumbnail({ thumbnail: { dataUrl: 'data:image/png;base64,AA' } }) === null,
 )
+
+console.log('\nF. Author labels (SR-1)')
+{
+  // Label one node of the default graph; leave the rest unlabelled.
+  const labelled = createDefaultGraph()
+  const target = labelled.nodes.find((n) => labelled.edges.some((e) => e.source === n.id))!
+  target.data = { ...target.data, label: 'site.seed' }
+  const others = labelled.nodes.filter((n) => n.id !== target.id).map((n) => n.id)
+
+  const viaPackage = importFromFile(decodeSombraPackage(encodeSombraPackage(exportToFile(labelled.nodes, labelled.edges))))
+  check('label survives .sombra encode → decode → import',
+    viaPackage.nodes.find((n) => n.id === target.id)?.data.label === 'site.seed')
+  check('unlabelled nodes stay unlabelled through .sombra',
+    viaPackage.nodes.filter((n) => others.includes(n.id)).every((n) => !('label' in n.data)))
+
+  const hash = encodeCompactHash(labelled.nodes, labelled.edges)
+  // Mechanism: the label is really IN the hash, as `l`, and only on that node.
+  const b64 = hash.replace(/-/g, '+').replace(/_/g, '/')
+  const compact = JSON.parse(new TextDecoder().decode(pako.inflate(Uint8Array.from(atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4)), (c) => c.charCodeAt(0)))))
+  check('compact hash carries l on the labelled node only',
+    compact.n.filter((cn: { l?: string }) => 'l' in cn).length === 1 && compact.n.find((cn: { i: string }) => cn.i === target.id)?.l === 'site.seed')
+  const viaHash = decodeCompactHash(hash)
+  check('label survives compact-hash encode → decode', viaHash.nodes.find((n) => n.id === target.id)?.data.label === 'site.seed')
+  check('unlabelled nodes decode with no label key', viaHash.nodes.filter((n) => n.id !== target.id).every((n) => !('label' in n.data)))
+
+  // A hash written before labels existed (no `l` anywhere) still decodes, unchanged.
+  const toHash = (o: unknown) => btoa(String.fromCharCode(...pako.deflate(new TextEncoder().encode(JSON.stringify(o)))))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  const legacy = decodeCompactHash(toHash({
+    v: 2,
+    n: [{ i: 'a', t: 'noise', p: { seed: 3 } }, { i: 'o', t: 'fragment_output' }],
+    e: [{ s: 'a', sh: 'value', t: 'o', th: 'color' }],
+  }))
+  check('a hash without l still decodes (2 nodes, 1 edge, param kept)',
+    legacy.nodes.length === 2 && legacy.edges.length === 1 && legacy.nodes[0].data.params.seed === 3)
+  check('a hash without l yields no labels', legacy.nodes.every((n) => !('label' in n.data)))
+
+  // A hand-made hash cannot smuggle in a label the store would never keep.
+  const crafted = decodeCompactHash(toHash({
+    v: 2,
+    n: [{ i: 'a', t: 'noise', l: `  ${'z'.repeat(60)}  ` }, { i: 'b', t: 'noise', l: '   ' }, { i: 'c', t: 'noise', l: 7 }, { i: 'o', t: 'fragment_output' }],
+    e: [{ s: 'a', sh: 'value', t: 'o', th: 'color' }],
+  }))
+  check('decoded labels are normalised (trimmed, 40 chars; blank / non-string dropped)',
+    crafted.nodes[0].data.label === 'z'.repeat(40) && !('label' in crafted.nodes[1].data) && !('label' in crafted.nodes[2].data))
+}
 
 console.log('\n' + '='.repeat(60))
 console.log(`  SUMMARY: ${passed} passed, ${failed} failed`)
