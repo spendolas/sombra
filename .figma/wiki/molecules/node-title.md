@@ -99,6 +99,10 @@ lives only in the main checkout, so they are recorded here):
 - `nodeTitle.root` (993:3897) → `padding`, `width`, `height`: on the board the row is an
   absolute 212×32 frame with 12px side padding; in code the header (`nodeCard.header`)
   owns the padding and height, and the title root is the header's flex-1 slot.
+- `inlineTextField.placeholder` — `figmaNodeId: null`: Figma draws the placeholder only as an
+  instance override in board F (`I993:3946;993:3739`). Instance-sublayer ids are fragile (they
+  change when the instance is swapped) and resolving one needed a Figma server round-trip that
+  timed out and took the whole audit down, so it is not anchored. Colour: fg/muted.
 - `nodeTitle.warning`, `nodeTitle.pencil` — `figmaNodeId: null`: the icon colour lives on
   the vector strokes inside the instance, which the extractor does not read (same as
   `amdWarning.icon`, `compileErrorBanner.icon`). The pencil's button chrome (radius, hover
