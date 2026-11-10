@@ -11,6 +11,7 @@ import { defaultParams } from '../src/nodes/default-params'
 import type { NodeData, EdgeData, UniformSpec } from '../src/nodes/types'
 import { buildManifest } from '../src/embed/manifest'
 import { publishScene } from '../src/embed/publish'
+import { compileGraph } from '../src/compiler/glsl-generator'
 import * as TG from '../src/utils/test-graph'
 
 initializeNodeLibrary()
@@ -196,6 +197,32 @@ const keyOf = (m: ReturnType<typeof publish>, nodeId: string, param: string) =>
   }
   // The snapshot must actually exercise the name pass: many knobs, and node-level " 2"/" 3" de-dup.
   check(`(e) snapshot is non-trivial (${compared} graphs, ${knobs} knobs, node de-dup present)`, compared >= 10 && knobs >= 120 && nodeDedup)
+}
+
+// N1 — a param that exists only through dynamicParams must still become a knob.
+// Stack layers other than the defaults l1/l2 declare their opacity/mask only
+// per instance; the static def.params lookup used to drop them silently.
+{
+  const layers = [{ id: 'la', name: 'Sky', blendMode: 'normal', visible: true }, { id: 'lb', name: 'Ground', blendMode: 'screen', visible: true }]
+  const g: G = {
+    nodes: [N('stk', 'stack', { layers, nextLayerNumber: 3, opacity_lb: 0.4 }), N('ca', 'color_constant'), N('cb', 'color_constant'), N('out', 'fragment_output')],
+    edges: [E('ca', 'color', 'stk', 'layer_la'), E('cb', 'color', 'stk', 'layer_lb'), E('stk', 'color', 'out', 'color')],
+  }
+  const plan = publishScene(g.nodes, g.edges)
+  const uniforms = new Set(plan.manifest.map((k) => k.uniform))
+  const stackKeys = plan.manifest.filter((k) => k.nodeId === 'stk').map((k) => k.key)
+  // Mechanism: those uniforms really are declared by the compiled shader, so a
+  // missing knob is a manifest bug, not an absent uniform.
+  const compiled = compileGraph(g.nodes, g.edges)
+  const src = compiled.passes.map((p) => p.fragmentShader).join('\n')
+  check('N1 fixture: the compiled passes declare the la/lb opacity uniforms',
+    /\bu_stk_opacity_la\b/.test(src) && /\bu_stk_opacity_lb\b/.test(src))
+  check('N1 fixture: Stack layer la/lb params are NOT in the static def.params',
+    !(nodeRegistry.get('stack')!.params ?? []).some((p) => p.id === 'opacity_la' || p.id === 'opacity_lb'))
+  check('N1: non-default Stack layers publish their opacity + mask knobs',
+    ['stack-sky-opacity', 'stack-sky-mask', 'stack-ground-opacity', 'stack-ground-mask'].every((k) => stackKeys.includes(k)))
+  check('N1: the knob carries the instance value as default', plan.manifest.find((k) => k.key === 'stack-ground-opacity')?.default === 0.4)
+  check('N1: every stack knob maps to a distinct uniform', stackKeys.length === new Set(plan.manifest.filter((k) => k.nodeId === 'stk').map((k) => k.uniform)).size && uniforms.size === plan.manifest.length)
 }
 
 console.log('='.repeat(60))

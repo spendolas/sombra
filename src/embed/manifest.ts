@@ -3,6 +3,7 @@ import type { NodeData, NodeParameter, UniformSpec } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import type { KnobDescriptor } from './artifact'
 import { normalizeNodeLabel } from '../nodes/node-label'
+import { resolveParams } from '../nodes/resolve-dynamic'
 
 function slugify(s: string): string {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
@@ -76,7 +77,7 @@ function buildNodeNames(
 
 /**
  * Build the public knob list from the compiler's uniform specs joined with each
- * param's static NodeDefinition metadata. Keys are node-scoped (`<node>-<param>`,
+ * param's NodeDefinition metadata, resolved per instance (resolveParams). Keys are node-scoped (`<node>-<param>`,
  * e.g. "noise-scale", "noise-2-scale") so the host can tell which effect each
  * knob drives — a flat "scale-2" list is unreadable in graphs that reuse nodes.
  * Call after initializeNodeLibrary().
@@ -86,6 +87,7 @@ export function buildManifest(
   nodes: Node<NodeData>[],
 ): KnobDescriptor[] {
   const nodeType = new Map(nodes.map((n) => [n.id, n.data.type]))
+  const nodeById = new Map(nodes.map((n) => [n.id, n]))
 
   // Only nodes that actually own a knob need a display name, in first-seen order.
   const ownerIds: string[] = []
@@ -109,7 +111,11 @@ export function buildManifest(
 
     const type = nodeType.get(u.nodeId)
     const def = type ? nodeRegistry.get(type) : undefined
-    const param = def?.params?.find((p) => p.id === u.paramId)
+    // Resolve the INSTANCE's params exactly as codegen does: a param that
+    // exists only through dynamicParams (a Stack layer's opacity, a ramp
+    // stop's colour) emits a uniform, and reading the static def.params here
+    // silently dropped its knob.
+    const param = def ? resolveParams(def, nodeById.get(u.nodeId)?.data.params).find((p) => p.id === u.paramId) : undefined
     if (!param) continue // no metadata → skip (defensive)
 
     const nodeName = nodeNames.get(u.nodeId) ?? 'node'

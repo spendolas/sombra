@@ -70,6 +70,7 @@ That's it. The node appears in the palette, compiles to GLSL, and renders on the
 | `params` | `NodeParameter[]` | No | Tweakable controls (sliders, dropdowns, color pickers) |
 | `glsl` | `(ctx: GLSLContext) => string` | Yes | GLSL code generator |
 | `dynamicInputs` | `(params) => PortDefinition[]` | No | Variable port count based on params |
+| `dynamicParams` | `(params) => NodeParameter[]` | No | Per-instance param set (replaces `params`, which stays as the fallback) — see *Dynamic params* |
 | `component` | `React.ComponentType` | No | Custom UI below standard controls |
 
 ### PortDefinition
@@ -296,6 +297,29 @@ inputs: [
 The compiler calls `dynamicInputs(params)` when present, otherwise falls back to static `inputs`. ShaderNode.tsx auto-renders +/- buttons.
 
 **See:** `src/nodes/math/arithmetic.ts` for full example.
+
+### Dynamic params
+
+```ts
+params: layerParams({}),          // static fallback = the default instance
+dynamicParams: layerParams,       // (params) => NodeParameter[] for THIS instance
+```
+
+When a node's parameter SET depends on its own stored state (Stack: one
+opacity + mask per layer), declare it through `dynamicParams`. **Every site that
+iterates a node's params must go through `resolveParams(def, node.data.params)`**
+(`src/nodes/resolve-dynamic.ts`) — codegen (both generators), the compile keys,
+connection validity, layout, file import, the node body, and the embed manifest
+(`src/embed/manifest.ts`). Reading the static `def.params` instead is silent:
+the shader still declares the uniform, but the reader never sees the param — the
+manifest used to drop the knob of every non-default Stack layer that way.
+
+Params that exist only through `dynamicParams` are never materialised into
+`node.data.params` by `defaultParams()`; a uniform param's value is
+`node.data.params[id] ?? param.default`, so the `default` can carry the value
+when another stored param is its source of truth.
+
+**See:** `src/nodes/color/stack.ts`.
 
 ### Multi-pass nodes (`multiPass`)
 
