@@ -17,13 +17,13 @@ V2 was rebuilt from scratch using a **code-driven approach**: every Figma compon
 
 ---
 
-## Parity Score: 43/43 ✅
+## Parity Score: 45/45 ✅
 
 | Level | Total | ✅ Match | Notes |
 |---|---|---|---|
 | Tokens | 5 collections + 12 text styles | All | 40 variables + 12 text styles, dark mode only |
-| Atoms | 8 | 8 | Handle, Separator, Category Header, Palette Item, Plus Minus Button, Node Header, Node Footer, Action Button |
-| Molecules | 16 | 16 | Labeled Handle, Float Slider (SombraSlider), Enum Select, Anchor Grid, Color Input, Connectable Param Row, Preview Toolbar, Zoom Bar, Gradient Editor, Random Display, MiniMap, Graph Toolbar, AMD Warning, Compile Error Banner, Stack Layer, Stack Empty |
+| Atoms | 9 | 9 | Handle, Separator, Category Header, Palette Item, Plus Minus Button, Node Header, Node Footer, Action Button, Inline Text Field |
+| Molecules | 17 | 17 | Labeled Handle, Float Slider (SombraSlider), Enum Select, Anchor Grid, Color Input, Connectable Param Row, Preview Toolbar, Zoom Bar, Gradient Editor, Random Display, MiniMap, Graph Toolbar, AMD Warning, Compile Error Banner, Stack Layer, Stack Empty, Node Title |
 | Organisms | 6 | 6 | Node Card, Node Palette, Properties Panel, Floating Preview, Full Window Overlay, File Drop Dialog |
 | Templates | 23 | 23 | All node types (Bayer Dither removed, Domain Warp → Warp UV, Pixel Grid → Dither) |
 | Scenes | 5 | 5 | All preview modes |
@@ -52,6 +52,7 @@ V2 was rebuilt from scratch using a **code-driven approach**: every Figma compon
 | [node-header.md](atoms/node-header.md) | `111:488` | — | base-node.tsx (BaseNodeHeader) | ✅ |
 | [node-footer.md](atoms/node-footer.md) | `111:491` | — | base-node.tsx (BaseNodeFooter) | ✅ |
 | [action-button.md](atoms/action-button.md) | `901:2134` | 3 | ActionButton.tsx | ✅ |
+| [Inline Text Field → node-title.md](molecules/node-title.md#colours) | `993:3749` | 1 | NodeTitle.tsx | ✅ (sandbox only) |
 
 ### Molecules
 | Page | Figma ID | Variants | Code File | Parity |
@@ -71,6 +72,7 @@ V2 was rebuilt from scratch using a **code-driven approach**: every Figma compon
 | [amd-warning.md](molecules/amd-warning.md) | `884:355` | 2 | AmdSeeThroughWarning.tsx | ✅ |
 | [compile-error-banner.md](molecules/compile-error-banner.md) | `954:2141` | 2 | CompileErrorBanner.tsx | ✅ |
 | [stack-layer.md](molecules/stack-layer.md) | `982:5693` · `982:5702` · `982:5703` | 8 + 2 | StackLayerList.tsx | ✅ |
+| [node-title.md](molecules/node-title.md) | board `993:3781` (DB `nt:1`) | 7 board states | NodeTitle.tsx | ✅ (sandbox only) |
 
 ### Organisms
 | Page | Figma ID | Variants | Code File | Parity |
