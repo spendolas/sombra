@@ -164,6 +164,9 @@ interface KnobDescriptor {
   min?: number; max?: number; step?: number
   default: number | number[]
   named?: true                   // owning node has an author label (absent otherwise)
+  group?: 'stops'                // ramp-stop knobs only (Color Ramp, Gradient)
+  index?: number                 // ramp stops: 0..N-1 by ascending position
+  position?: number              // ramp stops: the stop's position at publish time
 }
 // variables() returns Knob = KnobDescriptor & { value }; nodes() returns
 // NodeInfo = { id, name, type, params: Knob[] }.
@@ -194,6 +197,31 @@ correct. The node-name rules, in order:
 A scene with no labels publishes a manifest **byte-identical** to the pre-label
 format (`named` is omitted, never `false`), asserted against a frozen snapshot by
 `verify-manifest.ts`. Old players ignore `named`.
+
+**Ramp-stop knobs.** Every Color Ramp and Gradient stop colour is a runtime
+`vec4` uniform, so a ramp with N stops publishes N knobs, in ascending position
+order at publish time:
+
+```
+key "<node>-stop-<n>"   param "stop-<n>"   label "Stop <n>"   n = 0..N-1 by position
+type "color"  glslType "vec4"  default [r, g, b, a]  group "stops"  index n  position p
+```
+
+A ramp labelled `site.palette` gives `site-palette-stop-0…`. Set one with
+`handle.set('site-palette-stop-2', [r, g, b, a])` — alpha included, no recompile,
+no extra pass; a 3-tuple is padded to alpha 1 as for any colour knob. Positions
+and the interpolation mode stay **baked** (they decide the sort order and the
+step/smoothstep shape), so a host can recolour and dissolve stops but not move
+them. Interpolation between stops is **straight** RGBA and premultiplication
+happens only at Fragment Output: with smooth/linear interpolation a stop at
+alpha 0 still pulls its neighbours' RGB toward its own RGB before its alpha
+weights it; hard-edged (`constant`) ramps are unaffected. Stop uniforms are
+named from internal stop ids (`u_<node>_stop_<id>`) — address stops by key or
+`(nodeId, 'stop-<n>')`, never by uniform name. Stop knobs are additive: an old
+(0.1.0) player plays a new artifact unchanged, because uniforms are applied from
+`plan.userUniforms` whatever the manifest says. Gates: `verify:ramp-knobs`
+(offline) and `verify:ramp-knobs:gpu` (zeroing one stop's alpha makes exactly
+that band transparent, both backends).
 
 ```ts
 
@@ -429,7 +457,9 @@ npm run verify:embed:smoke       # end-to-end browser smoke (needs dev server + 
 ```
 
 Individual checks: `verify:embed:artifact` (lossless codec + vertex invariant),
-`verify:embed:manifest` (uniform↔metadata join + dedup), `verify:embed:snippets`
+`verify:embed:manifest` (uniform↔metadata join + dedup, named knobs, dynamic
+params, unlabelled-scene snapshot), `verify:ramp-knobs` / `verify:ramp-knobs:gpu`
+(ramp-stop knobs), `verify:embed:snippets`
 (version‑pinned, artifact‑carrying snippets), `verify:embed:bundle` (the player
 imports **no** React/xyflow/compiler/nodes and stays under the gzip budget).
 
