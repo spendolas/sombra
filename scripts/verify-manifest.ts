@@ -175,8 +175,16 @@ const keyOf = (m: ReturnType<typeof publish>, nodeId: string, param: string) =>
   check('a whitespace-only label is no label (type name, not named)', keyOf(m, 'blank', 'value') === 'number-value' && !('named' in m.find((k) => k.nodeId === 'blank')!))
 }
 
-// (e) unlabelled scenes publish manifests BYTE-IDENTICAL to the pre-SR-1 code.
+// (e) unlabelled scenes publish manifests BYTE-IDENTICAL to the pre-SR-1 code —
+// apart from SR-2's ramp-stop knobs (group "stops"), which are purely added:
+// with them removed, the bytes must match the frozen snapshot exactly.
 {
+  let stopKnobs = 0
+  const withoutStops = (m: ReturnType<typeof publish>) => {
+    const kept = m.filter((k) => k.group !== 'stops')
+    stopKnobs += m.length - kept.length
+    return JSON.stringify(kept)
+  }
   const base = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'baselines/manifest-unlabelled.json'), 'utf8')) as {
     presets: Record<string, unknown>; graphs: Record<string, G & { manifest: unknown }>
   }
@@ -185,18 +193,20 @@ const keyOf = (m: ReturnType<typeof publish>, nodeId: string, param: string) =>
     const fn = (TG as Record<string, unknown>)[name] as (() => G) | undefined
     if (!fn) { check(`(e) preset ${name} still exists`, false); continue }
     const g = fn()
-    const now = JSON.stringify(publish(g))
+    const now = withoutStops(publish(g))
     check(`(e) ${name}: manifest byte-identical to the pre-label snapshot`, now === JSON.stringify(frozen))
     compared++; knobs += (frozen as unknown[]).length
   }
   for (const [name, g] of Object.entries(base.graphs)) {
-    const now = JSON.stringify(publish(g))
+    const now = withoutStops(publish(g))
     check(`(e) ${name}: manifest byte-identical to the pre-label snapshot`, now === JSON.stringify(g.manifest))
     compared++; knobs += (g.manifest as unknown[]).length
     nodeDedup ||= now.includes('"noise-3-seed"')
   }
   // The snapshot must actually exercise the name pass: many knobs, and node-level " 2"/" 3" de-dup.
   check(`(e) snapshot is non-trivial (${compared} graphs, ${knobs} knobs, node de-dup present)`, compared >= 10 && knobs >= 120 && nodeDedup)
+  // The presets include ramps/gradients, so the filter above is really engaged.
+  check(`(e) the snapshot graphs do gain ramp-stop knobs (${stopKnobs}) — the stop filter is engaged`, stopKnobs > 0)
 }
 
 // N1 — a param that exists only through dynamicParams must still become a knob.

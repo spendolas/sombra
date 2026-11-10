@@ -157,6 +157,8 @@ export function buildManifest(
       default: u.value,
       // Only when true: an unlabelled scene's manifest stays byte-identical.
       ...(named.has(u.nodeId) ? { named: true } : {}),
+      // Ramp stops: group "stops", index, position. Absent for every other knob.
+      ...(param.knobMeta ? { ...param.knobMeta } : {}),
     })
   }
   return out
