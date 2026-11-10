@@ -163,6 +163,7 @@ interface KnobDescriptor {
   glslType: 'float' | 'vec2' | 'vec3' | 'vec4'
   min?: number; max?: number; step?: number
   default: number | number[]
+  named?: true                   // owning node has an author label (absent otherwise)
 }
 // variables() returns Knob = KnobDescriptor & { value }; nodes() returns
 // NodeInfo = { id, name, type, params: Knob[] }.
@@ -170,9 +171,29 @@ interface KnobDescriptor {
 
 Keys are **node-scoped** — `<node>-<param>` (e.g. `noise-scale`, `noise-2-scale`,
 `warp-offset-x`) — so a knob is traceable to the effect it drives even when many
-nodes expose same-named params. The node name is the node's custom label if set,
-else its type label ("Noise"), disambiguated with " 2"/" 3". The host discovers
-these at runtime via `shader.nodes()` / `shader.variables()`.
+nodes expose same-named params. The host discovers them at runtime via
+`shader.nodes()` / `shader.variables()`.
+
+**Named knobs — the stable contract.** Give a node an author label (dev bridge
+`renameNode(id, label)`; the editor rename UI is still to be designed) and its
+knobs key off that label: a Number node labelled `site.balance` publishes
+`site-balance-value` in *every* scene, whatever else the graph contains, and its
+knobs carry `named: true`. This is what a host should bind to; `mount(el, {
+variables: { 'site-balance-value': -1 } })` then makes the very first frame
+correct. The node-name rules, in order:
+
+1. **Labelled nodes claim first**, in graph (saved node-array) order. The label
+   is trimmed and capped at 40 characters, then slugged (`site.balance` →
+   `site-balance`). Two labels that slug the same are de-duplicated `Label`,
+   `Label 2`, `Label 3` in graph order — a clash the author should fix, since
+   only the first keeps the expected key.
+2. **Unlabelled nodes** get their type label ("Noise"), numbered " 2"/" 3" in
+   uniform order, skipping any slug a label already claimed — so an unlabelled
+   Noise next to a Noise labelled `Noise` becomes `noise-2-…`.
+
+A scene with no labels publishes a manifest **byte-identical** to the pre-label
+format (`named` is omitted, never `false`), asserted against a frozen snapshot by
+`verify-manifest.ts`. Old players ignore `named`.
 
 ```ts
 
