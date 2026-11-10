@@ -21,6 +21,9 @@ export interface MountOptions {
   fallback?: boolean                               // show the bouncing-SOMBRA screen on error (default true)
   onLoad?: (h: SceneHandle) => void
   onError?: (e: Error) => void
+  time?: number                                    // initial scene time in seconds (default 0)
+  timeScale?: number                               // clock rate, >= 0 (default 1)
+  reducedMotion?: 'respect' | 'ignore'             // default 'respect': no loop under prefers-reduced-motion
 }
 
 export interface SceneHandle {
@@ -38,6 +41,17 @@ export interface SceneHandle {
   nodes(): NodeInfo[]
   play(): void
   pause(): void
+  /** True while the render loop is actually running. */
+  isPlaying(): boolean
+  /** Scene time (u_time) in seconds. */
+  getTime(): number
+  /** Jump the scene clock; repaints if the loop is not running. */
+  setTime(seconds: number): void
+  getTimeScale(): number
+  /** Clock rate, k >= 0, phase-continuous. 0 holds time while the loop keeps painting. */
+  setTimeScale(k: number): void
+  /** Draw one frame now. */
+  render(): void
   resize(): void
   destroy(): void
   on(event: 'load' | 'error' | 'contextlost', cb: (...a: unknown[]) => void): void
@@ -46,6 +60,8 @@ export interface SceneHandle {
 const NOOP_HANDLE: SceneHandle = {
   set() {}, get() { return undefined }, variables() { return [] }, nodes() { return [] },
   play() {}, pause() {}, resize() {}, destroy() {}, on() {},
+  isPlaying() { return false }, getTime() { return 0 }, setTime() {},
+  getTimeScale() { return 1 }, setTimeScale() {}, render() {},
 }
 
 /** Fetch a hosted `.sombra` file (binary deflated artifact) and decode it. The ref
@@ -100,6 +116,7 @@ export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneH
   el.appendChild(canvas)
 
   const plan = reconstructPlan(artifact.plan)
+  const isAnimated = plan.isTimeLiveAtOutput
   const manifest = artifact.manifest
   const byKey = new Map(manifest.map((k) => [k.key, k]))
   const byNode = new Map(manifest.map((k) => [nodeKey(k.nodeId, k.param), k]))
@@ -137,12 +154,44 @@ export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneH
 
   renderer.setAnchor(artifact.meta.anchor)
 
+  // Player-owned clock (seconds) fed to the renderer as u_time. It advances only
+  // while the loop runs, by each frame's dt (clamped to 0.1 s) × timeScale, and
+  // holds whenever the loop is stopped — paused, off-screen, tab hidden, reduced
+  // motion — so resuming never jumps by the stopped duration.
+  let time = opts.time ?? 0
+  let timeScale = Math.max(0, opts.timeScale ?? 1) || 0
+  let running = false   // the render loop is running right now
+  let lastTick = -1     // performance.now() of the last advance; -1 = none since (re)start
+  const clock = (): number => {
+    if (running) {
+      const now = performance.now()
+      if (lastTick >= 0) time += Math.min((now - lastTick) / 1000, 0.1) * timeScale
+      lastTick = now
+    }
+    return time
+  }
+  renderer.setTimeSource?.(clock)
+
+  // One frame on demand while the loop is stopped (set, setTime, resize, a late
+  // image), coalesced to one per animation frame. A static scene goes through the
+  // renderer's own request path; a time-live scene keeps the renderer `animated`
+  // (which makes it ignore requestRender), so the player draws it.
+  let ready = false, dead = false, pending = false
+  const repaint = () => {
+    if (!ready || dead || running) return
+    if (!isAnimated) { renderer.requestRender(); return }
+    if (pending) return
+    pending = true
+    requestAnimationFrame(() => { pending = false; if (!dead && !running) renderer.render() })
+  }
+
   // Apply a value to a resolved uniform, padding rgb→rgba for color knobs.
   const applyUniform = (uniform: string, glslType: string, value: number | number[]) => {
     let v = value
     if (glslType === 'vec4' && Array.isArray(v) && v.length === 3) v = [...v, 1]
     renderer.updateUniforms([{ name: uniform, value: v }])
     values.set(uniform, v)
+    repaint()
   }
 
   // set(key, value) OR set(nodeId, param, value) — arity disambiguates.
@@ -197,48 +246,72 @@ export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneH
     renderer.updateRenderPlan(plan)
     renderer.updateUniforms([...values].map(([name, value]) => ({ name, value })))
     for (const [s, img] of images) renderer.uploadImageTexture(s, img)
+    // The renderer restarts its loop on restore whenever the scene is time-live;
+    // run it only if intent + visibility say so (stopped before its first frame).
+    running = false
+    renderer.stopAnimation()
+    sync()
+    repaint()
     emit('contextlost')
   })
 
   // Baked image textures decode async — re-render as each lands.
   const images = new Map<string, HTMLImageElement>()
-  const isAnimated = plan.isTimeLiveAtOutput
   for (const asset of artifact.images) {
     const img = new Image()
     img.onload = () => {
       images.set(asset.sampler, img)
       renderer.uploadImageTexture(asset.sampler, img)
       renderer.notifyChange()
-      if (!isAnimated) renderer.requestRender()
+      repaint()
     }
     img.src = asset.dataUrl
   }
 
   renderer.render()
+  ready = true
   renderer.setAnimated(isAnimated)
   renderer.setQualityTier((plan.qualityTier ?? 'adaptive') as QualityTier)
 
-  const rawPlay = () => { if (isAnimated) { renderer.setAnimationSpeed(artifact.meta.timeSpeed); renderer.startAnimation() } }
-  const rawPause = () => renderer.stopAnimation()
-
+  // The loop runs iff the scene is time-live, the host wants it (autoplay /
+  // play()), and the harness allows it (in view, tab visible, no reduced motion).
+  // Every play/pause/visibility change funnels through sync().
   let autoplayWanted = opts.autoplay !== false
-  const harness = new PerfHarness(el, {
-    onVisible: () => { if (autoplayWanted) rawPlay() },
-    onHidden: rawPause,
-    onResize: () => renderer.requestRender(),
-  })
-  if (harness.reducedMotion) renderer.notifyChange() // one static frame, no loop
-  else harness.start()
+  const sync = () => {
+    if (dead) return
+    if (isAnimated && autoplayWanted && harness.visible) {
+      if (!running) { running = true; lastTick = -1; renderer.setAnimationSpeed(artifact.meta.timeSpeed) }
+      renderer.startAnimation()   // idempotent
+    } else if (running) {
+      clock()                     // bank the time up to the stop
+      running = false
+      renderer.stopAnimation()
+    }
+  }
+  const harness = new PerfHarness(el, { onVisible: sync, onHidden: sync, onResize: repaint },
+    opts.reducedMotion === 'ignore')
+  harness.start()
 
   const handle: SceneHandle = {
     set: setImpl,
     get: getImpl,
     variables: () => manifest.map(withValue),
     nodes: nodesImpl,
-    play: () => { autoplayWanted = true; rawPlay() },
-    pause: () => { autoplayWanted = false; rawPause() },
-    resize: () => renderer.requestRender(),
-    destroy: () => { unregisterHandle(el); harness.stop(); renderer.stopAnimation(); renderer.dispose(); canvas.remove() },
+    play: () => { autoplayWanted = true; sync() },
+    pause: () => { autoplayWanted = false; sync() },
+    isPlaying: () => running,
+    getTime: clock,
+    setTime: (seconds) => {
+      if (!Number.isFinite(seconds)) return
+      time = seconds
+      if (running) lastTick = performance.now()
+      repaint()
+    },
+    getTimeScale: () => timeScale,
+    setTimeScale: (k) => { clock(); timeScale = Math.max(0, k) || 0 },
+    render: () => { if (!dead) renderer.render() },
+    resize: repaint,
+    destroy: () => { dead = true; running = false; unregisterHandle(el); harness.stop(); renderer.stopAnimation(); renderer.dispose(); canvas.remove() },
     on: (ev, cb) => {
       (listeners[ev] ??= []).push(cb)
       // 'load' already fired synchronously during mount() — replay it for late
