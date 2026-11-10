@@ -19,6 +19,7 @@ export const SANDBOXES: SandboxEntry[] = [
   { name: 'compile-error-banner', title: 'Compile Error Banner', group: 'Chrome', load: () => import('./harnesses/compile-error-banner') },
   { name: 'editor-chrome', title: 'Editor Chrome', group: 'Chrome', load: () => import('./harnesses/editor-chrome') },
   { name: 'srt-renderer', title: 'SRT Renderer', group: 'Chrome', load: () => import('./harnesses/srt-renderer') },
+  { name: 'knob-table', title: 'Knob Table', group: 'Embed', load: () => import('./harnesses/knob-table') },
   { name: 'ds-preview', title: 'DS Preview', group: 'DS', load: () => import('./harnesses/ds-preview') },
   { name: 'stack-layer-list', title: 'Stack Layer List', group: 'Nodes', load: () => import('./harnesses/stack-layer-list') },
   { name: 'perf-view', title: 'Perf View', group: 'Perf', load: () => import('./harnesses/perf-view') },
