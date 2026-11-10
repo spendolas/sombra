@@ -127,6 +127,8 @@ npm run verify:embed        # pure offline checks: artifact roundtrip + manifest
 npm run verify:embed:bundle # post-build gate: player pulls in no React/xyflow/compiler/nodes, under size budget
 npm run verify:embed:smoke  # playwright end-to-end smoke (needs dev server + Chromium)
 npm run verify:node-rename  # node labels (embed knob keys): one undo step, normalised, never in a compile key
+npm run verify:ramp-knobs   # ramp/gradient stops as embed knobs (offline)
+npm run verify:ramp-knobs:gpu # one stop's alpha → 0 clears exactly its band, both backends
 ```
 
 ## Architecture

@@ -321,6 +321,18 @@ when another stored param is its source of truth.
 
 **See:** `src/nodes/color/stack.ts`.
 
+**Color Ramp / Gradient stops** use the same mechanism: `dynamicParams` returns
+the static params plus one hidden `color` param per stop
+(`stop_<stopId>`, `updateMode: 'uniform'`, `default` = the stop's RGBA, label
+`Stop <n>` by position, `knobMeta: { group: 'stops', index, position }` for the
+embed manifest) — `stopColorParams()` in `src/nodes/color/ramp-stops.ts`.
+`params.stops` stays the only stored copy; glsl()/ir() read each colour through
+`stopUniform(ctx.inputs, stop)`, which throws if the compiler did not resolve
+it. Every reader of `params.stops` (both nodes and `ColorRampEditor`) goes
+through `normalizeStops()`: stable alphanumeric stop ids (id-less legacy stops
+resolve to `s<stored index>`), RGBA colours, the black→white fallback. New stops
+get `newStopId()` — never reuse an id.
+
 ### Multi-pass nodes (`multiPass`)
 
 An effect that cannot be expressed in a single generator call — e.g. a separable
@@ -634,7 +646,7 @@ Key variable collections (full IDs in Claude memory file `figma-ds.md`):
 | `domain_warp` | Domain Warp | Noise | `noise/domain-warp.ts` | connectable (strength, freq, seed), enum (noiseType), auto_uv, warpedPhase output, addFunction |
 | `hsv_to_rgb` | HSV to RGB | Color | `color/hsv-to-rgb.ts` | GLSL helper function |
 | `brightness_contrast` | Brightness/Contrast | Color | `color/brightness-contrast.ts` | connectable |
-| `color_ramp` | Color Ramp | Color | `color/color-ramp.ts` | enum, hidden param, custom component (ColorRampEditor), presets |
+| `color_ramp` | Color Ramp | Color | `color/color-ramp.ts` | enum, hidden param, dynamicParams (per-stop colour uniforms), custom component (ColorRampEditor), presets |
 | `dither` | Dither | Effect | `postprocess/pixel-grid.ts` | connectable (pixelSize, threshold, dither), enum (shape: square/circle/diamond/triangle), addFunction (bayer + SDF), gl_FragCoord, showWhen |
 | `quantize_uv` | Quantize UV | Effect | `postprocess/quantize-uv.ts` | connectable (pixelSize), gl_FragCoord, frozen-ref UV output |
 | `fragment_output` | Fragment Output | Output | `output/fragment-output.ts` | master output (one per graph) |

@@ -38,6 +38,8 @@ npx tsx scripts/verify-ir-poc.ts              # GLSL vs IR-generated output pari
 npx tsx scripts/validate-wgsl-multipass.ts    # WGSL GPU compilation tests for all nodes/passes
 npx tsx scripts/schema.ts                     # Zod validation of tokens/sombra.ds.json
 npm run verify:node-rename                    # node labels (SR-1): one undo step, normalised, never in a compile key
+npm run verify:ramp-knobs                     # ramp/gradient stops as embed knobs (SR-2, offline)
+npm run verify:ramp-knobs:gpu                 # one stop's alpha → 0 clears exactly its band, both backends
 
 npm run verify:pass-size          # per-pass sizing maths: the u_frame_scale rule that keeps auto_uv scale-invariant
 npm run verify:frame-scale-invariance  # GPU: a scene-locked feature's reference-unit size is constant across resolution/framing/dpr (guards the u_frame_scale split)

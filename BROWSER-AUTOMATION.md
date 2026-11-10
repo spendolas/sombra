@@ -443,9 +443,13 @@ const math = sombra.createNode('arithmetic', {x:0, y:0}, {
 
 ### Color Ramp Stops
 
-The Color Ramp node stores gradient stops in `params.stops`. Each stop's `color`
-is RGBA — a 3-tuple `[r, g, b]` (legacy, alpha defaults to `1.0`) or a
-4-tuple `[r, g, b, a]`:
+The Color Ramp node (and Gradient) stores gradient stops in `params.stops`. Each
+stop's `color` is RGBA — a 3-tuple `[r, g, b]` (legacy, alpha defaults to `1.0`)
+or a 4-tuple `[r, g, b, a]`. A stop may carry an `id` (alphanumeric, unique in
+the node); stops without one resolve to `s0`, `s1`, … by array index, and the
+ramp editor writes ids back on its next edit. Each stop colour compiles to a
+hidden uniform param `stop_<id>` (an embed knob `<node>-stop-<n>`, n by
+position); edit colours through `stops`, not through `stop_*`:
 
 ```js
 sombra.setParams(rampId, {
