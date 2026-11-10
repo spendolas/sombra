@@ -18,6 +18,10 @@ export interface KnobDescriptor {
   max?: number
   step?: number
   default: number | number[]
+  /** True when the owning node has an author label (its key then derives from
+   *  that label and is stable across scenes). Absent — never false — otherwise,
+   *  so unlabelled scenes publish byte-identical manifests. Old players ignore it. */
+  named?: boolean
 }
 
 /** A knob as returned by the read API — descriptor plus its current live value. */
