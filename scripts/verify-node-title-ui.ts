@@ -318,7 +318,9 @@ async function main() {
   let server: ViteDevServer | undefined
   let browser: Browser | undefined
   try {
-    server = await createServer({ configFile: resolve(ROOT, 'vite.config.ts'), root: ROOT, logLevel: 'error', server: { port: 0, host: '127.0.0.1' } })
+    server = await createServer({ configFile: resolve(ROOT, 'vite.config.ts'), root: ROOT, logLevel: 'error', // No watcher/HMR: a file event mid-run (Dropbox, a perturbation being
+    // restored) would reload the page under the test.
+    server: { port: 0, host: '127.0.0.1', hmr: false, watch: null } })
     await server.listen()
     const url = server.resolvedUrls?.local[0]
     if (!url) throw new Error('vite gave no local URL')
@@ -326,10 +328,13 @@ async function main() {
     page = await browser.newPage({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 })
     const pageErrors: string[] = []
     page.on('pageerror', (e) => pageErrors.push(e.message))
+    let navigations = 0
+    page.on('framenavigated', (f) => { if (f === page.mainFrame()) navigations++ })
     await page.addInitScript({ content: 'globalThis.__name = globalThis.__name || ((f) => f)' })
     await page.goto(`${url}node-title-sandbox.html`)
     await page.waitForFunction(() => !!(window as unknown as { __nodeTitleHarness?: unknown }).__nodeTitleHarness && !!document.querySelector('.react-flow__node[data-id="live"]'), null, { timeout: 30000 })
     test('no page errors', () => assert(pageErrors.length === 0, pageErrors.join('\n')))
+    test('the page never reloaded under the test', () => assert(navigations === 1, `main frame navigated ${navigations}× (expected 1)`))
     await run('node title (inline rename)')
   } finally {
     await browser?.close()
