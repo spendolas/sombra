@@ -184,11 +184,11 @@ console.log('\nF. Author labels (SR-1)')
   // A hand-made hash cannot smuggle in a label the store would never keep.
   const crafted = decodeCompactHash(toHash({
     v: 2,
-    n: [{ i: 'a', t: 'noise', l: `  ${'z'.repeat(60)}  ` }, { i: 'b', t: 'noise', l: '   ' }, { i: 'c', t: 'noise', l: 7 }, { i: 'o', t: 'fragment_output' }],
+    n: [{ i: 'a', t: 'noise', l: `  ${'z'.repeat(130)}  ` }, { i: 'b', t: 'noise', l: '   ' }, { i: 'c', t: 'noise', l: 7 }, { i: 'o', t: 'fragment_output' }],
     e: [{ s: 'a', sh: 'value', t: 'o', th: 'color' }],
   }))
-  check('decoded labels are normalised (trimmed, 40 chars; blank / non-string dropped)',
-    crafted.nodes[0].data.label === 'z'.repeat(40) && !('label' in crafted.nodes[1].data) && !('label' in crafted.nodes[2].data))
+  check('decoded labels are normalised (trimmed, 120-char cap; blank / non-string dropped)',
+    crafted.nodes[0].data.label === 'z'.repeat(120) && !('label' in crafted.nodes[1].data) && !('label' in crafted.nodes[2].data))
 }
 
 console.log('\n' + '='.repeat(60))

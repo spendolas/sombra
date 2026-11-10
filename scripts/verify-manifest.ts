@@ -168,10 +168,10 @@ const keyOf = (m: ReturnType<typeof publish>, nodeId: string, param: string) =>
   check('(d) all duplicates are still named', fwd.filter((k) => k.nodeType === 'float_constant').every((k) => k.named === true))
 }
 
-// Labels are normalised exactly as the store stores them (trim, 40 chars).
+// Labels are normalised exactly as the store stores them (trim, 120-char safety cap).
 {
-  const m = publish(graph([N('w', 'float_constant', {}, `   ${'site.x'.padEnd(60, 'y')}   `), N('blank', 'float_constant', {}, '   ')], ['w', 'blank']))
-  check('label is trimmed and capped at 40 chars before slugging', m.find((k) => k.nodeId === 'w')?.node === 'site.x'.padEnd(40, 'y'))
+  const m = publish(graph([N('w', 'float_constant', {}, `   ${'site.x'.padEnd(140, 'y')}   `), N('blank', 'float_constant', {}, '   ')], ['w', 'blank']))
+  check('label is trimmed and capped at 120 chars before slugging', m.find((k) => k.nodeId === 'w')?.node === 'site.x'.padEnd(120, 'y'))
   check('a whitespace-only label is no label (type name, not named)', keyOf(m, 'blank', 'value') === 'number-value' && !('named' in m.find((k) => k.nodeId === 'blank')!))
 }
 

@@ -101,8 +101,8 @@ interface GraphState {
    *  restores a removed layer together with its wires. */
   editStackLayers: (nodeId: string, edit: StackEdit) => void
   /** Set (or clear, with '' / undefined) a node's custom label — the name an
-   *  embed host binds knob keys to. Trimmed, capped at 40 chars
-   *  (normalizeNodeLabel). One history entry, never coalesced; a no-op when
+   *  embed host binds knob keys to. Trimmed, silently capped at 120
+   *  chars (normalizeNodeLabel). One history entry, never coalesced; a no-op when
    *  the normalised label is unchanged. Not part of any compile key, so a
    *  rename never recompiles. */
   renameNode: (nodeId: string, label: string | undefined) => void

@@ -183,7 +183,7 @@ variables: { 'site-balance-value': -1 } })` then makes the very first frame
 correct. The node-name rules, in order:
 
 1. **Labelled nodes claim first**, in graph (saved node-array) order. The label
-   is trimmed and capped at 40 characters, then slugged (`site.balance` →
+   is trimmed (silently capped at 120 characters), then slugged (`site.balance` →
    `site-balance`). Two labels that slug the same are de-duplicated `Label`,
    `Label 2`, `Label 3` in graph order — a clash the author should fix, since
    only the first keeps the expected key.

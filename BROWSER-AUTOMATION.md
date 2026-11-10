@@ -88,7 +88,7 @@ sombra.setParams(noiseId, { scale: 12, noiseType: 'value' })
 ### `sombra.renameNode(nodeId, label?)`
 
 Sets a node's custom label (`node.data.label`); `''` or no label clears it back
-to the type label. The label is trimmed and capped at 40 characters, is one undo
+to the type label. The label is trimmed (silently capped at 120 characters), is one undo
 step, and never triggers a recompile (it is in no compile key). It is the name
 an embed host binds to: knob keys derive from it, so a Number node labelled
 `site.balance` publishes `site-balance-value` in every scene (EMBED.md §2).
