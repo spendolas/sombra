@@ -17,13 +17,13 @@ V2 was rebuilt from scratch using a **code-driven approach**: every Figma compon
 
 ---
 
-## Parity Score: 43/43 ✅
+## Parity Score: 47/47 ✅
 
 | Level | Total | ✅ Match | Notes |
 |---|---|---|---|
 | Tokens | 5 collections + 12 text styles | All | 40 variables + 12 text styles, dark mode only |
 | Atoms | 8 | 8 | Handle, Separator, Category Header, Palette Item, Plus Minus Button, Node Header, Node Footer, Action Button |
-| Molecules | 16 | 16 | Labeled Handle, Float Slider (SombraSlider), Enum Select, Anchor Grid, Color Input, Connectable Param Row, Preview Toolbar, Zoom Bar, Gradient Editor, Random Display, MiniMap, Graph Toolbar, AMD Warning, Compile Error Banner, Stack Layer, Stack Empty |
+| Molecules | 20 | 20 | Labeled Handle, Float Slider (SombraSlider), Enum Select, Anchor Grid, Color Input, Connectable Param Row, Preview Toolbar, Zoom Bar, Gradient Editor, Random Display, MiniMap, Graph Toolbar, AMD Warning, Compile Error Banner, Stack Layer, Stack Empty, Table Header, Knob Row, Knob Notice, Knob Table (sandbox only, not yet in the app) |
 | Organisms | 6 | 6 | Node Card, Node Palette, Properties Panel, Floating Preview, Full Window Overlay, File Drop Dialog |
 | Templates | 23 | 23 | All node types (Bayer Dither removed, Domain Warp → Warp UV, Pixel Grid → Dither) |
 | Scenes | 5 | 5 | All preview modes |
@@ -71,6 +71,7 @@ V2 was rebuilt from scratch using a **code-driven approach**: every Figma compon
 | [amd-warning.md](molecules/amd-warning.md) | `884:355` | 2 | AmdSeeThroughWarning.tsx | ✅ |
 | [compile-error-banner.md](molecules/compile-error-banner.md) | `954:2141` | 2 | CompileErrorBanner.tsx | ✅ |
 | [stack-layer.md](molecules/stack-layer.md) | `982:5693` · `982:5702` · `982:5703` | 8 + 2 | StackLayerList.tsx | ✅ |
+| [knob-table.md](molecules/knob-table.md) | `994:4033` · `994:4106` (+ board frames `994:5134`, `994:5360`) | 1 + 4 | KnobTable.tsx (sandbox only) | ✅ |
 
 ### Organisms
 | Page | Figma ID | Variants | Code File | Parity |
