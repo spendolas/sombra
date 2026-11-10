@@ -2769,6 +2769,160 @@
           "radius": "md"
         }
       }
+    },
+    "993:3777": {
+      "name": "Section Header",
+      "type": "molecule",
+      "dsKey": "sectionHeader",
+      "codeFile": "src/components/SectionHeader.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "993:3750",
+          "position": "relative",
+          "layout": "horizontal",
+          "align": "center",
+          "padding": {
+            "right": "xs"
+          },
+          "transition": "colors",
+          "extra": "motion-reduce:transition-none"
+        },
+        "rootDropTarget": {
+          "figmaNodeId": "994:4600",
+          "position": "relative",
+          "layout": "horizontal",
+          "align": "center",
+          "padding": {
+            "right": "xs"
+          },
+          "fill": "interactive/highlight",
+          "radius": "sm",
+          "transition": "colors",
+          "extra": "motion-reduce:transition-none",
+          "auditIgnore": [
+            "fill.opacity",
+            "height"
+          ]
+        },
+        "toggle": {
+          "figmaNodeId": "993:3754",
+          "layout": "horizontal",
+          "align": "center",
+          "padding": {
+            "left": "handle-offset",
+            "y": "2xs"
+          },
+          "gap": "2xs",
+          "cursor": "pointer",
+          "extra": "group flex-1 min-w-0 text-left focus-visible:outline-2 focus-visible:outline-indigo-hover",
+          "overflow": "hidden",
+          "auditIgnore": [
+            "padding.left"
+          ]
+        },
+        "chevron": {
+          "figmaNodeId": null,
+          "width": "icon-sm",
+          "height": "icon-sm",
+          "textColor": "fg-subtle",
+          "extra": "shrink-0 transition-[color,transform] group-hover:text-fg-dim motion-reduce:transition-none"
+        },
+        "chevronHover": {
+          "figmaNodeId": null,
+          "width": "icon-sm",
+          "height": "icon-sm",
+          "textColor": "fg-dim",
+          "extra": "shrink-0 transition-[color,transform] motion-reduce:transition-none"
+        },
+        "chevronCollapsed": {
+          "figmaNodeId": null,
+          "extra": "-rotate-90"
+        },
+        "label": {
+          "figmaNodeId": "993:3757",
+          "textStyle": "text-category",
+          "textColor": "fg-subtle",
+          "transition": "colors",
+          "extra": "truncate group-hover:text-fg-dim motion-reduce:transition-none",
+          "textCase": "upper"
+        },
+        "labelHover": {
+          "figmaNodeId": "993:3775",
+          "textStyle": "text-category",
+          "textColor": "fg-dim",
+          "extra": "truncate",
+          "textCase": "upper"
+        },
+        "count": {
+          "figmaNodeId": "993:3758",
+          "textStyle": "text-category",
+          "textColor": "fg-dim",
+          "extra": "shrink-0 whitespace-nowrap",
+          "textCase": "upper",
+          "auditIgnore": [
+            "width",
+            "height"
+          ]
+        },
+        "gather": {
+          "figmaNodeId": "993:3751",
+          "position": "absolute",
+          "width": "handle",
+          "height": "handle",
+          "extra": "left-0 top-1/2 -translate-x-1/2 -translate-y-1/2"
+        },
+        "popover": {
+          "figmaNodeId": "994:4963",
+          "position": "absolute",
+          "z": 20,
+          "pointerEvents": "none",
+          "userSelect": "none",
+          "layout": "vertical",
+          "fill": "surface/raised",
+          "radius": "md",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "padding": {
+            "x": "md",
+            "y": "sm"
+          },
+          "gap": "xs",
+          "effects": [
+            {
+              "type": "shadow",
+              "class": "shadow-[0_8px_24px_0px_rgba(0,0,0,0.5)]"
+            }
+          ],
+          "extra": "top-full left-handle-offset ml-xs mt-sm w-max max-w-[320px]"
+        },
+        "popoverRow": {
+          "figmaNodeId": "994:4964",
+          "layout": "horizontal",
+          "align": "center",
+          "gap": "md",
+          "extra": "min-w-0 whitespace-nowrap",
+          "overflow": "hidden"
+        },
+        "popoverParam": {
+          "figmaNodeId": "994:4965",
+          "textStyle": "text-body",
+          "textColor": "fg",
+          "extra": "shrink-0"
+        },
+        "popoverSource": {
+          "figmaNodeId": "994:4966",
+          "textStyle": "text-param",
+          "textColor": "fg-muted",
+          "extra": "truncate min-w-0"
+        },
+        "popoverHint": {
+          "figmaNodeId": "994:4970",
+          "textStyle": "text-param",
+          "textColor": "fg-subtle"
+        }
+      }
     }
   },
   "nodeTemplates": {

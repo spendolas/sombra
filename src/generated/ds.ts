@@ -261,6 +261,23 @@ export const ds = {
   stackDropSlot: {
     slot: "bg-surface-alt rounded-md",
   },
+  sectionHeader: {
+    root: "flex flex-row items-center pr-xs transition-colors relative motion-reduce:transition-none",
+    rootDropTarget: "flex flex-row items-center bg-highlight rounded-sm pr-xs transition-colors relative motion-reduce:transition-none",
+    toggle: "flex flex-row items-center py-2xs pl-handle-offset gap-2xs cursor-pointer overflow-hidden group flex-1 min-w-0 text-left focus-visible:outline-2 focus-visible:outline-indigo-hover",
+    chevron: "text-fg-subtle w-icon-sm h-icon-sm shrink-0 transition-[color,transform] group-hover:text-fg-dim motion-reduce:transition-none",
+    chevronHover: "text-fg-dim w-icon-sm h-icon-sm shrink-0 transition-[color,transform] motion-reduce:transition-none",
+    chevronCollapsed: "-rotate-90",
+    label: "text-category text-fg-subtle uppercase transition-colors truncate group-hover:text-fg-dim motion-reduce:transition-none",
+    labelHover: "text-category text-fg-dim uppercase truncate",
+    count: "text-category text-fg-dim uppercase shrink-0 whitespace-nowrap",
+    gather: "absolute w-handle h-handle left-0 top-1/2 -translate-x-1/2 -translate-y-1/2",
+    popover: "flex flex-col bg-surface-raised rounded-md border border-edge px-md py-sm gap-xs select-none absolute z-20 pointer-events-none shadow-[0_8px_24px_0px_rgba(0,0,0,0.5)] top-full left-handle-offset ml-xs mt-sm w-max max-w-[320px]",
+    popoverRow: "flex flex-row items-center gap-md overflow-hidden min-w-0 whitespace-nowrap",
+    popoverParam: "text-body text-fg shrink-0",
+    popoverSource: "text-param text-fg-muted truncate min-w-0",
+    popoverHint: "text-param text-fg-subtle",
+  },
 } as const;
 
 export type DSComponent = keyof typeof ds;
