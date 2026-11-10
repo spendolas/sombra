@@ -191,6 +191,7 @@ Complete mapping of every Figma component to its React source:
 | Connectable Param Row | `106:311` | `src/components/ShaderNode.tsx` | (inline) |
 | Preview Toolbar | `106:352` | `src/components/PreviewToolbar.tsx` | `PreviewToolbar` |
 | Stack Layer / Stack Empty / Stack Drop Slot | `982:5693` · `982:5702` · `982:5703` | `src/components/StackLayerList.tsx` | `StackLayerList` |
+| Table Header / Knob Row (+ Knob Table, Knob Notice board frames) | `994:4033` · `994:4106` · `994:5134` · `994:5360` | `src/components/KnobTable.tsx` | `KnobTable` (sandbox only; not yet in EmbedModal) |
 
 ### Organisms (V2 IDs)
 | Figma Component | Node ID | Source File | React Component |
