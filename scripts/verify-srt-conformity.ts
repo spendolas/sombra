@@ -31,6 +31,7 @@
  *
  * Run: npx tsx scripts/verify-srt-conformity.ts
  */
+import { resolveParams } from '../src/nodes/resolve-dynamic'
 import { ALL_NODES, initializeNodeLibrary } from '../src/nodes/index'
 import type { NodeDefinition } from '../src/nodes/types'
 
@@ -71,6 +72,11 @@ function emitTexts(def: NodeDefinition, params: Record<string, unknown>): { text
   for (const inp of def.inputs ?? []) inputs[inp.id] = `__in_${inp.id}__`
   for (const p of def.params ?? []) {
     if ((p as any).connectable) inputs[p.id] = p.id.startsWith('srt_') ? SRT_MARKER(p.id) : `__in_${p.id}__`
+  }
+  // Like the compilers: every non-connectable uniform param of THIS instance
+  // (incl. dynamicParams — ramp stop colours) is resolved into `inputs`.
+  for (const p of resolveParams(def, params)) {
+    if (!(p as any).connectable && p.updateMode === 'uniform' && !(p.id in inputs)) inputs[p.id] = `__u_${p.id}__`
   }
   const outputs: Record<string, string> = {}
   for (const out of def.outputs ?? []) outputs[out.id] = `__out_${out.id}__`
