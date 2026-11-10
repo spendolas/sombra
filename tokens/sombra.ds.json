@@ -2809,7 +2809,7 @@
           ]
         },
         "placeholder": {
-          "figmaNodeId": "I993:3946;993:3739",
+          "figmaNodeId": null,
           "textStyle": "text-node-title",
           "textColor": "fg-muted"
         }
