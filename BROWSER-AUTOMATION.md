@@ -23,6 +23,7 @@ If `window.__sombra` is `undefined`, the page hasn't finished loading or the bri
 | Create a node | `sombra.createNode('noise', {x:200, y:100}, {scale:8})` |
 | Connect nodes | `sombra.connect(srcId, tgtId, 'value', 'color')` |
 | Update params | `sombra.setParams(id, {scale: 12})` |
+| Name a node (embed knob keys) | `sombra.renameNode(id, 'site.balance')` |
 | Move a node | `sombra.moveNode(id, 300, 200)` |
 | Remove a node | `sombra.removeNode(id)` |
 | Remove an edge | `sombra.removeEdge(edgeId)` |
@@ -82,6 +83,21 @@ Merges new param values into an existing node.
 
 ```js
 sombra.setParams(noiseId, { scale: 12, noiseType: 'value' })
+```
+
+### `sombra.renameNode(nodeId, label?)`
+
+Sets a node's custom label (`node.data.label`); `''` or no label clears it back
+to the type label. The label is trimmed and capped at 40 characters, is one undo
+step, and never triggers a recompile (it is in no compile key). It is the name
+an embed host binds to: knob keys derive from it, so a Number node labelled
+`site.balance` publishes `site-balance-value` in every scene (EMBED.md §2).
+Returns the stored label (`undefined` when cleared). `describeGraph()` lists
+`label` on named nodes. Saved in `.sombra` files and share URLs.
+
+```js
+sombra.renameNode(numberId, 'site.balance')   // → 'site.balance'
+sombra.renameNode(numberId, '')               // → undefined (back to "Number")
 ```
 
 ### `sombra.moveNode(nodeId, x, y)`
@@ -189,6 +205,7 @@ does **not** push its plan into this renderer (see above) — call
 | `addNodes(nodes)` | Atomic multi-add — one history entry (used by multi-image file drops) |
 | `replaceEdge(oldEdgeId, newEdge)` | Atomic reconnect (enforces single-wire-per-input) |
 | `updateNodeData(id, {params})` | What `setParams` calls under the hood |
+| `renameNode(id, label)` | What `renameNode` calls: one history entry (never coalesced with a param drag); no-op when the normalised label is unchanged |
 | `editStackLayers(stackId, edit)` | Every Stack layer change — `{kind:'add'}`, `{kind:'remove', id}`, `{kind:'reorder', from, to}` (TOP-first indices, as the layer list shows them), `{kind:'toggleVisible', id}`, `{kind:'blend', id, blendMode}`. Writes the layer list AND strips a removed layer's wires in one entry, so one undo restores both. `params.layers` itself is stored BOTTOM-first. Opacity is an ordinary param: `setParams(id, {opacity_<layerId>: v})` |
 
 ### Forcing the WebGL2 backend

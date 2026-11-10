@@ -178,6 +178,21 @@ function setParams(nodeId: string, params: Record<string, unknown>): void {
 }
 
 /**
+ * Give a node a custom label (or clear it with '' / undefined). The label is
+ * the name an embed host binds knob keys to: a Number node labelled
+ * `site.balance` publishes `site-balance-value`. Trimmed and capped at 40
+ * chars; one undo step; never triggers a recompile. Returns the stored label.
+ *
+ * @example
+ *   sombra.renameNode(id, 'site.palette')
+ */
+function renameNode(nodeId: string, label?: string): string | undefined {
+  if (!useGraphStore.getState().getNode(nodeId)) throw new Error(`Node "${nodeId}" not found`)
+  useGraphStore.getState().renameNode(nodeId, label)
+  return useGraphStore.getState().getNode(nodeId)?.data.label
+}
+
+/**
  * Move a node to a new position.
  */
 function moveNode(nodeId: string, x: number, y: number): void {
@@ -307,6 +322,7 @@ function describeGraph() {
     nodes: nodes.map(n => ({
       id: n.id,
       type: (n.data as NodeData).type,
+      ...((n.data as NodeData).label ? { label: (n.data as NodeData).label } : {}),
       position: n.position,
       params: (n.data as NodeData).params,
     })),
@@ -344,6 +360,10 @@ function help() {
     setParams: {
       signature: 'setParams(nodeId, params)',
       description: 'Merge new param values into an existing node',
+    },
+    renameNode: {
+      signature: 'renameNode(nodeId, label?) → stored label',
+      description: "Set a node's custom label (embed knob keys derive from it); '' or undefined clears it. No recompile",
     },
     moveNode: {
       signature: 'moveNode(nodeId, x, y)',
@@ -867,6 +887,7 @@ export function installDevBridge(): void {
     createNode,
     connect,
     setParams,
+    renameNode,
     moveNode,
     removeNode,
     removeEdge,

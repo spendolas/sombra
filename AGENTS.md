@@ -126,6 +126,7 @@ npm run build:embed         # build the standalone UMD player → dist/embed/som
 npm run verify:embed        # pure offline checks: artifact roundtrip + manifest + snippets
 npm run verify:embed:bundle # post-build gate: player pulls in no React/xyflow/compiler/nodes, under size budget
 npm run verify:embed:smoke  # playwright end-to-end smoke (needs dev server + Chromium)
+npm run verify:node-rename  # node labels (embed knob keys): one undo step, normalised, never in a compile key
 ```
 
 ## Architecture
