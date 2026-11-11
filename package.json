@@ -48,6 +48,7 @@
     "verify:stack-ui:gpu": "tsx scripts/verify-stack-ui-gpu.ts",
     "verify:ramp-knobs:gpu": "tsx scripts/verify-ramp-knobs-gpu.ts",
     "verify:section-header-ui": "tsx scripts/verify-section-header-ui.ts",
+    "verify:wired-param-row-ui": "tsx scripts/verify-wired-param-row-ui.ts",
     "verify:node-title-ui": "tsx scripts/verify-node-title-ui.ts",
     "verify:node-sections-ui": "tsx scripts/verify-node-sections-ui.ts",
     "verify:knob-table-ui": "tsx scripts/verify-knob-table-ui.ts",
