@@ -48,10 +48,12 @@ npm run verify:pass-resolution:gpu  # real GPUs: pinning, scale-1 identity, pool
 
 # Shader embed (see EMBED.md)
 npm run build:embed          # build the standalone UMD player → dist/embed/sombra-player.<version>.umd.js
-npm run verify:embed         # pure offline checks: artifact roundtrip + manifest + snippets
+npm run verify:embed         # pure offline checks: artifact roundtrip + manifest + ramp knobs + snippets + site
 npm run verify:embed:bundle  # post-build gate: player pulls in no React/xyflow/compiler/nodes, under size budget
 npm run verify:embed:smoke   # playwright end-to-end smoke + lifecycle (own dev server + Chrome)
 npm run verify:embed:clock   # player clock + play/pause contract, both backends (own dev server + Chrome)
+npm run verify:embed:site    # site-base fixture + static site checklist C1..C8 (offline; `<file.ombra>` arg checks any file)
+npm run verify:embed:site:gpu # runtime site checklist R1..R9 on the fixture, both backends (own dev server + Chrome)
 ```
 
 There are no unit tests. Verification = the scripts above + manual testing via dev server + browser automation through `window.__sombra` (see `BROWSER-AUTOMATION.md`).

@@ -497,10 +497,13 @@ from the running origin at snippet-build time by `embedHostBase()` in
 
 ```bash
 npm run build:embed              # build dist/embed/sombra-player.<version>.umd.js
-npm run verify:embed             # pure offline checks (artifact + manifest + snippets)
+npm run verify:embed             # pure offline checks (artifact + manifest + ramp knobs + snippets + site)
 npm run verify:embed:bundle      # after build:embed — no forbidden deps, under size budget
 npm run verify:embed:smoke       # end-to-end browser smoke (needs dev server + playwright)
 npm run verify:embed:clock       # clock + play/pause contract, both backends (starts its own dev server + Chrome)
+npm run verify:embed:site        # site-base fixture + static site checklist C1..C8 (offline; part of verify:embed)
+npm run verify:embed:site:gpu    # runtime site checklist R1..R9 on the fixture, both backends (own dev server + Chrome)
+npx tsx scripts/verify-embed-site.ts <file.ombra>   # check any .ombra against C1..C8, print a table
 ```
 
 Individual checks: `verify:embed:artifact` (lossless codec + vertex invariant),
@@ -523,6 +526,50 @@ play/pause contract on both backends: double `play()` then `pause()` stops
 drawing, time and pixels hold while paused, `set()`/`resize()`/`setTime()` repaint
 exactly once while stopped (also under reduced motion), `setTimeScale(0)` holds
 time while painting, `play()` respects the visibility gate.
+
+### Site conformance and the `site-base` fixture
+
+A host site that drives a background shader needs a known shape: palette stops
+it can set at 60 Hz (with alpha), a field alpha, optional balance and seed knobs,
+a pausable clock, a clean teardown. The checklist that pins that shape lives in
+`scripts/lib/site-conformance.ts` (static half, C1..C8: decodes, `site-palette-stop-<n>`
+RGBA knobs, `fragment-output-alpha`, `site-balance-value` / `site-seed-value`
+(warn if missing), no duplicate-label suffixes, Render Quality high/medium). It is
+plain TS, reusable editor-side, and must never be imported by the player
+(`verify:embed:bundle` forbids its marker).
+
+The reference scene is **`public/shared/site-base.sombra`** (editable graph) +
+**`public/shared/site-base.ombra`** (published): Value-FBM field → Pixelate 64
+(block UV) → Dither 8 (Bayer, Square) → Color Ramp (Constant, 4 RGBA stops
+`#160709` off, three "on" colours) → Fragment Output (Render Quality High).
+Author labels: `site.clock`, `site.seed`, `site.balance`, `site.dots`,
+`site.palette`, so the manifest carries `site-clock-speed`, `site-seed-value`,
+`site-balance-value`, `site-dots-pixel-size`, `site-dots-dither`,
+`site-palette-stop-0..3`, `fragment-output-alpha`, plus the unlabelled nodes'
+knobs. The graph is built in code (`scripts/lib/site-base-fixture.ts`);
+regenerate both files with `npx tsx scripts/verify-embed-site.ts --write`.
+Dither has no `mask` output yet (SR-6), so the fixture takes the mask from
+Dither·Result → Remap(0..0.5 → 0..1); the keys are the same.
+
+`verify:embed:site` (offline) checks the fixture's shape, runs C1..C8 on a fresh
+publish (with WGSL, as a WebGPU browser publishes) and on the committed files,
+pins the full key list, proves each check can fail, and holds the pre-ramp
+"compat" recipe (four Color + three Mix, Dither·Result → Remap → final Mix factor)
+to the exact shader and manifest 5752aa9 published for it
+(`scripts/baselines/site-compat-5752aa9.ombra`).
+
+`verify:embed:site:gpu` mounts the fixture with the real player over a solid page
+background and reads pixels back on WebGL2 and WebGPU: R1 mount (ok, `load`, no
+`sombra:error`, console quiet), R2 first frame already in the `variables`
+colours, R3 per-stop alpha 0 clears exactly that band and the page shows through
+exactly, R4 balance ±1.5 → all off / all on, R5 five seeds → five frames, R6
+pause/resume continuity, R7 reduced motion, R8 60 `set()`/s → ≥ 50 frames, R9 20×
+mount/destroy leaves no live context or device. It also checks the committed
+`.ombra` (fetched via `src`) and the compat recipe render pixel-identically to a
+fresh publish and to 5752aa9's artifact. R1's "no console output" is a WARN today:
+the player logs `[Sombra] Renderer backend: …` on every mount (SR-8 removes it);
+`SITE_STRICT=1` makes it fail. `--dpr <dir>` measures the Pixelate/Dither grids
+at DPR 1, 1.5, 2, 3 and writes a PNG per DPR (a report, not a gate).
 
 **Bundle rule (enforced):** the player import graph
 (`src/embed/index.ts` + its imports) may import only `src/renderer/*`,
