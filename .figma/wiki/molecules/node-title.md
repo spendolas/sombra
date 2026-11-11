@@ -75,7 +75,7 @@ Rules:
 |---|---|---|
 | `inlineTextField.field` | surface/default fill, interactive/active stroke, radius sm/4, height input/h | `bg-surface border border-active rounded-sm h-input-h` |
 | `inlineTextField.value` | heading/node-title, fg/default | `text-node-title text-fg` |
-| `inlineTextField.selection` | interactive/highlight | applied as `selection:bg-highlight` on the field |
+| `inlineTextField.selection` | interactive/active @ 50% | applied as `selection:bg-active/50` on the field (was interactive/highlight @ 15%: a menu-hover tint, too faint to see selected text on the dark field; changed 2026-11-11 after owner review) |
 | `inlineTextField.placeholder` | fg/muted (instance override in board F) | applied as `placeholder:text-fg-muted` on the field |
 | `nodeTitle.name` | heading/node-title, fg/default, truncate ending | `text-node-title text-fg truncate` |
 | `nodeTitle.typeTag` | label/param, fg/subtle | `text-param text-fg-subtle` |
@@ -91,9 +91,9 @@ field's `selection:` / `placeholder:` variants (in `field.extra`). Keep the two 
 `tokens:audit` clean. Ignores and nulls (reasons — `.claude/ds-queue.md` is gitignored and
 lives only in the main checkout, so they are recorded here):
 
-- `inlineTextField.selection` (993:3738) → `fill.opacity`: the 15% is interactive/highlight's
-  own alpha (`rgba(99,102,241,0.15)`); Figma reports a bound variable's alpha as paint
-  opacity. Adding `/15` in code would square it.
+- `inlineTextField.selection` (993:3738) → `fill.opacity`: the 50% is the paint's own opacity over
+  interactive/active (solid `#6366f1`); in code it is the `/50` modifier in `selection:bg-active/50`.
+  (Until 2026-11-11 this was interactive/highlight at 15%: too faint to see a selection.)
 - `inlineTextField.selection` → `width`, `height`: Figma draws the selection as a fixed
   55×21 rect; code uses the native `::selection` over the selected glyphs.
 - `nodeTitle.root` (993:3897) → `padding`, `width`, `height`: on the board the row is an

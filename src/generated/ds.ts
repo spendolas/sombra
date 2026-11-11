@@ -279,9 +279,9 @@ export const ds = {
     popoverHint: "text-param text-fg-subtle",
   },
   inlineTextField: {
-    field: "flex flex-row items-center bg-surface rounded-sm border border-active px-sm gap-xs overflow-hidden h-input-h min-w-0 outline-none selection:bg-highlight placeholder:text-fg-muted",
+    field: "flex flex-row items-center bg-surface rounded-sm border border-active px-sm gap-xs overflow-hidden h-input-h min-w-0 outline-none selection:bg-active/50 placeholder:text-fg-muted",
     value: "text-node-title text-fg",
-    selection: "bg-highlight",
+    selection: "bg-active",
     placeholder: "text-node-title text-fg-muted",
   },
   nodeTitle: {
