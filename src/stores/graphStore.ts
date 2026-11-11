@@ -17,6 +17,7 @@ import { REFERENCE_SIZE } from '../renderer/constants'
 import { previewCanvasSize } from '../utils/preview-canvas-size'
 import { applyStackEdit, type StackEdit } from '../nodes/color/stack-edit'
 import { normalizeNodeLabel } from '../nodes/node-label'
+import { carryUiState, withSectionCollapsed } from '../nodes/node-ui'
 
 /** Schema version — bump when persisted shape changes.
  *  v4: one-time dedupe of duplicate node ids left by the old
@@ -106,6 +107,11 @@ interface GraphState {
    *  the normalised label is unchanged. Not part of any compile key, so a
    *  rename never recompiles. */
   renameNode: (nodeId: string, label: string | undefined) => void
+  /** Open / collapse a section of a node's body (`'transform'`). View state,
+   *  stored on the node (`data.ui`) so it survives reloads and `.sombra` files,
+   *  but NOT an edit: no history entry, and undo/redo carry it over unchanged.
+   *  Not in any compile key. A no-op when the state is unchanged. */
+  setSectionCollapsed: (nodeId: string, section: string, collapsed: boolean) => void
 
   addEdge: (edge: Edge<EdgeData>) => void
   removeEdge: (edgeId: string) => void
@@ -165,7 +171,8 @@ export const useGraphStore = create<GraphState>()(
         if (_past.length === 0) return
         const prev = _past[_past.length - 1]
         set({
-          nodes: prev.nodes,
+          // Section open/collapsed is view state, not an edit: keep it as it is now.
+          nodes: carryUiState(prev.nodes, nodes),
           edges: prev.edges,
           _past: _past.slice(0, -1),
           _future: [..._future, { nodes, edges }],
@@ -180,7 +187,7 @@ export const useGraphStore = create<GraphState>()(
         if (_future.length === 0) return
         const next = _future[_future.length - 1]
         set({
-          nodes: next.nodes,
+          nodes: carryUiState(next.nodes, nodes),
           edges: next.edges,
           _past: [..._past, { nodes, edges }],
           _future: _future.slice(0, -1),
@@ -366,6 +373,17 @@ export const useGraphStore = create<GraphState>()(
           canUndo: true,
           canRedo: false,
         })
+      },
+
+      setSectionCollapsed: (nodeId, section, collapsed) => {
+        const state = get()
+        const node = state.nodes.find((n) => n.id === nodeId)
+        if (!node) return
+        const data = withSectionCollapsed(node.data, section, collapsed)
+        if (data === node.data) return
+        // Deliberately no _past / _future / _lastActionKey: toggling a section
+        // is not an undoable edit (and must not split a param-drag coalesce).
+        set({ nodes: state.nodes.map((n) => (n.id === nodeId ? { ...n, data } : n)) })
       },
 
       setOutputAnchor: (nodeId, anchor) => {
