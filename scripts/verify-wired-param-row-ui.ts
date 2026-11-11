@@ -53,6 +53,9 @@ async function fixture(key: string) {
   await page.click(`[data-fixture="${key}"]`)
   await page.mouse.move(1200, 880) // park the pointer away from the stage
   await realWait(60)
+  // The row must be mounted before it is measured (a dev-server full reload
+  // mid-run otherwise surfaces as a null deref, not as a finding).
+  await page.waitForSelector(ROW, { timeout: 10000 })
 }
 
 interface RowView {
@@ -413,6 +416,8 @@ async function main() {
     page = await browser.newPage({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 2 })
     const pageErrors: string[] = []
     page.on('pageerror', (e) => pageErrors.push(e.message))
+    let loads = 0
+    page.on('load', () => { if (++loads > 1) console.warn(`[gate] the sandbox page reloaded mid-run (${loads} loads) — a file changed under the dev server`) })
     // tsx compiles with keepNames, which wraps the inner helpers of page.evaluate
     // callbacks in __name(); the page has no such global.
     await page.addInitScript('window.__name = (f) => f')
