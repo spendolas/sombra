@@ -3136,7 +3136,7 @@
           "extra": "truncate"
         },
         "keyAuto": {
-          "figmaNodeId": "I994:5288;994:4041",
+          "figmaNodeId": null,
           "textStyle": "text-mono-value",
           "textColor": "fg-dim",
           "extra": "truncate"

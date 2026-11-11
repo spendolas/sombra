@@ -107,6 +107,12 @@ gitignored and lives in the main checkout only):
 - `knobTable.table` (994:5151) → `height`: Figma frame is FIXED 334; code caps the
   body at `max-h-[308px]` and shrinks to content when shorter.
 
+- `knobRow.keyAuto` is deliberately NOT anchored to Figma (`figmaNodeId: null`). It
+  pointed at a layer inside a component instance (`I994:5288;994:4041`); looking that up
+  needs a Figma server round-trip that times out and fails the whole `tokens:audit` run
+  (same fix as `inlineTextField.placeholder`, `82b32ef`). Its colour is `fg-dim` (the
+  dimmer variant of `knobRow.key`'s `fg`), recorded here instead.
+
 The checker squares (994:4045–4048) have no parts: the four rects are drawn in code
 by one `repeating-conic-gradient` in `knobRow.swatch`'s `extra`, using the same two
 tokens.
