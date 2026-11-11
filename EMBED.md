@@ -555,8 +555,15 @@ Dither·Result → Remap(0..0.5 → 0..1); the keys are the same.
 publish (with WGSL, as a WebGPU browser publishes) and on the committed files,
 pins the full key list, proves each check can fail, and holds the pre-ramp
 "compat" recipe (four Color + three Mix, Dither·Result → Remap → final Mix factor)
-to the exact shader and manifest 5752aa9 published for it
-(`scripts/baselines/site-compat-5752aa9.ombra`).
+to the manifest 5752aa9 published for it
+(`scripts/baselines/site-compat-5752aa9.ombra`, kept as the historical reference).
+Since 2026-11-11 the only difference allowed is the standard Rotate knob each
+Noise/FBM/Warp node gained (`noise-rotate`, `fbm-rotate` here — rule in
+`scripts/lib/added-rotate-knobs.ts`); the shader TEXT is no longer compared, because
+that Rotate necessarily adds a uniform and the rotate op. The compat guarantee is
+the pixel identity `verify:embed:site:gpu` checks against the same artifact.
+The site-base fixture itself gained `fbm-rotate` and `noise-rotate` the same day
+(additive; existing keys unchanged).
 
 `verify:embed:site:gpu` mounts the fixture with the real player over a solid page
 background and reads pixels back on WebGL2 and WebGPU: R1 mount (ok, `load`, no
