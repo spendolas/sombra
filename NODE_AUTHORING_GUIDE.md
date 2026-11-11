@@ -70,6 +70,7 @@ That's it. The node appears in the palette, compiles to GLSL, and renders on the
 | `params` | `NodeParameter[]` | No | Tweakable controls (sliders, dropdowns, color pickers) |
 | `glsl` | `(ctx: GLSLContext) => string` | Yes | GLSL code generator |
 | `dynamicInputs` | `(params) => PortDefinition[]` | No | Variable port count based on params |
+| `dynamicParams` | `(params) => NodeParameter[]` | No | Per-instance param set (replaces `params`, which stays as the fallback) — see *Dynamic params* |
 | `component` | `React.ComponentType` | No | Custom UI below standard controls |
 
 ### PortDefinition
@@ -296,6 +297,41 @@ inputs: [
 The compiler calls `dynamicInputs(params)` when present, otherwise falls back to static `inputs`. ShaderNode.tsx auto-renders +/- buttons.
 
 **See:** `src/nodes/math/arithmetic.ts` for full example.
+
+### Dynamic params
+
+```ts
+params: layerParams({}),          // static fallback = the default instance
+dynamicParams: layerParams,       // (params) => NodeParameter[] for THIS instance
+```
+
+When a node's parameter SET depends on its own stored state (Stack: one
+opacity + mask per layer), declare it through `dynamicParams`. **Every site that
+iterates a node's params must go through `resolveParams(def, node.data.params)`**
+(`src/nodes/resolve-dynamic.ts`) — codegen (both generators), the compile keys,
+connection validity, layout, file import, the node body, and the embed manifest
+(`src/embed/manifest.ts`). Reading the static `def.params` instead is silent:
+the shader still declares the uniform, but the reader never sees the param — the
+manifest used to drop the knob of every non-default Stack layer that way.
+
+Params that exist only through `dynamicParams` are never materialised into
+`node.data.params` by `defaultParams()`; a uniform param's value is
+`node.data.params[id] ?? param.default`, so the `default` can carry the value
+when another stored param is its source of truth.
+
+**See:** `src/nodes/color/stack.ts`.
+
+**Color Ramp / Gradient stops** use the same mechanism: `dynamicParams` returns
+the static params plus one hidden `color` param per stop
+(`stop_<stopId>`, `updateMode: 'uniform'`, `default` = the stop's RGBA, label
+`Stop <n>` by position, `knobMeta: { group: 'stops', index, position }` for the
+embed manifest) — `stopColorParams()` in `src/nodes/color/ramp-stops.ts`.
+`params.stops` stays the only stored copy; glsl()/ir() read each colour through
+`stopUniform(ctx.inputs, stop)`, which throws if the compiler did not resolve
+it. Every reader of `params.stops` (both nodes and `ColorRampEditor`) goes
+through `normalizeStops()`: stable alphanumeric stop ids (id-less legacy stops
+resolve to `s<stored index>`), RGBA colours, the black→white fallback. New stops
+get `newStopId()` — never reuse an id.
 
 ### Multi-pass nodes (`multiPass`)
 
@@ -610,7 +646,7 @@ Key variable collections (full IDs in Claude memory file `figma-ds.md`):
 | `domain_warp` | Domain Warp | Noise | `noise/domain-warp.ts` | connectable (strength, freq, seed), enum (noiseType), auto_uv, warpedPhase output, addFunction |
 | `hsv_to_rgb` | HSV to RGB | Color | `color/hsv-to-rgb.ts` | GLSL helper function |
 | `brightness_contrast` | Brightness/Contrast | Color | `color/brightness-contrast.ts` | connectable |
-| `color_ramp` | Color Ramp | Color | `color/color-ramp.ts` | enum, hidden param, custom component (ColorRampEditor), presets |
+| `color_ramp` | Color Ramp | Color | `color/color-ramp.ts` | enum, hidden param, dynamicParams (per-stop colour uniforms), custom component (ColorRampEditor), presets |
 | `dither` | Dither | Effect | `postprocess/pixel-grid.ts` | connectable (pixelSize, threshold, dither), enum (shape: square/circle/diamond/triangle), addFunction (bayer + SDF), gl_FragCoord, showWhen |
 | `quantize_uv` | Quantize UV | Effect | `postprocess/quantize-uv.ts` | connectable (pixelSize), gl_FragCoord, frozen-ref UV output |
 | `fragment_output` | Fragment Output | Output | `output/fragment-output.ts` | master output (one per graph) |

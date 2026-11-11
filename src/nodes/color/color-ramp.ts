@@ -1,26 +1,43 @@
 /**
- * Color Ramp node — Map a float value (0-1) to a color gradient via multi-stop ramp
+ * Color Ramp node — Map a float value (0-1) to a color gradient via multi-stop ramp.
+ *
+ * Stop colours are runtime uniforms (one hidden `color` param per stop, from
+ * ramp-stops.ts), so every stop is an embed knob; positions and interpolation
+ * stay compile-time — they decide sort order and the step/smoothstep shape.
  */
 
-import type { NodeDefinition } from '../types'
-import { variable, call, declare, assign, literal, construct, binary } from '../../compiler/ir/types'
+import type { NodeDefinition, NodeParameter } from '../types'
+import { variable, call, declare, assign, literal, binary } from '../../compiler/ir/types'
 import type { IRStmt, IRExpr } from '../../compiler/ir/types'
+import { normalizeStops, sortStops, stopColorParams, stopUniform } from './ramp-stops'
 
 /** Format number as GLSL float literal */
 function flt(n: number): string {
   return Number.isInteger(n) ? `${n}.0` : `${n}`
 }
 
-interface ColorStop {
-  position: number
-  /** RGB (legacy, alpha defaults to 1) or RGBA. */
-  color: [number, number, number] | [number, number, number, number]
-}
-
-/** Normalize a stop color to RGBA, defaulting alpha to 1 for legacy 3-length colors. */
-function normalizeStopColor(color: ColorStop['color']): [number, number, number, number] {
-  return color.length === 4 ? color : [color[0], color[1], color[2], 1]
-}
+const STATIC_PARAMS: NodeParameter[] = [
+  {
+    id: 'interpolation',
+    label: 'Interpolation',
+    type: 'enum',
+    default: 'smooth',
+    options: [
+      { value: 'smooth', label: 'Smooth' },
+      { value: 'linear', label: 'Linear' },
+      { value: 'constant', label: 'Constant' },
+    ],
+    updateMode: 'recompile',
+  },
+  {
+    id: 'stops',
+    label: 'Stops',
+    type: 'float',
+    default: 0,
+    hidden: true,
+    updateMode: 'recompile',
+  },
+]
 
 export const colorRampNode: NodeDefinition = {
   type: 'color_ramp',
@@ -36,59 +53,29 @@ export const colorRampNode: NodeDefinition = {
     { id: 'color', label: 'Color', type: 'color' },
   ],
 
-  params: [
-    {
-      id: 'interpolation',
-      label: 'Interpolation',
-      type: 'enum',
-      default: 'smooth',
-      options: [
-        { value: 'smooth', label: 'Smooth' },
-        { value: 'linear', label: 'Linear' },
-        { value: 'constant', label: 'Constant' },
-      ],
-      updateMode: 'recompile',
-    },
-    {
-      id: 'stops',
-      label: 'Stops',
-      type: 'float',
-      default: 0,
-      hidden: true,
-      updateMode: 'recompile',
-    },
-  ],
-
-
+  params: STATIC_PARAMS,
+  // + one hidden uniform `color` param per stop (Stop 0..N-1 by position).
+  dynamicParams: (params) => [...STATIC_PARAMS, ...stopColorParams(params)],
 
   glsl: (ctx) => {
     const { inputs, outputs, params } = ctx
     const interp = (params.interpolation as string) || 'smooth'
 
-    // Read stops, sort by position, fallback to black-white
-    let stops = params.stops as ColorStop[] | undefined
-    if (!stops || !Array.isArray(stops) || stops.length < 2) {
-      stops = [
-        { position: 0, color: [0, 0, 0] },
-        { position: 1, color: [1, 1, 1] },
-      ]
-    }
-    stops = [...stops].sort((a, b) => a.position - b.position)
+    // Stops by position (equal positions keep stored order); missing/unusable → black-white
+    const stops = sortStops(normalizeStops(params.stops))
 
     const lines: string[] = []
     const c = outputs.color
     const t = inputs.t
 
     // Initialize with first stop color
-    const [r0, g0, b0, a0] = normalizeStopColor(stops[0].color)
-    lines.push(`vec4 ${c} = vec4(${flt(r0)}, ${flt(g0)}, ${flt(b0)}, ${flt(a0)});`)
+    lines.push(`vec4 ${c} = ${stopUniform(inputs, stops[0], 'color_ramp')};`)
 
     // Chain mix() calls for each subsequent stop
     for (let i = 1; i < stops.length; i++) {
       const prev = stops[i - 1]
       const curr = stops[i]
-      const [r, g, b, a] = normalizeStopColor(curr.color)
-      const colorExpr = `vec4(${flt(r)}, ${flt(g)}, ${flt(b)}, ${flt(a)})`
+      const colorExpr = stopUniform(inputs, curr, 'color_ramp')
 
       let factor: string
       if (Math.abs(curr.position - prev.position) < 0.0001) {
@@ -114,40 +101,19 @@ export const colorRampNode: NodeDefinition = {
     const t = variable(ctx.inputs.t)
     const c = ctx.outputs.color
 
-    // Read stops, sort by position, fallback to black-white
-    let stops = ctx.params.stops as ColorStop[] | undefined
-    if (!stops || !Array.isArray(stops) || stops.length < 2) {
-      stops = [
-        { position: 0, color: [0, 0, 0] },
-        { position: 1, color: [1, 1, 1] },
-      ]
-    }
-    stops = [...stops].sort((a, b) => a.position - b.position)
+    // Stops by position (equal positions keep stored order); missing/unusable → black-white
+    const stops = sortStops(normalizeStops(ctx.params.stops))
 
     const statements: IRStmt[] = []
 
     // Initialize with first stop color
-    const [r0, g0, b0, a0] = normalizeStopColor(stops[0].color)
-    statements.push(
-      declare(c, 'vec4', construct('vec4', [
-        literal('float', r0),
-        literal('float', g0),
-        literal('float', b0),
-        literal('float', a0),
-      ])),
-    )
+    statements.push(declare(c, 'vec4', variable(stopUniform(ctx.inputs, stops[0], 'color_ramp'))))
 
     // Chain mix() calls for each subsequent stop
     for (let i = 1; i < stops.length; i++) {
       const prev = stops[i - 1]
       const curr = stops[i]
-      const [r, g, b, a] = normalizeStopColor(curr.color)
-      const colorExpr: IRExpr = construct('vec4', [
-        literal('float', r),
-        literal('float', g),
-        literal('float', b),
-        literal('float', a),
-      ])
+      const colorExpr: IRExpr = variable(stopUniform(ctx.inputs, curr, 'color_ramp'))
 
       let factor: IRExpr
       if (Math.abs(curr.position - prev.position) < 0.0001) {

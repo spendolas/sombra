@@ -4,7 +4,7 @@
  * add/remove controls, and preset palette selector.
  */
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import { useGraphStore } from '@/stores/graphStore'
 import {
   Select,
@@ -17,6 +17,7 @@ import { IconButton } from '@/components/IconButton'
 import { RgbaColorPicker, type Rgba } from '@/components/RgbaColorPicker'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
+import { normalizeStops, sortStops, newStopId, type RampStop } from '@/nodes/color/ramp-stops'
 
 /** Checkerboard pattern behind gradient/swatch surfaces so alpha reads visually (mirrors RgbaColorPicker). */
 const CHECKER_STYLE: React.CSSProperties = {
@@ -31,15 +32,15 @@ const CHECKER_STYLE: React.CSSProperties = {
 
 // --- Types ---
 
-interface ColorStop {
+/** Presets are authored without ids; applying one mints fresh ids (never reuses the old stops'). */
+interface PresetStop {
   position: number
-  /** RGB (legacy, alpha defaults to 1) or RGBA. */
   color: [number, number, number] | Rgba
 }
 
 interface Preset {
   name: string
-  stops: ColorStop[]
+  stops: PresetStop[]
 }
 
 // --- Presets (from spectra-pixel-bg) ---
@@ -107,20 +108,11 @@ const PRESETS: Preset[] = [
   },
 ]
 
-const DEFAULT_STOPS: ColorStop[] = [
-  { position: 0.0, color: [0.0, 0.0, 0.0] },
-  { position: 1.0, color: [1.0, 1.0, 1.0] },
-]
-
 // --- Helpers ---
 
-/** Normalize a stop color to RGBA, defaulting alpha to 1 for legacy 3-length colors. */
-function normalizeStopColor(color: ColorStop['color']): Rgba {
-  return color.length === 4 ? color : [color[0], color[1], color[2], 1]
-}
-
-function stopToRgba(stop: ColorStop): string {
-  const [r, g, b, a] = normalizeStopColor(stop.color)
+/** Stops come from the shared normaliser (ramp-stops.ts), so colours are already RGBA. */
+function stopToRgba(stop: RampStop): string {
+  const [r, g, b, a] = stop.color
   return `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, ${a})`
 }
 
@@ -135,10 +127,10 @@ function lerpColor(a: Rgba, b: Rgba, t: number): Rgba {
 }
 
 /** Get interpolated RGBA color at position from sorted stops */
-function colorAtPosition(stops: ColorStop[], pos: number): Rgba {
+function colorAtPosition(stops: RampStop[], pos: number): Rgba {
   if (stops.length === 0) return [0, 0, 0, 1]
-  if (pos <= stops[0].position) return normalizeStopColor(stops[0].color)
-  if (pos >= stops[stops.length - 1].position) return normalizeStopColor(stops[stops.length - 1].color)
+  if (pos <= stops[0].position) return [...stops[0].color]
+  if (pos >= stops[stops.length - 1].position) return [...stops[stops.length - 1].color]
 
   for (let i = 1; i < stops.length; i++) {
     if (pos <= stops[i].position) {
@@ -146,10 +138,10 @@ function colorAtPosition(stops: ColorStop[], pos: number): Rgba {
       const curr = stops[i]
       const range = curr.position - prev.position
       const t = range < 0.0001 ? 0 : (pos - prev.position) / range
-      return lerpColor(normalizeStopColor(prev.color), normalizeStopColor(curr.color), t)
+      return lerpColor(prev.color, curr.color, t)
     }
   }
-  return normalizeStopColor(stops[stops.length - 1].color)
+  return [...stops[stops.length - 1].color]
 }
 
 // --- Component ---
@@ -165,23 +157,21 @@ export function ColorRampEditor({
   const barRef = useRef<HTMLDivElement>(null)
   const [selectedIndex, setSelectedIndex] = useState(0)
 
-  // Read stops from data, fallback to defaults
-  const rawStops = data.stops as ColorStop[] | undefined
-  const stops: ColorStop[] =
-    rawStops && Array.isArray(rawStops) && rawStops.length >= 2
-      ? rawStops
-      : DEFAULT_STOPS
+  // The same stops (and stop ids) codegen sees — stored order, black-white
+  // fallback. Memoised on the stored value so callbacks keep their identity.
+  const rawStops = data.stops
+  const stops: RampStop[] = useMemo(() => normalizeStops(rawStops), [rawStops])
 
   // Initialize stops on first render if missing
   useEffect(() => {
-    if (!rawStops || !Array.isArray(rawStops) || rawStops.length < 2) {
+    if (!Array.isArray(rawStops) || rawStops.length < 2) {
       updateNodeData(nodeId, {
-        params: { ...data, stops: DEFAULT_STOPS },
+        params: { ...data, stops: normalizeStops(undefined) },
       })
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const sortedStops = [...stops].sort((a, b) => a.position - b.position)
+  const sortedStops = sortStops(stops)
 
   // Clamp selected index
   const safeIndex = Math.min(selectedIndex, stops.length - 1)
@@ -190,7 +180,7 @@ export function ColorRampEditor({
   // --- Store updates ---
 
   const updateStops = useCallback(
-    (newStops: ColorStop[]) => {
+    (newStops: RampStop[]) => {
       updateNodeData(nodeId, {
         params: { ...data, stops: newStops },
       })
@@ -199,7 +189,7 @@ export function ColorRampEditor({
   )
 
   const updateStop = useCallback(
-    (index: number, updated: ColorStop) => {
+    (index: number, updated: RampStop) => {
       const newStops = stops.map((s, i) => (i === index ? updated : s))
       updateStops(newStops)
     },
@@ -256,7 +246,8 @@ export function ColorRampEditor({
       const rect = bar.getBoundingClientRect()
       const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
       const color = colorAtPosition(sortedStops, pos)
-      const newStops = [...stops, { position: Math.round(pos * 1000) / 1000, color }]
+      const id = newStopId(new Set(stops.map((s) => s.id)))
+      const newStops = [...stops, { id, position: Math.round(pos * 1000) / 1000, color }]
       updateStops(newStops)
       setSelectedIndex(newStops.length - 1)
     },
@@ -267,7 +258,7 @@ export function ColorRampEditor({
 
   const handleAddStop = useCallback(() => {
     // Insert at midpoint between selected and next stop (or prev)
-    const sorted = [...stops].sort((a, b) => a.position - b.position)
+    const sorted = sortStops(stops)
     const sortedIndex = sorted.indexOf(stops[safeIndex])
     let pos: number
     if (sortedIndex < sorted.length - 1) {
@@ -278,7 +269,8 @@ export function ColorRampEditor({
       pos = 0.5
     }
     const color = colorAtPosition(sorted, pos)
-    const newStops = [...stops, { position: Math.round(pos * 1000) / 1000, color }]
+    const id = newStopId(new Set(stops.map((s) => s.id)))
+    const newStops = [...stops, { id, position: Math.round(pos * 1000) / 1000, color }]
     updateStops(newStops)
     setSelectedIndex(newStops.length - 1)
   }, [stops, safeIndex, updateStops])
@@ -307,11 +299,17 @@ export function ColorRampEditor({
     (presetName: string) => {
       const preset = PRESETS.find((p) => p.name === presetName)
       if (preset) {
-        updateStops(preset.stops.map((s) => ({ ...s })))
+        // Fresh ids: the replaced stops' ids are never reused.
+        const taken = new Set(stops.map((s) => s.id))
+        updateStops(normalizeStops(preset.stops).map((s) => {
+          const id = newStopId(taken)
+          taken.add(id)
+          return { ...s, id }
+        }))
         setSelectedIndex(0)
       }
     },
-    [updateStops]
+    [stops, updateStops]
   )
 
   return (
@@ -352,7 +350,7 @@ export function ColorRampEditor({
       <div className={ds.gradientEditor.controlsRow}>
         <RgbaColorPicker
           mode="popover"
-          value={normalizeStopColor(selectedStop.color)}
+          value={selectedStop.color}
           onChange={handleColorChange}
         />
         <span className={ds.gradientEditor.positionText}>

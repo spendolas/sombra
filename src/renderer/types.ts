@@ -92,11 +92,17 @@ export interface ShaderRenderer {
   /** Request a single render frame (for static/non-animated graphs). */
   requestRender(): void
 
-  /** Start the continuous animation loop. */
+  /** Start the continuous animation loop. Idempotent: a no-op while a loop is
+   *  already running. */
   startAnimation(): void
 
   /** Stop the continuous animation loop. */
   stopAnimation(): void
+
+  /** When set, render() uses fn() for u_time. null restores the built-in wall
+   *  clock. Used by the embed player to own a pausable clock; the editor and
+   *  viewer never call it. Implemented on both backends. */
+  setTimeSource?(fn: (() => number) | null): void
 
   /** Mark all multi-pass render passes as dirty. */
   markAllDirty(): void
