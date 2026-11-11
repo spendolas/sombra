@@ -1,5 +1,5 @@
 {
- "_about": "Manifests published by the code BEFORE author labels existed (main 5752aa9). verify-manifest asserts unlabelled scenes still publish these byte-for-byte. Never regenerate from current code — that would make the check vacuous.",
+ "_about": "Manifests published by the code BEFORE author labels existed (main 5752aa9). verify-manifest asserts unlabelled scenes still publish these byte-for-byte. Never regenerate from current code — that would make the check vacuous. Purely ADDED knobs are stripped by the gate before comparing, each with its own shape check, instead of being written in here: ramp-stop knobs (SR-2) and, from 2026-11-11, the framework Rotate knob on Noise / FBM / Warp (one per node, right after its Scale knob; 12 in this snapshot).",
  "presets": {
   "createDefaultGraph": [
    {
