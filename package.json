@@ -51,6 +51,7 @@
     "verify:node-title-ui": "tsx scripts/verify-node-title-ui.ts",
     "verify:node-sections-ui": "tsx scripts/verify-node-sections-ui.ts",
     "verify:knob-table-ui": "tsx scripts/verify-knob-table-ui.ts",
+    "verify:embed-knob-table-ui": "tsx scripts/verify-embed-knob-table-ui.ts",
     "verify:dropdown-preview:gpu": "tsx scripts/verify-dropdown-preview-gpu.ts",
     "verify:blend-modes:gpu": "tsx scripts/verify-blend-modes-gpu.ts",
     "verify:coord-contract:gpu": "tsx scripts/verify-coord-contract-gpu.ts",
