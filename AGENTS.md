@@ -130,6 +130,8 @@ npm run verify:embed:clock  # player clock + play/pause contract, both backends 
 npm run verify:embed:site   # site-base fixture + static site checklist C1..C8 (offline; `<file.ombra>` arg checks any file)
 npm run verify:embed:site:gpu # runtime site checklist R1..R9 on the fixture, both backends (own dev server + Chrome)
 npm run verify:node-rename  # node labels (embed knob keys): one undo step, normalised, never in a compile key
+npm run verify:node-sections    # section collapse state: no history, no compile key, saved; duplicate-name slug = manifest's
+npm run verify:node-sections-ui # Transform gathered wires, open-on-drag (mouse+touch), persistence, inline rename — live editor (Chrome)
 npm run verify:ramp-knobs   # ramp/gradient stops as embed knobs (offline)
 npm run verify:ramp-knobs:gpu # one stop's alpha → 0 clears exactly its band, both backends
 ```

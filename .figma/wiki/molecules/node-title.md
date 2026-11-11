@@ -14,7 +14,7 @@
 | DS Keys | `inlineTextField` (atom), `nodeTitle` (molecule, DB key `nt:1`) |
 | Sandbox | `sandbox.html?c=node-title` · standalone `node-title-sandbox.html` |
 | Gate | `npm run verify:node-title-ui` (headless Chrome) |
-| Status | Sandbox only — **not yet wired into ShaderNode** |
+| Status | Wired into `ShaderNode` (branch feat/wire-node-sections) |
 
 The title region of a node header, with inline rename. A drop-in for
 `<BaseNodeHeaderTitle>{definition.label}</BaseNodeHeaderTitle>`: it fills the same
@@ -127,16 +127,21 @@ Perturbations, each removed alone, gate red, then restored:
 
 Restored: 15/15.
 
-## Plug-in plan (not done here)
+## Plug-in — done (branch feat/wire-node-sections)
 
-1. In `ShaderNode.tsx`, replace
-   `<BaseNodeHeaderTitle>{definition.label}</BaseNodeHeaderTitle>` with
-   `<NodeTitle title={definition.label} customName={data.label} duplicate={…} onRename={(n) => renameNode(id, n)} />`
-   (the field name for the stored name follows the store work).
-2. `renameNode(nodeId, label | undefined)` is being built on another branch: one undo
-   step, the 120-char cap, and **no recompile** — the name is not in the semantic key.
-3. `duplicate` comes from a selector over all nodes' custom names (computed once per graph
-   change, not per node render).
-4. Then: check the error ⚠ that ShaderNode renders after the title still fits beside it,
-   check a few real node types (wide bodies, long type labels), and run the gate once more
-   against the app if a canvas-level check is wanted.
+1. `ShaderNode.tsx` renders `<NodeTitle title={definition.label} customName={nodeData.label}
+   duplicate={…} onRename={(n) => renameNode(id, n)} />` in place of
+   `<BaseNodeHeaderTitle>`. The error ⚠ after it still fits; header measured 32.
+2. `renameNode` (from main): one undo step, no recompile — and now also **no thumbnail
+   re-render**: the preview scheduler used to mark a node stale whenever its `data`
+   object changed identity, so a rename re-ran its thumbnail compiles. It now compares
+   `params` and `type` only (`src/renderer/preview-scheduler.ts`).
+3. `duplicate`: `hasDuplicateLabel(nodes, label)` over `duplicateLabelSlugs(nodes)`
+   (`src/nodes/node-label.ts`), cached per nodes array — one computation per graph
+   change, shared by every title. Labels are grouped by `labelSlug`, a copy of the
+   manifest's private slug rule; `verify:node-sections` asserts it flags exactly the
+   pairs `buildManifest` numbers. It looks at every named node, not only nodes that own
+   a knob, so two same-named nodes with no exported controls also warn.
+4. Gate: `npm run verify:node-sections-ui` covers pencil + Enter, one-step undo, zero
+   compile and thumbnail worker requests, the duplicate pair, click-away, Escape and
+   Backspace/Delete in the field, on a real canvas.

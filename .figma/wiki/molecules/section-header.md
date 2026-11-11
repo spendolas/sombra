@@ -83,42 +83,43 @@ Accessibility: the toggle is a `<button aria-expanded>`; the popover is
 - `rootDropTarget` → `height` (`994:4600`): an instance of the 20px variant; code height comes from the content (16px chevron + 2×2px).
 - `count` → `width`, `height` (`993:3758`): the Figma text box is FIXED 13×15 (auto-resize off); code sizes to the text. Fixing auto-resize in Figma would remove this ignore.
 
-## Plug-in plan (not done — owner reviews the sandbox first)
+## Plug-in — done (branch feat/wire-node-sections)
 
-How `ShaderNode.tsx` (Transform section, today ~lines 562–640) will use it:
+Wired into the live editor by `src/components/TransformSection.tsx`, which
+`ShaderNode.tsx` renders for every node with visible SRT params. The component
+itself is unchanged. What was built, against the plan above:
 
-1. **Swap the header.** Replace the inline `<button>` (with its inline `style`)
-   by `<SectionHeader label="Transform" open={transformOpen} onToggle={setTransformOpen} …/>`.
-   `wiredParams` = the connectable SRT params in `connectedInputs`, each with its
-   source label built the way the body params already build `sourceLabel`.
-2. **Keep the wired handles mounted.** Today the rows (and their handles) unmount
-   when closed, which is the bug. While closed, render one `BaseHandle` per WIRED
-   SRT param inside `renderGatherHandle`, all stacked at the gather point, each
-   with `id={param.id}` (handle ids must stay equal to the param ids or saved
-   edges drop). While open, the rows render those same ids, so exactly one handle
-   per id is mounted at any time. Unwired params need no handle while closed.
-   The stacked handles should be `isConnectableEnd={false}` (one dot cannot say
-   which param a new wire means — the open-on-drag path handles new wires).
-3. **Re-measure.** Call `updateNodeInternals(id)` whenever the handle layout
-   changes — open/closed and the set of wired SRT params — the same pattern as
-   `StackNodeBody.tsx` (a `useEffect` keyed on a string of the layout). Without
-   it React Flow keeps the old handle bounds and the wires point at nothing.
-4. **Open on drag.** Feed `connecting` from React Flow's `useConnection()`
-   (`inProgress`). A mouse drag does not capture the pointer (v12 listens on the
-   document), so `pointerenter` on the header works. Touch (and pen, where the
-   platform captures implicitly) does not see `pointerenter`: hit-test the drag
-   position against the header element and pass `dropActive` instead.
-5. **Wire hover.** Pass `popoverOpen` while the pointer is on one of the gathered
-   edges, and thicken those edges while `onGatherHoverChange(true)` — both need
-   edge hover state the node does not have today; can ship after 1–4.
-6. **Clicking the dot.** The component opens the section on a dot click. Check
-   that React Flow's `connectOnClick` (default true) does not also start a
-   click-connection from the stacked target handles; if it does, stop
-   propagation in the slot or disable click-connect on those handles.
-7. **Popover stacking.** The popover hangs below the node's bottom edge (as on
-   the board). The node card does not clip it, but a node rendered later can
-   cover it; raise the hovered node's z-index if that shows up in the app.
-8. **Persisting the collapse state** (per node, in the graph, or not at all — it
-   is component state today and resets on reload): **left to the owner.**
+1. **Header swapped.** `<SectionHeader label="Transform" …>` replaces the inline
+   button. `wiredParams` = visible connectable SRT params that have an edge; the
+   source reads `<source node type label>.<output>` (the lookup the connected body
+   rows use, plus the output id), e.g. `Scale  from Number.value`.
+2. **Wired handles stay mounted.** While collapsed, one `BaseHandle` per wired
+   param sits in `renderGatherHandle`, `id = param id`, port colour, all stacked
+   on the dot (`style.left = 50%` centres React Flow's left handle on the 12px
+   gather box). Exactly one handle per id is mounted at any time. They are
+   `isConnectableStart={false}` and `isConnectableEnd={false}`.
+3. **Re-measure.** `updateNodeInternals(nodeId)` in an effect keyed on the string
+   `open|wiredIds` (value, not identity).
+4. **Open on drag.** `connecting` = `useConnection(c => c.inProgress)`; `dropActive`
+   = a boolean `useConnection` selector that hit-tests the drag against the header
+   rect, so the node re-renders only when the drag enters/leaves. It uses
+   `connection.pointer`, which is **px relative to the `.react-flow` container**,
+   not flow units, and never snapped (`connection.to` snaps to a nearby valid
+   handle and is converted by the hook). Mouse and touch both verified.
+5. **Wire hover — NOT built.** No popover on hovering a gathered edge and no wire
+   thickening on dot hover (`onGatherHoverChange` is unused); the node has no edge
+   hover state. The dot-hover popover works.
+6. **Dot click.** Opens the section; with `isConnectableStart={false}` React Flow's
+   click-connect does not start from the stacked handles (gate check; perturbed:
+   with it on, a following click on an output created an edge).
+7. **Popover stacking.** Hangs below the node as on the board; not checked against
+   a node placed directly underneath.
+8. **Persistence (owner decision: remembered).** `node.data.ui.collapsed.transform`,
+   stored only when it differs from the default (collapsed). Saved in localStorage
+   and `.sombra`; not in the share hash, manifest or artifact; no history entry
+   (`graphStore.setSectionCollapsed`), and undo/redo carry the live value over.
 
-Run `npm run verify:section-header-ui` after any change to the component.
+Gates: `npm run verify:node-sections` (offline, in `verify:ci`) and
+`npm run verify:node-sections-ui` (live editor, headless Chrome, real mouse and
+CDP touch). Still run `npm run verify:section-header-ui` after any change to the
+component.

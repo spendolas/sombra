@@ -205,7 +205,8 @@ does **not** push its plan into this renderer (see above) — call
 | `addNodes(nodes)` | Atomic multi-add — one history entry (used by multi-image file drops) |
 | `replaceEdge(oldEdgeId, newEdge)` | Atomic reconnect (enforces single-wire-per-input) |
 | `updateNodeData(id, {params})` | What `setParams` calls under the hood |
-| `renameNode(id, label)` | What `renameNode` calls: one history entry (never coalesced with a param drag); no-op when the normalised label is unchanged |
+| `renameNode(id, label)` | What `renameNode` calls: one history entry (never coalesced with a param drag); no-op when the normalised label is unchanged. The node title's pencil / double-click calls it too |
+| `setSectionCollapsed(id, section, collapsed)` | Open / collapse a node-body section — today only `'transform'` (default collapsed). View state stored on the node as `data.ui.collapsed` (only non-default values; an untouched node has no `ui`): saved to localStorage and `.sombra` files, left out of share URLs, manifests and artifacts. **No history entry**, undo/redo keep the current state, and no recompile |
 | `editStackLayers(stackId, edit)` | Every Stack layer change — `{kind:'add'}`, `{kind:'remove', id}`, `{kind:'reorder', from, to}` (TOP-first indices, as the layer list shows them), `{kind:'toggleVisible', id}`, `{kind:'blend', id, blendMode}`. Writes the layer list AND strips a removed layer's wires in one entry, so one undo restores both. `params.layers` itself is stored BOTTOM-first. Opacity is an ordinary param: `setParams(id, {opacity_<layerId>: v})` |
 
 ### Forcing the WebGL2 backend
@@ -268,6 +269,7 @@ Inflating the payload produces the editable, versioned graph envelope:
 - **`sombra`** — payload schema version (integer). Distinct from the package version and `GRAPH_SCHEMA_VERSION` used for localStorage.
 - **`nodes` / `edges`** — same shape as React Flow's node/edge arrays (position, data, handles, etc.)
 - **Settings are NOT included** — preview mode, split sizes, etc. are UI preferences, not graph content.
+- **Per-node view state IS included** — `data.ui.collapsed` (which node-body sections the user left open; see `setSectionCollapsed`). Absent = defaults; files without it load as before.
 - **File extension:** `.sombra`. Legacy plain-JSON `.sombra` files and `.json` files remain importable.
 
 The **GraphToolbar** in the top-left of the canvas provides Save (download) and Open (upload) buttons for `.sombra` files.
