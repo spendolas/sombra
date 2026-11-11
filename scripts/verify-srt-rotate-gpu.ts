@@ -24,6 +24,14 @@
  * with quarter-turn symmetry, or an ignored uniform, cannot pass). Strip
  * 'rotate' from a node, or break either codegen path, and this goes red.
  *
+ * Rotate = 0 is NOT guaranteed bit-identical to the pre-rotate shader. ACCEPTED (owner, 2026-11-11):
+ * bioluminescence.sombra on WebGPU moves one 2x2 dither cell by 1 step in one
+ * channel (the other 81 of 82 corpus renders are identical). cos(0)/sin(0) are
+ * exact; the FBM rotate statement's mere presence changes how Metal fuses the
+ * neighbouring scale/offset maths (it persists with literal cos=1, sin=0), and
+ * that graph amplifies the sub-rounding change. An `if (angle != 0.0)` guard
+ * would remove it but was declined. See the PHASE6-MULTIPASS.md SRT note.
+ *
  * Run: npm run verify:srt-rotate:gpu
  */
 import { createServer, type ViteDevServer } from 'vite'
