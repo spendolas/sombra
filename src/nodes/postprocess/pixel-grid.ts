@@ -129,7 +129,9 @@ export const ditherNode: NodeDefinition = {
       max: 1,
       step: 0.01,
       connectable: true,
-      showWhen: { shape: 'circle' },
+      // Every SDF shape dithers its edge; only Square (no SDF) ignores this.
+      // verify:dither-visibility pins this list to the shapes the shader reads it for.
+      showWhen: { shape: ['circle', 'diamond', 'triangle'] },
       updateMode: 'uniform',
     },
   ],
