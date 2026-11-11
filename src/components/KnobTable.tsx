@@ -26,13 +26,11 @@ import { ds } from '@/generated/ds'
 import { cn } from '@/lib/utils'
 
 /**
- * One row. The first five fields are KnobDescriptor's own; `named` is being
- * added to KnobDescriptor on another branch, and the clash fields come from the
- * manifest's dedupe pass, so they are declared here until both land.
+ * One row. The first six fields are KnobDescriptor's own (`named`: listed
+ * first, full-strength key); the clash fields come from the manifest's de-dupe
+ * pass (`KnobNameClash`), which the caller maps onto the rows.
  */
-export type KnobTableItem = Pick<KnobDescriptor, 'key' | 'type' | 'default' | 'min' | 'max'> & {
-  /** The owning node carries a name the author gave it: listed first, full-strength key. */
-  named?: boolean
+export type KnobTableItem = Pick<KnobDescriptor, 'key' | 'type' | 'default' | 'min' | 'max' | 'named'> & {
   /** This key was numbered because another node has the same name. */
   clash?: boolean
   /** Text beside the clash mark. Default: "name clash, numbered". */

@@ -4,7 +4,58 @@ import { useGraphStore } from '@/stores/graphStore'
 import { encodeCompactHash } from '@/utils/sombra-file'
 import { publishScene, type PublishResult } from '@/embed/publish'
 import { mount, type SceneHandle } from '@/embed/player'
+import type { KnobDescriptor } from '@/embed/artifact'
+import type { KnobNameClash } from '@/embed/manifest'
 import { icons } from '@/components/icons'
+import { KnobTable, type KnobTableItem } from '@/components/KnobTable'
+
+/** The one clipboard write the modal uses — snippet buttons and knob keys alike. */
+const writeClipboard = (text: string) => navigator.clipboard.writeText(text)
+
+const KNOB_FOOTNOTE = 'Named nodes come first and keep their key in every scene. Double-click a node’s title to name it.'
+
+/**
+ * Manifest → table rows, in manifest (graph) order; the table lists named rows
+ * first. Fragment Output's knobs ride with the named ones (board 993:3778: "it
+ * is always public" — its key never depends on the rest of the graph). Keys of
+ * a node numbered by a name clash carry the clash mark.
+ */
+function knobRows(manifest: KnobDescriptor[], clashes: KnobNameClash[]): KnobTableItem[] {
+  const numbered = new Set(clashes.map((c) => c.nodeId))
+  return manifest.map((k) => ({
+    key: k.key, type: k.type, default: k.default, min: k.min, max: k.max,
+    named: k.named === true || k.nodeType === 'fragment_output',
+    ...(numbered.has(k.nodeId) ? { clash: true } : {}),
+  }))
+}
+
+const COUNT = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine']
+const listOf = (xs: string[]) => xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`
+
+/**
+ * The name-clash notice (board wording, Figma 994:5360): "Two nodes are named
+ * “site.balance”. The second one publishes as site-balance-2-value. Rename one
+ * of them so each key stays the one you meant." One sentence per clashing name.
+ */
+function clashNotice(manifest: KnobDescriptor[], clashes: KnobNameClash[]): string | undefined {
+  if (clashes.length === 0) return undefined
+  const groups = new Map<string, KnobNameClash[]>()
+  for (const c of clashes) groups.set(c.heldBy, [...(groups.get(c.heldBy) ?? []), c])
+  const keysOf = (id: string) => manifest.filter((k) => k.nodeId === id).map((k) => k.key)
+  const parts: string[] = []
+  let many = false
+  for (const [label, cs] of groups) {
+    const n = cs.length + 1
+    many ||= n > 2
+    const keys = cs.flatMap((c) => keysOf(c.nodeId))
+    parts.push(`${COUNT[n] ?? n} nodes are named “${label}”.`)
+    parts.push(cs.length === 1 ? `The second one publishes as ${listOf(keys)}.` : `The later ones publish as ${listOf(keys)}.`)
+  }
+  parts.push(many || groups.size > 1
+    ? 'Rename them so each key stays the one you meant.'
+    : 'Rename one of them so each key stays the one you meant.')
+  return parts.join(' ')
+}
 
 export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [result, setResult] = useState<PublishResult | null>(null)
@@ -40,10 +91,12 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
   const sizeKb = useMemo(() => result ? (result.sizeBytes / 1024).toFixed(1) : '0', [result])
   const fileKb = useMemo(() => result ? (result.fileBytes / 1024).toFixed(1) : '0', [result])
   const heavy = !!result && result.fileBytes > 200 * 1024
+  const knobs = useMemo(() => result ? knobRows(result.manifest, result.clashes) : [], [result])
+  const notice = useMemo(() => result ? clashNotice(result.manifest, result.clashes) : undefined, [result])
 
   if (!open) return null
   const copy = (text: string, which: string) => {
-    void navigator.clipboard.writeText(text).then(() => { setCopied(which); setTimeout(() => setCopied(null), 1500) })
+    void writeClipboard(text).then(() => { setCopied(which); setTimeout(() => setCopied(null), 1500) })
   }
   const download = () => {
     if (!result) return
@@ -97,7 +150,7 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
         </div>
 
         {result && (
-          <div className="mt-4">
+          <div className="mt-4" data-section="control">
             <div className="text-sm text-fg-dim mb-1">Control it from JavaScript (optional — same embed)</div>
             <div className="relative">
               <pre className="bg-surface-raised text-fg-dim text-xs p-3 pr-10 rounded max-h-32 overflow-auto whitespace-pre-wrap break-all">{result.snippets.control}</pre>
@@ -112,6 +165,8 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
             <div className="text-xs text-fg-subtle mt-1">
               List controllable params at runtime with <code className="font-mono">shader.nodes()</code>, then drive them via <code className="font-mono">shader.set(nodeId, param, value)</code>.
             </div>
+            {/* The keys shader.set() takes, next to the code that uses them (Figma 993:3778). */}
+            <KnobTable knobs={knobs} notice={notice} footnote={KNOB_FOOTNOTE} onCopy={writeClipboard} />
           </div>
         )}
 
