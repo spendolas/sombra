@@ -88,7 +88,14 @@ async function main() {
     const pageErrors: string[] = []
     page.on('pageerror', (e) => pageErrors.push(e.message))
     await page.addInitScript({ content: 'globalThis.__name = globalThis.__name || ((f) => f)' })
+    // Diagnostics for an intermittent failure seen ~1 run in 25 (the dev bridge
+    // vanished mid-test, which looks like a page reload): record every later
+    // main-frame navigation and console error so the next failure says why.
+    const navigations: string[] = []
+    const consoleErrors: string[] = []
+    page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push(m.text().slice(0, 200)) })
     await page.goto(url)
+    page.on('framenavigated', (f) => { if (f === page.mainFrame()) navigations.push(f.url()) })
     await page.waitForFunction(() => !!(window as unknown as { __sombra?: { renderer?: unknown } }).__sombra?.renderer, null, { timeout: 30000 })
 
     // ---- A · Stack blend ----------------------------------------------------
@@ -214,6 +221,8 @@ async function main() {
       assert(nEsc.shader === nBase.shader, 'after Escape the shader is not the original one')
     })
 
+    test('the page was never reloaded during the run', () => assert(navigations.length === 0,
+      `main frame navigated ${navigations.length}x after load (${navigations.join(', ')}); console errors: ${consoleErrors.join(' | ') || 'none'} — a reload mid-test (Vite dependency re-optimisation, HMR, a crash) is what makes the dev bridge vanish`))
     test('no page errors', () => assert(pageErrors.length === 0, pageErrors.join(' | ')))
     await run('dropdown-preview-gpu')
   } finally {

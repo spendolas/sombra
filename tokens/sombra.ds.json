@@ -2769,6 +2769,603 @@
           "radius": "md"
         }
       }
+    },
+    "993:3777": {
+      "name": "Section Header",
+      "type": "molecule",
+      "dsKey": "sectionHeader",
+      "codeFile": "src/components/SectionHeader.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "993:3750",
+          "position": "relative",
+          "layout": "horizontal",
+          "align": "center",
+          "padding": {
+            "right": "xs"
+          },
+          "transition": "colors",
+          "extra": "motion-reduce:transition-none"
+        },
+        "rootDropTarget": {
+          "figmaNodeId": "994:4600",
+          "position": "relative",
+          "layout": "horizontal",
+          "align": "center",
+          "padding": {
+            "right": "xs"
+          },
+          "fill": "interactive/highlight",
+          "radius": "sm",
+          "transition": "colors",
+          "extra": "motion-reduce:transition-none",
+          "auditIgnore": [
+            "fill.opacity",
+            "height"
+          ]
+        },
+        "toggle": {
+          "figmaNodeId": "993:3754",
+          "layout": "horizontal",
+          "align": "center",
+          "padding": {
+            "left": "handle-offset",
+            "y": "2xs"
+          },
+          "gap": "2xs",
+          "cursor": "pointer",
+          "extra": "group flex-1 min-w-0 text-left focus-visible:outline-2 focus-visible:outline-indigo-hover",
+          "overflow": "hidden",
+          "auditIgnore": [
+            "padding.left"
+          ]
+        },
+        "chevron": {
+          "figmaNodeId": null,
+          "width": "icon-sm",
+          "height": "icon-sm",
+          "textColor": "fg-subtle",
+          "extra": "shrink-0 transition-[color,transform] group-hover:text-fg-dim motion-reduce:transition-none"
+        },
+        "chevronHover": {
+          "figmaNodeId": null,
+          "width": "icon-sm",
+          "height": "icon-sm",
+          "textColor": "fg-dim",
+          "extra": "shrink-0 transition-[color,transform] motion-reduce:transition-none"
+        },
+        "chevronCollapsed": {
+          "figmaNodeId": null,
+          "extra": "-rotate-90"
+        },
+        "label": {
+          "figmaNodeId": "993:3757",
+          "textStyle": "text-category",
+          "textColor": "fg-subtle",
+          "transition": "colors",
+          "extra": "truncate group-hover:text-fg-dim motion-reduce:transition-none",
+          "textCase": "upper"
+        },
+        "labelHover": {
+          "figmaNodeId": "993:3775",
+          "textStyle": "text-category",
+          "textColor": "fg-dim",
+          "extra": "truncate",
+          "textCase": "upper"
+        },
+        "count": {
+          "figmaNodeId": "993:3758",
+          "textStyle": "text-category",
+          "textColor": "fg-dim",
+          "extra": "shrink-0 whitespace-nowrap",
+          "textCase": "upper",
+          "auditIgnore": [
+            "width",
+            "height"
+          ]
+        },
+        "gather": {
+          "figmaNodeId": "993:3751",
+          "position": "absolute",
+          "width": "handle",
+          "height": "handle",
+          "extra": "left-0 top-1/2 -translate-x-1/2 -translate-y-1/2"
+        },
+        "popover": {
+          "figmaNodeId": "994:4963",
+          "position": "absolute",
+          "z": 20,
+          "pointerEvents": "none",
+          "userSelect": "none",
+          "layout": "vertical",
+          "fill": "surface/raised",
+          "radius": "md",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "padding": {
+            "x": "md",
+            "y": "sm"
+          },
+          "gap": "xs",
+          "effects": [
+            {
+              "type": "shadow",
+              "class": "shadow-[0_8px_24px_0px_rgba(0,0,0,0.5)]"
+            }
+          ],
+          "extra": "top-full left-handle-offset ml-xs mt-sm w-max max-w-[320px]"
+        },
+        "popoverRow": {
+          "figmaNodeId": "994:4964",
+          "layout": "horizontal",
+          "align": "center",
+          "gap": "md",
+          "extra": "min-w-0 whitespace-nowrap",
+          "overflow": "hidden"
+        },
+        "popoverParam": {
+          "figmaNodeId": "994:4965",
+          "textStyle": "text-body",
+          "textColor": "fg",
+          "extra": "shrink-0"
+        },
+        "popoverSource": {
+          "figmaNodeId": "994:4966",
+          "textStyle": "text-param",
+          "textColor": "fg-muted",
+          "extra": "truncate min-w-0"
+        },
+        "popoverHint": {
+          "figmaNodeId": "994:4970",
+          "textStyle": "text-param",
+          "textColor": "fg-subtle"
+        }
+      }
+    },
+    "993:3749": {
+      "name": "Inline Text Field",
+      "type": "atom",
+      "dsKey": "inlineTextField",
+      "codeFile": "src/components/NodeTitle.tsx",
+      "parts": {
+        "field": {
+          "figmaNodeId": "993:3735",
+          "layout": "horizontal",
+          "align": "center",
+          "fill": "surface/default",
+          "stroke": {
+            "color": "interactive/active",
+            "weight": 1
+          },
+          "radius": "sm",
+          "padding": {
+            "x": "sm"
+          },
+          "gap": "xs",
+          "height": "input-h",
+          "extra": "min-w-0 outline-none selection:bg-active/50 placeholder:text-fg-muted",
+          "overflow": "hidden"
+        },
+        "value": {
+          "figmaNodeId": "993:3739",
+          "textStyle": "text-node-title",
+          "textColor": "fg"
+        },
+        "selection": {
+          "figmaNodeId": "993:3738",
+          "fill": "interactive/active",
+          "auditIgnore": [
+            "fill.opacity",
+            "width",
+            "height"
+          ]
+        },
+        "placeholder": {
+          "figmaNodeId": null,
+          "textStyle": "text-node-title",
+          "textColor": "fg-muted"
+        }
+      }
+    },
+    "nt:1": {
+      "name": "Node Title",
+      "type": "molecule",
+      "dsKey": "nodeTitle",
+      "codeFile": "src/components/NodeTitle.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "993:3897",
+          "layout": "horizontal",
+          "align": "center",
+          "gap": "md",
+          "extra": "flex-1 min-w-0",
+          "auditIgnore": [
+            "padding",
+            "width",
+            "height"
+          ]
+        },
+        "name": {
+          "figmaNodeId": "993:3898",
+          "textStyle": "text-node-title",
+          "textColor": "fg",
+          "userSelect": "none",
+          "extra": "flex-1 min-w-0 truncate"
+        },
+        "typeTag": {
+          "figmaNodeId": "993:3899",
+          "textStyle": "text-param",
+          "textColor": "fg-subtle",
+          "userSelect": "none",
+          "extra": "shrink-0"
+        },
+        "warning": {
+          "figmaNodeId": null,
+          "textColor": "warning",
+          "extra": "shrink-0"
+        },
+        "pencil": {
+          "figmaNodeId": null,
+          "layout": "vertical",
+          "align": "center",
+          "justify": "center",
+          "radius": "sm",
+          "textColor": "fg-subtle",
+          "cursor": "pointer",
+          "hover": {
+            "fill": "interactive/hover",
+            "textColor": "fg"
+          },
+          "extra": "shrink-0 -mx-xs"
+        }
+      }
+    },
+    "994:4033": {
+      "name": "Table Header",
+      "type": "molecule",
+      "dsKey": "tableHeader",
+      "codeFile": "src/components/KnobTable.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "994:4033",
+          "layout": "horizontal",
+          "align": "center",
+          "gap": "lg",
+          "padding": {
+            "x": "lg",
+            "y": "sm"
+          },
+          "fill": "surface/raised",
+          "stroke": {
+            "side": "bottom",
+            "color": "edge/subtle",
+            "weight": 1
+          },
+          "extra": "shrink-0 overflow-y-hidden [scrollbar-gutter:stable]"
+        },
+        "colKey": {
+          "figmaNodeId": "994:4034",
+          "textStyle": "text-category",
+          "textColor": "fg-subtle",
+          "textCase": "upper",
+          "extra": "flex-1 min-w-0"
+        },
+        "colType": {
+          "figmaNodeId": "994:4035",
+          "textStyle": "text-category",
+          "textColor": "fg-subtle",
+          "textCase": "upper",
+          "width": "[48px]",
+          "extra": "shrink-0"
+        },
+        "colDefault": {
+          "figmaNodeId": "994:4036",
+          "textStyle": "text-category",
+          "textColor": "fg-subtle",
+          "textCase": "upper",
+          "width": "[136px]",
+          "extra": "shrink-0"
+        },
+        "colRange": {
+          "figmaNodeId": "994:4037",
+          "textStyle": "text-category",
+          "textColor": "fg-subtle",
+          "textCase": "upper",
+          "width": "[88px]",
+          "extra": "shrink-0"
+        },
+        "colReserved": {
+          "figmaNodeId": "994:4038",
+          "layout": "horizontal",
+          "width": "[64px]",
+          "height": "[10px]",
+          "extra": "shrink-0"
+        }
+      }
+    },
+    "994:4106": {
+      "name": "Knob Row",
+      "type": "molecule",
+      "dsKey": "knobRow",
+      "codeFile": "src/components/KnobTable.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "994:4039",
+          "layout": "horizontal",
+          "align": "center",
+          "gap": "lg",
+          "padding": {
+            "x": "lg",
+            "y": "xs"
+          },
+          "cursor": "pointer",
+          "transition": "colors",
+          "hover": {
+            "fill": "interactive/hover"
+          },
+          "extra": "group w-full shrink-0 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-indigo-hover"
+        },
+        "rootLifted": {
+          "figmaNodeId": "994:4053",
+          "layout": "horizontal",
+          "align": "center",
+          "gap": "lg",
+          "padding": {
+            "x": "lg",
+            "y": "xs"
+          },
+          "fill": "interactive/hover",
+          "auditIgnore": [
+            "fill.opacity"
+          ]
+        },
+        "keyCell": {
+          "figmaNodeId": "994:4040",
+          "layout": "horizontal",
+          "align": "center",
+          "gap": "sm",
+          "overflow": "hidden",
+          "extra": "flex-1 min-w-0"
+        },
+        "key": {
+          "figmaNodeId": "994:4041",
+          "textStyle": "text-mono-value",
+          "textColor": "fg",
+          "extra": "truncate"
+        },
+        "keyAuto": {
+          "figmaNodeId": null,
+          "textStyle": "text-mono-value",
+          "textColor": "fg-dim",
+          "extra": "truncate"
+        },
+        "copyIcon": {
+          "figmaNodeId": "994:4056",
+          "textColor": "fg-subtle",
+          "width": "icon-sm",
+          "height": "icon-sm",
+          "extra": "shrink-0",
+          "auditIgnore": [
+            "fill",
+            "textColor"
+          ]
+        },
+        "checkIcon": {
+          "figmaNodeId": "994:4073",
+          "textColor": "success",
+          "width": "icon-sm",
+          "height": "icon-sm",
+          "extra": "shrink-0",
+          "auditIgnore": [
+            "fill",
+            "textColor"
+          ]
+        },
+        "copied": {
+          "figmaNodeId": "994:4075",
+          "textStyle": "text-param",
+          "textColor": "success",
+          "extra": "shrink-0 whitespace-nowrap"
+        },
+        "clashIcon": {
+          "figmaNodeId": "994:4090",
+          "textColor": "warning",
+          "width": "icon-sm",
+          "height": "icon-sm",
+          "extra": "shrink-0",
+          "auditIgnore": [
+            "fill",
+            "textColor"
+          ]
+        },
+        "clashHint": {
+          "figmaNodeId": "994:4094",
+          "textStyle": "text-param",
+          "textColor": "fg-subtle",
+          "extra": "shrink-0 whitespace-nowrap"
+        },
+        "type": {
+          "figmaNodeId": "994:4042",
+          "textStyle": "text-port-type",
+          "textColor": "fg-subtle",
+          "width": "[48px]",
+          "extra": "shrink-0 truncate"
+        },
+        "defaultCell": {
+          "figmaNodeId": "994:4043",
+          "layout": "horizontal",
+          "align": "center",
+          "gap": "sm",
+          "width": "[136px]",
+          "height": "[18px]",
+          "extra": "shrink-0"
+        },
+        "swatch": {
+          "figmaNodeId": "994:4044",
+          "position": "relative",
+          "width": "[12px]",
+          "height": "[12px]",
+          "radius": "xs",
+          "stroke": {
+            "color": "edge/card",
+            "weight": 1
+          },
+          "overflow": "hidden",
+          "extra": "shrink-0 bg-[repeating-conic-gradient(var(--fg-muted)_0_25%,var(--fg-subtle)_0_50%)] bg-[length:10px_10px]",
+          "auditIgnore": [
+            "stroke.opacity"
+          ]
+        },
+        "swatchColor": {
+          "figmaNodeId": "994:4049",
+          "position": "absolute",
+          "inset": "0",
+          "auditIgnore": [
+            "fill",
+            "width",
+            "height"
+          ]
+        },
+        "defaultValue": {
+          "figmaNodeId": "994:4050",
+          "textStyle": "text-mono-value",
+          "textColor": "fg-dim",
+          "extra": "whitespace-nowrap"
+        },
+        "range": {
+          "figmaNodeId": "994:4051",
+          "textStyle": "text-mono-value",
+          "textColor": "fg-subtle",
+          "width": "[88px]",
+          "extra": "shrink-0 whitespace-nowrap"
+        },
+        "reserved": {
+          "figmaNodeId": "994:4052",
+          "layout": "horizontal",
+          "width": "[64px]",
+          "height": "[10px]",
+          "extra": "shrink-0"
+        }
+      }
+    },
+    "994:5134": {
+      "name": "Knob Table",
+      "type": "organism",
+      "dsKey": "knobTable",
+      "codeFile": "src/components/KnobTable.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "994:5134",
+          "layout": "vertical",
+          "padding": {
+            "top": "md"
+          }
+        },
+        "header": {
+          "figmaNodeId": "994:5147",
+          "layout": "horizontal",
+          "justify": "between"
+        },
+        "copyHint": {
+          "figmaNodeId": "994:5150",
+          "textStyle": "text-param",
+          "textColor": "fg-muted"
+        },
+        "noticeWrap": {
+          "figmaNodeId": "994:5359",
+          "layout": "vertical",
+          "padding": {
+            "bottom": "md"
+          }
+        },
+        "table": {
+          "figmaNodeId": "994:5151",
+          "layout": "vertical",
+          "fill": "surface/raised",
+          "overflow": "hidden",
+          "auditIgnore": [
+            "height"
+          ]
+        },
+        "body": {
+          "figmaNodeId": "994:5158",
+          "layout": "vertical",
+          "extra": "overflow-y-auto max-h-[308px] [scrollbar-gutter:stable]"
+        },
+        "divider": {
+          "figmaNodeId": "994:5285",
+          "layout": "vertical",
+          "padding": {
+            "x": "lg",
+            "y": "xs"
+          },
+          "extra": "shrink-0"
+        },
+        "hintRow": {
+          "figmaNodeId": "994:5345",
+          "layout": "vertical",
+          "padding": {
+            "top": "xs"
+          }
+        },
+        "hint": {
+          "figmaNodeId": "994:5344",
+          "textStyle": "text-body",
+          "textColor": "fg-subtle"
+        },
+        "empty": {
+          "figmaNodeId": "994:5589",
+          "layout": "vertical",
+          "padding": "lg",
+          "fill": "surface/raised"
+        },
+        "emptyText": {
+          "figmaNodeId": "994:5590",
+          "textStyle": "text-body",
+          "textColor": "fg-subtle"
+        }
+      }
+    },
+    "994:5360": {
+      "name": "Knob Notice",
+      "type": "molecule",
+      "dsKey": "knobNotice",
+      "codeFile": "src/components/KnobTable.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "994:5360",
+          "layout": "horizontal",
+          "gap": "md",
+          "padding": {
+            "x": "lg",
+            "y": "md"
+          },
+          "fill": "surface/raised",
+          "stroke": {
+            "color": "edge/subtle",
+            "weight": 1
+          }
+        },
+        "icon": {
+          "figmaNodeId": "994:5361",
+          "textColor": "warning",
+          "width": "icon-sm",
+          "height": "icon-sm",
+          "extra": "shrink-0",
+          "auditIgnore": [
+            "fill",
+            "textColor"
+          ]
+        },
+        "text": {
+          "figmaNodeId": "994:5365",
+          "textStyle": "text-body",
+          "textColor": "fg-dim",
+          "extra": "flex-1 min-w-0"
+        }
+      }
     }
   },
   "nodeTemplates": {

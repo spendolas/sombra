@@ -27,6 +27,7 @@ export const icons = {
   minimize: createIcon('minimize', nodes.minimize),
   minus: createIcon('minus', nodes.minus),
   paintBucket: createIcon('paintBucket', nodes.paintBucket),
+  pencil: createIcon('pencil', nodes.pencil),
   pip: createIcon('pip', nodes.pip),
   pipette: createIcon('pipette', nodes.pipette),
   plus: createIcon('plus', nodes.plus),

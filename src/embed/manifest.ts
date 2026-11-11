@@ -39,21 +39,23 @@ const nameSlug = (name: string) => slugify(name) || 'node'
 function buildNodeNames(
   nodeIds: string[],
   nodes: Node<NodeData>[],
-): { names: Map<string, string>; named: Set<string> } {
+): { names: Map<string, string>; named: Set<string>; clashes: KnobNameClash[] } {
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const owners = new Set(nodeIds)
   const names = new Map<string, string>()
   const named = new Set<string>()
+  const clashes: KnobNameClash[] = []
 
   // Pass 1 — custom labels claim their slug, in graph order.
-  const claimed = new Set<string>()
+  const claimed = new Map<string, string>() // slug → the label that claimed it
   for (const node of nodes) {
     if (!owners.has(node.id) || names.has(node.id)) continue
     const custom = normalizeNodeLabel(node.data.label)
     if (custom === undefined) continue
     let name = custom
     for (let k = 2; claimed.has(nameSlug(name)); k++) name = `${custom} ${k}`
-    claimed.add(nameSlug(name))
+    if (name !== custom) clashes.push({ nodeId: node.id, label: custom, heldBy: claimed.get(nameSlug(custom))!, name })
+    claimed.set(nameSlug(name), custom)
     names.set(node.id, name)
     named.add(node.id)
   }
@@ -72,7 +74,23 @@ function buildNodeNames(
     usedBase.set(base, n + 1)
     names.set(id, name)
   }
-  return { names, named }
+  return { names, named, clashes }
+}
+
+/**
+ * A custom node label that had to be numbered because an earlier labelled node
+ * (graph order) already holds its slug — so this node's keys are NOT the ones
+ * its author typed. Editor-only: never part of the published manifest.
+ */
+export interface KnobNameClash {
+  /** The numbered node. Its knobs are the manifest entries with this nodeId. */
+  nodeId: string
+  /** The label the author gave it (normalised), e.g. "site.balance". */
+  label: string
+  /** The label of the node that kept the slug — equal to `label`, or a label that slugs the same. */
+  heldBy: string
+  /** The name it publishes under instead, e.g. "site.balance 2". */
+  name: string
 }
 
 /**
@@ -86,6 +104,18 @@ export function buildManifest(
   uniforms: UniformSpec[],
   nodes: Node<NodeData>[],
 ): KnobDescriptor[] {
+  return buildManifestWithClashes(uniforms, nodes).manifest
+}
+
+/**
+ * buildManifest plus the name clashes its de-dupe pass resolved (for the Embed
+ * modal's notice). The manifest is the very same array buildManifest returns —
+ * the clash list rides beside it and never enters the artifact.
+ */
+export function buildManifestWithClashes(
+  uniforms: UniformSpec[],
+  nodes: Node<NodeData>[],
+): { manifest: KnobDescriptor[]; clashes: KnobNameClash[] } {
   const nodeType = new Map(nodes.map((n) => [n.id, n.data.type]))
   const nodeById = new Map(nodes.map((n) => [n.id, n]))
 
@@ -95,7 +125,7 @@ export function buildManifest(
   for (const u of uniforms) {
     if (!seenOwner.has(u.nodeId)) { seenOwner.add(u.nodeId); ownerIds.push(u.nodeId) }
   }
-  const { names: nodeNames, named } = buildNodeNames(ownerIds, nodes)
+  const { names: nodeNames, named, clashes } = buildNodeNames(ownerIds, nodes)
 
   const usedKeys = new Map<string, number>()
   const usedParams = new Map<string, Map<string, number>>()  // nodeId → paramSlug → count
@@ -161,5 +191,5 @@ export function buildManifest(
       ...(param.knobMeta ? { ...param.knobMeta } : {}),
     })
   }
-  return out
+  return { manifest: out, clashes }
 }

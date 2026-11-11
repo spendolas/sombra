@@ -15,7 +15,10 @@ exposes every knob to the host page so the surrounding site can drive the shader
     is the *compiled output* of a `.sombra` and can't be turned back into one.
 - **Editor entry point:** the `</>` (code) button in the graph toolbar opens the
   Embed modal. It compiles the current graph and offers a **Download .ombra**
-  file plus copy-paste snippets (hosted, inline, iframe).
+  file plus copy-paste snippets (hosted, inline, iframe). Under the JavaScript
+  control snippet it lists the scene's knobs (`KnobTable`): every manifest key
+  with its type, default and range, named knobs first, a click copies the key,
+  and a notice when two labels clash (see *Named knobs* below).
 - **Two scene transports:**
   - **Hosted file (primary):** download a `.ombra` file (deflated binary — *no*
     base64, ~25% smaller than inline), host it anywhere, and reference it with
@@ -189,7 +192,11 @@ correct. The node-name rules, in order:
    is trimmed (silently capped at 120 characters), then slugged (`site.balance` →
    `site-balance`). Two labels that slug the same are de-duplicated `Label`,
    `Label 2`, `Label 3` in graph order — a clash the author should fix, since
-   only the first keeps the expected key.
+   only the first keeps the expected key. The Embed modal warns about it:
+   `publishScene` returns `clashes` (from `buildManifestWithClashes`) beside the
+   manifest — the numbered nodes and the label that kept the slug — and the
+   knob table shows a notice plus a mark on each numbered key. The clash list
+   is editor-only and never enters the artifact.
 2. **Unlabelled nodes** get their type label ("Noise"), numbered " 2"/" 3" in
    uniform order, skipping any slug a label already claimed — so an unlabelled
    Noise next to a Noise labelled `Noise` becomes `noise-2-…`.
@@ -503,6 +510,7 @@ npm run verify:embed:smoke       # end-to-end browser smoke (needs dev server + 
 npm run verify:embed:clock       # clock + play/pause contract, both backends (starts its own dev server + Chrome)
 npm run verify:embed:site        # site-base fixture + static site checklist C1..C8 (offline; part of verify:embed)
 npm run verify:embed:site:gpu    # runtime site checklist R1..R9 on the fixture, both backends (own dev server + Chrome)
+npm run verify:embed-knob-table-ui # the knob table in the real Embed modal (own dev server + Chrome)
 npx tsx scripts/verify-embed-site.ts <file.ombra>   # check any .ombra against C1..C8, print a table
 ```
 
@@ -526,6 +534,17 @@ play/pause contract on both backends: double `play()` then `pause()` stops
 drawing, time and pixels hold while paused, `set()`/`resize()`/`setTime()` repaint
 exactly once while stopped (also under reduced motion), `setTimeScale(0)` holds
 time while painting, `play()` respects the visibility gate.
+
+`verify:embed-knob-table-ui` (`scripts/verify-embed-knob-table-ui.ts`) opens the
+real Embed modal from the toolbar on graphs built through `window.__sombra` —
+the site-base fixture, the same after a rename (rows must follow the graph), two
+nodes sharing a label, a labelled translucent colour, and a scene with no knobs —
+and checks the table against `publishScene` run in the page: keys in order,
+named first (Fragment Output's knobs with them), defaults/ranges/swatch alpha, the
+clash notice and mark only where a clash exists, the table inside the JavaScript
+section, a real click copying exactly the key, body and modal scrolling, nothing
+overflowing sideways at 1280 and 640 px windows, and no console errors.
+`EMBED_KNOB_SHOTS=<dir>` also writes a screenshot per state.
 
 ### Site conformance and the `site-base` fixture
 

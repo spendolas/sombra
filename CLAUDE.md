@@ -38,6 +38,8 @@ npx tsx scripts/verify-ir-poc.ts              # GLSL vs IR-generated output pari
 npx tsx scripts/validate-wgsl-multipass.ts    # WGSL GPU compilation tests for all nodes/passes
 npx tsx scripts/schema.ts                     # Zod validation of tokens/sombra.ds.json
 npm run verify:node-rename                    # node labels (SR-1): one undo step, normalised, never in a compile key
+npm run verify:node-sections                  # section collapse state: no history, no compile key, saved; duplicate-name slug = manifest's
+npm run verify:node-sections-ui               # Transform gathered wires, open-on-drag (mouse+touch), persistence, inline rename — live editor (Chrome)
 npm run verify:ramp-knobs                     # ramp/gradient stops as embed knobs (SR-2, offline)
 npm run verify:ramp-knobs:gpu                 # one stop's alpha → 0 clears exactly its band, both backends
 
@@ -54,6 +56,7 @@ npm run verify:embed:smoke   # playwright end-to-end smoke + lifecycle (own dev 
 npm run verify:embed:clock   # player clock + play/pause contract, both backends (own dev server + Chrome)
 npm run verify:embed:site    # site-base fixture + static site checklist C1..C8 (offline; `<file.ombra>` arg checks any file)
 npm run verify:embed:site:gpu # runtime site checklist R1..R9 on the fixture, both backends (own dev server + Chrome)
+npm run verify:embed-knob-table-ui # knob table in the real Embed modal: rows = manifest, clash notice, copy, placement (own dev server + Chrome)
 ```
 
 There are no unit tests. Verification = the scripts above + manual testing via dev server + browser automation through `window.__sombra` (see `BROWSER-AUTOMATION.md`).
@@ -126,7 +129,7 @@ Three change classes, keyed separately, to avoid needless recompiles:
 Publish a compiled shader and drop it on any third-party site. **Two halves with a hard import boundary:**
 
 - **Player half (shipped bundle):** `version.ts`, `vertex.ts`, `artifact.ts` (`SceneArtifact` codec — compiled `RenderPlan` minus vertex shaders + knob manifest + baked images, deflated to base64url), `player.ts` (`mount` → `SceneHandle`, reuses `createShaderRenderer`), `perf-harness.ts` (IO/visibility/reduced-motion/resize gating), `auto-init.ts`, `index.ts` (UMD global `Sombra`). **This half must import ONLY `src/renderer/*`, `src/embed/*`, and `pako` — never React, `@xyflow/react`, `src/compiler/*`, `src/nodes/*`, or `sombra-file.ts`** (type-only imports are fine — they erase). Enforced by `scripts/verify-embed-bundle.ts`.
-- **Editor half (runs in the app, not the bundle):** `manifest.ts` (`buildManifest`), `publish.ts` (`publishScene`/`buildSnippets`), `EmbedModal.tsx` — these MAY import compiler/nodes/xyflow.
+- **Editor half (runs in the app, not the bundle):** `manifest.ts` (`buildManifest`, `buildManifestWithClashes`), `publish.ts` (`publishScene` → `PublishResult.clashes` beside the manifest, never in the artifact; `buildSnippets`), `EmbedModal.tsx` (renders `KnobTable` from the result) — these MAY import compiler/nodes/xyflow.
 - **Build target:** `npm run build:embed` (via `vite.embed.config.ts`) emits a self-contained version-pinned UMD to `dist/embed/`, chained into `npm run build` so it ships to Pages at `/sombra/embed/`. The player owns a byte-identical copy of the compiler's vertex shader (`vertex.ts`); the round-trip test enforces they stay in sync.
 
 ### Node system (46 nodes)
