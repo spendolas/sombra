@@ -18,6 +18,16 @@ export interface KnobDescriptor {
   max?: number
   step?: number
   default: number | number[]
+  /** True when the owning node has an author label (its key then derives from
+   *  that label and is stable across scenes). Absent — never false — otherwise,
+   *  so unlabelled scenes publish byte-identical manifests. Old players ignore it. */
+  named?: boolean
+  /** Knob family within its node — "stops" for colour-ramp stops. Absent otherwise. */
+  group?: string
+  /** Order within `group` (ramp stops: 0..N-1 by ascending position). */
+  index?: number
+  /** Ramp stops only: the stop's position (0..1) at publish time. */
+  position?: number
 }
 
 /** A knob as returned by the read API — descriptor plus its current live value. */

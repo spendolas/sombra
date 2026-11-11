@@ -2,6 +2,8 @@ import type { Node } from '@xyflow/react'
 import type { NodeData, NodeParameter, UniformSpec } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import type { KnobDescriptor } from './artifact'
+import { normalizeNodeLabel } from '../nodes/node-label'
+import { resolveParams } from '../nodes/resolve-dynamic'
 
 function slugify(s: string): string {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
@@ -16,36 +18,66 @@ function knobType(paramType: NodeParameter['type']): KnobDescriptor['type'] {
     : 'float'
 }
 
+/** The slug a display name occupies in knob keys ('' → 'node', as in buildManifest). */
+const nameSlug = (name: string) => slugify(name) || 'node'
+
 /**
- * Resolve a stable, unique display name per node that owns a knob. Prefers the
- * node's custom label, then the node type's friendly label, then the raw type.
- * Duplicates are disambiguated with " 2", " 3" so two Noise nodes read as
- * "Noise" and "Noise 2" — this is what makes the flat knob list legible.
+ * Resolve a stable, unique display name per node that owns a knob.
+ *
+ * Author-named nodes (a custom `data.label`) come FIRST and claim their slug,
+ * in graph (nodes-array) order: a node labelled `site.balance` is always
+ * "site.balance" → key `site-balance-…`, whatever else is in the graph. Two
+ * custom labels that slugify the same are de-duplicated " 2", " 3" in graph
+ * order (the Embed modal is meant to warn about that clash).
+ *
+ * Unlabelled nodes then get the type label ("Noise"), or the raw type, with
+ * " 2"/" 3" in uniform order — exactly the rule from before labels existed,
+ * except that a name whose slug a custom label already owns is skipped. In a
+ * graph with no custom labels nothing is claimed, so names (and therefore the
+ * whole manifest) are byte-identical to the pre-label output.
  */
 function buildNodeNames(
   nodeIds: string[],
   nodes: Node<NodeData>[],
-): Map<string, string> {
+): { names: Map<string, string>; named: Set<string> } {
   const byId = new Map(nodes.map((n) => [n.id, n]))
-  const usedBase = new Map<string, number>()
+  const owners = new Set(nodeIds)
   const names = new Map<string, string>()
+  const named = new Set<string>()
 
+  // Pass 1 — custom labels claim their slug, in graph order.
+  const claimed = new Set<string>()
+  for (const node of nodes) {
+    if (!owners.has(node.id) || names.has(node.id)) continue
+    const custom = normalizeNodeLabel(node.data.label)
+    if (custom === undefined) continue
+    let name = custom
+    for (let k = 2; claimed.has(nameSlug(name)); k++) name = `${custom} ${k}`
+    claimed.add(nameSlug(name))
+    names.set(node.id, name)
+    named.add(node.id)
+  }
+
+  // Pass 2 — everyone else, numbered around the claimed slugs.
+  const usedBase = new Map<string, number>()
   for (const id of nodeIds) {
+    if (names.has(id)) continue
     const node = byId.get(id)
     const type = node?.data.type
     const def = type ? nodeRegistry.get(type) : undefined
-    const custom = typeof node?.data.label === 'string' ? node.data.label.trim() : ''
-    const base = custom || def?.label || type || 'node'
-    const n = usedBase.get(base) ?? 0
+    const base = def?.label || type || 'node'
+    let n = usedBase.get(base) ?? 0
+    let name = n > 0 ? `${base} ${n + 1}` : base
+    while (claimed.has(nameSlug(name))) { n++; name = `${base} ${n + 1}` }
     usedBase.set(base, n + 1)
-    names.set(id, n > 0 ? `${base} ${n + 1}` : base)
+    names.set(id, name)
   }
-  return names
+  return { names, named }
 }
 
 /**
  * Build the public knob list from the compiler's uniform specs joined with each
- * param's static NodeDefinition metadata. Keys are node-scoped (`<node>-<param>`,
+ * param's NodeDefinition metadata, resolved per instance (resolveParams). Keys are node-scoped (`<node>-<param>`,
  * e.g. "noise-scale", "noise-2-scale") so the host can tell which effect each
  * knob drives — a flat "scale-2" list is unreadable in graphs that reuse nodes.
  * Call after initializeNodeLibrary().
@@ -55,6 +87,7 @@ export function buildManifest(
   nodes: Node<NodeData>[],
 ): KnobDescriptor[] {
   const nodeType = new Map(nodes.map((n) => [n.id, n.data.type]))
+  const nodeById = new Map(nodes.map((n) => [n.id, n]))
 
   // Only nodes that actually own a knob need a display name, in first-seen order.
   const ownerIds: string[] = []
@@ -62,7 +95,7 @@ export function buildManifest(
   for (const u of uniforms) {
     if (!seenOwner.has(u.nodeId)) { seenOwner.add(u.nodeId); ownerIds.push(u.nodeId) }
   }
-  const nodeNames = buildNodeNames(ownerIds, nodes)
+  const { names: nodeNames, named } = buildNodeNames(ownerIds, nodes)
 
   const usedKeys = new Map<string, number>()
   const usedParams = new Map<string, Map<string, number>>()  // nodeId → paramSlug → count
@@ -78,7 +111,11 @@ export function buildManifest(
 
     const type = nodeType.get(u.nodeId)
     const def = type ? nodeRegistry.get(type) : undefined
-    const param = def?.params?.find((p) => p.id === u.paramId)
+    // Resolve the INSTANCE's params exactly as codegen does: a param that
+    // exists only through dynamicParams (a Stack layer's opacity, a ramp
+    // stop's colour) emits a uniform, and reading the static def.params here
+    // silently dropped its knob.
+    const param = def ? resolveParams(def, nodeById.get(u.nodeId)?.data.params).find((p) => p.id === u.paramId) : undefined
     if (!param) continue // no metadata → skip (defensive)
 
     const nodeName = nodeNames.get(u.nodeId) ?? 'node'
@@ -118,6 +155,10 @@ export function buildManifest(
       max: param.max,
       step: param.step,
       default: u.value,
+      // Only when true: an unlabelled scene's manifest stays byte-identical.
+      ...(named.has(u.nodeId) ? { named: true } : {}),
+      // Ramp stops: group "stops", index, position. Absent for every other knob.
+      ...(param.knobMeta ? { ...param.knobMeta } : {}),
     })
   }
   return out
