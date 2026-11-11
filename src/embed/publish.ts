@@ -4,7 +4,7 @@ import { compileGraph } from '../compiler/glsl-generator'
 import { compileGraphIR, toPlanWgsl } from '../compiler/ir-compiler'
 import { topologicalSort } from '../compiler/topological-sort'
 import { anchorToVec2 } from '../nodes/output/fragment-output'
-import { buildManifest } from './manifest'
+import { buildManifestWithClashes, type KnobNameClash } from './manifest'
 import { stripPlan, encodeArtifact, encodeArtifactBytes, type SceneArtifact, type ImageAsset, type KnobDescriptor } from './artifact'
 import { PLAYER_FILENAME } from './version'
 
@@ -12,6 +12,8 @@ export interface PublishResult {
   sceneB64: string          // inline artifact (base64url) for data-sombra-scene
   sceneBytes: Uint8Array    // hosted .ombra file contents (compiled shader, deflated binary, no base64)
   manifest: KnobDescriptor[]
+  /** Labelled nodes whose keys were numbered by a name clash. Editor-only: NOT in the artifact. */
+  clashes: KnobNameClash[]
   sizeBytes: number         // inline base64 length (what a data-attribute costs)
   fileBytes: number         // hosted .ombra file size (~25-33% smaller — no base64)
   snippets: ReturnType<typeof buildSnippets>
@@ -64,13 +66,14 @@ export function publishScene(
     .filter((u) => u.paramId === 'seed' && randomIds.has(u.nodeId))
     .map((u) => u.name)
 
+  const { manifest, clashes } = buildManifestWithClashes(plan.userUniforms, nodes)
   const outputNode = nodes.find((n) => n.data.type === 'fragment_output')
   const timeNode = nodes.find((n) => n.data.type === 'time')
   const artifact: SceneArtifact = {
     v: 1,
     kind: 'frozen',
     plan: stripPlan(plan),
-    manifest: buildManifest(plan.userUniforms, nodes),
+    manifest,
     images: collectImages(nodes, reachable),
     meta: {
       anchor: anchorToVec2((outputNode?.data.params?.anchor as string) ?? 'center'),
@@ -85,6 +88,7 @@ export function publishScene(
     sceneB64,
     sceneBytes,
     manifest: artifact.manifest,
+    clashes,
     sizeBytes: sceneB64.length,
     fileBytes: sceneBytes.length,
     snippets: buildSnippets(sceneB64, viewerHash),

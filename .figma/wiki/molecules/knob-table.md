@@ -12,8 +12,8 @@
 | React Component | `KnobTable` |
 | DS Keys | `tableHeader`, `knobRow`, `knobTable`, `knobNotice` |
 | Sandbox | `sandbox.html?c=knob-table` (standalone: `knob-table-sandbox.html`) |
-| Gate | `npm run verify:knob-table-ui` (headless Chrome, real mouse) |
-| Status | Sandbox only — **not yet wired into `EmbedModal.tsx`** |
+| Gate | `npm run verify:knob-table-ui` (sandbox, headless Chrome, real mouse); `npm run verify:embed-knob-table-ui` (the real Embed modal) |
+| Status | **Wired into `EmbedModal.tsx`** (JavaScript section, under the hint line) |
 
 The list of knobs a published scene exposes, exactly as a host passes them to
 `shader.set()`. It sits inside the Embed modal's "Control it from JavaScript"
@@ -55,8 +55,7 @@ default, range, reserved space.
 ## Props
 
 ```ts
-type KnobTableItem = Pick<KnobDescriptor, 'key' | 'type' | 'default' | 'min' | 'max'> & {
-  named?: boolean      // listed first, full-strength key
+type KnobTableItem = Pick<KnobDescriptor, 'key' | 'type' | 'default' | 'min' | 'max' | 'named'> & {
   clash?: boolean      // this key was numbered because of a name clash
   clashNote?: string   // text beside the mark; default "name clash, numbered"
 }
@@ -117,33 +116,37 @@ The checker squares (994:4045–4048) have no parts: the four rects are drawn in
 by one `repeating-conic-gradient` in `knobRow.swatch`'s `extra`, using the same two
 tokens.
 
-## Plug-in plan (not done — owner sign-off first)
+## Plug-in (done)
 
-1. **Rows from the manifest.** `EmbedModal` already holds `result = publishScene(...)`,
-   whose `result.manifest` is `buildManifest(plan.userUniforms, nodes)` — a
-   `KnobDescriptor[]` in graph order. Pass it straight through:
-   `<KnobTable knobs={result.manifest} footnote="Named nodes come first …" />`.
-   `KnobTableItem` is a structural subset of `KnobDescriptor`, so no mapping is needed.
-2. **`named`.** The SR-1 manifest work (other branch) adds `named: boolean` to
-   `KnobDescriptor` (true when the owning node has an author-given name). The board
-   also lists Fragment Output's alpha with the named knobs ("it is always public");
-   whether the manifest marks it `named` or the modal does is for that work to settle.
-   Once merged, delete the local `named?` from `KnobTableItem` — the field then comes
-   from `Pick<KnobDescriptor, …>`.
-3. **Clash info.** The same work's dedupe pass knows when a key had to be numbered
-   because two named nodes share a name. Two outputs are needed from it: per knob, a
-   `clash: true` on the numbered key (optionally `clashNote`); per scene, the clashing
-   label and the key it produced, so the modal can build the notice text
-   (board wording: "Two nodes are named “<label>”. The second one publishes as
-   <key>. Rename one of them so each key stays the one you meant."). If the manifest
-   only exposes the per-knob flag, the modal can build the notice from the flagged
-   knob's key plus its node's display name.
-4. **Placement.** Inside the `result &&` "Control it from JavaScript" block, after the
-   `shader.nodes()` hint line, before the Inline `<details>`. The table's own `pt-md`
-   gives the gap; the section needs no new spacing.
-5. **Copy.** Leave `onCopy` unset (default clipboard). The modal's snippet buttons and
-   the table then share icons, colour and the 1.5 s hold; a shared copy hook is a
-   separate change if wanted.
-6. **Check.** Open the modal on the site scene, a clash scene and an all-baked scene
-   at real modal width (720, and narrow at 92vw) — the sandbox at 680 can hide a
-   narrow-container bug.
+What was built, against the plan the component's builder wrote (each claim
+re-checked against source):
+
+1. **Rows from the manifest.** `EmbedModal` maps `result.manifest` (the publish
+   result it already builds) to rows in `knobRows()`: key, type, default, min,
+   max, `named`. KnobTable sorts named first. The rows are rebuilt on every open
+   (the modal re-publishes on open), so a rename between opens shows up.
+2. **`named`.** Comes from `KnobDescriptor.named` (SR-1); the local `named?` in
+   `KnobTableItem` is gone. **Fragment Output's knobs are listed with the named
+   ones** in the modal (`nodeType === 'fragment_output'`), as the board shows
+   ("it is always public"); the manifest does not mark them — that would change
+   published bytes.
+3. **Clash info.** Editor half only: `buildManifestWithClashes()` in
+   `src/embed/manifest.ts` returns the same manifest plus `KnobNameClash[]`
+   (numbered node, its label, the label that kept the slug, the numbered name);
+   `publishScene` passes it out as `PublishResult.clashes`. The artifact is the
+   same bytes (57 fixtures + the committed `.ombra` files hashed before/after).
+   Every key of a numbered node gets `clash: true`; the notice is built in the
+   modal (`clashNotice()`), one sentence pair per clashing label, board wording.
+   Note the real numbered key is `site-balance-2-value` (the node name is
+   numbered, then the param appended), not the board's `site-balance-value-2`.
+4. **Placement.** Inside the `data-section="control"` block, after the
+   `shader.nodes()` hint, before Inline. No spacing added.
+5. **Copy.** `onCopy` is the modal's own `writeClipboard` — the same function
+   the snippet copy buttons call — so a refused write shows no "Copied".
+6. **Check.** `verify:embed-knob-table-ui`. Measured in headless Chrome: at a
+   1280 window the modal is 720 and the table 680, key column 261 px (the body
+   reserves an 11 px gutter for a classic scrollbar, so a key + clash hint
+   around 20 characters truncates where the board shows it whole; overlay
+   scrollbars reserve nothing). At 640 (92vw cap) the table is 549, key column
+   130. Below about a 500 px window the fixed columns (336 px + gaps) leave the
+   key column no room — at 480 it is 0 px. The editor is not used at that width.

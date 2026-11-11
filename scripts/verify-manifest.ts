@@ -9,7 +9,7 @@ import { initializeNodeLibrary } from '../src/nodes'
 import { nodeRegistry } from '../src/nodes/registry'
 import { defaultParams } from '../src/nodes/default-params'
 import type { NodeData, EdgeData, UniformSpec } from '../src/nodes/types'
-import { buildManifest } from '../src/embed/manifest'
+import { buildManifest, buildManifestWithClashes } from '../src/embed/manifest'
 import { publishScene } from '../src/embed/publish'
 import { compileGraph } from '../src/compiler/glsl-generator'
 import * as TG from '../src/utils/test-graph'
@@ -166,6 +166,23 @@ const keyOf = (m: ReturnType<typeof publish>, nodeId: string, param: string) =>
   check('(d) reversing the wiring order changes no key (deterministic)',
     Object.entries(expect).every(([id, k]) => keyOf(rev, id, 'value') === k))
   check('(d) all duplicates are still named', fwd.filter((k) => k.nodeType === 'float_constant').every((k) => k.named === true))
+
+  // The clash list the Embed modal warns from: exactly the numbered nodes, each
+  // pointing at the label that kept the slug — and it rides BESIDE the
+  // manifest (publishScene's artifact manifest is the same array, unchanged).
+  const dup = graph(nodes(), ['d1', 'd2', 'd3'])
+  const r = publishScene(dup.nodes, dup.edges)
+  check('(d) clashes name exactly the numbered nodes d2, d3 (not d1)',
+    JSON.stringify(r.clashes) === JSON.stringify([
+      { nodeId: 'd2', label: 'site.balance', heldBy: 'site.balance', name: 'site.balance 2' },
+      { nodeId: 'd3', label: 'Site Balance', heldBy: 'site.balance', name: 'Site Balance 3' },
+    ]))
+  const two = graph([N('a', 'float_constant', {}, 'site.a'), N('b', 'float_constant', {}, 'site.b')], ['a', 'b'])
+  check('(d) distinct labels → no clashes', publishScene(two.nodes, two.edges).clashes.length === 0)
+  const u = compileGraph(dup.nodes, dup.edges).userUniforms
+  check('(d) buildManifestWithClashes(...).manifest is buildManifest(...)',
+    JSON.stringify(buildManifestWithClashes(u, dup.nodes).manifest) === JSON.stringify(buildManifest(u, dup.nodes)))
+  check('(d) the clash list is not in the artifact manifest', !JSON.stringify(r.manifest).includes('heldBy'))
 }
 
 // Labels are normalised exactly as the store stores them (trim, 120-char safety cap).
