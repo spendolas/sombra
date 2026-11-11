@@ -311,8 +311,8 @@ are documented in [`docs/file-drop-formats.md`](docs/file-drop-formats.md).
 
 | Type | Label | Inputs | Outputs | Params |
 |---|---|---|---|---|
-| `noise` | Noise | `coords` (vec2, auto_uv), `phase` (float) | `value` (float) | `srt_scale` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `noiseType` (enum: simplex/value/worley/worley_fast/worley2d/box), `seed` (connectable) |
-| `fbm` | FBM | `coords` (vec2, auto_uv), `phase` (float) | `value` (float) | `srt_scale` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `noiseType` (enum: simplex/value/worley/worley_fast/worley2d/box), `fractalMode` (enum: standard/turbulence/ridged), `octaves` (connectable), `lacunarity` (connectable), `gain` (connectable), `seed` (connectable) |
+| `noise` | Noise | `coords` (vec2, auto_uv), `phase` (float) | `value` (float) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `noiseType` (enum: simplex/value/worley/worley_fast/worley2d/box), `seed` (connectable) |
+| `fbm` | FBM | `coords` (vec2, auto_uv), `phase` (float) | `value` (float) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `noiseType` (enum: simplex/value/worley/worley_fast/worley2d/box), `fractalMode` (enum: standard/turbulence/ridged), `octaves` (connectable), `lacunarity` (connectable), `gain` (connectable), `seed` (connectable) |
 
 ### Color
 
@@ -333,7 +333,7 @@ are documented in [`docs/file-drop-formats.md`](docs/file-drop-formats.md).
 |---|---|---|---|---|
 | `turbulence` | Turbulence | `value` (float) | `result` (float) | — |
 | `ridged` | Ridged | `value` (float) | `result` (float) | — |
-| `warp` | Warp | `source` (color, textureInput), `coords` (vec2, auto_uv), `phase` (float) | `color` (color, RGBA — full vec4 sampled), `warped` (vec2), `warpedPhase` (float) | `srt_scale` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `noiseType` (enum: simplex/value/worley/worley_fast/worley2d/box), `strength` (connectable), `seed` (connectable), `warpDepth` (enum: 2/3), `edge` (enum: clamp/repeat/mirror) |
+| `warp` | Warp | `source` (color, textureInput), `coords` (vec2, auto_uv), `phase` (float) | `color` (color, RGBA — full vec4 sampled), `warped` (vec2), `warpedPhase` (float) | `srt_scale` (connectable), `srt_rotate` (connectable), `srt_translateX` (connectable), `srt_translateY` (connectable), `noiseType` (enum: simplex/value/worley/worley_fast/worley2d/box), `strength` (connectable), `seed` (connectable), `warpDepth` (enum: 2/3), `edge` (enum: clamp/repeat/mirror) |
 | `polar_coords` | Polar Coordinates | `source` (color, textureInput), `coords` (vec2, auto_uv) | `color` (color, RGBA — full vec4 sampled), `polar` (vec2) | `mode` (enum: forward/inverse), `centerX` (connectable), `centerY` (connectable) |
 | `tile` | Tile | `source` (color, textureInput), `coords` (vec2, auto_uv) | `color` (color, RGBA — full vec4 sampled), `uv` (vec2) | `countX` (connectable), `countY` (connectable), `mirror` (enum: none/x/y/xy) |
 

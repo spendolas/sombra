@@ -225,6 +225,8 @@ Nodes that adopt framework SRT **remove** their manual scale/rotate/translate pa
 | `dots.ts` | `scale` | `{ transforms: ['scale', 'rotate', 'translate'] }` |
 | `reeded-glass.ts` | — (no manual SRT currently) | `{ transforms: ['scale', 'rotate', 'translate'] }` |
 
+> **Note (2026-11-11):** Noise, FBM and Warp (`domain-warp.ts` above; now `src/nodes/distort/warp.ts`) now declare `{ transforms: ['scale', 'rotate', 'translate'] }`. They were listed as scale + translate only because each previously had just a scale param — no technical reason was recorded, and rotation matters for lattice noise (value, box, worley2d). Saves without `srt_rotate` load at 0. Gates: `verify:srt` section I (declaration, params and all four compilers) and `verify:srt-rotate:gpu` (quarter-turn pixels, both backends). The table above is left as the original plan.
+
 ### Backward Compatibility
 
 - Bump `SOMBRA_FILE_VERSION` to `2` in `src/utils/sombra-file.ts`
