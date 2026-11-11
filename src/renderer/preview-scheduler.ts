@@ -174,8 +174,11 @@ export class PreviewScheduler {
       if (!prev) {
         // New node
         this.markStaleWithDownstream(node.id)
-      } else if (prev.data !== node.data) {
-        // Data reference changed (Zustand immutability) — params changed
+      } else if (prev.data.params !== node.data.params || prev.data.type !== node.data.type) {
+        // Params reference changed (Zustand immutability) — params changed.
+        // Compared on params + type, NOT on `data` identity: a rename
+        // (`data.label`) or a section toggle (`data.ui`) replaces `data` but
+        // changes nothing a thumbnail draws, and must not re-render one.
         this.markStaleWithDownstream(node.id)
       }
     }
