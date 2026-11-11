@@ -14,12 +14,13 @@ import { icons, type IconName } from '@/components/icons'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
 
-const CHECKER_STYLE: React.CSSProperties = {
+/** The swatch checkerboard. Also reused by WiredParamRow's swatch and colour strip. */
+export const CHECKER_STYLE = {
   backgroundImage:
     'linear-gradient(45deg,rgba(128,128,128,.4) 25%,transparent 25%),linear-gradient(-45deg,rgba(128,128,128,.4) 25%,transparent 25%),' +
     'linear-gradient(45deg,transparent 75%,rgba(128,128,128,.4) 75%),linear-gradient(-45deg,transparent 75%,rgba(128,128,128,.4) 75%)',
   backgroundSize: '8px 8px', backgroundPosition: '0 0,0 4px,4px -4px,-4px 0',
-}
+} satisfies React.CSSProperties
 const to255 = (x: number) => Math.round(x * 255)
 // Ink for an icon drawn on the swatch. The fill is composited over the swatch's
 // checkerboard (which, on Sombra's dark surfaces, reads as a dark grey) at the
