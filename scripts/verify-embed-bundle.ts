@@ -19,7 +19,9 @@ try { src = readFileSync(path, 'utf8') } catch { console.error(`  [FAIL] missing
 // Forbidden markers — identifiers that only appear if the wrong module tree got pulled in.
 // `squoosh_oxipng` / `@jsquash` = the WASM PNG encoder used only by the editor-side
 // export sink; it (and its ~180 KB wasm) must never reach the player bundle.
-const forbidden = ['react-dom', '@xyflow', 'ALL_NODES', 'initializeNodeLibrary', 'compileGraph', 'react/jsx-runtime', 'squoosh_oxipng', '@jsquash', 'png-encode-pool', 'png-encode.worker']
+// `site-palette-stop-` = the site-conformance checklist (scripts/lib/site-conformance.ts),
+// tooling/editor-side only.
+const forbidden = ['react-dom', '@xyflow', 'ALL_NODES', 'initializeNodeLibrary', 'compileGraph', 'react/jsx-runtime', 'squoosh_oxipng', '@jsquash', 'png-encode-pool', 'png-encode.worker', 'site-palette-stop-']
 for (const f of forbidden) check(`no "${f}" in bundle`, !src.includes(f))
 
 const raw = statSync(path).size

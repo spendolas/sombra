@@ -13,6 +13,7 @@ import type { NodeData, EdgeData } from '../nodes/types'
 import { nodeRegistry } from '../nodes/registry'
 import { defaultParams, cloneParamDefault } from '../nodes/default-params'
 import { resolveParams, userInputs } from '../nodes/resolve-dynamic'
+import { normalizeNodeLabel } from '../nodes/node-label'
 import { migrateOffsetSpace } from './srt-migration'
 import { SOMBRA_FILE_MIME_TYPE } from './file-type-constants'
 import type { ShaderThumbnail } from '../renderer/capture-thumbnail'
@@ -474,6 +475,7 @@ interface CompactNode {
   i: string                     // id
   t: string                     // node type (e.g. 'noise')
   p?: Record<string, unknown>   // non-default params (omitted if empty)
+  l?: string                    // custom node label (omitted when none) — embed knob keys derive from it
 }
 
 interface CompactEdge {
@@ -532,6 +534,8 @@ export function encodeCompactHash(
 
   const compactNodes: CompactNode[] = connectedNodes.map(node => {
     const cn: CompactNode = { i: node.id, t: node.data.type }
+    const label = normalizeNodeLabel(node.data.label)
+    if (label !== undefined) cn.l = label
     const params = node.data.params
     if (params && Object.keys(params).length > 0) {
       // Strip params that match definition defaults
@@ -598,11 +602,13 @@ export function decodeCompactHash(hash: string): {
       delete params.srt_translateSpace
     }
 
+    // Hashes from before labels existed carry no `l` and decode unchanged.
+    const label = normalizeNodeLabel(cn.l)
     return {
       id: cn.i,
       type: 'shaderNode',
       position: { x: 0, y: 0 },
-      data: { type: cn.t, params },
+      data: label === undefined ? { type: cn.t, params } : { type: cn.t, params, label },
     }
   })
 

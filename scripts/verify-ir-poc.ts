@@ -111,7 +111,7 @@ import type { IRContext, IRNodeOutput } from '../src/compiler/ir/types'
 // Real-codegen-path regression harness (color_constant RGBA — see bottom of file)
 // ---------------------------------------------------------------------------
 import { initializeNodeLibrary } from '../src/nodes'
-import { generateNodeGlsl, compileGraph } from '../src/compiler/glsl-generator'
+import { generateNodeGlsl, compileGraph, uniformName } from '../src/compiler/glsl-generator'
 import { generateNodeIR, compileGraphIR } from '../src/compiler/ir-compiler'
 import { compileNodePreview } from '../src/compiler/subgraph-compiler'
 import { compileNodePreviewIR } from '../src/compiler/ir-subgraph-compiler'
@@ -161,6 +161,21 @@ function ctx(
     imageSamplers: spec.imageSamplers,
   }
   return [glsl, ir]
+}
+
+/**
+ * The inputs the compilers hand a ramp node for its stop colours: one uniform
+ * per hidden stop param, named exactly as glsl-generator/ir-compiler name them
+ * (`uniformName(sanitizedId, param.id)`), derived from the node's own
+ * dynamicParams — the same param set the compilers resolve.
+ */
+function stopInputs(def: { dynamicParams?: (p: Record<string, unknown>) => Array<{ id: string; updateMode: string; connectable?: boolean }> },
+  nodeId: string, params: Record<string, unknown>): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const p of def.dynamicParams!(params)) {
+    if (p.id.startsWith('stop_') && p.updateMode === 'uniform' && !p.connectable) out[p.id] = uniformName(nodeId.replace(/-/g, '_'), p.id)
+  }
+  return out
 }
 
 let passed = 0
@@ -862,16 +877,18 @@ function verify(
     { position: 0.0, color: [0, 0, 0, 1] },
     { position: 1.0, color: [1, 1, 1, 0.5] },
   ]
+  const gp = { gradientType: 'linear', interpolation: 'smooth', stops }
   const [g, i] = ctx({
     nodeId: 'grad-ppp666',
-    inputs: { coords: 'node_uv_xyz_coords' },
+    inputs: { coords: 'node_uv_xyz_coords', ...stopInputs(gradientNode, 'grad-ppp666', gp) },
     outputs: { color: 'node_grad_ppp666_color', value: 'node_grad_ppp666_value' },
-    params: { gradientType: 'linear', interpolation: 'smooth', stops },
+    params: gp,
   })
   verify('Gradient (Linear, RGBA stops)', gradientNode, g, i, 'loose')
 
-  // RGBA assertion — mirrors color_ramp's Task 5b migration: `value` keeps the
-  // existing Type field math; `color` is the stops mix-chain over `value` as `t`.
+  // RGBA assertion — `value` keeps the Type field math; `color` is the stops
+  // mix-chain over `value` as `t`, each stop colour read from its vec4 uniform
+  // (SR-2: id-less stops resolve to s0, s1 by stored index).
   testNum++
   console.log(`\n  ${testNum}. Gradient — RGBA color output assertion`)
   const refGLSL = gradientNode.glsl(g)
@@ -880,31 +897,31 @@ function verify(
     console.log(`  [FAIL] GLSL: expected value assigned from field. Got:\n    ${refGLSL}`)
     gradOk = false
   }
-  if (!/vec4 node_grad_ppp666_color = vec4\(0\.0, 0\.0, 0\.0, 1\.0\);/.test(refGLSL)) {
+  if (!/vec4 node_grad_ppp666_color = u_grad_ppp666_stop_s0;/.test(refGLSL)) {
     console.log(`  [FAIL] GLSL: expected vec4 init assignment. Got:\n    ${refGLSL}`)
     gradOk = false
   }
-  if (!/node_grad_ppp666_color = mix\(node_grad_ppp666_color, vec4\(1\.0, 1\.0, 1\.0, 0\.5\), smoothstep\(0\.0, 1\.0, grad_field_grad_ppp666\)\);/.test(refGLSL)) {
+  if (!/node_grad_ppp666_color = mix\(node_grad_ppp666_color, u_grad_ppp666_stop_s1, smoothstep\(0\.0, 1\.0, grad_field_grad_ppp666\)\);/.test(refGLSL)) {
     console.log(`  [FAIL] GLSL: expected vec4 mix() carrying alpha over field. Got:\n    ${refGLSL}`)
     gradOk = false
   }
   const irOut = gradientNode.ir!(i)
   const irGLSL = lowerNodeOutputToGLSL(irOut).join('\n')
-  if (!/vec4 node_grad_ppp666_color = vec4\(0\.0, 0\.0, 0\.0, 1\.0\);/.test(irGLSL)) {
+  if (!/vec4 node_grad_ppp666_color = u_grad_ppp666_stop_s0;/.test(irGLSL)) {
     console.log(`  [FAIL] IR->GLSL: expected vec4 init. Got:\n    ${irGLSL}`)
     gradOk = false
   }
   const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
-  if (!/var node_grad_ppp666_color: vec4f = vec4f\(0\.0, 0\.0, 0\.0, 1\.0\);/.test(irWGSL)) {
+  if (!/var node_grad_ppp666_color: vec4f = u_grad_ppp666_stop_s0;/.test(irWGSL)) {
     console.log(`  [FAIL] IR->WGSL: expected vec4f init. Got:\n    ${irWGSL}`)
     gradOk = false
   }
-  if (!/node_grad_ppp666_color = mix\(node_grad_ppp666_color, vec4f\(1\.0, 1\.0, 1\.0, 0\.5\), smoothstep\(0\.0, 1\.0, grad_field_grad_ppp666\)\);/.test(irWGSL)) {
+  if (!/node_grad_ppp666_color = mix\(node_grad_ppp666_color, u_grad_ppp666_stop_s1, smoothstep\(0\.0, 1\.0, grad_field_grad_ppp666\)\);/.test(irWGSL)) {
     console.log(`  [FAIL] IR->WGSL: expected vec4f mix() carrying alpha over field. Got:\n    ${irWGSL}`)
     gradOk = false
   }
   if (gradOk) {
-    console.log('  [PASS] gradient: color output is RGBA (vec4/vec4f), alpha interpolated via mix() over field')
+    console.log('  [PASS] gradient: color output is RGBA (vec4/vec4f) from per-stop uniforms, mixed over field')
     passed++
   } else {
     failed++
@@ -961,11 +978,12 @@ function verify(
   ]
 
   for (const [idx, tc] of pinnedCases.entries()) {
+    const params = { gradientType: tc.gradientType, drawMode: 'pinned', interpolation: 'smooth', stops, ...tc.params }
     const [g, i] = ctx({
       nodeId: `grad-pin${idx}`,
-      inputs: tc.inputs,
+      inputs: { ...tc.inputs, ...stopInputs(gradientNode, `grad-pin${idx}`, params) },
       outputs: { color: `node_grad_pin${idx}_color`, value: `node_grad_pin${idx}_value` },
-      params: { gradientType: tc.gradientType, drawMode: 'pinned', interpolation: 'smooth', stops, ...tc.params },
+      params,
     })
     verify(`Gradient (Pinned, ${tc.gradientType})`, gradientNode, g, i, 'loose')
   }
@@ -1162,11 +1180,12 @@ function verify(
     { position: 0.0, color: [0, 0, 0, 1] },
     { position: 1.0, color: [1, 1, 1, 0.5] },
   ]
+  const rp = { interpolation: 'smooth', stops }
   const [g, i] = ctx({
     nodeId: 'ramp-fff666',
-    inputs: { t: 'node_grad_aaa_value' },
+    inputs: { t: 'node_grad_aaa_value', ...stopInputs(colorRampNode, 'ramp-fff666', rp) },
     outputs: { color: 'node_ramp_fff666_color' },
-    params: { interpolation: 'smooth', stops },
+    params: rp,
   })
   verify('Color Ramp (smooth, RGBA stops)', colorRampNode, g, i, 'loose')
 
@@ -1176,70 +1195,136 @@ function verify(
   console.log(`\n  ${testNum}. Color Ramp — RGBA output assertion`)
   const refGLSL = colorRampNode.glsl(g)
   let rampOk = true
-  if (!/vec4 node_ramp_fff666_color = vec4\(0\.0, 0\.0, 0\.0, 1\.0\);/.test(refGLSL)) {
+  if (!/vec4 node_ramp_fff666_color = u_ramp_fff666_stop_s0;/.test(refGLSL)) {
     console.log(`  [FAIL] GLSL: expected vec4 init assignment. Got:\n    ${refGLSL}`)
     rampOk = false
   }
-  if (!/node_ramp_fff666_color = mix\(node_ramp_fff666_color, vec4\(1\.0, 1\.0, 1\.0, 0\.5\), smoothstep\(0\.0, 1\.0, node_grad_aaa_value\)\);/.test(refGLSL)) {
+  if (!/node_ramp_fff666_color = mix\(node_ramp_fff666_color, u_ramp_fff666_stop_s1, smoothstep\(0\.0, 1\.0, node_grad_aaa_value\)\);/.test(refGLSL)) {
     console.log(`  [FAIL] GLSL: expected vec4 mix() carrying alpha. Got:\n    ${refGLSL}`)
     rampOk = false
   }
   const irOut = colorRampNode.ir!(i)
   const irGLSL = lowerNodeOutputToGLSL(irOut).join('\n')
-  if (!/vec4 node_ramp_fff666_color = vec4\(0\.0, 0\.0, 0\.0, 1\.0\);/.test(irGLSL)) {
+  if (!/vec4 node_ramp_fff666_color = u_ramp_fff666_stop_s0;/.test(irGLSL)) {
     console.log(`  [FAIL] IR->GLSL: expected vec4 init. Got:\n    ${irGLSL}`)
     rampOk = false
   }
   const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
-  if (!/var node_ramp_fff666_color: vec4f = vec4f\(0\.0, 0\.0, 0\.0, 1\.0\);/.test(irWGSL)) {
+  if (!/var node_ramp_fff666_color: vec4f = u_ramp_fff666_stop_s0;/.test(irWGSL)) {
     console.log(`  [FAIL] IR->WGSL: expected vec4f init. Got:\n    ${irWGSL}`)
     rampOk = false
   }
-  if (!/node_ramp_fff666_color = mix\(node_ramp_fff666_color, vec4f\(1\.0, 1\.0, 1\.0, 0\.5\), smoothstep\(0\.0, 1\.0, node_grad_aaa_value\)\);/.test(irWGSL)) {
+  if (!/node_ramp_fff666_color = mix\(node_ramp_fff666_color, u_ramp_fff666_stop_s1, smoothstep\(0\.0, 1\.0, node_grad_aaa_value\)\);/.test(irWGSL)) {
     console.log(`  [FAIL] IR->WGSL: expected vec4f mix() carrying alpha. Got:\n    ${irWGSL}`)
     rampOk = false
   }
   if (rampOk) {
-    console.log('  [PASS] color_ramp: output is RGBA (vec4/vec4f), alpha interpolated via mix()')
+    console.log('  [PASS] color_ramp: output is RGBA (vec4/vec4f) from per-stop uniforms, alpha interpolated via mix()')
     passed++
   } else {
     failed++
   }
 }
 
-// 32b. Color Ramp — legacy 3-length stop backward-compat (opaque, a=1)
+// 32b. Color Ramp — legacy 3-length stop backward-compat (opaque, a=1).
+// The colour is a uniform now, so the padding lives in the stop param's
+// default (what the compiler uploads); the generators must read that uniform.
 {
   const stops = [
     { position: 0.0, color: [0.2, 0.4, 0.6] },
     { position: 1.0, color: [0.8, 0.6, 0.4] },
   ]
+  const rp = { interpolation: 'linear', stops }
   const [g, i] = ctx({
     nodeId: 'ramp-legacy1',
-    inputs: { t: 'node_grad_bbb_value' },
+    inputs: { t: 'node_grad_bbb_value', ...stopInputs(colorRampNode, 'ramp-legacy1', rp) },
     outputs: { color: 'node_ramp_legacy1_color' },
-    params: { interpolation: 'linear', stops },
+    params: rp,
   })
   testNum++
   console.log(`\n${'='.repeat(60)}`)
   console.log(`  ${testNum}. Color Ramp — legacy 3-length stop backward-compat`)
   console.log('='.repeat(60))
   let legacyOk = true
+  const defaults = colorRampNode.dynamicParams!(rp).filter((p) => p.id.startsWith('stop_')).map((p) => JSON.stringify(p.default))
+  if (JSON.stringify(defaults) !== JSON.stringify(['[0.2,0.4,0.6,1]', '[0.8,0.6,0.4,1]'])) {
+    console.log(`  [FAIL] legacy 3-length stops should default to RGBA with a=1. Got: ${defaults.join(' ')}`)
+    legacyOk = false
+  }
   const refGLSL = colorRampNode.glsl(g)
-  if (!/vec4 node_ramp_legacy1_color = vec4\(0\.2, 0\.4, 0\.6, 1\.0\);/.test(refGLSL)) {
-    console.log(`  [FAIL] GLSL: legacy 3-length stop should pad alpha to 1.0. Got:\n    ${refGLSL}`)
+  if (!/vec4 node_ramp_legacy1_color = u_ramp_legacy1_stop_s0;/.test(refGLSL)) {
+    console.log(`  [FAIL] GLSL: legacy stop 0 should read its uniform. Got:\n    ${refGLSL}`)
     legacyOk = false
   }
   const irOut = colorRampNode.ir!(i)
   const irGLSL = lowerNodeOutputToGLSL(irOut).join('\n')
-  if (!/vec4 node_ramp_legacy1_color = vec4\(0\.2, 0\.4, 0\.6, 1\.0\);/.test(irGLSL)) {
-    console.log(`  [FAIL] IR->GLSL: legacy 3-length stop should pad alpha to 1.0. Got:\n    ${irGLSL}`)
+  if (!/vec4 node_ramp_legacy1_color = u_ramp_legacy1_stop_s0;/.test(irGLSL)) {
+    console.log(`  [FAIL] IR->GLSL: legacy stop 0 should read its uniform. Got:\n    ${irGLSL}`)
     legacyOk = false
   }
   if (legacyOk) {
-    console.log('  [PASS] color_ramp: legacy 3-length stops render opaque (a=1.0)')
+    console.log('  [PASS] color_ramp: legacy 3-length stops become opaque (a=1.0) RGBA uniforms')
     passed++
   } else {
     failed++
+  }
+}
+
+// 32c. Ramp stop matrix (SR-2) — Color Ramp AND Gradient; 2, 4, 8 stops (stored
+// out of position order), all three interpolations, two stops at one position,
+// RGBA alpha < 1. For every case, on GLSL, IR→GLSL and IR→WGSL: each stop's
+// uniform is read exactly once, in ascending-position order, inside N-1 mix()
+// calls; no 4-float vec4 colour literal survives; same-position pairs use step().
+{
+  const stopSets: Record<string, Array<{ position: number; color: number[] }>> = {
+    two: [{ position: 0, color: [0.1, 0.2, 0.3, 0.4] }, { position: 1, color: [0.9, 0.8, 0.7] }],
+    four: [
+      { position: 0.75, color: [0.5, 0.6, 0.7, 0.25] }, { position: 0, color: [0, 0, 0, 1] },
+      { position: 0.5, color: [1, 0, 0, 0] }, { position: 0.25, color: [0, 1, 0, 0.5] },
+    ],
+    eight: Array.from({ length: 8 }, (_, k) => ({ position: ((k * 5) % 8) / 7, color: [k / 8, 1 - k / 8, 0.5, 0.1 + k / 10] })),
+    samepos: [{ position: 0, color: [0, 0, 0, 1] }, { position: 0.5, color: [1, 0, 0, 1] }, { position: 0.5, color: [0, 0, 1, 0.3] }, { position: 1, color: [1, 1, 1, 1] }],
+  }
+  const literalVec4 = /vec4f?\(\s*-?[\d.]+\s*,\s*-?[\d.]+\s*,\s*-?[\d.]+\s*,\s*-?[\d.]+\s*\)/
+  for (const [nodeLabel, def, extra] of [
+    ['color_ramp', colorRampNode, {}],
+    ['gradient', gradientNode, { gradientType: 'radial' }],
+  ] as const) {
+    for (const [setName, stops] of Object.entries(stopSets)) {
+      for (const interp of ['smooth', 'linear', 'constant']) {
+        const nodeId = `rmx-${setName}-${interp}`
+        const sid = nodeId.replace(/-/g, '_')
+        const params = { ...extra, interpolation: interp, stops }
+        const isRamp = nodeLabel === 'color_ramp'
+        const [g, i] = ctx({
+          nodeId,
+          inputs: { ...(isRamp ? { t: 'node_src_t' } : { coords: 'node_uv_xyz_coords' }), ...stopInputs(def, nodeId, params) },
+          outputs: isRamp ? { color: `node_${sid}_color` } : { color: `node_${sid}_color`, value: `node_${sid}_value` },
+          params,
+        })
+        verify(`${nodeLabel} stops: ${setName} / ${interp}`, def, g, i, interp === 'linear' || !isRamp ? 'loose' : 'exact')
+        testNum++
+        const byPos = stops.map((s, k) => ({ ...s, k })).sort((a, b) => a.position - b.position)
+        const expected = byPos.map((s) => `u_${sid}_stop_s${s.k}`)
+        const ir = def.ir!(i)
+        const texts: Record<string, string> = {
+          glsl: def.glsl(g), 'ir→glsl': lowerNodeOutputToGLSL(ir).join('\n'), 'ir→wgsl': lowerNodeOutputToWGSL(ir).join('\n'),
+        }
+        const problems: string[] = []
+        for (const [path, txt] of Object.entries(texts)) {
+          const pos = expected.map((u) => txt.search(new RegExp(`\\b${u}\\b`)))
+          if (pos.some((x) => x < 0)) problems.push(`${path}: missing ${expected.filter((_, k) => pos[k] < 0).join(',')}`)
+          else if (pos.some((x, k) => k > 0 && x <= pos[k - 1])) problems.push(`${path}: stop uniforms not in position order`)
+          if (expected.some((u) => (txt.match(new RegExp(`\\b${u}\\b`, 'g')) ?? []).length !== 1)) problems.push(`${path}: a stop uniform is read more than once`)
+          const ramp = isRamp ? txt : txt.slice(txt.indexOf(`node_${sid}_color`))
+          if (literalVec4.test(ramp)) problems.push(`${path}: a baked vec4 colour literal survives`)
+          if ((ramp.match(/\bmix\(/g) ?? []).length !== stops.length - 1) problems.push(`${path}: ${(ramp.match(/\bmix\(/g) ?? []).length} mix() for ${stops.length} stops`)
+          if (setName === 'samepos' && interp !== 'constant' && !/step\(0\.5,/.test(ramp)) problems.push(`${path}: same-position pair not a hard step`)
+        }
+        if (problems.length) { console.log(`  [FAIL] ${nodeLabel}/${setName}/${interp}: ${problems.join('; ')}`); failed++ }
+        else { console.log(`  [PASS] ${nodeLabel}/${setName}/${interp}: ${stops.length} stop uniforms, position order, no literals`); passed++ }
+      }
+    }
   }
 }
 

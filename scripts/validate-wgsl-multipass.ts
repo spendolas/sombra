@@ -374,6 +374,68 @@ console.log('\n--- Post-process nodes ---')
   else { failed++; console.log(`  ✗ ${r.name}`); r.errors.forEach(e => console.log(`    ${e}`)) }
 }
 
+// 8. Ramp stops as uniforms (SR-2) — Color Ramp and Gradient, 2/4/8 stops,
+// same-position pair, alpha < 1, every interpolation, single- and multi-pass.
+// Beyond the structural scan: every stop uniform must be DECLARED by the pass
+// that reads it on both backends (GLSL `uniform vec4`, WGSL Uniforms struct
+// field + `uniforms.` access) and uploaded with the stop's RGBA value.
+console.log('\n--- Ramp stops as uniforms (SR-2) ---')
+{
+  const stopSets: Record<string, Array<{ position: number; color: number[] }>> = {
+    two: [{ position: 0, color: [0.1, 0.2, 0.3] }, { position: 1, color: [0.9, 0.8, 0.7, 0.5] }],
+    four: [{ position: 0.75, color: [0.5, 0.6, 0.7, 0.25] }, { position: 0, color: [0, 0, 0, 1] }, { position: 0.5, color: [1, 0, 0, 0] }, { position: 0.25, color: [0, 1, 0, 0.5] }],
+    eight: Array.from({ length: 8 }, (_, k) => ({ position: ((k * 3) % 8) / 7, color: [k / 8, 1 - k / 8, 0.5, 0.1 + k / 10] })),
+    samepos: [{ position: 0, color: [0, 0, 0, 1] }, { position: 0.5, color: [1, 0, 0, 1] }, { position: 0.5, color: [0, 0, 1, 0.3] }, { position: 1, color: [1, 1, 1, 1] }],
+  }
+  for (const nodeType of ['color_ramp', 'gradient']) {
+    for (const [setName, stops] of Object.entries(stopSets)) {
+      for (const interp of ['smooth', 'linear', 'constant']) {
+        for (const multi of [false, true]) {
+          const srcId = uid(), rampId = uid(), blurId = uid(), outId = uid()
+          const nodes: Node<NodeData>[] = []
+          const edges: Edge<EdgeData>[] = []
+          if (nodeType === 'color_ramp') {
+            nodes.push(makeNode(srcId, 'noise', { noiseType: 'value' }), makeNode(rampId, 'color_ramp', { interpolation: interp, stops }))
+            edges.push(makeEdge(srcId, rampId, 'value', 't'))
+          } else {
+            nodes.push(makeNode(rampId, 'gradient', { gradientType: 'angular', interpolation: interp, stops }))
+          }
+          if (multi) {
+            nodes.push(makeNode(blurId, 'blur'))
+            edges.push(makeEdge(rampId, blurId, 'color', 'source'), makeEdge(blurId, outId, 'color', 'color'))
+          } else {
+            edges.push(makeEdge(rampId, outId, 'color', 'color'))
+          }
+          nodes.push(makeNode(outId, 'fragment_output'))
+          const r = runTest(`${nodeType} ${setName} ${interp}${multi ? ' → blur (multi-pass)' : ''}`, nodes, edges)
+          if (r.glslOk) {
+            const sid = rampId.replace(/-/g, '_')
+            const glsl = compileGraph(nodes, edges)
+            const wgsl = compileGraphIR(nodes, edges)!
+            const names = stops.map((_, k) => `u_${sid}_stop_s${k}`)
+            const glslPass = glsl.passes.find((p) => p.fragmentShader.includes(`node_${sid}_color`))
+            const wgslPass = wgsl.passes.find((p) => p.shaderCode.includes(`node_${sid}_color`))
+            if (multi && glsl.passes.length < 2) r.errors.push('expected a multi-pass plan')
+            for (const [k, u] of names.entries()) {
+              if (!glslPass || !new RegExp(`uniform vec4 ${u};`).test(glslPass.fragmentShader)) r.errors.push(`GLSL pass does not declare ${u}`)
+              if (!wgslPass || !new RegExp(`\\b${u}\\s*:\\s*vec4f`).test(wgslPass.shaderCode) || !wgslPass.shaderCode.includes(`uniforms.${u}`)) r.errors.push(`WGSL pass does not declare/read ${u}`)
+              const spec = glsl.userUniforms.find((x) => x.name === u)
+              const c = stops[k].color
+              const want = c.length === 4 ? c : [c[0], c[1], c[2], 1]
+              if (!spec || JSON.stringify(spec.value) !== JSON.stringify(want)) r.errors.push(`${u} uploads ${JSON.stringify(spec?.value)}, want ${JSON.stringify(want)}`)
+            }
+            r.wgslOk = r.errors.length === 0
+          }
+          results.push(r)
+          totalTests++
+          if (r.wgslOk) { passed++; console.log(`  ✓ ${r.name}`) }
+          else { failed++; console.log(`  ✗ ${r.name}`); r.errors.forEach(e => console.log(`    ${e}`)) }
+        }
+      }
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Summary
 // ---------------------------------------------------------------------------

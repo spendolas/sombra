@@ -11,21 +11,11 @@ import type { NodeDefinition, SpatialConfig, GizmoConfig } from '../types'
 import { getSpatialParams } from '../types'
 import { variable, call, binary, literal, declare, assign, swizzle, construct, ternary } from '../../compiler/ir/types'
 import type { IRStmt, IRExpr } from '../../compiler/ir/types'
+import { normalizeStops, sortStops, stopColorParams, stopUniform } from '../color/ramp-stops'
 
 /** Format number as GLSL float literal */
 function flt(n: number): string {
   return Number.isInteger(n) ? `${n}.0` : `${n}`
-}
-
-interface ColorStop {
-  position: number
-  /** RGB (legacy, alpha defaults to 1) or RGBA. */
-  color: [number, number, number] | [number, number, number, number]
-}
-
-/** Normalize a stop color to RGBA, defaulting alpha to 1 for legacy 3-length colors. */
-function normalizeStopColor(color: ColorStop['color']): [number, number, number, number] {
-  return color.length === 4 ? color : [color[0], color[1], color[2], 1]
 }
 
 export const gradientNode: NodeDefinition = {
@@ -161,6 +151,9 @@ export const gradientNode: NodeDefinition = {
       updateMode: 'recompile',
     },
   ],
+  // The static params + one hidden uniform `color` param per stop (Stop 0..N-1
+  // by position) — appended last, so every existing param keeps its order.
+  dynamicParams: (params) => [...(gradientNode.params ?? []), ...stopColorParams(params)],
 
   // Two gizmo sets, gated by drawMode: 'p*' in px (Pinned, frozen) and 'p*uv'
   // in UV (Stretch, resize-tracking). No top-level showWhen — one set is always
@@ -359,29 +352,21 @@ export const gradientNode: NodeDefinition = {
 
     lines.push(`float ${outputs.value} = ${field};`)
 
-    // Read stops, sort by position, fallback to black-white
-    let stops = params.stops as ColorStop[] | undefined
-    if (!stops || !Array.isArray(stops) || stops.length < 2) {
-      stops = [
-        { position: 0, color: [0, 0, 0] },
-        { position: 1, color: [1, 1, 1] },
-      ]
-    }
-    stops = [...stops].sort((a, b) => a.position - b.position)
+    // Stops by position (equal positions keep stored order); missing/unusable →
+    // black-white. Colours are runtime uniforms (ramp-stops.ts), positions baked.
+    const stops = sortStops(normalizeStops(params.stops))
 
     const c = outputs.color
     const t = field
 
     // Initialize with first stop color
-    const [r0, g0, b0, a0] = normalizeStopColor(stops[0].color)
-    lines.push(`vec4 ${c} = vec4(${flt(r0)}, ${flt(g0)}, ${flt(b0)}, ${flt(a0)});`)
+    lines.push(`vec4 ${c} = ${stopUniform(inputs, stops[0], 'gradient')};`)
 
     // Chain mix() calls for each subsequent stop
     for (let i = 1; i < stops.length; i++) {
       const prev = stops[i - 1]
       const curr = stops[i]
-      const [r, g, b, a] = normalizeStopColor(curr.color)
-      const colorExpr = `vec4(${flt(r)}, ${flt(g)}, ${flt(b)}, ${flt(a)})`
+      const colorExpr = stopUniform(inputs, curr, 'gradient')
 
       let factor: string
       if (Math.abs(curr.position - prev.position) < 0.0001) {
@@ -690,41 +675,21 @@ export const gradientNode: NodeDefinition = {
 
     statements.push(declare(ctx.outputs.value, 'float', variable(field)))
 
-    // Read stops, sort by position, fallback to black-white
-    let stops = ctx.params.stops as ColorStop[] | undefined
-    if (!stops || !Array.isArray(stops) || stops.length < 2) {
-      stops = [
-        { position: 0, color: [0, 0, 0] },
-        { position: 1, color: [1, 1, 1] },
-      ]
-    }
-    stops = [...stops].sort((a, b) => a.position - b.position)
+    // Stops by position (equal positions keep stored order); missing/unusable →
+    // black-white. Colours are runtime uniforms (ramp-stops.ts), positions baked.
+    const stops = sortStops(normalizeStops(ctx.params.stops))
 
     const c = ctx.outputs.color
     const t = variable(field)
 
     // Initialize with first stop color
-    const [r0, g0, b0, a0] = normalizeStopColor(stops[0].color)
-    statements.push(
-      declare(c, 'vec4', construct('vec4', [
-        literal('float', r0),
-        literal('float', g0),
-        literal('float', b0),
-        literal('float', a0),
-      ])),
-    )
+    statements.push(declare(c, 'vec4', variable(stopUniform(ctx.inputs, stops[0], 'gradient'))))
 
     // Chain mix() calls for each subsequent stop
     for (let i = 1; i < stops.length; i++) {
       const prev = stops[i - 1]
       const curr = stops[i]
-      const [r, g, b, a] = normalizeStopColor(curr.color)
-      const colorExpr: IRExpr = construct('vec4', [
-        literal('float', r),
-        literal('float', g),
-        literal('float', b),
-        literal('float', a),
-      ])
+      const colorExpr: IRExpr = variable(stopUniform(ctx.inputs, curr, 'gradient'))
 
       let factor: IRExpr
       if (Math.abs(curr.position - prev.position) < 0.0001) {

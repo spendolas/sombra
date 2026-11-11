@@ -80,6 +80,12 @@ export interface NodeParameter {
    *   Use for: quality tiers, render mode switches.
    */
   updateMode: 'recompile' | 'uniform' | 'renderer'
+  /**
+   * Extra fields copied onto this param's embed knob (src/embed/manifest.ts).
+   * Used by the ramp stops (ramp-stops.ts): `group: 'stops'`, `index` = order
+   * by position, `position` = the stop's position at publish time.
+   */
+  knobMeta?: { group: string; index: number; position?: number }
 }
 
 /**
