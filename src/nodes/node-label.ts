@@ -24,3 +24,45 @@ export function normalizeNodeLabel(label: unknown): string | undefined {
   const clipped = label.trim().slice(0, NODE_LABEL_MAX).trim()
   return clipped.length > 0 ? clipped : undefined
 }
+
+/**
+ * The slug a custom label occupies in embed knob keys — the SAME rule as
+ * `slugify` / `nameSlug` in src/embed/manifest.ts ('' → 'node'). Two labels
+ * with the same slug are the clash the manifest numbers (" 2", " 3"), so this
+ * is what the node title's duplicate warning groups by. Kept as a copy because
+ * manifest.ts does not export its helper; `verify:node-sections` asserts the
+ * two agree on the cases that matter (case, punctuation, spacing).
+ */
+export function labelSlug(label: string): string {
+  const slug = label.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  return slug || 'node'
+}
+
+const duplicateCache = new WeakMap<readonly { data: { label?: unknown } }[], ReadonlySet<string>>()
+
+/**
+ * Slugs carried by more than one custom-labelled node. Computed once per nodes
+ * array (the store replaces the array on every graph change, so the cache is
+ * exactly "once per graph change"), then shared by every node's title.
+ */
+export function duplicateLabelSlugs(nodes: readonly { data: { label?: unknown } }[]): ReadonlySet<string> {
+  const hit = duplicateCache.get(nodes)
+  if (hit) return hit
+  const seen = new Set<string>()
+  const dup = new Set<string>()
+  for (const n of nodes) {
+    const label = normalizeNodeLabel(n.data.label)
+    if (label === undefined) continue
+    const slug = labelSlug(label)
+    if (seen.has(slug)) dup.add(slug)
+    else seen.add(slug)
+  }
+  duplicateCache.set(nodes, dup)
+  return dup
+}
+
+/** Does this node's custom label clash with another node's (same knob-key slug)? */
+export function hasDuplicateLabel(nodes: readonly { data: { label?: unknown } }[], label: unknown): boolean {
+  const l = normalizeNodeLabel(label)
+  return l !== undefined && duplicateLabelSlugs(nodes).has(labelSlug(l))
+}
