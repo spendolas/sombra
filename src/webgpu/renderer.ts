@@ -188,6 +188,8 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
 
   // Animation
   private startTime: number = Date.now()
+  /** Embed player only (see setTimeSource): when set, u_time comes from here. */
+  private timeSource: (() => number) | null = null
   private animationFrameId: number | null = null
   private animated = true
   private renderRequested = false
@@ -1223,7 +1225,7 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
       this.canvas.height = displayHeight
     }
 
-    const time = (Date.now() - this.startTime) / 1000
+    const time = this.timeSource ? this.timeSource() : (Date.now() - this.startTime) / 1000
 
     if (this.isMultiPass) {
       this.renderMultiPass(displayWidth, displayHeight, dpr, time)
@@ -1661,6 +1663,10 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
   // -----------------------------------------------------------------------
 
   startAnimation(): void {
+    // Idempotent. A second call while a loop runs used to stack another rAF
+    // chain, and stopAnimation() cancels only the latest id — so the first
+    // chain kept rendering after a stop.
+    if (this.animationFrameId !== null) return
     this.lastFrameTime = performance.now()
     const animate = (timestamp: number) => {
       const elapsed = timestamp - this.lastFrameTime
@@ -1672,6 +1678,12 @@ export class WebGPUShaderRenderer implements ShaderRenderer {
       this.animationFrameId = requestAnimationFrame(animate)
     }
     this.animationFrameId = requestAnimationFrame(animate)
+  }
+
+  /** Embed player only: render() reads u_time from fn() instead of the wall
+   *  clock; null restores the wall clock. The editor and viewer never call it. */
+  setTimeSource(fn: (() => number) | null): void {
+    this.timeSource = fn
   }
 
   stopAnimation(): void {

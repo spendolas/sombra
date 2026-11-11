@@ -273,29 +273,47 @@ Sombra.configure({ resolve: id => `https://cdn.example/scenes/${id}.ombra` });
 | `debug`     | `boolean`                               | `false` | overlay the error message on the fallback |
 | `onLoad`    | `(h: SceneHandle) => void`              | —       | called once the scene is mounted and rendering |
 | `onError`   | `(e: Error) => void`                    | —       | called on decode/renderer‑init failure |
+| `time`      | `number`                                | `0`     | initial scene time (`u_time`) in seconds |
+| `timeScale` | `number`                                | `1`     | clock rate, `>= 0` (see `setTimeScale`) |
+| `reducedMotion` | `'respect' \| 'ignore'`             | `'respect'` | `'ignore'` lets the loop run under `prefers-reduced-motion` (for hosts that handle the preference themselves) |
 
 `mount()` always resolves — it never rejects. On any failure — a `src` fetch error
 (404 / network / CORS), decode, or renderer‑init — it logs `[Sombra] …`, calls
 `onError`, dispatches `sombra:error` on the element, shows the DVD-style fallback
 (unless `fallback: false`), and returns a no‑op handle whose `destroy()` removes
 the fallback (every other method is a safe stub), so host code can call the handle
-unconditionally. It also returns the no‑op handle when there is no DOM
-(`window === undefined`) or no element, making SSR safe.
+unconditionally. That handle has **`ok === false`** and the failure in
+**`error`**, and `on('error', cb)` calls `cb(error)` immediately (replayed, like
+`'load'` on a good handle). It also returns a failed no‑op handle when there is no
+DOM (`window === undefined`) or no element, making SSR safe.
+
+```js
+const shader = await Sombra.mount(el, { src: 'scene.ombra', fallback: false })
+if (!shader.ok) console.warn('no shader:', shader.error.message)
+```
 
 ### `SceneHandle`
 
-| Method                       | Behavior |
+| Member                       | Behavior |
 |------------------------------|----------|
+| `ok`                         | `true` for a live scene; `false` for the no‑op handle of a failed mount. |
+| `error`                      | The `Error` when `ok === false`; otherwise `undefined`. |
 | `set(key, value)`            | Override a knob by its flat `key` (e.g. `'noise-scale'`). Unknown keys log a warning listing valid keys. A 3‑component value on a `vec4` (color) knob is padded to alpha `1`. |
 | `set(nodeId, param, value)`  | Override a knob by **stable node id** + friendly param (e.g. `set('noise-1784…','scale',3)`). Same target as the flat form; the stable, unambiguous way to address one node among several of the same type. |
 | `get(key)` / `get(nodeId, param)` | The knob's **current live value** (default, or whatever was last `set`), or `undefined`. |
 | `variables()`                | `Knob[]` — the full flat list, each with its current `value`. Enumerate knobs, ranges, defaults, and node identity. |
 | `nodes()`                    | `NodeInfo[]` — knobs **grouped by owning node** (`{ id, name, type, params }`). The deliberate way to discover and target nodes: `nodes().filter(n => n.type==='noise').forEach(n => set(n.id,'seed',0))`. |
-| `play()`                     | Mark autoplay wanted and resume the loop (only animates if the shader is time‑live). |
-| `pause()`                    | Mark autoplay unwanted and stop the loop. |
-| `resize()`                   | Request one frame (the harness also auto‑resizes via `ResizeObserver`). |
-| `destroy()`                  | Stop the harness + loop, dispose the renderer, remove the canvas. |
-| `on(event, cb)`              | Subscribe to `'load'`, `'error'`, or `'contextlost'`. |
+| `play()`                     | Mark autoplay wanted; the loop starts only if the shader is time‑live, the element is in view, the tab is visible and reduced motion is not in force (§5). Safe to call repeatedly. |
+| `pause()`                    | Mark autoplay unwanted and stop the loop. Scene time holds. |
+| `isPlaying()`                | `true` while the render loop is actually running. |
+| `getTime()`                  | Scene time (`u_time`) in seconds. |
+| `setTime(seconds)`           | Jump the scene clock; draws one frame if the loop is not running. |
+| `getTimeScale()`             | Current clock rate. |
+| `setTimeScale(k)`            | Clock rate, `k >= 0`, phase‑continuous (no jump). `0` holds time while the loop keeps painting, so knob changes still animate. Prefer it over the Time node's `speed` knob, which rescales the phase. |
+| `render()`                   | Draw one frame now. |
+| `resize()`                   | Draw one frame if the loop is not running (the harness also repaints on container resize via `ResizeObserver`). |
+| `destroy()`                  | Stop the harness + loop, dispose the renderer, release the GPU context (WebGL2: `WEBGL_lose_context`; WebGPU: device destroyed), remove the canvas. Idempotent. |
+| `on(event, cb)`              | Subscribe to `'load'`, `'error'`, or `'contextlost'`. `'load'` replays on a live handle, `'error'` on a failed one. A live handle fires `'error'` (plus `onError` and `sombra:error`) for later failures — e.g. the scene cannot be re‑applied after a context/device restore. |
 
 **Addressing knobs.** Every knob has both a flat `key` (`<node>-<param>`, e.g.
 `noise-2-scale`) and a `(nodeId, param)` pair. The flat key is terse for one‑offs;
@@ -309,6 +327,10 @@ the key's suffix, not the raw internal id. Enumerate them from the live handle:
 Value conventions: `float` → `number`; `vec2`/`vec3` → `number[]`; `color` →
 `[r, g, b]` in 0..1 (alpha auto‑padded). Ranges come from each knob's
 `min`/`max`/`step`.
+
+While the loop is not running (paused, off‑screen, tab hidden, reduced motion,
+or a static shader), every `set()` draws one frame, coalesced to one per
+animation frame — so a host can tween knobs on a frozen scene.
 
 ---
 
@@ -349,14 +371,33 @@ off‑screen or backgrounded shader burns no GPU:
 - **IntersectionObserver** (`rootMargin: '50px'`, `threshold: 0.01`) — pauses the
   loop when the element scrolls out of view, resumes when it returns.
 - **`visibilitychange`** — pauses when the browser tab is hidden.
-- **`prefers-reduced-motion: reduce`** — renders exactly one static frame and
-  never starts a loop. `reducedMotion` is exposed read‑only on the harness.
-- **ResizeObserver** — requests a frame when the container resizes.
+- **`prefers-reduced-motion: reduce`** — renders one static frame at mount and
+  never starts a loop (`play()` included); knob changes and resizes still
+  repaint. `MountOptions.reducedMotion: 'ignore'` opts out. `reducedMotion` is
+  exposed read‑only on the harness.
+- **ResizeObserver** — draws a frame when the container resizes (in every mode,
+  reduced motion included).
 
-Manual `play()`/`pause()` set an `autoplayWanted` flag that the visibility gate
-respects: the loop only runs when the shader is time‑live, autoplay is wanted,
-the element is in view, and the tab is visible. Static (non‑time‑live) shaders
-render on demand and never spin a loop. `destroy()` disconnects all observers.
+Manual `play()`/`pause()` set an `autoplayWanted` flag that the gate respects:
+the loop only runs when the shader is time‑live, autoplay is wanted, the element
+is in view, the tab is visible and reduced motion is not in force. The same rule
+applies after a WebGL context / WebGPU device restore — a paused embed stays
+paused. Static (non‑time‑live) shaders render on demand and never spin a loop.
+`destroy()` disconnects all observers.
+
+### Clock
+
+The player owns `u_time`. It starts at `MountOptions.time` (default `0`) and
+advances by each frame's elapsed time (clamped to 0.1 s) × `timeScale` **only
+while the loop is running**; it holds whenever the loop is stopped for any
+reason — `pause()`, scrolled away, tab hidden, reduced motion. The renderer gets
+it through `ShaderRenderer.setTimeSource()`, which the editor and viewer never
+call (they keep the wall clock).
+
+**Visible change for embeds published before this player** (intended): `u_time`
+is `0` on the first frame instead of "time since the renderer was created", and
+a scene no longer jumps forward by the hidden duration after the tab was hidden
+or the embed was scrolled away. The Time node's `speed` knob is unchanged.
 
 ---
 
@@ -369,6 +410,11 @@ render on demand and never spin a loop. `destroy()` disconnects all observers.
   can drive the same scene on the viewer's machine.
 - **Context loss.** On device/context loss the player re‑applies the full render
   plan, re‑bakes uniforms, re‑uploads image textures, and emits `contextlost`.
+  If the plan cannot be re‑applied it stops and fires `'error'` instead.
+- **Context release.** `destroy()` loses the WebGL2 context right away instead of
+  leaving it for garbage collection. Browsers cap live WebGL contexts per page
+  (16 in Chrome) and evict the *oldest* — which may belong to the host — so a host
+  that swaps scenes by destroy + mount no longer leaks one context per swap.
 - **Async image textures.** Baked images decode asynchronously; each re‑renders
   (static) or is picked up by the running loop (animated) as it lands.
 
@@ -405,6 +451,7 @@ npm run build:embed              # build dist/embed/sombra-player.<version>.umd.
 npm run verify:embed             # pure offline checks (artifact + manifest + snippets)
 npm run verify:embed:bundle      # after build:embed — no forbidden deps, under size budget
 npm run verify:embed:smoke       # end-to-end browser smoke (needs dev server + playwright)
+npm run verify:embed:clock       # clock + play/pause contract, both backends (starts its own dev server + Chrome)
 ```
 
 Individual checks: `verify:embed:artifact` (lossless codec + vertex invariant),
@@ -412,18 +459,19 @@ Individual checks: `verify:embed:artifact` (lossless codec + vertex invariant),
 (version‑pinned, artifact‑carrying snippets), `verify:embed:bundle` (the player
 imports **no** React/xyflow/compiler/nodes and stays under the gzip budget).
 
-The smoke script (`scripts/verify-embed-smoke.ts`) drives `embed-dev.html` with
-`playwright-core`: it waits for mount, samples canvas pixels for non‑black output,
-and calls `handle.set()` on the first knob. Run the dev server first:
+The smoke script (`scripts/verify-embed-smoke.ts`) starts its own Vite dev server
+(or uses `EMBED_DEV_URL`, e.g. `http://localhost:5173/embed-dev.html`) and drives
+it with `playwright-core` + Chrome: it waits for mount, samples canvas pixels for
+non‑black output, calls `handle.set()` on the first knob, and checks the
+lifecycle contract — a failed mount's `ok`/`error`/`on('error')`, an `'error'`
+from a failed context restore, the first frame's resolution, and 20 mount/destroy
+cycles leaving no live WebGL2 context behind.
 
-```bash
-npm run dev                                   # terminal 1
-npx tsx scripts/verify-embed-smoke.ts         # terminal 2 (needs a Chromium binary)
-```
-
-If no Chromium binary is available, run the smoke manually: open
-`http://localhost:5173/sombra/embed-dev.html` and execute the two `page.evaluate`
-bodies in the console.
+`verify:embed:clock` (`scripts/verify-embed-clock.ts`) is the clock and
+play/pause contract on both backends: double `play()` then `pause()` stops
+drawing, time and pixels hold while paused, `set()`/`resize()`/`setTime()` repaint
+exactly once while stopped (also under reduced motion), `setTimeScale(0)` holds
+time while painting, `play()` respects the visibility gate.
 
 **Bundle rule (enforced):** the player import graph
 (`src/embed/index.ts` + its imports) may import only `src/renderer/*`,
