@@ -24,5 +24,6 @@ export const SANDBOXES: SandboxEntry[] = [
   { name: 'section-header', title: 'Section Header', group: 'Nodes', load: () => import('./harnesses/section-header') },
   { name: 'node-title', title: 'Node Title', group: 'Nodes', load: () => import('./harnesses/node-title') },
   { name: 'stack-layer-list', title: 'Stack Layer List', group: 'Nodes', load: () => import('./harnesses/stack-layer-list') },
+  { name: 'wired-param-row', title: 'Wired Param Row', group: 'Nodes', load: () => import('./harnesses/wired-param-row') },
   { name: 'perf-view', title: 'Perf View', group: 'Perf', load: () => import('./harnesses/perf-view') },
 ]
