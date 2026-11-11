@@ -196,6 +196,23 @@ async function main() {
       assert(collapsed.count === '2' && collapsed.countText === '· 2', `badge ${collapsed.count} / "${collapsed.countText}"`)
     })
 
+    // A wire added / removed while collapsed changes no node size, so React Flow
+    // learns of the new stacked handle only through updateNodeInternals.
+    const extraEdge = await page.evaluate(({ st, num }) => (window as Any).__sombra.connect(num, st, 'value', 'srt_translateX') as string, { st: ids.st, num: ids.num })
+    await page.waitForTimeout(500)
+    const three = await headerState()
+    const threeWires = await wires()
+    await page.evaluate((e) => (window as Any).__sombra.removeEdge(e), extraEdge)
+    await page.waitForTimeout(500)
+    const backToTwo = await headerState()
+    test('a wire added while collapsed gathers on the dot too (handle layout re-measured); removing it restores 2', () => {
+      assert(three.count === '3' && three.gatherIds.includes('srt_translateX'), `badge ${three.count}, gathered ${three.gatherIds}`)
+      const w = threeWires.find((x) => x.handle === 'srt_translateX')
+      assert(w?.drawn, 'the new wire is not drawn — React Flow does not know its stacked handle')
+      assert(w!.toDot <= 2, `the new wire ends ${w!.toDot.toFixed(1)} flow-px from the dot`)
+      assert(backToTwo.count === '2' && !backToTwo.gatherIds.includes('srt_translateX'), `after removal: badge ${backToTwo.count}, gathered ${backToTwo.gatherIds}`)
+    })
+
     // ── 2. Popover on the dot ────────────────────────────────────────────────
     const dot = await centre(`${nodeSel(ids.st)} [data-gather]`)
     if (dot) await page.mouse.move(dot.x, dot.y, { steps: 4 })
@@ -226,7 +243,10 @@ async function main() {
     const after2 = await graph()
     test('clicking the dot opens the section and does not start a click-connection', () => {
       assert(afterDot.open, 'clicking the gather dot did not open the section')
-      assert(after2.edges.length === before2.edges.length, `a click-connection from the dot created an edge: ${after2.edges.filter((e) => !before2.edges.includes(e))}`)
+      // Exact set, not a count: a click-connect onto an already-wired param
+      // REPLACES its edge (single wire per input), leaving the count unchanged.
+      const a = [...after2.edges].sort().join(' '), b = [...before2.edges].sort().join(' ')
+      assert(a === b, `the edges changed after dot click + output click: ${b} → ${a} — a click-connection started from the stacked handles`)
     })
 
     // ── 1b. Expanded: wires back on their rows ───────────────────────────────
@@ -323,6 +343,8 @@ async function main() {
     })
 
     // ── 4. Persistence, undo, zero recompiles ────────────────────────────────
+    // Start open whatever happened above, so one failure does not cascade.
+    await page.evaluate((st) => (window as Any).__sombra.stores.graph.getState().setSectionCollapsed(st, 'transform', false), ids.st)
     await page.waitForTimeout(1200)
     const c0 = await counts()
     const pastBefore = (await graph()).past
@@ -352,15 +374,27 @@ async function main() {
       assert(c2.preview.length > c1.preview.length, 'control: a param edit posted no thumbnail request — the counter is not wired')
     })
 
-    // Undo of an unrelated edit leaves the section alone.
+    // Undo of an unrelated edit leaves the section alone. The toggle must come
+    // AFTER the edit: the snapshot the undo restores then holds the OLD state,
+    // so only the carry-over keeps the section as the user left it.
+    const tbU = await centre(toggleBtn)
+    if (tbU) await page.mouse.click(tbU.x, tbU.y)    // collapse, after the noise edit
+    await page.mouse.move(5, 5)
+    await page.waitForTimeout(300)
+    const beforeUndo = await headerState()
     await page.evaluate(() => (window as Any).__sombra.stores.graph.getState().undo())
     await page.waitForTimeout(300)
     const afterUndo = await headerState()
     const undoneParam = await page.evaluate((nz) => (window as Any).__sombra.stores.graph.getState().nodes.find((n: Any) => n.id === nz).data.params.noiseType, ids.nz)
-    test('undo of an unrelated edit does not toggle the section', () => {
+    test('undo of an edit made before a toggle does not toggle the section back', () => {
+      assert(!beforeUndo.open, 'fixture: the header click did not collapse the section')
       assert(undoneParam !== 'value', 'fixture: the undo did not revert the noise edit — proves nothing')
-      assert(afterUndo.open, 'undo collapsed the section')
+      assert(!afterUndo.open, 'undo re-opened the section — the toggle rode along in the history snapshot')
     })
+    const tbR = await centre(toggleBtn)
+    if (tbR && !(await headerState()).open) await page.mouse.click(tbR.x, tbR.y)    // open again for the reload check
+    await page.mouse.move(5, 5)
+    await page.waitForTimeout(300)
 
     // Reload: localStorage keeps the (non-default) open state.
     await page.reload()
