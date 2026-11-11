@@ -496,6 +496,24 @@ export interface NodeData extends Record<string, unknown> {
   type: string                      // References NodeDefinition.type
   params: Record<string, unknown>   // Current parameter values
   label?: string                    // Optional custom label
+  /** Editor-only view state (see NodeUiState). Never read by the compiler. */
+  ui?: NodeUiState
+}
+
+/**
+ * Editor view state stored on a node: how the user left its body, so it looks
+ * the same after a reload or a file round-trip. Not shader content: it is in no
+ * compile / uniform / renderer key, no compact share hash, no manifest, and no
+ * undo history (graphStore.setSectionCollapsed; undo/redo carry it over).
+ *
+ * Absent means "every section at its default" — an untouched graph has no `ui`.
+ */
+export interface NodeUiState {
+  /**
+   * Section id → collapsed. Only values that differ from the section's default
+   * are stored (the Transform section, id 'transform', defaults to collapsed).
+   */
+  collapsed?: Record<string, boolean>
 }
 
 /**
