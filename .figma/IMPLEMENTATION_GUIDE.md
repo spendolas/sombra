@@ -193,6 +193,7 @@ Complete mapping of every Figma component to its React source:
 | Preview Toolbar | `106:352` | `src/components/PreviewToolbar.tsx` | `PreviewToolbar` |
 | Stack Layer / Stack Empty / Stack Drop Slot | `982:5693` · `982:5702` · `982:5703` | `src/components/StackLayerList.tsx` | `StackLayerList` |
 | Section Header | `993:3777` | `src/components/SectionHeader.tsx` | `SectionHeader` |
+| Wired Param Row (+ Wired Tooltip) | `998:6114` (Option D variants) · `999:6115` | `src/components/WiredParamRow.tsx` | `WiredParamRow` (sandbox only; not yet in ShaderNode / StackLayerList) |
 | Node Title (inline rename) | board `993:3781` | `src/components/NodeTitle.tsx` | `NodeTitle` (sandbox only, not yet in ShaderNode) |
 | Table Header / Knob Row (+ Knob Table, Knob Notice board frames) | `994:4033` · `994:4106` · `994:5134` · `994:5360` | `src/components/KnobTable.tsx` | `KnobTable` (sandbox only; not yet in EmbedModal) |
 

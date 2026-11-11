@@ -17,13 +17,13 @@ V2 was rebuilt from scratch using a **code-driven approach**: every Figma compon
 
 ---
 
-## Parity Score: 50/50 ✅
+## Parity Score: 51/51 ✅
 
 | Level | Total | ✅ Match | Notes |
 |---|---|---|---|
 | Tokens | 5 collections + 12 text styles | All | 40 variables + 12 text styles, dark mode only |
 | Atoms | 9 | 9 | Handle, Separator, Category Header, Palette Item, Plus Minus Button, Node Header, Node Footer, Action Button, Inline Text Field |
-| Molecules | 22 | 22 | Labeled Handle, Float Slider (SombraSlider), Enum Select, Anchor Grid, Color Input, Connectable Param Row, Preview Toolbar, Zoom Bar, Gradient Editor, Random Display, MiniMap, Graph Toolbar, AMD Warning, Compile Error Banner, Stack Layer, Stack Empty, Section Header, Node Title, Table Header, Knob Row, Knob Notice, Knob Table (sandbox only, not yet in the app) |
+| Molecules | 23 | 23 | Labeled Handle, Float Slider (SombraSlider), Enum Select, Anchor Grid, Color Input, Connectable Param Row, Preview Toolbar, Zoom Bar, Gradient Editor, Random Display, MiniMap, Graph Toolbar, AMD Warning, Compile Error Banner, Stack Layer, Stack Empty, Section Header, Node Title, Table Header, Knob Row, Knob Notice, Knob Table (sandbox only, not yet in the app), Wired Param Row (sandbox only, not yet in the app) |
 | Organisms | 6 | 6 | Node Card, Node Palette, Properties Panel, Floating Preview, Full Window Overlay, File Drop Dialog |
 | Templates | 23 | 23 | All node types (Bayer Dither removed, Domain Warp → Warp UV, Pixel Grid → Dither) |
 | Scenes | 5 | 5 | All preview modes |
@@ -75,6 +75,7 @@ V2 was rebuilt from scratch using a **code-driven approach**: every Figma compon
 | [section-header.md](molecules/section-header.md) | `993:3777` | 3 | SectionHeader.tsx | ✅ |
 | [node-title.md](molecules/node-title.md) | board `993:3781` (DB `nt:1`) | 7 board states | NodeTitle.tsx | ✅ (sandbox only) |
 | [knob-table.md](molecules/knob-table.md) | `994:4033` · `994:4106` (+ board frames `994:5134`, `994:5360`) | 1 + 4 | KnobTable.tsx (sandbox only) | ✅ |
+| [wired-param-row.md](molecules/wired-param-row.md) | `998:6114` (Option D) · `999:6115` (+ hover instance `999:7576`) | 6 of 24 (Option D) + 1 | WiredParamRow.tsx | ✅ (sandbox only) |
 
 ### Organisms
 | Page | Figma ID | Variants | Code File | Parity |
@@ -128,6 +129,7 @@ The component mappings below are documented for reference but not activated in F
 | Full Window Overlay | `FullWindowOverlay` | `src/components/FullWindowOverlay.tsx` |
 | File Drop Dialog | `FileDropDialog` | `src/components/FileDropOverlay.tsx` |
 | Graph Toolbar | `GraphToolbar` | `src/components/GraphToolbar.tsx` |
+| Wired Param Row | `WiredParamRow` | `src/components/WiredParamRow.tsx` |
 
 ---
 
