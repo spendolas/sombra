@@ -32,6 +32,13 @@ import { migrateOffsetSpace, FRAMEWORK_SPATIAL_TRANSLATE_TYPES } from '../src/ut
 import { importFromFile, exportToFile, encodeCompactHash, decodeCompactHash } from '../src/utils/sombra-file'
 import { resolveSRT } from '../src/compiler/ir/srt-resolve'
 import pako from 'pako'
+import { getSpatialParams } from '../src/nodes/types'
+import { nodeRegistry } from '../src/nodes/registry'
+import { defaultParams } from '../src/nodes/default-params'
+import { compileGraph } from '../src/compiler/glsl-generator'
+import { compileGraphIR } from '../src/compiler/ir-compiler'
+import { compileNodePreview } from '../src/compiler/subgraph-compiler'
+import { compileNodePreviewIR } from '../src/compiler/ir-subgraph-compiler'
 
 let failures = 0
 const check = (name: string, cond: boolean, detail = '') => {
@@ -398,6 +405,125 @@ console.log('\nH. resolveSRT — the gizmo API (all math encapsulated)')
     const world = resolveSRT({ srt_translateX: 120, srt_translateY: 40, srt_rotate: 30, srt_scale: 2 }, { transforms: T })
     check('world storage: dragRotate does NOT touch offsets',
       !('srt_translateX' in world.dragRotate(0.3)))
+  }
+}
+
+console.log('\nI. framework rotate on Noise / FBM / Warp (2026-11-11) — config, params, every compiler, gizmo')
+// Noise, FBM and Warp used to declare scale+translate only. They now declare
+// the standard order scale, rotate, translate. This section pins that the
+// declaration, the param list and the generated shaders agree, on all four
+// compilers (main GLSL, main IR→WGSL, preview GLSL, preview IR→WGSL), in
+// single-pass and — for warp — texture mode. The rotate statement must appear
+// exactly when rotate is declared: a built-in negative control strips 'rotate'
+// from the live definition and requires it to vanish from every shader (the
+// check can fail; restored afterwards). Pixels: verify:srt-rotate:gpu.
+{
+  const ROTATED = ['noise', 'fbm', 'warp']
+  const STD = ['scale', 'rotate', 'translate']
+  const srtIds = (d: { params?: Array<{ id: string }> }) => (d.params ?? []).map((p) => p.id).filter((id) => id.startsWith('srt_'))
+  const stripesRot = ALL_NODES.find((n) => n.type === 'stripes')!.params!.find((p) => p.id === 'srt_rotate')!
+
+  // Generic: for EVERY framework-spatial node the srt_* params are exactly
+  // what its `spatial` declares (getSpatialParams is spread from a separate
+  // literal in each file — the two copies must not drift).
+  for (const def of ALL_NODES) {
+    if (!def.spatial) continue
+    const want = getSpatialParams(def.spatial).map((p) => p.id)
+    check(`${def.type}: srt_* params == getSpatialParams(spatial)`, JSON.stringify(srtIds(def)) === JSON.stringify(want),
+      `params ${JSON.stringify(srtIds(def))} vs spatial ${JSON.stringify(want)}`)
+  }
+
+  for (const type of ROTATED) {
+    const def = ALL_NODES.find((n) => n.type === type)!
+    check(`${type}: spatial.transforms is scale, rotate, translate`, JSON.stringify(def.spatial?.transforms) === JSON.stringify(STD),
+      JSON.stringify(def.spatial?.transforms))
+    const rot = def.params?.find((p) => p.id === 'srt_rotate')
+    check(`${type}: srt_rotate is the standard param (same as Stripes: default 0, −180..180 step 1, connectable, uniform)`,
+      !!rot && JSON.stringify(rot) === JSON.stringify(stripesRot), JSON.stringify(rot))
+    // Gizmo: handles come from definition.spatial via resolveSRT — no per-node list.
+    const r = resolveSRT({ srt_rotate: 0, srt_scale: 1 }, { transforms: def.spatial!.transforms })
+    check(`${type}: gizmo offers the rotate handle (resolveSRT has.rotate)`, r.has.rotate === true)
+    check(`${type}: gizmo rotate drag writes srt_rotate`, r.dragRotate(-(45 * Math.PI / 180)).srt_rotate === 45)
+  }
+
+  type Shaders = Record<'glsl' | 'wgsl' | 'previewGlsl' | 'previewWgsl', string>
+  const N = (id: string, type: string, params: Record<string, unknown> = {}) =>
+    ({ id, type: 'shaderNode', position: { x: 0, y: 0 }, data: { type, params: { ...defaultParams(nodeRegistry.get(type)), ...params } } }) as Node<NodeData>
+  const E = (s: string, sh: string, t: string, th: string) => ({ id: `${s}-${sh}-${t}-${th}`, source: s, sourceHandle: sh, target: t, targetHandle: th })
+  const compileAll = (type: string, textureMode: boolean): Shaders => {
+    const nodes = [N('rn', type), N('out', 'fragment_output')]
+    const outPort = type === 'warp' ? 'color' : 'value'
+    const edges = [E('rn', outPort, 'out', 'color')]
+    if (textureMode) { nodes.push(N('src', 'checkerboard')); edges.push(E('src', 'color', 'rn', 'source')) }
+    const plan = compileGraph(nodes, edges as never)
+    const ir = compileGraphIR(nodes, edges as never)
+    const pg = compileNodePreview(nodes, edges as never, 'rn')
+    const pw = compileNodePreviewIR(nodes, edges as never, 'rn')
+    if (!plan.success || !ir || !pg.success || !pw.success) {
+      return { glsl: `ERR ${JSON.stringify(plan.errors)}`, wgsl: ir ? '' : 'ERR ir null', previewGlsl: `ERR ${JSON.stringify(pg.errors)}`, previewWgsl: `ERR ${JSON.stringify(pw.errors)}` }
+    }
+    return {
+      glsl: plan.passes.map((p) => p.fragmentShader).join('\n'),
+      wgsl: ir.passes.map((p) => p.shaderCode).join('\n'),
+      previewGlsl: [pg.fragmentShader, ...pg.passes.map((p) => (p as { fragmentShader?: string }).fragmentShader ?? '')].join('\n'),
+      previewWgsl: pw.wgslPasses.map((p) => p.shaderCode).join('\n'),
+    }
+  }
+  // The rotate uniform is declared AND fed into the SRT rotate op of THIS node
+  // (srt_rn = single-pass coords, srtown_rn = texture-mode own-content coords).
+  const rotEngaged = (src: string, textureMode: boolean) => {
+    const v = textureMode ? 'srtown_rn' : 'srt_rn'
+    return src.includes('u_rn_srt_rotate')
+      && new RegExp(`${v}_rad\\b[^;]*=\\s*(uniforms\\.)?u_rn_srt_rotate \\* 0\\.01745329;`).test(src)
+      && new RegExp(`${v} = vec2f?\\(${v}\\.x \\* ${v}_c - ${v}\\.y \\* ${v}_s`).test(src)
+  }
+  const rotAbsent = (src: string) => !src.includes('u_rn_srt_rotate') && !/srt(own)?_rn_rad/.test(src)  // (the checkerboard source has its own rotate)
+  const cases: Array<[string, boolean]> = [['noise', false], ['fbm', false], ['warp', false], ['warp', true]]
+
+  for (const [type, tex] of cases) {
+    const s = compileAll(type, tex)
+    for (const k of Object.keys(s) as Array<keyof Shaders>) {
+      check(`${type}${tex ? ' (texture mode)' : ''} ${k}: rotate uniform drives the SRT rotate op`, rotEngaged(s[k], tex), s[k].slice(0, 200))
+    }
+  }
+
+  // Negative control: strip 'rotate' from the LIVE definitions — the rotate
+  // statement must vanish from every shader. Proves the presence check above
+  // can fail and that it is the declaration (not something else) that emits it.
+  for (const type of ROTATED) {
+    const def = nodeRegistry.get(type)!
+    const saved = { spatial: def.spatial, params: def.params }
+    try {
+      ;(def as { spatial?: unknown }).spatial = { transforms: ['scale', 'translate'] }
+      ;(def as { params: unknown }).params = def.params!.filter((p) => p.id !== 'srt_rotate')
+      for (const [t, tex] of cases.filter(([t]) => t === type)) {
+        const s = compileAll(t, tex)
+        for (const k of Object.keys(s) as Array<keyof Shaders>) {
+          check(`negative control — ${t}${tex ? ' (texture mode)' : ''} ${k}: no rotate op once 'rotate' is undeclared`,
+            !s[k].startsWith('ERR') && rotAbsent(s[k]), s[k].slice(0, 200))
+        }
+      }
+    } finally {
+      ;(def as { spatial?: unknown }).spatial = saved.spatial
+      ;(def as { params: unknown }).params = saved.params
+    }
+  }
+
+  // Old saves carry no srt_rotate: importFromFile seeds the default (0), and
+  // the compact share hash strips it again (default) — no stored key appears.
+  {
+    const file = { sombra: 3, nodes: [N('rn', 'noise'), N('out', 'fragment_output')].map((n) => {
+      const p = { ...(n.data.params as Record<string, unknown>) }; delete p.srt_rotate
+      return { ...n, data: { ...n.data, params: p } }
+    }), edges: [E('rn', 'value', 'out', 'color')] }
+    const imported = importFromFile(file)
+    const rn = imported.nodes.find((n) => n.id === 'rn')!
+    check('old noise save (no srt_rotate) imports with srt_rotate = 0', (rn.data.params as Record<string, unknown>).srt_rotate === 0)
+    const hash = encodeCompactHash(imported.nodes, imported.edges)
+    const json = JSON.parse(new TextDecoder().decode(pako.inflate(Uint8Array.from(atob(hash.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((hash.length + 3) % 4)), (c) => c.charCodeAt(0)))))
+    check('compact hash does not store a default srt_rotate', !JSON.stringify(json).includes('srt_rotate'))
+    const back = decodeCompactHash(hash).nodes.find((n) => n.id === 'rn')!
+    check('…and decodes it back to 0', (back.data.params as Record<string, unknown>).srt_rotate === 0)
   }
 }
 
