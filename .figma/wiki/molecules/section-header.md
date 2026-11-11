@@ -99,7 +99,10 @@ itself is unchanged. What was built, against the plan above:
    gather box). Exactly one handle per id is mounted at any time. They are
    `isConnectableStart={false}` and `isConnectableEnd={false}`.
 3. **Re-measure.** `updateNodeInternals(nodeId)` in an effect keyed on the string
-   `open|wiredIds` (value, not identity).
+   `open|wiredIds` (value, not identity). Opening/closing resizes the node, which
+   React Flow re-measures by itself; the call is what makes a wire **added or
+   removed while collapsed** (no size change) land on the dot — without it the new
+   wire is not drawn at all (gate perturbation).
 4. **Open on drag.** `connecting` = `useConnection(c => c.inProgress)`; `dropActive`
    = a boolean `useConnection` selector that hit-tests the drag against the header
    rect, so the node re-renders only when the drag enters/leaves. It uses
@@ -111,7 +114,8 @@ itself is unchanged. What was built, against the plan above:
    hover state. The dot-hover popover works.
 6. **Dot click.** Opens the section; with `isConnectableStart={false}` React Flow's
    click-connect does not start from the stacked handles (gate check; perturbed:
-   with it on, a following click on an output created an edge).
+   with it on, a dot click then an output click silently REPLACED the Rotate wire —
+   the top handle of the stack — with one from that output).
 7. **Popover stacking.** Hangs below the node as on the board; not checked against
    a node placed directly underneath.
 8. **Persistence (owner decision: remembered).** `node.data.ui.collapsed.transform`,
