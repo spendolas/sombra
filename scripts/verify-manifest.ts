@@ -13,6 +13,7 @@ import { buildManifest } from '../src/embed/manifest'
 import { publishScene } from '../src/embed/publish'
 import { compileGraph } from '../src/compiler/glsl-generator'
 import * as TG from '../src/utils/test-graph'
+import { stripAddedRotateKnobs } from './lib/added-rotate-knobs'
 
 initializeNodeLibrary()
 
@@ -186,27 +187,17 @@ const keyOf = (m: ReturnType<typeof publish>, nodeId: string, param: string) =>
 //    else (a renamed, moved, re-ranged or missing rotate knob fails here).
 {
   let stopKnobs = 0, rotateKnobs = 0, rotateExpected = 0
-  const ROTATE_ADDED = new Set(['noise', 'fbm', 'warp'])
   const withoutStops = (m: ReturnType<typeof publish>) => {
     const kept = m.filter((k) => k.group !== 'stops')
     stopKnobs += m.length - kept.length
-    const out: typeof kept = []
-    kept.forEach((k, i) => {
-      if (ROTATE_ADDED.has(k.nodeType) && k.param === 'scale') rotateExpected++
-      if (ROTATE_ADDED.has(k.nodeType) && k.param === 'rotate') {
-        const prev = kept[i - 1]
-        const scaleKey = prev?.key ?? ''
-        check(`(e) ${k.key}: the added rotate knob is the standard one, right after its node's scale knob`,
-          !!prev && prev.nodeId === k.nodeId && prev.param === 'scale' &&
-          k.key === `${scaleKey.slice(0, -'scale'.length)}rotate` && k.label === 'Rotate' &&
-          k.uniform === prev.uniform.replace(/srt_scale$/, 'srt_rotate') &&
-          k.type === 'float' && k.min === -180 && k.max === 180 && k.step === 1 && k.default === 0)
-        rotateKnobs++
-        return
-      }
-      out.push(k)
-    })
-    return JSON.stringify(out)
+    const r = stripAddedRotateKnobs(kept)   // shared rule: scripts/lib/added-rotate-knobs.ts
+    for (const key of r.stripped) {
+      check(`(e) ${key}: the added rotate knob is the standard one, right after its node's scale knob`,
+        !r.problems.some((p) => p.startsWith(`${key}:`)))
+    }
+    for (const p of r.problems.filter((x) => !r.stripped.some((key) => x.startsWith(`${key}:`)))) check(`(e) ${p}`, false)
+    rotateKnobs += r.stripped.length; rotateExpected += r.expected
+    return JSON.stringify(r.kept)
   }
   const base = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'baselines/manifest-unlabelled.json'), 'utf8')) as {
     presets: Record<string, unknown>; graphs: Record<string, G & { manifest: unknown }>

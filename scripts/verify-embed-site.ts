@@ -21,10 +21,21 @@
  *      to the same keys.
  *   E. Compat fixture (the pre-change recipe: four Color + three Mix, Dither ·
  *      Result → Remap → final Mix factor) still publishes and exposes its four
- *      colour knobs; its published shader and manifest equal the ones 5752aa9
- *      (before SR-1..SR-4) published for the same graph
- *      (scripts/baselines/site-compat-5752aa9.ombra). The GPU gate compares
- *      their pixels.
+ *      colour knobs, and its manifest equals the one 5752aa9 (before SR-1..SR-4)
+ *      published for the same graph (scripts/baselines/site-compat-5752aa9.ombra,
+ *      kept as the historical reference — never overwrite it) EXCEPT for the
+ *      Rotate knobs Noise/FBM/Warp gained on 2026-11-11, each of which must be
+ *      the standard Rotate right after its node's Scale
+ *      (scripts/lib/added-rotate-knobs.ts, the same rule as verify-manifest's
+ *      snapshot). The GPU gate (verify:embed:site:gpu) requires today's publish
+ *      to render EXACTLY 5752aa9's frame on both backends — that pixel identity
+ *      is the compat guarantee.
+ *      WHY E CHANGED (2026-11-11, owner-approved): E used to demand the
+ *      published GLSL/WGSL text be byte-identical to 5752aa9's. Adding Rotate
+ *      to Noise/FBM puts a rotate uniform and the rotate op into the shader of
+ *      any scene that uses them, so byte-identity became impossible by design.
+ *      The change only ADDS controls; existing scenes keep their frame (pixel
+ *      identity, above) and keys (only additions allowed, above).
  *
  * Publishing happens with a `navigator.gpu` stub so the artifact carries WGSL,
  * exactly as the editor publishes in a WebGPU browser (publishScene adds WGSL
@@ -43,6 +54,7 @@ import { exportToFile, encodeSombraPackage, decodeSombraPackage, importFromFile 
 import { buildSiteBase, buildSiteCompat, REQUIRED_SITE_KEYS, SITE_STOP_HEX, hex, type Graph } from './lib/site-base-fixture'
 import { checkSiteArtifact, formatSiteReport, type SiteReport } from './lib/site-conformance'
 import { test, run, assert } from './blur-bakeoff/lib/test-util'
+import { stripAddedRotateKnobs, ROTATE_ADDED_TYPES } from './lib/added-rotate-knobs'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
 const OMBRA = path.join(ROOT, 'public/shared/site-base.ombra')
@@ -105,10 +117,10 @@ console.log(`\nsite-base (fresh build)\n${formatSiteReport(report.rows)}\n`)
  */
 const PINNED_KEYS = [
   'pixelate-pixel-size', 'site-clock-speed', 'site-seed-value',
-  'fbm-scale', 'fbm-offset-x', 'fbm-offset-y', 'fbm-octaves', 'fbm-lacunarity', 'fbm-gain',
+  'fbm-scale', 'fbm-rotate', 'fbm-offset-x', 'fbm-offset-y', 'fbm-octaves', 'fbm-lacunarity', 'fbm-gain',
   'site-balance-value', 'site-dots-pixel-size', 'site-dots-dither',
   'remap-in-min', 'remap-in-max', 'remap-out-min', 'remap-out-max',
-  'noise-scale', 'noise-offset-x', 'noise-offset-y',
+  'noise-scale', 'noise-rotate', 'noise-offset-x', 'noise-offset-y',
   'remap-2-in-min', 'remap-2-in-max', 'remap-2-out-min', 'remap-2-out-max',
   'site-palette-stop-0', 'site-palette-stop-1', 'site-palette-stop-2', 'site-palette-stop-3',
   'fragment-output-alpha',
@@ -271,17 +283,23 @@ test('E. compat fixture: still publishes (one pass) and exposes its four colour 
   for (const h of SITE_STOP_HEX) assert(defaults.has(JSON.stringify(hex(h))), `no colour knob defaults to ${h}`)
 })
 
-test('E. compat fixture: shader + manifest equal what 5752aa9 published for the same graph', () => {
+test('E. compat fixture: manifest equals what 5752aa9 published, apart from the added standard Rotate knobs', () => {
+  // (Shader TEXT is no longer compared — see the header, "WHY E CHANGED". Pixel
+  // identity against the same reference is verify:embed:site:gpu's job.)
   assert(fs.existsSync(COMPAT_REF), `${path.relative(ROOT, COMPAT_REF)} missing`)
   const ref = decodeArtifactBytes(new Uint8Array(fs.readFileSync(COMPAT_REF)))
   const now = decodeArtifactBytes(compatPub.sceneBytes)
+  const strip = stripAddedRotateKnobs(now.manifest)
+  assert(strip.problems.length === 0, `added rotate knobs are not the standard ones:\n      ${strip.problems.join('\n      ')}`)
+  // Mechanism-engaged: the recipe has a Noise and an FBM, so the strip must
+  // actually remove their two rotate knobs (else this compares nothing new).
+  assert(JSON.stringify(strip.stripped) === JSON.stringify(['noise-rotate', 'fbm-rotate']), `stripped ${strip.stripped.join(', ') || 'nothing'}`)
+  assert(!ref.manifest.some((k) => k.param === 'rotate' && ROTATE_ADDED_TYPES.has(k.nodeType)), '5752aa9 reference already has a Noise/FBM/Warp rotate knob — wrong reference?')
   const refKeys = ref.manifest.map((k) => `${k.key}=${JSON.stringify(k.default)}`)
-  const nowKeys = now.manifest.map((k) => `${k.key}=${JSON.stringify(k.default)}`)
-  assert(JSON.stringify(refKeys) === JSON.stringify(nowKeys), `manifest drifted:\n      5752aa9 ${refKeys.join(', ')}\n      now     ${nowKeys.join(', ')}`)
-  const glsl = (x: typeof ref) => x.plan.passes.map((p) => p.fragmentShader).join('\n')
-  const wgsl = (x: typeof ref) => (x.plan.wgsl?.passes ?? []).map((p) => p.shaderCode).join('\n')
-  assert(glsl(ref) === glsl(now), 'GLSL fragment shader differs from 5752aa9')
-  assert(wgsl(ref).length > 0 && wgsl(ref) === wgsl(now), 'WGSL differs from 5752aa9 (or the reference has none)')
+  const nowKeys = strip.kept.map((k) => `${k.key}=${JSON.stringify(k.default)}`)
+  assert(JSON.stringify(refKeys) === JSON.stringify(nowKeys), `manifest drifted beyond the added rotate knobs:\n      5752aa9 ${refKeys.join(', ')}\n      now     ${nowKeys.join(', ')}`)
+  // Both artifacts still carry shaders for both backends (the GPU gate renders them).
+  assert(ref.plan.passes.length === now.plan.passes.length && (ref.plan.wgsl?.passes.length ?? 0) > 0 && (now.plan.wgsl?.passes.length ?? 0) > 0, 'pass count / WGSL presence changed')
 })
 
 await run('verify-embed-site')
