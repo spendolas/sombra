@@ -278,6 +278,19 @@ export const ds = {
     popoverSource: "text-param text-fg-muted truncate min-w-0",
     popoverHint: "text-param text-fg-subtle",
   },
+  inlineTextField: {
+    field: "flex flex-row items-center bg-surface rounded-sm border border-active px-sm gap-xs overflow-hidden h-input-h min-w-0 outline-none selection:bg-highlight placeholder:text-fg-muted",
+    value: "text-node-title text-fg",
+    selection: "bg-highlight",
+    placeholder: "text-node-title text-fg-muted",
+  },
+  nodeTitle: {
+    root: "flex flex-row items-center gap-md flex-1 min-w-0",
+    name: "text-node-title text-fg select-none flex-1 min-w-0 truncate",
+    typeTag: "text-param text-fg-subtle select-none shrink-0",
+    warning: "text-warning shrink-0",
+    pencil: "flex flex-col items-center justify-center rounded-sm text-fg-subtle cursor-pointer hover:bg-hover hover:text-fg shrink-0 -mx-xs",
+  },
 } as const;
 
 export type DSComponent = keyof typeof ds;

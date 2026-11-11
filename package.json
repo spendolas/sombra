@@ -48,6 +48,7 @@
     "verify:stack-ui:gpu": "tsx scripts/verify-stack-ui-gpu.ts",
     "verify:ramp-knobs:gpu": "tsx scripts/verify-ramp-knobs-gpu.ts",
     "verify:section-header-ui": "tsx scripts/verify-section-header-ui.ts",
+    "verify:node-title-ui": "tsx scripts/verify-node-title-ui.ts",
     "verify:dropdown-preview:gpu": "tsx scripts/verify-dropdown-preview-gpu.ts",
     "verify:blend-modes:gpu": "tsx scripts/verify-blend-modes-gpu.ts",
     "verify:coord-contract:gpu": "tsx scripts/verify-coord-contract-gpu.ts",
