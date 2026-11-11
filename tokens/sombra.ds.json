@@ -3366,6 +3366,330 @@
           "extra": "flex-1 min-w-0"
         }
       }
+    },
+    "998:6114": {
+      "name": "Wired Param Row",
+      "type": "molecule",
+      "dsKey": "wiredParamRow",
+      "codeFile": "src/components/WiredParamRow.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": "998:6034",
+          "position": "relative",
+          "layout": "horizontal",
+          "align": "center",
+          "transition": "colors",
+          "extra": "outline-none focus-visible:outline-2 focus-visible:outline-indigo-hover motion-reduce:transition-none"
+        },
+        "rootHover": {
+          "figmaNodeId": "999:7576",
+          "position": "relative",
+          "layout": "horizontal",
+          "align": "center",
+          "fill": "interactive/hover",
+          "radius": "sm",
+          "transition": "colors",
+          "extra": "outline-none focus-visible:outline-2 focus-visible:outline-indigo-hover motion-reduce:transition-none",
+          "auditIgnore": [
+            "fill.opacity",
+            "height"
+          ]
+        },
+        "content": {
+          "figmaNodeId": "998:6037",
+          "layout": "vertical",
+          "padding": {
+            "left": "handle-offset",
+            "right": "xs"
+          },
+          "gap": "2xs",
+          "extra": "flex-1 min-w-0"
+        },
+        "labelLine": {
+          "figmaNodeId": "998:6038",
+          "layout": "horizontal",
+          "align": "center",
+          "gap": "xs",
+          "height": "[18px]",
+          "extra": "min-w-0"
+        },
+        "label": {
+          "figmaNodeId": "998:6039",
+          "textStyle": "text-param",
+          "textColor": "fg-subtle",
+          "extra": "shrink-0 whitespace-nowrap"
+        },
+        "source": {
+          "figmaNodeId": "998:6040",
+          "textStyle": "text-param",
+          "textColor": "fg-muted",
+          "extra": "truncate flex-1 min-w-0"
+        },
+        "valueGroup": {
+          "figmaNodeId": "998:6041",
+          "layout": "horizontal",
+          "align": "center",
+          "gap": "xs",
+          "extra": "shrink-0"
+        },
+        "valueGroupColor": {
+          "figmaNodeId": "998:6080",
+          "layout": "horizontal",
+          "align": "center",
+          "gap": "sm",
+          "extra": "shrink-0"
+        },
+        "value": {
+          "figmaNodeId": "998:6042",
+          "textStyle": "text-mono-value",
+          "textColor": "fg",
+          "extra": "whitespace-nowrap"
+        },
+        "valueMuted": {
+          "figmaNodeId": "998:6067",
+          "textStyle": "text-mono-value",
+          "textColor": "fg-muted",
+          "extra": "whitespace-nowrap"
+        },
+        "indicator": {
+          "figmaNodeId": "998:6043",
+          "position": "relative",
+          "height": "icon-sm",
+          "extra": "w-full",
+          "auditIgnore": [
+            "width"
+          ]
+        },
+        "track": {
+          "figmaNodeId": "998:6044",
+          "position": "absolute",
+          "fill": "surface/raised",
+          "radius": "full",
+          "height": "slider-track",
+          "extra": "inset-x-0 top-1/2 -translate-y-1/2",
+          "auditIgnore": [
+            "width"
+          ]
+        },
+        "trackDim": {
+          "figmaNodeId": "998:6056",
+          "position": "absolute",
+          "fill": "surface/raised",
+          "radius": "full",
+          "height": "slider-track",
+          "opacity": 50,
+          "extra": "inset-x-0 top-1/2 -translate-y-1/2",
+          "auditIgnore": [
+            "width"
+          ]
+        },
+        "tick": {
+          "figmaNodeId": "998:6045",
+          "position": "absolute",
+          "fill": "fg/dim",
+          "radius": "xs",
+          "width": "[2px]",
+          "height": "[12px]",
+          "extra": "top-1/2 -translate-x-1/2 -translate-y-1/2"
+        },
+        "sparkline": {
+          "figmaNodeId": null,
+          "position": "absolute",
+          "textColor": "indigo-hover",
+          "pointerEvents": "none",
+          "extra": "inset-0 w-full h-full overflow-visible"
+        },
+        "nowDot": {
+          "figmaNodeId": "998:6058",
+          "position": "absolute",
+          "fill": "indigo/hover",
+          "radius": "full",
+          "width": "[5px]",
+          "height": "[5px]",
+          "pointerEvents": "none",
+          "extra": "-translate-x-1/2 -translate-y-1/2"
+        },
+        "rangeBar": {
+          "figmaNodeId": "998:6070",
+          "position": "absolute",
+          "fill": "fg/muted",
+          "radius": "full",
+          "height": "slider-track",
+          "extra": "top-1/2 -translate-y-1/2",
+          "auditIgnore": [
+            "width"
+          ]
+        },
+        "rangeEnd": {
+          "figmaNodeId": "998:6071",
+          "position": "absolute",
+          "fill": "fg/subtle",
+          "radius": "xs",
+          "width": "[2px]",
+          "height": "[12px]",
+          "extra": "top-1/2 -translate-x-1/2 -translate-y-1/2"
+        },
+        "swatch": {
+          "figmaNodeId": "998:6081",
+          "position": "relative",
+          "radius": "xs",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "width": "[14px]",
+          "height": "[14px]",
+          "overflow": "hidden",
+          "extra": "shrink-0",
+          "auditIgnore": [
+            "fill"
+          ]
+        },
+        "swatchNone": {
+          "figmaNodeId": "998:6093",
+          "position": "relative",
+          "fill": "surface/alt",
+          "radius": "xs",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "width": "[14px]",
+          "height": "[14px]",
+          "overflow": "hidden",
+          "extra": "shrink-0"
+        },
+        "swatchSlash": {
+          "figmaNodeId": null,
+          "position": "absolute",
+          "fill": "fg/muted",
+          "pointerEvents": "none",
+          "extra": "left-1/2 top-1/2 w-[20px] h-px -translate-x-1/2 -translate-y-1/2 -rotate-45"
+        },
+        "colorStrip": {
+          "figmaNodeId": "998:6084",
+          "position": "absolute",
+          "radius": "full",
+          "height": "slider-track",
+          "extra": "inset-x-0 top-1/2 -translate-y-1/2",
+          "auditIgnore": [
+            "fill",
+            "width"
+          ]
+        },
+        "palette": {
+          "figmaNodeId": "998:6098",
+          "position": "absolute",
+          "layout": "horizontal",
+          "radius": "full",
+          "height": "slider-track",
+          "overflow": "hidden",
+          "extra": "inset-x-0 top-1/2 -translate-y-1/2",
+          "auditIgnore": [
+            "width"
+          ]
+        },
+        "paletteSample": {
+          "figmaNodeId": "998:6099",
+          "height": "slider-track",
+          "extra": "flex-1",
+          "auditIgnore": [
+            "fill"
+          ]
+        },
+        "maskRoot": {
+          "figmaNodeId": "998:6105",
+          "position": "relative",
+          "layout": "horizontal",
+          "align": "center",
+          "transition": "colors",
+          "extra": "outline-none focus-visible:outline-2 focus-visible:outline-indigo-hover motion-reduce:transition-none"
+        },
+        "maskContent": {
+          "figmaNodeId": "998:6108",
+          "layout": "horizontal",
+          "align": "center",
+          "padding": {
+            "left": "handle-offset",
+            "right": "xs"
+          },
+          "gap": "sm",
+          "extra": "flex-1 min-w-0",
+          "auditIgnore": [
+            "padding.left"
+          ]
+        },
+        "maskLabel": {
+          "figmaNodeId": "998:6109",
+          "textStyle": "text-handle",
+          "textColor": "fg",
+          "extra": "shrink-0 whitespace-nowrap"
+        },
+        "maskRange": {
+          "figmaNodeId": "998:6111",
+          "position": "relative",
+          "width": "[36px]",
+          "height": "[6px]",
+          "extra": "shrink-0"
+        },
+        "maskRangeTrack": {
+          "figmaNodeId": "998:6112",
+          "position": "absolute",
+          "fill": "surface/raised",
+          "radius": "full",
+          "width": "[36px]",
+          "height": "[4px]",
+          "extra": "left-0 top-1/2 -translate-y-1/2"
+        },
+        "maskRangeFill": {
+          "figmaNodeId": "998:6113",
+          "position": "absolute",
+          "fill": "fg/muted",
+          "radius": "full",
+          "height": "[4px]",
+          "extra": "top-1/2 -translate-y-1/2",
+          "auditIgnore": [
+            "width"
+          ]
+        },
+        "tooltip": {
+          "figmaNodeId": "999:6115",
+          "position": "absolute",
+          "z": 20,
+          "pointerEvents": "none",
+          "userSelect": "none",
+          "layout": "vertical",
+          "fill": "surface/raised",
+          "radius": "md",
+          "stroke": {
+            "color": "edge/default",
+            "weight": 1
+          },
+          "padding": {
+            "x": "md",
+            "y": "sm"
+          },
+          "gap": "2xs",
+          "effects": [
+            {
+              "type": "shadow",
+              "class": "shadow-[0_6px_16px_-4px_rgba(0,0,0,0.5)]"
+            }
+          ],
+          "extra": "top-full left-handle-offset ml-2xl mt-xs w-max max-w-[240px]"
+        },
+        "tooltipMessage": {
+          "figmaNodeId": "999:6116",
+          "textStyle": "text-body",
+          "textColor": "fg",
+          "extra": "break-words"
+        },
+        "tooltipHint": {
+          "figmaNodeId": "999:6117",
+          "textStyle": "text-param",
+          "textColor": "fg-subtle"
+        }
+      }
     }
   },
   "nodeTemplates": {
