@@ -16,6 +16,7 @@ import { anchorToVec2 } from '../nodes/output/fragment-output'
 import { REFERENCE_SIZE } from '../renderer/constants'
 import { previewCanvasSize } from '../utils/preview-canvas-size'
 import { applyStackEdit, type StackEdit } from '../nodes/color/stack-edit'
+import { normalizeNodeLabel } from '../nodes/node-label'
 
 /** Schema version — bump when persisted shape changes.
  *  v4: one-time dedupe of duplicate node ids left by the old
@@ -99,6 +100,12 @@ interface GraphState {
    *  node's params AND its edges in ONE set, ONE history entry — so one undo
    *  restores a removed layer together with its wires. */
   editStackLayers: (nodeId: string, edit: StackEdit) => void
+  /** Set (or clear, with '' / undefined) a node's custom label — the name an
+   *  embed host binds knob keys to. Trimmed, silently capped at 120
+   *  chars (normalizeNodeLabel). One history entry, never coalesced; a no-op when
+   *  the normalised label is unchanged. Not part of any compile key, so a
+   *  rename never recompiles. */
+  renameNode: (nodeId: string, label: string | undefined) => void
 
   addEdge: (edge: Edge<EdgeData>) => void
   removeEdge: (edgeId: string) => void
@@ -333,6 +340,28 @@ export const useGraphStore = create<GraphState>()(
           edges: result.edges,
           _past: pushHistory(state._past, snapshot(state)),
           _future: [],
+          _lastActionKey: null,
+          canUndo: true,
+          canRedo: false,
+        })
+      },
+
+      renameNode: (nodeId, label) => {
+        const state = get()
+        const node = state.nodes.find((n) => n.id === nodeId)
+        if (!node) return
+        const next = normalizeNodeLabel(label)
+        if (next === normalizeNodeLabel(node.data.label) && (next !== undefined || !('label' in node.data))) return
+        // Clearing removes the key rather than storing '' / undefined, so a
+        // cleared node serialises exactly like one that was never named.
+        const { label: _old, ...rest } = node.data
+        const data: NodeData = next === undefined ? rest : { ...rest, label: next }
+        set({
+          nodes: state.nodes.map((n) => (n.id === nodeId ? { ...n, data } : n)),
+          _past: pushHistory(state._past, snapshot(state)),
+          _future: [],
+          // Cleared like editStackLayers: a following slider drag on this node
+          // must not coalesce into (and be undone together with) the rename.
           _lastActionKey: null,
           canUndo: true,
           canRedo: false,
