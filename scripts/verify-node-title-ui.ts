@@ -126,6 +126,38 @@ test('clicking the pencil enters edit with the whole text selected', async () =>
   await page.keyboard.press('Escape')
 })
 
+test('the selection highlight is clearly visible against the field (owner: it was nearly invisible)', async () => {
+  await load('default')
+  const p = await center(sel('node-title-name'))
+  await page.mouse.move(p.x, p.y)
+  await page.waitForTimeout(300)
+  const q = await center(sel('node-title-pencil'))
+  await page.mouse.click(q.x, q.y)
+  await page.waitForSelector(sel('node-title-input'), { timeout: 2000 })
+  assertWholeSelection(await field(), 'Number', 'mechanism: text is selected')
+  const r = await page.evaluate((s) => {
+    const el = document.querySelector<HTMLInputElement>(s)!
+    // Resolve any CSS colour syntax (color-mix, oklab...) to sRGB + alpha via a canvas.
+    const px = (css: string) => {
+      const c = document.createElement('canvas'); c.width = c.height = 1
+      const ctx = c.getContext('2d', { willReadFrequently: true })!
+      ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = css; ctx.fillRect(0, 0, 1, 1)
+      const d = ctx.getImageData(0, 0, 1, 1).data
+      return { r: d[0], g: d[1], b: d[2], a: d[3] / 255 }
+    }
+    return { sel: px(getComputedStyle(el, '::selection').backgroundColor), field: px(getComputedStyle(el).backgroundColor), raw: getComputedStyle(el, '::selection').backgroundColor }
+  }, sel('node-title-input'))
+  // What the user sees: the selection tint composited over the field background.
+  const mix = (c: number, f: number) => r.sel.a * c + (1 - r.sel.a) * f
+  const seen = { r: mix(r.sel.r, r.field.r), g: mix(r.sel.g, r.field.g), b: mix(r.sel.b, r.field.b) }
+  const lum = (c: { r: number; g: number; b: number }) => (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) / 255
+  const delta = Math.abs(lum(seen) - lum(r.field))
+  const dist = Math.hypot(seen.r - r.field.r, seen.g - r.field.g, seen.b - r.field.b)
+  assert(r.sel.a >= 0.4, `selection tint alpha ${r.sel.a.toFixed(2)} (${r.raw}) — below 0.4 is too faint to see over the dark field`)
+  assert(dist >= 60, `selected text background differs from the field by only ${dist.toFixed(0)} (rgb distance) — selection is nearly invisible`)
+  void delta
+})
+
 test('double-clicking the title enters edit with the whole text selected — no node dblclick, no zoom', async () => {
   await load('custom')
   const vpBefore = await page.evaluate(() => (document.querySelector('.react-flow__viewport') as HTMLElement).style.transform)

@@ -2945,7 +2945,7 @@
           },
           "gap": "xs",
           "height": "input-h",
-          "extra": "min-w-0 outline-none selection:bg-highlight placeholder:text-fg-muted",
+          "extra": "min-w-0 outline-none selection:bg-active/50 placeholder:text-fg-muted",
           "overflow": "hidden"
         },
         "value": {
@@ -2955,7 +2955,7 @@
         },
         "selection": {
           "figmaNodeId": "993:3738",
-          "fill": "interactive/highlight",
+          "fill": "interactive/active",
           "auditIgnore": [
             "fill.opacity",
             "width",
