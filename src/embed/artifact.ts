@@ -2,6 +2,7 @@ import pako from 'pako'
 import type { RenderPlan, RenderPass } from '../compiler/glsl-generator'
 import type { UniformSpec } from '../nodes/types'
 import { GLSL_VERTEX_SHADER } from './vertex'
+import { safeInflateToString, MAX_INFLATED_FILE_BYTES, MAX_ENCODED_HASH_CHARS } from './safe-inflate'
 
 /** A knob exposed to the host page. One per unwired updateMode:'uniform' param. */
 export interface KnobDescriptor {
@@ -116,6 +117,7 @@ function bytesToBase64Url(bytes: Uint8Array): string {
 }
 
 function base64UrlToBytes(s: string): Uint8Array {
+  if (s.length > MAX_ENCODED_HASH_CHARS) throw new Error('Scene data is too large')
   const b64 = s.replace(/-/g, '+').replace(/_/g, '/')
   const bin = atob(b64)
   const bytes = new Uint8Array(bin.length)
@@ -154,7 +156,7 @@ export function encodeArtifactBytes(a: SceneArtifact): Uint8Array {
 }
 
 export function decodeArtifactBytes(bytes: Uint8Array): SceneArtifact {
-  const json = pako.inflate(bytes, { to: 'string' })
+  const json = safeInflateToString(bytes, MAX_INFLATED_FILE_BYTES)
   return JSON.parse(json, mapReviver) as SceneArtifact
 }
 

@@ -28,6 +28,7 @@ import { resolvePassResolution, resolveOutputPassResolution } from './pass-resol
 import { nodesFeeding } from './reachability'
 import { assignTextureSlots, type PassLiveness } from './texture-slots'
 import { orderPassesByConsumer } from './pass-order'
+import { assertSafeGraphIds } from '../utils/node-id'
 
 // ---------------------------------------------------------------------------
 // WGSL type coercion (IR-level, parallel to type-coercion.ts GLSL rules)
@@ -489,6 +490,7 @@ export function compileGraphIR(
   edges: Edge<EdgeData>[],
 ): WGSLMultiPassOutput | null {
   try {
+    assertSafeGraphIds(nodes, edges) // untrusted ids/handles must not reach shader text
     if (hasCycles(nodes, edges)) return null
 
     // Must mirror compileGraph: expand multi-pass nodes before anything else, or
