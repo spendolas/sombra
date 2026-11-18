@@ -1,8 +1,8 @@
 /**
  * verify-embed-site-worley-gpu — the `site-worley-ridged` scene rendered by the
  * real player in headless Chrome, measured against the spectra Preset 3 look
- * (www repo docs/refactor/sombra/S-B-LOOK-SPEC.md §7), on WebGL2 (the backend
- * the site plays it on) and WebGPU.
+ * (www repo docs/refactor/sombra/S-B-LOOK-SPEC.md §7), on WebGPU (the primary
+ * backend; WGSL ships in the artifact) and WebGL2 (the fallback).
  *
  * Canvas 1440×900 at DPR 1, knobs written the way the site adapter writes them
  * at DPR 1 (dots 4, pixelate 32 reference px = 4/32 device px), scene time 30 s.
@@ -22,7 +22,7 @@
  *                   anchored at the canvas centre; the same at DPR 2 with the
  *                   authored 2/16 reference px
  *   L5 Balance      sweep −1 → +0.985: coverage 0 → 1, monotone
- *   L6 Statistics   over 24 generated seeds (WebGL2 gated; WebGPU reported):
+ *   L6 Statistics   over 24 generated seeds (both backends gated):
  *                   median coverage in 0.46–0.68 and ±10 % of spectra's, median
  *                   extreme-cell fraction (level < 2 % or > 98 %) in 0.42–0.80
  *                   and ±10 % of spectra's, run-length anisotropy (max/min of
@@ -391,10 +391,9 @@ async function runBackend(browser: Browser, origin: string, base: string, backen
     [`L6 run-length anisotropy > ${BASE.aniso} on ${anisoN} of ${n} seeds (need ≥ ${Math.ceil(BASE.anisoShare * n)})`, anisoN >= BASE.anisoShare * n],
     [`L6 median cells changing level from ${T0} s to ${T1} s: ${f3(tMed)} in ${BASE.temporal.join('–')}`, inR(tMed, BASE.temporal)],
   ] as const
-  for (const [name, ok] of stats) {
-    if (backend === 'webgl2') check(P(name), ok)
-    else info(P(name), ok ? 'in range (reported, not gated: the site plays WebGL2)' : 'OUT of range (reported, not gated: the site plays WebGL2)')
-  }
+  // Both backends are gated with the same bands: WebGPU is the primary target
+  // (WGSL ships in the artifact), WebGL2 the fallback.
+  for (const [name, ok] of stats) check(P(name), ok)
 
   // ── L3 + L5 balance sweep ───────────────────────────────────────────────────
   const sweep = await page.evaluate(([s, w, h]) => {
