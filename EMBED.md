@@ -553,7 +553,11 @@ it can set at 60 Hz (with alpha), a field alpha, optional balance and seed knobs
 a pausable clock, a clean teardown. The checklist that pins that shape lives in
 `scripts/lib/site-conformance.ts` (static half, C1..C8: decodes, `site-palette-stop-<n>`
 RGBA knobs, `fragment-output-alpha`, `site-balance-value` / `site-seed-value`
-(warn if missing), no duplicate-label suffixes, Render Quality high/medium). It is
+(warn if missing), no duplicate-label suffixes, Render Quality high/medium). C2
+accepts the stop keys in one of two forms, never mixed: `site-palette-stop-<n>`
+(stop n of a Color Ramp labelled `site.palette`) or `site-palette-stop-<n>-color`
+(one Color node per stop, labelled `site.palette.stop-<n>`; a Color node's key
+always ends in its param). It is
 plain TS, reusable editor-side, and must never be imported by the player
 (`verify:embed:bundle` forbids its marker).
 
