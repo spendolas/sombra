@@ -608,15 +608,16 @@ at DPR 1, 1.5, 2, 3 and writes a PNG per DPR (a report, not a gate).
 **`public/shared/site-worley-ridged.sombra`** + **`.ombra`** recreate the site's
 banded background (spectra pixel mode, Preset 3; recipe in the www repo's
 `docs/refactor/sombra/S-B-LOOK-SPEC.md`) from existing nodes, one pass,
-WebGL2-capable. Graph (built in code, `scripts/lib/site-worley-ridged-fixture.ts`):
+WebGPU-first, WebGL2-capable. Graph (built in code, `scripts/lib/site-worley-ridged-fixture.ts`):
 Pixelate.uv → Domain Warp (value noise, Deep: x, y AND phase) → Noise Worley 2D at
 the warped coords and warped phase → Ridged → Smoothstep(0.2, 0.8) → + `site.balance`
 → threshold Remap → Dither (Square, Per-pixel) → mask; a second field at half
 coords / half time picks the stop-1 → stop-2 blend; three Mixes over four Color
 nodes. The bands are a float32 effect: Worley's `sin` hash steps in whole ulps as
 the warped phase crosses them, so the scene must play on highp (it is never
-mediump) and the site plays it on WebGL2 (WGSL `sin` differs; the look is the same
-kind, not the same pixels).
+mediump). WebGPU is the primary target and the artifact carries its WGSL; WebGL2
+is the fallback. Both are gated with the same statistics (WGSL and GLSL `sin`
+differ, so the look is the same kind, not the same pixels).
 
 | Knob (key) | Address | Default | Notes |
 |---|---|---|---|
