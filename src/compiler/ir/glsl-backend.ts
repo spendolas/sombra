@@ -127,6 +127,13 @@ export function lowerExprToGLSL(expr: IRExpr, parentPrec = 0, isRightOfParent = 
       const e = lowerExprToGLSL(expr.expr)
       return expr.from === 'yDown' ? `vec2((${e}).x, -(${e}).y)` : e
     }
+
+    case 'nativeToYDown': {
+      // GLSL's framebuffer is y-UP, so a native position is mirrored against the frame
+      // height — the same flip fragCoord('yDown') applies. Requires u_resolution.
+      const e = lowerExprToGLSL(expr.expr)
+      return `vec2((${e}).x, u_resolution.y - (${e}).y)`
+    }
   }
 }
 

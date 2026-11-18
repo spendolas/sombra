@@ -97,7 +97,7 @@ export type IRExpr =
   | IRSwizzle
   | IRConstruct
   | IRTernary
-  | IRTextureSample | IRFragCoord | IRFramebufferY
+  | IRTextureSample | IRFragCoord | IRFramebufferY | IRNativeToYDown
 
 // ---------------------------------------------------------------------------
 // Statements
@@ -166,6 +166,26 @@ export interface IRFramebufferY {
   readonly expr: IRExpr
   /** The Y orientation the input vector is already expressed in. */
   readonly from: 'yUp' | 'yDown'
+}
+
+/**
+ * Re-express a pixel POSITION from the backend's native framebuffer orientation in Sombra's
+ * y-down pattern space (top-left origin — the space of `fragCoord('yDown')` and `auto_uv`).
+ *
+ * For a position built from `fragCoord('native')` that must ALSO leave the node as a
+ * coordinate. Pixelate's cell centre is the case: it indexes the source texture, which was
+ * rendered in the backend's own orientation, so it has to stay native for the sample — but
+ * the same centre is the `uv` output, and an output coordinate must be y-down on both
+ * backends or everything downstream renders vertically mirrored on WebGL2 only.
+ *
+ * GLSL mirrors Y against `u_resolution` (declare it as a standard uniform); WGSL is already
+ * y-down and passes the expression through unchanged, so `nativeToYDown(fragCoord('native'))`
+ * means exactly `fragCoord('yDown')`. This is for a POSITION. A displacement or direction
+ * has no origin to mirror about — reorient those with `framebufferY`.
+ */
+export interface IRNativeToYDown {
+  readonly kind: 'nativeToYDown'
+  readonly expr: IRExpr
 }
 
 /** One arm of an if / else-if chain. */
@@ -445,6 +465,10 @@ export function fragCoord(space: 'yDown' | 'native' = 'yDown'): IRFragCoord {
 
 export function framebufferY(expr: IRExpr, from: 'yUp' | 'yDown'): IRFramebufferY {
   return { kind: 'framebufferY', expr, from }
+}
+
+export function nativeToYDown(expr: IRExpr): IRNativeToYDown {
+  return { kind: 'nativeToYDown', expr }
 }
 
 export function textureSample(
