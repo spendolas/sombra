@@ -18,6 +18,7 @@ import { migrateOffsetSpace } from './srt-migration'
 import { SOMBRA_FILE_MIME_TYPE } from './file-type-constants'
 import type { ShaderThumbnail } from '../renderer/capture-thumbnail'
 import { SOMBRA_APP_BUILD_ID } from '../generated/build-info'
+import { assertSafeGraphIds } from './node-id'
 
 // v3: ONE-STORAGE Offset Space — srt_translateX/Y store the world-frame offset.
 // Files < 3 were authored under node-frame translate semantics and get their
@@ -264,7 +265,18 @@ function migrateV1ToV2(nodes: Node<NodeData>[]): Node<NodeData>[] {
  * Validate and unwrap a .sombra file (or bare { nodes, edges }).
  * Throws on invalid input.
  */
+/** Public entry: decode, then reject ids/handles that are unsafe to compile. */
 export function importFromFile(json: unknown): {
+  nodes: Node<NodeData>[]
+  edges: Edge<EdgeData>[]
+  appBuildId: string | null
+} {
+  const r = importFromFileUnchecked(json)
+  assertSafeGraphIds(r.nodes, r.edges)
+  return r
+}
+
+function importFromFileUnchecked(json: unknown): {
   nodes: Node<NodeData>[]
   edges: Edge<EdgeData>[]
   appBuildId: string | null
@@ -652,6 +664,7 @@ export function decodeCompactHash(hash: string): {
     return !inputs.some((p) => p.id === e.targetHandle && p.internal)
   })
 
+  assertSafeGraphIds(nodes, edges)
   return { nodes, edges }
 }
 
