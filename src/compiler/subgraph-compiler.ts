@@ -22,6 +22,7 @@ import {
 import type { TextureBoundaryEdge } from './glsl-generator'
 import { expandMultiPassNodes } from './expand-passes'
 import { resolvePassResolution, resolveOutputPassResolution } from './pass-resolution'
+import { assertSafeGraphIds } from '../utils/node-id'
 
 /** Maximum passes for preview rendering. Beyond this, show placeholder. [P8] */
 const MAX_PREVIEW_PASSES = 6
@@ -57,6 +58,7 @@ export function compileNodePreview(
   targetNodeId: string,
 ): PreviewCompilationResult {
   try {
+    assertSafeGraphIds(nodes, edges) // untrusted ids/handles must not reach shader text
     // A multi-pass node (separable blur) must be expanded here too, and the
     // preview must target the LAST sub-pass — targeting the authored id would
     // render only the first, so a blur would appear filtered on one axis.

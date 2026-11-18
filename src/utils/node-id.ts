@@ -87,3 +87,32 @@ export function dedupeNodeIds(
   })
   return repaired ? { nodes: out, edges, repaired } : { nodes, edges, repaired: 0 }
 }
+
+/**
+ * Ids and port handles are spliced into generated shader text
+ * (`node_<id>_<port>`, `u_<id>_<param>`), and the compilers only replace `-`
+ * with `_`. An id from untrusted input (share link, .sombra file) containing
+ * `;`, `}`, `//` etc. would therefore inject arbitrary code into the shader.
+ * This is the single allow-list every entry point enforces.
+ */
+const SAFE_ID_RE = /^[A-Za-z0-9_-]{1,128}$/
+
+export function isSafeId(id: unknown): id is string {
+  return typeof id === 'string' && SAFE_ID_RE.test(id)
+}
+
+/** Throws if any node id or edge endpoint/handle is not shader-identifier safe. */
+export function assertSafeGraphIds(
+  nodes: readonly { id: string }[],
+  edges: readonly { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null }[],
+): void {
+  for (const n of nodes) {
+    if (!isSafeId(n.id)) throw new Error(`Unsafe node id: ${JSON.stringify(String(n.id)).slice(0, 60)}`)
+  }
+  for (const e of edges) {
+    if (!isSafeId(e.source) || !isSafeId(e.target)) throw new Error('Unsafe edge endpoint id')
+    for (const h of [e.sourceHandle, e.targetHandle]) {
+      if (h != null && !isSafeId(h)) throw new Error(`Unsafe port handle: ${JSON.stringify(String(h)).slice(0, 60)}`)
+    }
+  }
+}
