@@ -11,7 +11,7 @@
 import pako from 'pako'
 
 /** Decompressed-size ceilings. Real scenes are far below these. */
-export const MAX_INFLATED_FILE_BYTES = 64 * 1024 * 1024 // .sombra file, hosted embed artifact
+export const MAX_INFLATED_FILE_BYTES = 128 * 1024 * 1024 // .sombra file, hosted embed artifact (old files embed large image sources)
 export const MAX_INFLATED_HASH_BYTES = 16 * 1024 * 1024 // share-URL hash / inline attribute
 /** Ceiling on the base64 text of a hash/attribute before it is even decoded. */
 export const MAX_ENCODED_HASH_CHARS = 8 * 1024 * 1024
