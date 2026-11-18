@@ -18,6 +18,8 @@ import { migrateOffsetSpace } from './srt-migration'
 import { SOMBRA_FILE_MIME_TYPE } from './file-type-constants'
 import type { ShaderThumbnail } from '../renderer/capture-thumbnail'
 import { SOMBRA_APP_BUILD_ID } from '../generated/build-info'
+import { assertSafeGraphIds } from './node-id'
+import { safeInflateToString, MAX_INFLATED_FILE_BYTES, MAX_INFLATED_HASH_BYTES, MAX_ENCODED_HASH_CHARS } from '../embed/safe-inflate'
 
 // v3: ONE-STORAGE Offset Space — srt_translateX/Y store the world-frame offset.
 // Files < 3 were authored under node-frame translate semantics and get their
@@ -126,7 +128,7 @@ export function decodeSombraPackage(data: ArrayBuffer | Uint8Array): unknown {
     }
 
     try {
-      const json = pako.inflate(bytes.subarray(SOMBRA_PACKAGE_HEADER_SIZE), { to: 'string' })
+      const json = safeInflateToString(bytes.subarray(SOMBRA_PACKAGE_HEADER_SIZE), MAX_INFLATED_FILE_BYTES)
       return JSON.parse(json)
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
@@ -264,7 +266,18 @@ function migrateV1ToV2(nodes: Node<NodeData>[]): Node<NodeData>[] {
  * Validate and unwrap a .sombra file (or bare { nodes, edges }).
  * Throws on invalid input.
  */
+/** Public entry: decode, then reject ids/handles that are unsafe to compile. */
 export function importFromFile(json: unknown): {
+  nodes: Node<NodeData>[]
+  edges: Edge<EdgeData>[]
+  appBuildId: string | null
+} {
+  const r = importFromFileUnchecked(json)
+  assertSafeGraphIds(r.nodes, r.edges)
+  return r
+}
+
+function importFromFileUnchecked(json: unknown): {
   nodes: Node<NodeData>[]
   edges: Edge<EdgeData>[]
   appBuildId: string | null
@@ -456,13 +469,14 @@ export function decodeGraphFromHash(hash: string): {
   edges: Edge<EdgeData>[]
 } {
   // Restore standard base64 from base64url
+  if (hash.length > MAX_ENCODED_HASH_CHARS) throw new Error('Link is too large')
   let base64 = hash.replace(/-/g, '+').replace(/_/g, '/')
   // Re-add padding
   while (base64.length % 4 !== 0) base64 += '='
   const binary = atob(base64)
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  const json = new TextDecoder().decode(pako.inflate(bytes))
+  const json = safeInflateToString(bytes, MAX_INFLATED_HASH_BYTES)
   const parsed = JSON.parse(json)
   return importFromFile(parsed)
 }
@@ -574,12 +588,13 @@ export function decodeCompactHash(hash: string): {
   nodes: Node<NodeData>[]
   edges: Edge<EdgeData>[]
 } {
+  if (hash.length > MAX_ENCODED_HASH_CHARS) throw new Error('Link is too large')
   let base64 = hash.replace(/-/g, '+').replace(/_/g, '/')
   while (base64.length % 4 !== 0) base64 += '='
   const binary = atob(base64)
   const bytes = new Uint8Array(binary.length)
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-  const json = new TextDecoder().decode(pako.inflate(bytes))
+  const json = safeInflateToString(bytes, MAX_INFLATED_HASH_BYTES)
   const compact = JSON.parse(json) as CompactGraph
 
   if (compact.v !== 1 && compact.v !== 2) {
@@ -652,6 +667,7 @@ export function decodeCompactHash(hash: string): {
     return !inputs.some((p) => p.id === e.targetHandle && p.internal)
   })
 
+  assertSafeGraphIds(nodes, edges)
   return { nodes, edges }
 }
 

@@ -20,6 +20,7 @@ import type { IRSpatialTransform } from './ir/types'
 import { nodesFeeding } from './reachability'
 import { assignTextureSlots, type PassLiveness } from './texture-slots'
 import { orderPassesByConsumer } from './pass-order'
+import { assertSafeGraphIds } from '../utils/node-id'
 
 export function uniformName(sanitizedNodeId: string, paramId: string): string {
   return `u_${sanitizedNodeId}_${paramId}`
@@ -671,6 +672,7 @@ export function compileGraph(
   edges: Edge<EdgeData>[]
 ): RenderPlan {
   try {
+    assertSafeGraphIds(nodes, edges) // untrusted ids/handles must not reach shader text
     if (hasCycles(nodes, edges)) {
       return errorPlan([{ message: 'Graph contains cycles. Remove circular dependencies.' }])
     }
