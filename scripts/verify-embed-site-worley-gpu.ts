@@ -54,7 +54,6 @@ let passed = 0, failed = 0
 function check(name: string, cond: boolean, detail = '') {
   if (cond) { passed++; console.log(`  ok   ${name}${detail ? `  (${detail})` : ''}`) } else { failed++; console.error(`  FAIL ${name}${detail ? ` — ${detail}` : ''}`) }
 }
-const info = (name: string, detail: string) => console.log(`  info ${name}  ${detail}`)
 
 const W = 1440, H = 900
 /**
