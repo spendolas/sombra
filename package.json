@@ -87,6 +87,7 @@
     "verify:srt": "tsx scripts/verify-srt.ts",
     "verify:srt-conformity": "tsx scripts/verify-srt-conformity.ts",
     "verify:srt-rotate:gpu": "tsx scripts/verify-srt-rotate-gpu.ts",
+    "verify:uv-orientation:gpu": "tsx scripts/verify-uv-orientation-gpu.ts",
     "verify:sandbox": "tsx scripts/verify-sandbox-isolation.ts",
     "verify:dynamic-texture-ports": "tsx scripts/verify-dynamic-texture-ports.ts",
     "verify:dynamic-params": "tsx scripts/verify-dynamic-params.ts",

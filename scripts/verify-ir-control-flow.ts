@@ -20,7 +20,7 @@
 import { test, run, assert } from './blur-bakeoff/lib/test-util'
 import { createRig } from './blur-bakeoff/lib/gpu-rig'
 import {
-  ifStmt, forLoop, declare, assign, binary, variable, literal, call, fragCoord, framebufferY,
+  ifStmt, forLoop, declare, assign, binary, variable, literal, call, fragCoord, framebufferY, nativeToYDown,
 } from '../src/compiler/ir/types'
 import type { IRStmt } from '../src/compiler/ir/types'
 import { lowerStmtToGLSL } from '../src/compiler/ir/glsl-backend'
@@ -120,6 +120,17 @@ test('framebufferY negates on exactly ONE backend, and which one depends on the 
   // WGSL's framebuffer is y-down: the mirror image.
   assert(wgsl(up).includes('-'), `WGSL + yUp must negate: ${wgsl(up)}`)
   assert(!wgsl(down).includes('-'), `WGSL + yDown must be identity: ${wgsl(down)}`)
+})
+
+test('nativeToYDown mirrors a native POSITION on GLSL only, the same flip as fragCoord(yDown)', () => {
+  const s = declare('p', 'vec2', nativeToYDown(variable('q')))
+  assert(glsl(s).includes('u_resolution.y - (q).y'), `GLSL must mirror Y against u_resolution: ${glsl(s)}`)
+  assert(!wgsl(s).includes('-') && wgsl(s).includes('= q;'), `WGSL is already y-down and must pass through: ${wgsl(s)}`)
+  // Applied to the native builtin it must mean exactly fragCoord('yDown'): same flip, per backend.
+  const viaFc = glsl(declare('a', 'vec2', nativeToYDown(fragCoord('native'))))
+  assert(viaFc.includes('u_resolution.y - (gl_FragCoord.xy).y'), `GLSL: ${viaFc}`)
+  assert(wgsl(declare('a', 'vec2', nativeToYDown(fragCoord('native')))) === wgsl(declare('a', 'vec2', fragCoord('yDown'))),
+    'WGSL nativeToYDown(fragCoord(native)) must equal fragCoord(yDown)')
 })
 
 // ---------------------------------------------------------------------------
