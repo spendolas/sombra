@@ -1552,6 +1552,31 @@ function verify(
     params: { pixelSize: 8 },
   })
   verify('Pixelate (non-texture)', pixelateNode, g, i, 'loose')
+
+  // 39a. The uv OUTPUT is y-down on both GLSL paths, and the two paths agree.
+  // The cell centre stays native (it indexes the source texture); only the output is
+  // mirrored. WebGL2 renders the hand-written glsl(), so the GPU gate
+  // (verify:uv-orientation:gpu) cannot see the ir() side — on WGSL the mirror is the
+  // identity by construction. This text check is what catches a revert of ir() alone.
+  testNum++
+  console.log(`\n  ${testNum}. Pixelate — uv output is y-down on both GLSL paths, identity on WGSL`)
+  const uvLine = (src: string) => src.split('\n').map((l) => l.trim()).find((l) => /node_pix_mmm333_uv\s*(:\s*vec2f)?\s*=/.test(l)) ?? ''
+  // IR lowering parenthesises each operand: `(pxl_px_x).x` ≡ `pxl_px_x.x`.
+  const canon = (l: string) => normalize(l.replace(/\((\w+)\)/g, '$1'))
+  const refUv = uvLine(pixelateNode.glsl(g))
+  const irOut = pixelateNode.ir!(i)
+  const irUv = uvLine(lowerNodeOutputToGLSL(irOut).join('\n'))
+  const wgslUv = uvLine(lowerNodeOutputToWGSL(irOut).join('\n'))
+  const mirror = 'u_resolution.y - pxl_px_pix_mmm333.y'
+  const uvOk = canon(refUv).includes(mirror) && canon(refUv) === canon(irUv)
+    && wgslUv.length > 0 && !wgslUv.includes('u_resolution.y -')
+  if (uvOk) {
+    console.log('  [PASS] pixelate uv: GLSL mirrors the native cell centre on both paths (paths match); WGSL unchanged')
+    passed++
+  } else {
+    console.log(`  [FAIL] pixelate uv orientation\n    glsl(): ${refUv}\n    ir→GLSL: ${irUv}\n    ir→WGSL: ${wgslUv}`)
+    failed++
+  }
 }
 
 // 39b. Pixelate (texture mode) — RGBA sample assertion
