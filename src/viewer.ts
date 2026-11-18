@@ -11,6 +11,7 @@ import { decodeGraphFromHash, decodeCompactHash } from './utils/sombra-file'
 import { createShaderRenderer } from './renderer/create-renderer'
 import { anchorToVec2 } from './nodes/output/fragment-output'
 import type { QualityTier } from './renderer/types'
+import { isSafeImageDataUrl } from './embed/image-guard'
 
 function showError(message: string) {
   const el = document.getElementById('error')!
@@ -130,6 +131,7 @@ async function main() {
       if (node.data.type !== 'image') continue
       const imageData = node.data.params?.imageData as string | undefined
       if (!imageData) continue
+      if (!isSafeImageDataUrl(imageData)) continue
       const samplerName = `u_${node.id.replace(/-/g, '_')}_image`
       const img = new Image()
       img.onload = () => {

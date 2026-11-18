@@ -157,7 +157,27 @@ export function encodeArtifactBytes(a: SceneArtifact): Uint8Array {
 
 export function decodeArtifactBytes(bytes: Uint8Array): SceneArtifact {
   const json = safeInflateToString(bytes, MAX_INFLATED_FILE_BYTES)
-  return JSON.parse(json, mapReviver) as SceneArtifact
+  return validateArtifact(JSON.parse(json, mapReviver))
+}
+
+/** Shape check on untrusted artifact JSON (security audit F3). Shader text itself
+ *  cannot be validated; this bounds structure so a hostile file can't hand the
+ *  renderer a non-array, millions of passes or a prototype-poisoned object. */
+export const MAX_ARTIFACT_PASSES = 64
+export const MAX_ARTIFACT_IMAGES = 64
+export const MAX_ARTIFACT_MANIFEST = 20000
+function validateArtifact(a: unknown): SceneArtifact {
+  const o = a as Partial<SceneArtifact> | null
+  const bad = (why: string): never => { throw new Error(`Invalid scene: ${why}`) }
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return bad('not an object')
+  if (Object.prototype.hasOwnProperty.call(o, '__proto__')) return bad('forbidden key')
+  if (!o.plan || typeof o.plan !== 'object' || !Array.isArray(o.plan.passes)) return bad('missing render plan')
+  if (o.plan.passes.length < 1 || o.plan.passes.length > MAX_ARTIFACT_PASSES) return bad('pass count out of range')
+  if (o.plan.passes.some((p) => !p || typeof p !== 'object')) return bad('malformed pass')
+  if (!Array.isArray(o.manifest) || o.manifest.length > MAX_ARTIFACT_MANIFEST) return bad('manifest')
+  if (!Array.isArray(o.images) || o.images.length > MAX_ARTIFACT_IMAGES) return bad('images')
+  if (!o.meta || typeof o.meta !== 'object') return bad('meta')
+  return o as SceneArtifact
 }
 
 /** Inline transport: the same deflated bytes, base64url-wrapped for a `data-` attribute. */

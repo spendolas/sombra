@@ -19,6 +19,7 @@ import { SOMBRA_FILE_MIME_TYPE } from './file-type-constants'
 import type { ShaderThumbnail } from '../renderer/capture-thumbnail'
 import { SOMBRA_APP_BUILD_ID } from '../generated/build-info'
 import { assertSafeGraphIds } from './node-id'
+import { sanitizeGraph } from './sanitize-graph'
 import { safeInflateToString, MAX_INFLATED_FILE_BYTES, MAX_INFLATED_HASH_BYTES, MAX_ENCODED_HASH_CHARS } from '../embed/safe-inflate'
 
 // v3: ONE-STORAGE Offset Space — srt_translateX/Y store the world-frame offset.
@@ -274,7 +275,7 @@ export function importFromFile(json: unknown): {
 } {
   const r = importFromFileUnchecked(json)
   assertSafeGraphIds(r.nodes, r.edges)
-  return r
+  return { ...r, ...sanitizeGraph(r.nodes, r.edges) }
 }
 
 function importFromFileUnchecked(json: unknown): {
@@ -668,7 +669,7 @@ export function decodeCompactHash(hash: string): {
   })
 
   assertSafeGraphIds(nodes, edges)
-  return { nodes, edges }
+  return sanitizeGraph(nodes, edges)
 }
 
 /**
