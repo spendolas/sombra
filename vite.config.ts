@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react-swc'
 import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 import { readFileSync } from 'fs'
+import { injectCsp } from './vite-csp'
 
 // Dev-only: serve the built embed player (dist/embed/*) at /embed/* so the
 // Embed Tester can load the REAL UMD bundle from this origin (prod serves it from
@@ -30,7 +31,7 @@ function serveEmbedDist(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), serveEmbedDist()],
+  plugins: [react(), tailwindcss(), serveEmbedDist(), injectCsp()],
   base: '/',
   server: {
     // Honour an externally assigned port. Vite does NOT read PORT by default —
