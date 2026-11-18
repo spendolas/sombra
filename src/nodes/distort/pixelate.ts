@@ -4,7 +4,7 @@
 
 import type { NodeDefinition } from '../types'
 import type { IRContext, IRNodeOutput, IRStmt } from '../../compiler/ir/types'
-import { variable, declare, construct, binary, literal, call, textureSample, raw, fragCoord } from '../../compiler/ir/types'
+import { variable, declare, construct, binary, literal, call, textureSample, raw, fragCoord, nativeToYDown } from '../../compiler/ir/types'
 
 export const pixelateNode: NodeDefinition = {
   type: 'pixelate',
@@ -61,8 +61,10 @@ export const pixelateNode: NodeDefinition = {
     lines.push(`vec2 pxl_px_${id} = (pxl_cell_${id} + 0.5) * vec2(pxl_size_${id}) + u_resolution * u_anchor;`)
     // Screen UV for FBO sampling
     lines.push(`vec2 pxl_screenUV_${id} = pxl_px_${id} / u_viewport;`)
-    // Frozen-ref UV for downstream nodes
-    lines.push(`vec2 ${outputs.uv} = (pxl_px_${id} - u_resolution * u_anchor) / (u_frame_scale * u_ref_size) + u_anchor;`)
+    // Frozen-ref UV for downstream nodes. pxl_px is NATIVE (gl_FragCoord is y-up) because it
+    // indexes the source texture above; an output coordinate must be y-down like auto_uv, so
+    // mirror the cell centre before it leaves the node. Same as nativeToYDown() in ir().
+    lines.push(`vec2 ${outputs.uv} = (vec2(pxl_px_${id}.x, u_resolution.y - pxl_px_${id}.y) - u_resolution * u_anchor) / (u_frame_scale * u_ref_size) + u_anchor;`)
 
     // Color output
     const samplerName = ctx.textureSamplers?.source
@@ -114,11 +116,13 @@ export const pixelateNode: NodeDefinition = {
       declare(`pxl_screenUV_${id}`, 'vec2',
         binary('/', variable(`pxl_px_${id}`), variable('u_viewport'), 'vec2'),
       ),
-      // Frozen-ref UV for downstream nodes (same formula as auto_uv)
+      // Frozen-ref UV for downstream nodes (same formula as auto_uv). The cell centre is
+      // NATIVE because it indexes the source texture; an output coordinate must be y-down
+      // on both backends, so it is re-expressed in y-down space here (identity on WGSL).
       declare(ctx.outputs.uv, 'vec2',
         binary('+',
           binary('/',
-            binary('-', variable(`pxl_px_${id}`), binary('*', variable('u_resolution'), variable('u_anchor'), 'vec2'), 'vec2'),
+            binary('-', nativeToYDown(variable(`pxl_px_${id}`)), binary('*', variable('u_resolution'), variable('u_anchor'), 'vec2'), 'vec2'),
             binary('*', variable('u_frame_scale'), variable('u_ref_size'), 'float'),
             'vec2',
           ),
