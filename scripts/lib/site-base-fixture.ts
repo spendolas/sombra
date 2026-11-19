@@ -45,7 +45,7 @@ export const REQUIRED_SITE_KEYS = [
 ] as const
 
 /** Builder that validates every wire like the canvas does. */
-function graphBuilder() {
+export function graphBuilder() {
   const nodes: Node<NodeData>[] = []
   const edges: Edge<EdgeData>[] = []
   const add = (id: string, type: string, col: number, row: number, params: Record<string, unknown> = {}, label?: string) => {

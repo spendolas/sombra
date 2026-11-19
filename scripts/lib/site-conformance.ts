@@ -10,7 +10,13 @@
  *
  *   C1 Decodes      inflates; v === 1; kind === 'frozen'; plan.success; ≥ 1 pass
  *   C2 Palette      ≥ 2 knobs `site-palette-stop-<n>`, n contiguous from 0,
- *                   type 'color', glslType 'vec4', 4-component defaults
+ *                   type 'color', glslType 'vec4', 4-component defaults. Either
+ *                   form, never mixed: `site-palette-stop-<n>` (stop n of one
+ *                   Color Ramp labelled `site.palette`) or
+ *                   `site-palette-stop-<n>-color` (a Color node labelled
+ *                   `site.palette.stop-<n>` — a scene that blends its stops
+ *                   itself needs one node per stop,
+ *                   and a Color node's key always ends in its param, `-color`)
  *   C3 Field alpha  `fragment-output-alpha` exists, type 'float'
  *   C4 Balance      `site-balance-value` exists (warn if missing)
  *   C5 Seed         `site-seed-value` exists (warn if missing)
@@ -24,7 +30,7 @@ export type CheckStatus = 'pass' | 'warn' | 'fail' | 'info'
 export interface CheckRow { id: string; title: string; status: CheckStatus; detail: string }
 export interface SiteReport { rows: CheckRow[]; ok: boolean; artifact?: SceneArtifact }
 
-const PALETTE_RE = /^site-palette-stop-(\d+)$/
+const PALETTE_RE = /^site-palette-stop-(\d+)(-color)?$/
 
 /** Run C1..C8 over the raw `.ombra` bytes. `ok` is false iff any row failed. */
 export function checkSiteArtifact(bytes: Uint8Array): SiteReport {
@@ -56,10 +62,11 @@ export function checkSiteArtifact(bytes: Uint8Array): SiteReport {
   const stops = manifest
     .map((k) => ({ k, m: PALETTE_RE.exec(k.key) }))
     .filter((x): x is { k: KnobDescriptor; m: RegExpExecArray } => x.m !== null)
-    .map(({ k, m }) => ({ k, n: Number(m[1]) }))
+    .map(({ k, m }) => ({ k, n: Number(m[1]), perNode: m[2] !== undefined }))
     .sort((x, y) => x.n - y.n)
   const c2: string[] = []
   if (stops.length < 2) c2.push(`${stops.length} stop knob(s), need ≥ 2`)
+  if (new Set(stops.map((s) => s.perNode)).size > 1) c2.push('stop keys mix the ramp form and the per-node `-color` form')
   stops.forEach(({ n }, i) => { if (n !== i) c2.push(`stop indices not contiguous from 0 (${stops.map((s) => s.n).join(',')})`) })
   for (const { k } of stops) {
     if (k.type !== 'color' || k.glslType !== 'vec4') c2.push(`${k.key} is ${k.type}/${k.glslType}, need color/vec4`)

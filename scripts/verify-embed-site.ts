@@ -4,7 +4,6 @@
  *
  *   npx tsx scripts/verify-embed-site.ts              build + check the fixture (the gate)
  *   npx tsx scripts/verify-embed-site.ts <file.ombra> validate any .ombra, print the C1..C8 table
- *   npx tsx scripts/verify-embed-site.ts --write      (re)write public/shared/site-base.{sombra,ombra}, then check
  *
  * The gate (no argument):
  *   A. The fixture graph is the §6.1 table: node types, author labels, every
@@ -15,16 +14,25 @@
  *   C. The checklist can fail: each check is run against a broken variant of
  *      the fixture (or of the bytes) and must report fail/warn — so a pass above
  *      is a decision, not a default.
- *   D. The committed public/shared/site-base.ombra decodes, passes C1..C8, and
- *      carries the same manifest keys as a fresh build; the committed .sombra
- *      re-opens through the editor's importer with its labels and re-publishes
- *      to the same keys.
+ *   D. (removed 2026-11-19) The scene is no longer stored or hosted on the Sombra
+ *      side; the fixture is built in code, so there are no committed files to check.
  *   E. Compat fixture (the pre-change recipe: four Color + three Mix, Dither ·
  *      Result → Remap → final Mix factor) still publishes and exposes its four
- *      colour knobs; its published shader and manifest equal the ones 5752aa9
- *      (before SR-1..SR-4) published for the same graph
- *      (scripts/baselines/site-compat-5752aa9.ombra). The GPU gate compares
- *      their pixels.
+ *      colour knobs, and its manifest equals the one 5752aa9 (before SR-1..SR-4)
+ *      published for the same graph (scripts/baselines/site-compat-5752aa9.ombra,
+ *      kept as the historical reference — never overwrite it) EXCEPT for the
+ *      Rotate knobs Noise/FBM/Warp gained on 2026-11-11, each of which must be
+ *      the standard Rotate right after its node's Scale
+ *      (scripts/lib/added-rotate-knobs.ts, the same rule as verify-manifest's
+ *      snapshot). The GPU gate (verify:embed:site:gpu) requires today's publish
+ *      to render EXACTLY 5752aa9's frame on both backends — that pixel identity
+ *      is the compat guarantee.
+ *      WHY E CHANGED (2026-11-11, owner-approved): E used to demand the
+ *      published GLSL/WGSL text be byte-identical to 5752aa9's. Adding Rotate
+ *      to Noise/FBM puts a rotate uniform and the rotate op into the shader of
+ *      any scene that uses them, so byte-identity became impossible by design.
+ *      The change only ADDS controls; existing scenes keep their frame (pixel
+ *      identity, above) and keys (only additions allowed, above).
  *
  * Publishing happens with a `navigator.gpu` stub so the artifact carries WGSL,
  * exactly as the editor publishes in a WebGPU browser (publishScene adds WGSL
@@ -39,14 +47,12 @@ import type { EdgeData } from '../src/nodes/types'
 import { initializeNodeLibrary } from '../src/nodes'
 import { publishScene, type PublishResult } from '../src/embed/publish'
 import { decodeArtifactBytes } from '../src/embed/artifact'
-import { exportToFile, encodeSombraPackage, decodeSombraPackage, importFromFile } from '../src/utils/sombra-file'
 import { buildSiteBase, buildSiteCompat, REQUIRED_SITE_KEYS, SITE_STOP_HEX, hex, type Graph } from './lib/site-base-fixture'
 import { checkSiteArtifact, formatSiteReport, type SiteReport } from './lib/site-conformance'
 import { test, run, assert } from './blur-bakeoff/lib/test-util'
+import { stripAddedRotateKnobs, ROTATE_ADDED_TYPES } from './lib/added-rotate-knobs'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
-const OMBRA = path.join(ROOT, 'public/shared/site-base.ombra')
-const SOMBRA = path.join(ROOT, 'public/shared/site-base.sombra')
 const COMPAT_REF = path.join(ROOT, 'scripts/baselines/site-compat-5752aa9.ombra')
 
 initializeNodeLibrary()
@@ -65,7 +71,7 @@ function publishWithWgsl(g: Graph): PublishResult {
 
 // ── CLI: validate an arbitrary file ──────────────────────────────────────────
 const arg = process.argv[2]
-if (arg && arg !== '--write') {
+if (arg) {
   const bytes = new Uint8Array(fs.readFileSync(arg))
   const r = checkSiteArtifact(bytes)
   console.log(`\n${arg}\n${formatSiteReport(r.rows)}`)
@@ -77,16 +83,6 @@ if (arg && arg !== '--write') {
   }
   console.log(`\n  ${r.ok ? 'CONFORMS' : 'DOES NOT CONFORM'}`)
   process.exit(r.ok ? 0 : 1)
-}
-
-// ── --write: regenerate the committed fixture files ─────────────────────────
-if (arg === '--write') {
-  const g = buildSiteBase()
-  const pub = publishWithWgsl(g)
-  fs.mkdirSync(path.dirname(OMBRA), { recursive: true })
-  fs.writeFileSync(OMBRA, pub.sceneBytes)
-  fs.writeFileSync(SOMBRA, encodeSombraPackage(exportToFile(g.nodes, g.edges)))
-  console.log(`  wrote ${path.relative(ROOT, OMBRA)} (${pub.sceneBytes.length} B) and ${path.relative(ROOT, SOMBRA)}`)
 }
 
 // ── The gate ────────────────────────────────────────────────────────────────
@@ -105,10 +101,10 @@ console.log(`\nsite-base (fresh build)\n${formatSiteReport(report.rows)}\n`)
  */
 const PINNED_KEYS = [
   'pixelate-pixel-size', 'site-clock-speed', 'site-seed-value',
-  'fbm-scale', 'fbm-offset-x', 'fbm-offset-y', 'fbm-octaves', 'fbm-lacunarity', 'fbm-gain',
+  'fbm-scale', 'fbm-rotate', 'fbm-offset-x', 'fbm-offset-y', 'fbm-octaves', 'fbm-lacunarity', 'fbm-gain',
   'site-balance-value', 'site-dots-pixel-size', 'site-dots-dither',
   'remap-in-min', 'remap-in-max', 'remap-out-min', 'remap-out-max',
-  'noise-scale', 'noise-offset-x', 'noise-offset-y',
+  'noise-scale', 'noise-rotate', 'noise-offset-x', 'noise-offset-y',
   'remap-2-in-min', 'remap-2-in-max', 'remap-2-out-min', 'remap-2-out-max',
   'site-palette-stop-0', 'site-palette-stop-1', 'site-palette-stop-2', 'site-palette-stop-3',
   'fragment-output-alpha',
@@ -234,30 +230,6 @@ test('C. C7 warns on adaptive and low quality', () => {
   }
 })
 
-// D ────────────────────────────────────────────────────────────────────────
-test('D. committed public/shared/site-base.ombra conforms and has the fresh build\'s keys', () => {
-  assert(fs.existsSync(OMBRA), `${path.relative(ROOT, OMBRA)} missing — run with --write`)
-  const r = checkSiteArtifact(new Uint8Array(fs.readFileSync(OMBRA)))
-  const bad = r.rows.filter((x) => x.status === 'fail' || x.status === 'warn')
-  assert(bad.length === 0, bad.map((x) => `${x.id}: ${x.detail}`).join(' | '))
-  const committed = r.artifact!.manifest.map((k) => k.key)
-  assert(JSON.stringify(committed) === JSON.stringify(keys), `committed keys ${committed.join(', ')}`)
-  assert(r.artifact!.plan.wgsl?.passes?.length, 'committed .ombra has no WGSL (plays on WebGL2 only)')
-  // Informational: a different shader means the file predates a codegen change.
-  const fresh = report.artifact!.plan.passes.map((p) => p.fragmentShader).join('\n')
-  const theirs = r.artifact!.plan.passes.map((p) => p.fragmentShader).join('\n')
-  if (fresh !== theirs) console.warn('  [WARN] committed site-base.ombra shader differs from a fresh build — regenerate with --write')
-})
-
-test('D. committed public/shared/site-base.sombra re-opens with its labels and re-publishes to the same keys', () => {
-  assert(fs.existsSync(SOMBRA), `${path.relative(ROOT, SOMBRA)} missing — run with --write`)
-  const { nodes, edges } = importFromFile(decodeSombraPackage(fs.readFileSync(SOMBRA)))
-  const labels = nodes.filter((n) => n.data.label).map((n) => n.data.label).sort()
-  assert(JSON.stringify(labels) === JSON.stringify(['site.balance', 'site.clock', 'site.dots', 'site.palette', 'site.seed']), `labels ${labels.join(', ')}`)
-  const again = publishWithWgsl({ nodes, edges }).manifest.map((k) => k.key)
-  assert(JSON.stringify(again) === JSON.stringify(keys), `re-published keys ${again.join(', ')}`)
-})
-
 // E ────────────────────────────────────────────────────────────────────────
 const compat = buildSiteCompat()
 const compatPub = publishWithWgsl(compat)
@@ -271,17 +243,23 @@ test('E. compat fixture: still publishes (one pass) and exposes its four colour 
   for (const h of SITE_STOP_HEX) assert(defaults.has(JSON.stringify(hex(h))), `no colour knob defaults to ${h}`)
 })
 
-test('E. compat fixture: shader + manifest equal what 5752aa9 published for the same graph', () => {
+test('E. compat fixture: manifest equals what 5752aa9 published, apart from the added standard Rotate knobs', () => {
+  // (Shader TEXT is no longer compared — see the header, "WHY E CHANGED". Pixel
+  // identity against the same reference is verify:embed:site:gpu's job.)
   assert(fs.existsSync(COMPAT_REF), `${path.relative(ROOT, COMPAT_REF)} missing`)
   const ref = decodeArtifactBytes(new Uint8Array(fs.readFileSync(COMPAT_REF)))
   const now = decodeArtifactBytes(compatPub.sceneBytes)
+  const strip = stripAddedRotateKnobs(now.manifest)
+  assert(strip.problems.length === 0, `added rotate knobs are not the standard ones:\n      ${strip.problems.join('\n      ')}`)
+  // Mechanism-engaged: the recipe has a Noise and an FBM, so the strip must
+  // actually remove their two rotate knobs (else this compares nothing new).
+  assert(JSON.stringify(strip.stripped) === JSON.stringify(['noise-rotate', 'fbm-rotate']), `stripped ${strip.stripped.join(', ') || 'nothing'}`)
+  assert(!ref.manifest.some((k) => k.param === 'rotate' && ROTATE_ADDED_TYPES.has(k.nodeType)), '5752aa9 reference already has a Noise/FBM/Warp rotate knob — wrong reference?')
   const refKeys = ref.manifest.map((k) => `${k.key}=${JSON.stringify(k.default)}`)
-  const nowKeys = now.manifest.map((k) => `${k.key}=${JSON.stringify(k.default)}`)
-  assert(JSON.stringify(refKeys) === JSON.stringify(nowKeys), `manifest drifted:\n      5752aa9 ${refKeys.join(', ')}\n      now     ${nowKeys.join(', ')}`)
-  const glsl = (x: typeof ref) => x.plan.passes.map((p) => p.fragmentShader).join('\n')
-  const wgsl = (x: typeof ref) => (x.plan.wgsl?.passes ?? []).map((p) => p.shaderCode).join('\n')
-  assert(glsl(ref) === glsl(now), 'GLSL fragment shader differs from 5752aa9')
-  assert(wgsl(ref).length > 0 && wgsl(ref) === wgsl(now), 'WGSL differs from 5752aa9 (or the reference has none)')
+  const nowKeys = strip.kept.map((k) => `${k.key}=${JSON.stringify(k.default)}`)
+  assert(JSON.stringify(refKeys) === JSON.stringify(nowKeys), `manifest drifted beyond the added rotate knobs:\n      5752aa9 ${refKeys.join(', ')}\n      now     ${nowKeys.join(', ')}`)
+  // Both artifacts still carry shaders for both backends (the GPU gate renders them).
+  assert(ref.plan.passes.length === now.plan.passes.length && (ref.plan.wgsl?.passes.length ?? 0) > 0 && (now.plan.wgsl?.passes.length ?? 0) > 0, 'pass count / WGSL presence changed')
 })
 
 await run('verify-embed-site')

@@ -523,6 +523,10 @@ When unconnected, the compiler generates frozen-reference UV inline:
 vec2 node_X_auto_uv = (v_uv - 0.5) * u_resolution / u_ref_size + 0.5;
 ```
 
+### Pitfall: coordinate outputs are y-down on both backends
+
+Pattern coordinates (`auto_uv` and any `uv` / `coords` OUTPUT a downstream node can use as a field coordinate) have a **top-left origin on both backends**. `fragCoord('yDown')` gives that on both. `fragCoord('native')` is each backend's own framebuffer orientation (GLSL bottom-left, WGSL top-left) and is for indexing a texture that was itself rendered in that orientation. If one cell centre does both jobs (Pixelate), keep it native for the texture sample and pass it through `nativeToYDown()` before it leaves as a coordinate; in hand-written `glsl()` that is `u_resolution.y - p.y`. Getting it wrong renders the graph vertically mirrored on WebGL2 only. Gate: `npm run verify:uv-orientation:gpu`.
+
 ### Pattern: Enum-driven GLSL
 
 ```ts
