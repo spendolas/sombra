@@ -390,6 +390,34 @@ animation frame — so a host can tween knobs on a frozen scene.
 
 ---
 
+### When the player is asked for something it can't do
+
+The handle never throws from a setter (hosts call `set()` inside their own animation loops, and one
+exception would kill that loop). Instead:
+
+- **`set()` returns a boolean**: `true` when the value was applied, `false` when not (unknown knob, wrong
+  value type). `get()` returns `undefined` for an unknown knob.
+- **Each distinct problem is reported once** (`console.warn`, plus an `on('warning')` event), so a slider driving
+  `set()` at 60 Hz can't flood the console. Warnings carry a stable `code`, a `key`, a message and, where possible, a
+  hint such as `Did you mean "noise-scale"?`:
+
+  | code | meaning |
+  |---|---|
+  | `UNKNOWN_KNOB` | no knob with that key (or node id + param); a close match is suggested |
+  | `BAD_VALUE` | wrong type or shape (a string for a float, 2 numbers for a vec3, `NaN`), a bad `setTime`/`setTimeScale`, a non-function callback, a non-string key |
+  | `OUT_OF_RANGE` | outside the editor's slider range; **still applied**, flagged only |
+  | `UNKNOWN_EVENT` | `on('x')` for an event the player doesn't emit |
+
+  ```js
+  shader.on('warning', function (w) { /* w.code, w.key, w.message, w.hint */ })
+  if (!shader.set('noise-scal', 3)) { /* returned false; the console says: Did you mean "noise-scale"? */ }
+  ```
+- **Feature-detect instead of version-sniffing.** `handle.capabilities` (and `Sombra.capabilities` / `Sombra.supports('clock.play')`)
+  list what this player build can do, so a page can check before calling instead of hitting "x is not a function".
+  Names only ever get added. Current names: `knobs`, `knobs.byNode`, `clock.play`, `clock.time`, `clock.timeScale`,
+  `events.load`, `events.error`, `events.contextlost`, `events.warning`, `set.returnsBoolean`, `capabilities`.
+- A handle from a **failed mount** is a safe no-op: `set()` returns `false`, and `ok`/`error` say why.
+
 ## 4. `data-sombra-*` attributes
 
 `init()` (and the auto‑init on load) scans for `[data-sombra-scene]`,
@@ -518,6 +546,19 @@ bytes it was generated with (the browser refuses anything else; the loader then 
   if an unregistered player file is being served.
 - Not covered: hosted scene files (`data-sombra-src`) are fetched with `fetch()` and are
   not integrity-pinned.
+
+**One-time exception (2026-11-19).** Before SRI existed, the player filename was not honoured: `EMBED_VERSION` was
+set once in July and never bumped, so `0.1.0` silently changed several times (security fixes on 18-19 Nov; before that
+the 10-11 Nov control work: pausable clock and time API, mount-failure events, labelled-node knob keys, ramp-stop
+knobs). No third party had adopted a hash yet, so both versions were corrected once with `--force`:
+
+- **0.1.0 is now the ORIGINAL control surface**: `set`, `get`, `variables`, `nodes`, `play`, `pause`, `resize`,
+  `destroy`, events `load` / `contextlost`, and no clock queries. It runs on today's renderer (scenes from the current
+  editor need it) and carries the security fixes and the player-feedback behaviour. It is rebuilt reproducibly by
+  `python3 scripts/legacy-player/build-0.1.0.py` from the player files at commit `1d0b54e` (the last before the 10 Nov work).
+  Its `capabilities` list shows exactly what it can do.
+- **0.2.0** keeps everything newer (clock/time API, error events, labelled and ramp knobs) plus the feedback behaviour.
+- From 2026-11-19 on the rule above is absolute. `--force` after that date is a bug.
 
 ### Mutable aliases: `latest` and `<major>` (opt-in convenience)
 
