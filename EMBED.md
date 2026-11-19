@@ -510,8 +510,6 @@ npm run verify:embed:smoke       # end-to-end browser smoke (needs dev server + 
 npm run verify:embed:clock       # clock + play/pause contract, both backends (starts its own dev server + Chrome)
 npm run verify:embed:site        # site-base fixture + static site checklist C1..C8 (offline; part of verify:embed)
 npm run verify:embed:site:gpu    # runtime site checklist R1..R9 on the fixture, both backends (own dev server + Chrome)
-npm run verify:embed:site-worley # site-worley-ridged scene: recipe, mechanism, calibration, C1..C8, committed files (offline; part of verify:embed)
-npm run verify:embed:site-worley:gpu # site-worley-ridged rendered and measured against spectra Preset 3, both backends (own dev server + Chrome)
 npm run verify:embed-knob-table-ui # the knob table in the real Embed modal (own dev server + Chrome)
 npx tsx scripts/verify-embed-site.ts <file.ombra>   # check any .ombra against C1..C8, print a table
 ```
@@ -563,21 +561,20 @@ always ends in its param). It is
 plain TS, reusable editor-side, and must never be imported by the player
 (`verify:embed:bundle` forbids its marker).
 
-The reference scene is **`public/shared/site-base.sombra`** (editable graph) +
-**`public/shared/site-base.ombra`** (published): Value-FBM field → Pixelate 64
+The reference scene (built in code and no longer stored or hosted on the Sombra side:
+neither a `.sombra` nor an `.ombra` of it is committed): Value-FBM field → Pixelate 64
 (block UV) → Dither 8 (Bayer, Square) → Color Ramp (Constant, 4 RGBA stops
 `#160709` off, three "on" colours) → Fragment Output (Render Quality High).
 Author labels: `site.clock`, `site.seed`, `site.balance`, `site.dots`,
 `site.palette`, so the manifest carries `site-clock-speed`, `site-seed-value`,
 `site-balance-value`, `site-dots-pixel-size`, `site-dots-dither`,
 `site-palette-stop-0..3`, `fragment-output-alpha`, plus the unlabelled nodes'
-knobs. The graph is built in code (`scripts/lib/site-base-fixture.ts`);
-regenerate both files with `npx tsx scripts/verify-embed-site.ts --write`.
+knobs. The graph is built in code (`scripts/lib/site-base-fixture.ts`) at test time.
 Dither has no `mask` output yet (SR-6), so the fixture takes the mask from
 Dither·Result → Remap(0..0.5 → 0..1); the keys are the same.
 
 `verify:embed:site` (offline) checks the fixture's shape, runs C1..C8 on a fresh
-publish (with WGSL, as a WebGPU browser publishes) and on the committed files,
+publish (with WGSL, as a WebGPU browser publishes),
 pins the full key list, proves each check can fail, and holds the pre-ramp
 "compat" recipe (four Color + three Mix, Dither·Result → Remap → final Mix factor)
 to the manifest 5752aa9 published for it
@@ -596,115 +593,10 @@ background and reads pixels back on WebGL2 and WebGPU: R1 mount (ok, `load`, no
 colours, R3 per-stop alpha 0 clears exactly that band and the page shows through
 exactly, R4 balance ±1.5 → all off / all on, R5 five seeds → five frames, R6
 pause/resume continuity, R7 reduced motion, R8 60 `set()`/s → ≥ 50 frames, R9 20×
-mount/destroy leaves no live context or device. It also checks the committed
-`.ombra` (fetched via `src`) and the compat recipe render pixel-identically to a
-fresh publish and to 5752aa9's artifact. R1's "no console output" is a WARN today:
+mount/destroy leaves no live context or device. It also checks that the compat
+recipe renders pixel-identically to 5752aa9's artifact (exact on WebGPU; on WebGL2
+the stored artifact predates the Pixelate uv orientation fix, so it is not compared). R1's "no console output" is a WARN today:
 the player logs `[Sombra] Renderer backend: …` on every mount (SR-8 removes it);
 `SITE_STRICT=1` makes it fail. `--dpr <dir>` measures the Pixelate/Dither grids
 at DPR 1, 1.5, 2, 3 and writes a PNG per DPR (a report, not a gate).
 
-### The `site-worley-ridged` scene (spectra Preset 3 "Worley Ridged")
-
-**`public/shared/site-worley-ridged.sombra`** + **`.ombra`** recreate the site's
-banded background (spectra pixel mode, Preset 3; recipe in the www repo's
-`docs/refactor/sombra/S-B-LOOK-SPEC.md`) from existing nodes, one pass,
-WebGPU-first, WebGL2-capable. Graph (built in code, `scripts/lib/site-worley-ridged-fixture.ts`):
-Pixelate.uv → Domain Warp (value noise, Deep: x, y AND phase) → Noise Worley 2D at
-the warped coords and warped phase → Ridged → Smoothstep(0.2, 0.8) → + `site.balance`
-→ threshold Remap → Dither (Square, Per-pixel) → mask; a second field at half
-coords / half time picks the stop-1 → stop-2 blend; three Mixes over four Color
-nodes. The bands are a float32 effect: Worley's `sin` hash steps in whole ulps as
-the warped phase crosses them, so the scene must play on highp (it is never
-mediump). WebGPU is the primary target and the artifact carries its WGSL; WebGL2
-is the fallback. Both are gated with the same statistics (WGSL and GLSL `sin`
-differ, so the look is the same kind, not the same pixels).
-
-| Knob (key) | Address | Default | Notes |
-|---|---|---|---|
-| `site-palette-stop-0..3-color` | `site-palette-stop-<n>` · `color` | site-base's four colours | raw sRGB RGBA; stop 0 = off dots, on = mix(mix(c1, c2, ≤ 0.3), c3, ≤ 0.3) |
-| `site-balance-value` | `site-balance` · `value` | 0 | spectra units, added to the field: host map is **identity**, site `[-1, 0, 0.985]` → knob `[-1, 0, 0.985]` (−1 empty, +0.985 full) — not site-base's `[-0.7, 0, 0.65]` |
-| `site-seed-value` | `site-seed` · `value` | 123 | feeds both warps and both noises |
-| `site-dots-pixel-size` | `site-dots` · `pixel-size` | 2 ref px | 4 device px at DPR 2; write 4/dpr |
-| `pixelate-pixel-size` | `pixelate` · `pixel-size` | 16 ref px | always exactly 8 × the dot (32 device px), both centre-anchored |
-| `site-clock-speed` | `site-clock` · `speed` | 2.5e-6 | field time = u_time × speed (see below) |
-| `site-warp-scale` | `site-warp` · `scale` | 17.578125 | H_css / 51.2; re-write on resize |
-| `site-warp-color-scale` | `site-warp-color` · `scale` | 35.15625 | 2 × site-warp-scale |
-| `fragment-output-alpha` | `output` · `alpha` | 1 | field alpha |
-
-Derived values (spectra → Sombra):
-- **Dots 4 / cells 32 device px** (spectra: 3.5 / 28). Dither and Pixelate round to
-  whole device px; 4 is the nearest size that keeps the cell exactly 8 dots.
-- **Threshold Remap 0..1 → −0.04/63 .. 63.96/63 (−0.000635 .. 1.015238)**: Sombra
-  lights a dot when bayer/63 ≤ thr, spectra when feed + 0.015 ≥ 1 − k/64, so
-  thr = (64·(feed + 0.015) − 1)/63. The gate checks the lit-dot count against
-  spectra's rule for 200 001 feeds.
-- **Accent: Smoothstep 0.585 / 0.885, × 0.3** — spectra's smoothstep(0.6, 0.9, feed +
-  0.015) with the offset folded in; the colour-branch factor is also × 0.3.
-- **Clock: speed 2.5e-6** = spectra's uTime × 1e-5 × 5 × 0.05. The player's `u_time`
-  is seconds × the host's `timeScale`; `meta.timeSpeed` (published from the Time
-  node, so also 2.5e-6) only picks the adaptive FPS tier and does **not** scale
-  time — so the whole factor sits on the Time node, not "5e-5 × meta 0.05".
-- **Warp scale H_css / 51.2** (one spectra lattice unit = 10 viewport heights; one
-  ref unit = 512 CSS px; SRT divides by scale). This is above the Scale knob's
-  max of 10. Nothing clamps a write — not the player, not the renderer, not the
-  compiler — and the GPU gate proves a write of 17.578125 after 10 reaches the
-  shader. The colour branch half-coords are scale × 2; half-time is an exact
-  × 0.5 Remap of the clock.
-
-Regenerate both files with `npx tsx scripts/verify-embed-site-worley.ts --write`.
-`verify:embed:site-worley` (offline) pins the recipe, the full key list, the
-mechanism in both published shaders (Worley 2D at the warped phase of a 3-sample
-warp in both branches, the threshold wire), the calibration, C1..C8, and that the
-committed files are byte-identical to a fresh build; every mechanism assertion is
-run against a variant that breaks it. `verify:embed:site-worley:gpu` renders
-1440×900 at DPR 1 with the site's knob writes and measures, over 24 generated
-seeds: off dots exactly stop 0 and on dots within ΔE76 3 of the mix family, the
-4/32 px lattices (also at DPR 2 with the authored sizes), the balance sweep
-(coverage 0 → 1, monotone), and the look's statistics against spectra's own
-fragment rendered in the same harness (`scripts/measure-spectra-worley-baseline.ts`,
-not a gate) — median coverage and extreme-cell share within ±10 % of spectra's,
-run-length anisotropy on ≥ 50 % of seeds, the level-change share from 30 s to
-90 s in 10–40 %. The seed spaces and the warp noise differ (Sombra's value noise
-is not spectra's sin-hash one), so these compare distributions, never frames.
-WebGPU statistics are reported, not gated.
-
-**Bundle rule (enforced):** the player import graph
-(`src/embed/index.ts` + its imports) may import only `src/renderer/*`,
-`src/embed/*`, and `pako`. It must **not** import React, `@xyflow/react`,
-`src/compiler/*`, `src/nodes/*`, or `src/utils/sombra-file.ts`. Editor‑side
-modules (`manifest.ts`, `publish.ts`, `EmbedModal.tsx`) may import compiler/nodes
-because they run in the editor, never in the shipped player. `import type` is
-erased at build, so type‑only imports of compiler types are fine everywhere.
-
----
-
-## 9. Scope & fast‑follows
-
-**v1 (this release):** frozen scenes, knobs‑only. The published artifact is the
-compiled shader plus a manifest of unwired `uniform`‑mode params, shippable inline
-or as a hosted `.ombra` file. The Embed modal shows a file‑size badge and warns
-when baked images make the artifact large.
-
-**Doors left open:**
-- `SceneArtifact.kind` reserves `'frozen'` today with `'live'` planned — a future
-  artifact could ship the graph and recompile on the host for live editing.
-- The `configure({ resolve })` seam + `data-sombra-id` are the hook for a future
-  **short-code / CDN service**: it only needs to map an id → a `.ombra` URL, with
-  zero changes to already-embedded pages.
-
-**Fast‑follows (not in v1):**
-
-- **Pointer / `u_mouse`** — forward host pointer events into the shader's mouse
-  uniform so embeds react to cursor position.
-- **Self‑hosted player file** — let the host serve the UMD bundle from its own
-  origin instead of the Sombra CDN (offline/CSP‑restricted sites).
-- **Per‑knob rename** — let the publisher choose friendly knob keys/labels at
-  publish time rather than auto‑slugging param labels.
-- **Shared rendering context** — one GPU device/context shared across multiple
-  embeds on a page (today each embed creates its own renderer).
-- **Minification** — minify the player bundle (currently unminified) to shrink
-  the gzip payload.
-- **Image WebP downscale** — at publish, re‑encode baked images to WebP with a
-  max‑dimension cap (`reencodeImages(images, maxDim)` via an offscreen canvas
-  `toDataURL('image/webp')`), wired to a toggle that re‑runs `publishScene`.
-  v1 ships only the size badge + warning; this is the actual re‑encode.
