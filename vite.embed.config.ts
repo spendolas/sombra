@@ -14,7 +14,10 @@ export default defineConfig({
   publicDir: false,
   build: {
     outDir: 'dist/embed',
-    emptyOutDir: true,
+    // false on purpose: the main build copies public/embed/ (frozen older player
+    // versions that existing snippets still reference) into dist/embed/ first; emptying
+    // would delete them. The main build already cleans dist/ itself.
+    emptyOutDir: false,
     lib: {
       entry: resolve(__dirname, 'src/embed/index.ts'),
       name: 'Sombra',

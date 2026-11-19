@@ -117,6 +117,8 @@
     "verify:embed:artifact": "tsx scripts/verify-artifact-roundtrip.ts",
     "verify:embed:manifest": "tsx scripts/verify-manifest.ts",
     "verify:embed:bundle": "tsx scripts/verify-embed-bundle.ts",
+    "embed:integrity": "tsx scripts/embed-integrity.ts",
+    "verify:embed-integrity": "tsx scripts/embed-integrity.ts",
     "verify:embed:snippets": "tsx scripts/verify-embed-snippets.ts",
     "verify:embed:smoke": "tsx scripts/verify-embed-smoke.ts",
     "verify:embed:fwd": "tsx scripts/verify-embed-forward-compat.ts",
