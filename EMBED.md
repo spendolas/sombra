@@ -49,7 +49,7 @@ its URL. The player lazy-loads once (cached across embeds and sites), then fetch
 + inflates the file and mounts it. Tiny snippet regardless of scene size.
 
 ```html
-<script>!function(){var s=window.Sombra;if(s&&s.init){s.init()}else{var i=document.createElement("script");i.src="https://sombra.sh/embed/sombra-player.0.1.0.umd.js";i.onload=function(){Sombra.init()};(document.head||document.body).appendChild(i)}}();</script>
+<script>!function(){var s=window.Sombra;if(s&&s.init){s.init()}else{var i=document.createElement("script");i.src="https://sombra.sh/embed/sombra-player.0.2.0.umd.js";i.integrity="sha384-+8iJjyEvpOxUm0xEWFh9AC7CzA5Fu3nD2+QM4+hn3LCDo7HpoTyOyfcCzTaZ06eX";i.crossOrigin="anonymous";i.onload=function(){Sombra.init()};i.onerror=function(){console.error("Sombra player failed to load (integrity check or network error)")};(document.head||document.body).appendChild(i)}}();</script>
 <div id="sombra-shader" data-sombra-src="https://your-host.example/scene.ombra" style="width:100%;height:100%"></div>
 ```
 
@@ -64,7 +64,7 @@ The whole artifact base64url'd into the attribute — no file to host, but a lar
 string. Best for small scenes / paste-and-forget.
 
 ```html
-<script>!function(){var s=window.Sombra;if(s&&s.init){s.init()}else{var i=document.createElement("script");i.src="https://sombra.sh/embed/sombra-player.0.1.0.umd.js";i.onload=function(){Sombra.init()};(document.head||document.body).appendChild(i)}}();</script>
+<script>!function(){var s=window.Sombra;if(s&&s.init){s.init()}else{var i=document.createElement("script");i.src="https://sombra.sh/embed/sombra-player.0.2.0.umd.js";i.integrity="sha384-+8iJjyEvpOxUm0xEWFh9AC7CzA5Fu3nD2+QM4+hn3LCDo7HpoTyOyfcCzTaZ06eX";i.crossOrigin="anonymous";i.onload=function(){Sombra.init()};i.onerror=function(){console.error("Sombra player failed to load (integrity check or network error)")};(document.head||document.body).appendChild(i)}}();</script>
 <div id="sombra-shader" data-sombra-scene="<BASE64URL_ARTIFACT>" style="width:100%;height:100%"></div>
 ```
 
@@ -481,7 +481,7 @@ or the embed was scrolled away. The Time node's `speed` knob is unchanged.
 `src/embed/version.ts` is the single source of truth for the version + filename:
 
 ```ts
-export const EMBED_VERSION = '0.1.0'
+export const EMBED_VERSION = '0.2.0'
 export const PLAYER_FILENAME = `sombra-player.${EMBED_VERSION}.umd.js`
 ```
 
@@ -489,12 +489,36 @@ The host (which domain serves the player/viewer) is **not** here — it is deriv
 from the running origin at snippet-build time by `embedHostBase()` in
 `src/embed/publish.ts`, so embeds follow whatever domain hosts the editor.
 
-- The player filename is **version‑pinned** (`sombra-player.0.1.0.umd.js`) so a
+- The player filename is **version‑pinned** (`sombra-player.0.2.0.umd.js`) so a
   published snippet keeps rendering against the exact player it was built for;
   new player versions ship under new filenames and never break old embeds.
 - `EMBED_VERSION` drives the build output name (`vite.embed.config.ts`), the
   snippet URLs (`buildSnippets`), and the bundle‑gate path
   (`scripts/verify-embed-bundle.ts`). Bump it in one place.
+
+### Subresource Integrity (the immutability rule)
+
+Every snippet pins the player with `integrity="sha384-…"` + `crossOrigin="anonymous"`,
+so a page that embedded Sombra before any compromise of the host keeps running only the
+bytes it was generated with (the browser refuses anything else; the loader then logs
+"Sombra player failed to load"). The hashes live in `src/embed/integrity.ts`
+(generated, committed). Consequences:
+
+- **The bytes served at a released filename must never change.** Any change to the
+  player build — code, a dependency bump that alters the output, anything — means a new
+  `EMBED_VERSION`.
+- **Releasing a new player version:** bump `EMBED_VERSION`, `npm run build`, then
+  `npm run embed:integrity -- --write` to register the new hash, commit.
+- **Old versions stay served.** Frozen copies of released players live in `public/embed/`
+  (the main build copies them into `dist/embed/`; `vite.embed.config.ts` does not empty
+  that folder). Add the previous file there when you bump, so snippets already in the
+  wild keep working.
+- `npm run verify:embed-integrity` (run in CI and deploy after the build) fails if a
+  registered file is missing or its bytes changed, if the current version has no hash, or
+  if an unregistered player file is being served.
+- Not covered: hosted scene files (`data-sombra-src`) are fetched with `fetch()` and are
+  not integrity-pinned.
+
 - The player ships to Pages via `npm run build` (which chains
   `npm run build:embed`) into `dist/embed/`.
 

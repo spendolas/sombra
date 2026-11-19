@@ -35,3 +35,6 @@ jobs:
 
       - name: Typecheck + build
         run: npm run build
+
+      - name: Verify embed player integrity
+        run: npm run verify:embed-integrity
