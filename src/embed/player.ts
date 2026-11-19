@@ -9,6 +9,8 @@ import { PerfHarness } from './perf-harness'
 import { showFallback } from './fallback'
 import { registerHandle, unregisterHandle } from './registry'
 import { isSafeImageDataUrl } from './image-guard'
+import { CAPABILITIES, createReporter, closest, checkKnobValue, describe } from './feedback'
+import type { SombraWarning } from './feedback'
 
 /** Composite index key for (nodeId, param) lookups (param ids never contain a space). */
 const nodeKey = (nodeId: string, param: string) => `${nodeId} ${param}`
@@ -32,10 +34,12 @@ export interface SceneHandle {
   readonly ok: boolean
   /** The failure, when ok === false. */
   readonly error?: Error
-  /** Set a knob by its flat key, e.g. set('noise-scale', 3). */
-  set(key: string, value: number | number[]): void
-  /** Set a knob by stable node id + param, e.g. set(nodeId, 'scale', 3). */
-  set(nodeId: string, param: string, value: number | number[]): void
+  /** Set a knob by its flat key, e.g. set('noise-scale', 3). Returns true when applied,
+   *  false when not (unknown knob, wrong value type); never throws. The reason is also
+   *  reported once via console.warn and the 'warning' event. */
+  set(key: string, value: number | number[]): boolean
+  /** Set a knob by stable node id + param, e.g. set(nodeId, 'scale', 3). Same contract. */
+  set(nodeId: string, param: string, value: number | number[]): boolean
   /** Current live value of a knob by flat key. */
   get(key: string): number | number[] | undefined
   /** Current live value of a knob by node id + param. */
@@ -59,11 +63,19 @@ export interface SceneHandle {
   render(): void
   resize(): void
   destroy(): void
-  on(event: 'load' | 'error' | 'contextlost', cb: (...a: unknown[]) => void): void
+  /** 'warning' delivers a SombraWarning (non-fatal misuse, with a stable code). */
+  on(event: 'load' | 'error' | 'contextlost' | 'warning', cb: (...a: unknown[]) => void): void
+  /** What this player build can do: feature-detect instead of version-sniffing. */
+  readonly capabilities: readonly string[]
 }
 
+export type { SombraWarning }
+
+const EVENTS: readonly string[] = ['load', 'error', 'contextlost', 'warning']
+
 const NOOP_HANDLE: Omit<SceneHandle, 'ok' | 'error'> = {
-  set() {}, get() { return undefined }, variables() { return [] }, nodes() { return [] },
+  capabilities: CAPABILITIES,
+  set() { return false }, get() { return undefined }, variables() { return [] }, nodes() { return [] },
   play() {}, pause() {}, resize() {}, destroy() {}, on() {},
   isPlaying() { return false }, getTime() { return 0 }, setTime() {},
   getTimeScale() { return 1 }, setTimeScale() {}, render() {},
@@ -145,6 +157,8 @@ export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneH
   const byNode = new Map(manifest.map((k) => [nodeKey(k.nodeId, k.param), k]))
   const listeners: Record<string, Array<(...a: unknown[]) => void>> = {}
   const emit = (ev: string, ...a: unknown[]) => (listeners[ev] ?? []).forEach((f) => f(...a))
+  // Non-fatal misuse of the API: console.warn once per problem + the 'warning' event.
+  const report = createReporter((w) => emit('warning', w))
   let loaded = false
 
   let renderer: ShaderRenderer
@@ -217,29 +231,45 @@ export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneH
     repaint()
   }
 
-  // set(key, value) OR set(nodeId, param, value) — arity disambiguates.
-  const setImpl = (a: string, b: number | number[] | string, c?: number | number[]) => {
-    if (typeof c !== 'undefined') {
-      const knob = byNode.get(nodeKey(a, b as string))
-      if (!knob) {
-        console.warn(`[Sombra] unknown knob ${a}.${String(b)}. Use handle.nodes() to list nodes + params.`)
-        return
-      }
-      applyUniform(knob.uniform, knob.glslType, c)
-    } else {
-      const knob = byKey.get(a)
-      if (!knob) {
-        console.warn(`[Sombra] unknown knob "${a}". Known: ${[...byKey.keys()].join(', ')}`)
-        return
-      }
-      applyUniform(knob.uniform, knob.glslType, b as number | number[])
+  // set(key, value) OR set(nodeId, param, value) — arity disambiguates. Returns whether
+  // the value was applied; never throws (hosts call this from their own render loops).
+  const setImpl = (a: string, b: unknown, c?: unknown): boolean => {
+    const nodeForm = typeof c !== 'undefined'
+    const label = nodeForm ? `${String(a)}.${String(b)}` : String(a)
+    if (typeof a !== 'string' || (nodeForm && typeof b !== 'string')) {
+      report({ code: 'BAD_VALUE', key: label, message: `knob key${nodeForm ? ' and param' : ''} must be a string, got ${typeof a}.` })
+      return false
     }
+    const knob = nodeForm ? byNode.get(nodeKey(a, b as string)) : byKey.get(a)
+    if (!knob) { unknownKnob(label, nodeForm); return false }
+    const checked = checkKnobValue(knob, nodeForm ? c : b)
+    if (!checked.ok) {
+      report({ code: 'BAD_VALUE', key: label, message: `set("${label}"): ${checked.message}` })
+      return false
+    }
+    if (checked.outOfRange) report({ code: 'OUT_OF_RANGE', key: label, message: `set("${label}"): ${checked.outOfRange}` })
+    applyUniform(knob.uniform, knob.glslType, checked.value)
+    return true
   }
 
-  // get(key) OR get(nodeId, param) — returns the live value (or default).
+  // Same report for set() and get(), so asking about one bad key warns once in total.
+  const unknownKnob = (label: string, nodeForm: boolean) => {
+    const near = nodeForm ? undefined : closest(label, byKey.keys())
+    report({
+      code: 'UNKNOWN_KNOB', key: label,
+      message: `unknown knob "${label}".`,
+      hint: near ? `Did you mean "${near}"?` : nodeForm
+        ? 'Use handle.nodes() to list node ids and params.'
+        : `Use handle.variables() to list knobs (${[...byKey.keys()].slice(0, 8).join(', ')}${byKey.size > 8 ? ', …' : ''}).`,
+    })
+  }
+
+  // get(key) OR get(nodeId, param) — returns the live value (or default); undefined when
+  // the knob does not exist (reported once, like set()).
   const getImpl = (a: string, b?: string): number | number[] | undefined => {
-    const knob = typeof b === 'string' ? byNode.get(nodeKey(a, b)) : byKey.get(a)
-    if (!knob) return undefined
+    const nodeForm = typeof b === 'string'
+    const knob = nodeForm ? byNode.get(nodeKey(a, b)) : byKey.get(a)
+    if (!knob) { unknownKnob(nodeForm ? `${String(a)}.${b}` : String(a), nodeForm); return undefined }
     return values.get(knob.uniform) ?? knob.default
   }
 
@@ -331,7 +361,8 @@ export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneH
 
   const handle: SceneHandle = {
     ok: true,
-    set: setImpl,
+    capabilities: CAPABILITIES,
+    set: setImpl as SceneHandle['set'],
     get: getImpl,
     variables: () => manifest.map(withValue),
     nodes: nodesImpl,
@@ -340,13 +371,21 @@ export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneH
     isPlaying: () => running,
     getTime: clock,
     setTime: (seconds) => {
-      if (!Number.isFinite(seconds)) return
+      if (!Number.isFinite(seconds)) {
+        report({ code: 'BAD_VALUE', key: 'setTime', message: `setTime(): expected a finite number of seconds, got ${describe(seconds)}; ignored.` })
+        return
+      }
       time = seconds
       if (running) lastTick = performance.now()
       repaint()
     },
     getTimeScale: () => timeScale,
-    setTimeScale: (k) => { clock(); timeScale = Math.max(0, k) || 0 },
+    setTimeScale: (k) => {
+      if (!Number.isFinite(k) || k < 0) {
+        report({ code: 'BAD_VALUE', key: 'setTimeScale', message: `setTimeScale(): expected a number >= 0, got ${describe(k)}; using 0.` })
+      }
+      clock(); timeScale = Math.max(0, k) || 0
+    },
     render: () => { if (!dead) renderer.render() },
     resize: repaint,
     destroy: () => {
@@ -361,6 +400,14 @@ export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneH
       canvas.remove()
     },
     on: (ev, cb) => {
+      if (!EVENTS.includes(ev)) {
+        report({ code: 'UNKNOWN_EVENT', key: String(ev), message: `unknown event "${String(ev)}"; ignored.`, hint: `Supported: ${EVENTS.join(', ')}.` })
+        return
+      }
+      if (typeof cb !== 'function') {
+        report({ code: 'BAD_VALUE', key: `on:${ev}`, message: `on("${ev}"): the callback must be a function.` })
+        return
+      }
       (listeners[ev] ??= []).push(cb)
       // 'load' already fired synchronously during mount() — replay it for late
       // subscribers so handle.on('load', cb) is reliable, not a lost event.
