@@ -19,7 +19,7 @@ export const warpNode: NodeDefinition = {
   label: 'Warp',
   category: 'Distort',
   description: 'Distorts coordinates using noise for organic warping effects',
-  spatial: { transforms: ['scale', 'translate'] } satisfies SpatialConfig,
+  spatial: { transforms: ['scale', 'rotate', 'translate'] } satisfies SpatialConfig,
 
   inputs: [
     { id: 'source', label: 'Source', type: 'color', textureInput: true, default: [0, 0, 0] },
@@ -34,7 +34,7 @@ export const warpNode: NodeDefinition = {
   ],
 
   params: [
-    ...getSpatialParams({ transforms: ['scale', 'translate'] }),
+    ...getSpatialParams({ transforms: ['scale', 'rotate', 'translate'] }),
     {
       id: 'noiseType', label: 'Noise Type', type: 'enum', default: 'value',
       options: NOISE_TYPE_OPTIONS, updateMode: 'recompile',

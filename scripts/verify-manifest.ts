@@ -13,6 +13,7 @@ import { buildManifest, buildManifestWithClashes } from '../src/embed/manifest'
 import { publishScene } from '../src/embed/publish'
 import { compileGraph } from '../src/compiler/glsl-generator'
 import * as TG from '../src/utils/test-graph'
+import { stripAddedRotateKnobs } from './lib/added-rotate-knobs'
 
 initializeNodeLibrary()
 
@@ -193,14 +194,27 @@ const keyOf = (m: ReturnType<typeof publish>, nodeId: string, param: string) =>
 }
 
 // (e) unlabelled scenes publish manifests BYTE-IDENTICAL to the pre-SR-1 code —
-// apart from SR-2's ramp-stop knobs (group "stops"), which are purely added:
-// with them removed, the bytes must match the frozen snapshot exactly.
+// apart from two purely ADDED knob families, which are stripped before the
+// byte comparison (the snapshot itself stays frozen — never regenerate it):
+//  - SR-2's ramp-stop knobs (group "stops");
+//  - the framework Rotate knob Noise / FBM / Warp gained on 2026-11-11 (they
+//    declared scale + translate only). Each must be exactly the standard
+//    Rotate knob, sit right after its node's Scale knob, and appear once per
+//    such node that publishes a Scale knob — so the strip cannot hide anything
+//    else (a renamed, moved, re-ranged or missing rotate knob fails here).
 {
-  let stopKnobs = 0
+  let stopKnobs = 0, rotateKnobs = 0, rotateExpected = 0
   const withoutStops = (m: ReturnType<typeof publish>) => {
     const kept = m.filter((k) => k.group !== 'stops')
     stopKnobs += m.length - kept.length
-    return JSON.stringify(kept)
+    const r = stripAddedRotateKnobs(kept)   // shared rule: scripts/lib/added-rotate-knobs.ts
+    for (const key of r.stripped) {
+      check(`(e) ${key}: the added rotate knob is the standard one, right after its node's scale knob`,
+        !r.problems.some((p) => p.startsWith(`${key}:`)))
+    }
+    for (const p of r.problems.filter((x) => !r.stripped.some((key) => x.startsWith(`${key}:`)))) check(`(e) ${p}`, false)
+    rotateKnobs += r.stripped.length; rotateExpected += r.expected
+    return JSON.stringify(r.kept)
   }
   const base = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'baselines/manifest-unlabelled.json'), 'utf8')) as {
     presets: Record<string, unknown>; graphs: Record<string, G & { manifest: unknown }>
@@ -224,6 +238,9 @@ const keyOf = (m: ReturnType<typeof publish>, nodeId: string, param: string) =>
   check(`(e) snapshot is non-trivial (${compared} graphs, ${knobs} knobs, node de-dup present)`, compared >= 10 && knobs >= 120 && nodeDedup)
   // The presets include ramps/gradients, so the filter above is really engaged.
   check(`(e) the snapshot graphs do gain ramp-stop knobs (${stopKnobs}) — the stop filter is engaged`, stopKnobs > 0)
+  // Every Noise/FBM/Warp node gained exactly one rotate knob (12 in this snapshot).
+  check(`(e) one added rotate knob per Noise/FBM/Warp node (${rotateKnobs} of ${rotateExpected}) — the rotate strip is engaged`,
+    rotateKnobs > 0 && rotateKnobs === rotateExpected)
 }
 
 // N1 — a param that exists only through dynamicParams must still become a knob.

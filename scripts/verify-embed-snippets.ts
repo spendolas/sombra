@@ -4,6 +4,7 @@
  */
 import { buildSnippets } from '../src/embed/publish'
 import { EMBED_VERSION } from '../src/embed/version'
+import { PLAYER_INTEGRITY } from '../src/embed/integrity'
 import { resolveRef } from '../src/embed/config'
 
 let passed = 0, failed = 0
@@ -19,6 +20,17 @@ check('embed div has a stable id for control', s.embed.includes('id="sombra-shad
 check('control targets the embed via sombra:load', s.control.includes(`getElementById('sombra-shader')`) && s.control.includes('sombra:load') && s.control.includes('e.detail.handle'))
 check('iframe uses the viewer hash', s.iframe.includes('viewer.html#g=HASH'))
 check('iframe absent without hash', buildSnippets(B64).iframe.includes('unavailable'))
+
+// Subresource Integrity: every snippet that loads the player pins its exact bytes.
+const want = PLAYER_INTEGRITY[EMBED_VERSION]
+check('registry has a sha384 for the current player version', /^sha384-[A-Za-z0-9+/]{64}$/.test(want ?? ''))
+for (const [name, snip] of [['hosted', s.hosted], ['embed', s.embed]] as const) {
+  check(`${name}: loader sets integrity to the registry hash`, snip.includes(`i.integrity="${want}"`))
+  check(`${name}: integrity is set BEFORE the script is appended (else it is ignored)`, snip.indexOf('i.integrity=') > -1 && snip.indexOf('i.integrity=') < snip.indexOf('appendChild'))
+  check(`${name}: crossOrigin=anonymous (SRI on a cross-origin script needs CORS)`, snip.includes('i.crossOrigin="anonymous"'))
+  check(`${name}: a blocked load reports a console error`, snip.includes('i.onerror=') && snip.includes('console.error'))
+}
+check('iframe snippet needs no integrity (no script)', !s.iframe.includes('integrity'))
 
 // Legacy-host migration shim (heals pre-sombra.sh hosted embeds we don't control).
 const legacy = 'https://spendolas.github.io/sombra/shared/x.ombra'

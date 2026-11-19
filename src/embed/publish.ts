@@ -6,7 +6,8 @@ import { topologicalSort } from '../compiler/topological-sort'
 import { anchorToVec2 } from '../nodes/output/fragment-output'
 import { buildManifestWithClashes, type KnobNameClash } from './manifest'
 import { stripPlan, encodeArtifact, encodeArtifactBytes, type SceneArtifact, type ImageAsset, type KnobDescriptor } from './artifact'
-import { PLAYER_FILENAME } from './version'
+import { PLAYER_FILENAME, EMBED_VERSION } from './version'
+import { PLAYER_INTEGRITY } from './integrity'
 
 export interface PublishResult {
   sceneB64: string          // inline artifact (base64url) for data-sombra-scene
@@ -119,9 +120,19 @@ export function buildSnippets(sceneB64: string, viewerHash?: string) {
   const playerUrl = `${host}embed/${PLAYER_FILENAME}`
 
   // Player loader: loads the UMD once (cached across sites) then auto-mounts.
+  // Subresource Integrity: the browser refuses the file unless its bytes hash to the
+  // value below, so a snippet copied before any compromise of the host keeps running
+  // only the player it was generated with. Needs crossOrigin (the player is served
+  // with Access-Control-Allow-Origin: *). Every released version has a registry entry
+  // (verify:embed-integrity); only an unreleased dev build can lack one, and then the
+  // attributes are simply omitted.
+  const integrity = PLAYER_INTEGRITY[EMBED_VERSION]
+  const sriAttrs = integrity ? `i.integrity="${integrity}";i.crossOrigin="anonymous";` : ''
   const loader =
 `<script>!function(){var s=window.Sombra;if(s&&s.init){s.init()}else{var i=document.createElement("script");` +
-`i.src="${playerUrl}";i.onload=function(){Sombra.init()};(document.head||document.body).appendChild(i)}}();</script>`
+`i.src="${playerUrl}";${sriAttrs}i.onload=function(){Sombra.init()};` +
+`i.onerror=function(){console.error("Sombra player failed to load (integrity check or network error)")};` +
+`(document.head||document.body).appendChild(i)}}();</script>`
 
   // Hosted: reference a compiled .ombra file you host anywhere; tiny snippet, and
   // the container is addressable (id) for optional live control. The primary path.

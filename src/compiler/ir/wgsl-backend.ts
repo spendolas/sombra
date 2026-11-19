@@ -420,6 +420,11 @@ export function lowerExprToWGSL(expr: IRExpr): string {
       const e = lowerExprToWGSL(expr.expr)
       return expr.from === 'yUp' ? `vec2f((${e}).x, -(${e}).y)` : e
     }
+
+    case 'nativeToYDown':
+      // in.position is ALREADY y-down, so a native position is a y-down position: identity.
+      // The asymmetry lives entirely on the GLSL side — see glsl-backend.ts.
+      return lowerExprToWGSL(expr.expr)
   }
 }
 

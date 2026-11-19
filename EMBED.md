@@ -49,7 +49,7 @@ its URL. The player lazy-loads once (cached across embeds and sites), then fetch
 + inflates the file and mounts it. Tiny snippet regardless of scene size.
 
 ```html
-<script>!function(){var s=window.Sombra;if(s&&s.init){s.init()}else{var i=document.createElement("script");i.src="https://sombra.sh/embed/sombra-player.0.1.0.umd.js";i.onload=function(){Sombra.init()};(document.head||document.body).appendChild(i)}}();</script>
+<script>!function(){var s=window.Sombra;if(s&&s.init){s.init()}else{var i=document.createElement("script");i.src="https://sombra.sh/embed/sombra-player.0.2.0.umd.js";i.integrity="sha384-+8iJjyEvpOxUm0xEWFh9AC7CzA5Fu3nD2+QM4+hn3LCDo7HpoTyOyfcCzTaZ06eX";i.crossOrigin="anonymous";i.onload=function(){Sombra.init()};i.onerror=function(){console.error("Sombra player failed to load (integrity check or network error)")};(document.head||document.body).appendChild(i)}}();</script>
 <div id="sombra-shader" data-sombra-src="https://your-host.example/scene.ombra" style="width:100%;height:100%"></div>
 ```
 
@@ -64,7 +64,7 @@ The whole artifact base64url'd into the attribute — no file to host, but a lar
 string. Best for small scenes / paste-and-forget.
 
 ```html
-<script>!function(){var s=window.Sombra;if(s&&s.init){s.init()}else{var i=document.createElement("script");i.src="https://sombra.sh/embed/sombra-player.0.1.0.umd.js";i.onload=function(){Sombra.init()};(document.head||document.body).appendChild(i)}}();</script>
+<script>!function(){var s=window.Sombra;if(s&&s.init){s.init()}else{var i=document.createElement("script");i.src="https://sombra.sh/embed/sombra-player.0.2.0.umd.js";i.integrity="sha384-+8iJjyEvpOxUm0xEWFh9AC7CzA5Fu3nD2+QM4+hn3LCDo7HpoTyOyfcCzTaZ06eX";i.crossOrigin="anonymous";i.onload=function(){Sombra.init()};i.onerror=function(){console.error("Sombra player failed to load (integrity check or network error)")};(document.head||document.body).appendChild(i)}}();</script>
 <div id="sombra-shader" data-sombra-scene="<BASE64URL_ARTIFACT>" style="width:100%;height:100%"></div>
 ```
 
@@ -390,6 +390,34 @@ animation frame — so a host can tween knobs on a frozen scene.
 
 ---
 
+### When the player is asked for something it can't do
+
+The handle never throws from a setter (hosts call `set()` inside their own animation loops, and one
+exception would kill that loop). Instead:
+
+- **`set()` returns a boolean**: `true` when the value was applied, `false` when not (unknown knob, wrong
+  value type). `get()` returns `undefined` for an unknown knob.
+- **Each distinct problem is reported once** (`console.warn`, plus an `on('warning')` event), so a slider driving
+  `set()` at 60 Hz can't flood the console. Warnings carry a stable `code`, a `key`, a message and, where possible, a
+  hint such as `Did you mean "noise-scale"?`:
+
+  | code | meaning |
+  |---|---|
+  | `UNKNOWN_KNOB` | no knob with that key (or node id + param); a close match is suggested |
+  | `BAD_VALUE` | wrong type or shape (a string for a float, 2 numbers for a vec3, `NaN`), a bad `setTime`/`setTimeScale`, a non-function callback, a non-string key |
+  | `OUT_OF_RANGE` | outside the editor's slider range; **still applied**, flagged only |
+  | `UNKNOWN_EVENT` | `on('x')` for an event the player doesn't emit |
+
+  ```js
+  shader.on('warning', function (w) { /* w.code, w.key, w.message, w.hint */ })
+  if (!shader.set('noise-scal', 3)) { /* returned false; the console says: Did you mean "noise-scale"? */ }
+  ```
+- **Feature-detect instead of version-sniffing.** `handle.capabilities` (and `Sombra.capabilities` / `Sombra.supports('clock.play')`)
+  list what this player build can do, so a page can check before calling instead of hitting "x is not a function".
+  Names only ever get added. Current names: `knobs`, `knobs.byNode`, `clock.play`, `clock.time`, `clock.timeScale`,
+  `events.load`, `events.error`, `events.contextlost`, `events.warning`, `set.returnsBoolean`, `capabilities`.
+- A handle from a **failed mount** is a safe no-op: `set()` returns `false`, and `ok`/`error` say why.
+
 ## 4. `data-sombra-*` attributes
 
 `init()` (and the auto‑init on load) scans for `[data-sombra-scene]`,
@@ -481,7 +509,7 @@ or the embed was scrolled away. The Time node's `speed` knob is unchanged.
 `src/embed/version.ts` is the single source of truth for the version + filename:
 
 ```ts
-export const EMBED_VERSION = '0.1.0'
+export const EMBED_VERSION = '0.2.0'
 export const PLAYER_FILENAME = `sombra-player.${EMBED_VERSION}.umd.js`
 ```
 
@@ -489,12 +517,76 @@ The host (which domain serves the player/viewer) is **not** here — it is deriv
 from the running origin at snippet-build time by `embedHostBase()` in
 `src/embed/publish.ts`, so embeds follow whatever domain hosts the editor.
 
-- The player filename is **version‑pinned** (`sombra-player.0.1.0.umd.js`) so a
+- The player filename is **version‑pinned** (`sombra-player.0.2.0.umd.js`) so a
   published snippet keeps rendering against the exact player it was built for;
   new player versions ship under new filenames and never break old embeds.
 - `EMBED_VERSION` drives the build output name (`vite.embed.config.ts`), the
   snippet URLs (`buildSnippets`), and the bundle‑gate path
   (`scripts/verify-embed-bundle.ts`). Bump it in one place.
+
+### Subresource Integrity (the immutability rule)
+
+Every snippet pins the player with `integrity="sha384-…"` + `crossOrigin="anonymous"`,
+so a page that embedded Sombra before any compromise of the host keeps running only the
+bytes it was generated with (the browser refuses anything else; the loader then logs
+"Sombra player failed to load"). The hashes live in `src/embed/integrity.ts`
+(generated, committed). Consequences:
+
+- **The bytes served at a released filename must never change.** Any change to the
+  player build — code, a dependency bump that alters the output, anything — means a new
+  `EMBED_VERSION`.
+- **Releasing a new player version:** bump `EMBED_VERSION`, `npm run build`, then
+  `npm run embed:integrity -- --write` to register the new hash, commit.
+- **Old versions stay served.** Frozen copies of released players live in `public/embed/`
+  (the main build copies them into `dist/embed/`; `vite.embed.config.ts` does not empty
+  that folder). Add the previous file there when you bump, so snippets already in the
+  wild keep working.
+- `npm run verify:embed-integrity` (run in CI and deploy after the build) fails if a
+  registered file is missing or its bytes changed, if the current version has no hash, or
+  if an unregistered player file is being served.
+- Not covered: hosted scene files (`data-sombra-src`) are fetched with `fetch()` and are
+  not integrity-pinned.
+
+**One-time exception (2026-11-19).** Before SRI existed, the player filename was not honoured: `EMBED_VERSION` was
+set once in July and never bumped, so `0.1.0` silently changed several times (security fixes on 18-19 Nov; before that
+the 10-11 Nov control work: pausable clock and time API, mount-failure events, labelled-node knob keys, ramp-stop
+knobs). No third party had adopted a hash yet, so both versions were corrected once with `--force`:
+
+- **0.1.0 is now the ORIGINAL control surface**: `set`, `get`, `variables`, `nodes`, `play`, `pause`, `resize`,
+  `destroy`, events `load` / `contextlost`, and no clock queries. It runs on today's renderer (scenes from the current
+  editor need it) and carries the security fixes and the player-feedback behaviour. It is rebuilt reproducibly by
+  `python3 scripts/legacy-player/build-0.1.0.py` from the player files at commit `1d0b54e` (the last before the 10 Nov work).
+  Its `capabilities` list shows exactly what it can do.
+- **0.2.0** keeps everything newer (clock/time API, error events, labelled and ramp knobs) plus the feedback behaviour.
+- From 2026-11-19 on the rule above is absolute. `--force` after that date is a bug.
+
+### Mutable aliases: `latest` and `<major>` (opt-in convenience)
+
+For a quick start with no version to maintain, two ALIAS files are served next to the
+releases, in the style of `unpkg.com/<pkg>@latest`:
+
+- `https://sombra.sh/embed/sombra-player.latest.umd.js` is always the newest release;
+- `https://sombra.sh/embed/sombra-player.0.umd.js` is the newest release of major version 0.
+
+```html
+<script src="https://sombra.sh/embed/sombra-player.latest.umd.js"></script>
+```
+
+**Trust model.** A script tag runs with the full privileges of the page that includes it,
+so with an alias the embedder trusts Sombra to ship good code on every release instead of
+trusting one reviewed file. No Subresource Integrity is possible (the bytes change by
+design): production embeds should use the pinned, integrity-checked snippet from the Embed
+dialog. Aliases are copies (GitHub Pages is static), so a release reaches them within the
+host's cache lifetime (`max-age=600`, about ten minutes).
+
+**Rules.** Aliases are never registered in `src/embed/integrity.ts`; the released
+versioned files stay immutable and untouched. The build writes the aliases for the current
+version and major (`vite.embed.config.ts`); `npm run verify:embed-integrity` fails if an
+alias is missing, differs from the newest release of its line, or names a major with no
+release. When a major is superseded (a 1.0.0 release), freeze that major's alias
+(`sombra-player.0.umd.js`) into `public/embed/` so it keeps serving the last 0.x. Within a
+major, the documented player API is not broken: from 0.2.0 on, changes are additive.
+
 - The player ships to Pages via `npm run build` (which chains
   `npm run build:embed`) into `dist/embed/`.
 
@@ -553,29 +645,39 @@ it can set at 60 Hz (with alpha), a field alpha, optional balance and seed knobs
 a pausable clock, a clean teardown. The checklist that pins that shape lives in
 `scripts/lib/site-conformance.ts` (static half, C1..C8: decodes, `site-palette-stop-<n>`
 RGBA knobs, `fragment-output-alpha`, `site-balance-value` / `site-seed-value`
-(warn if missing), no duplicate-label suffixes, Render Quality high/medium). It is
+(warn if missing), no duplicate-label suffixes, Render Quality high/medium). C2
+accepts the stop keys in one of two forms, never mixed: `site-palette-stop-<n>`
+(stop n of a Color Ramp labelled `site.palette`) or `site-palette-stop-<n>-color`
+(one Color node per stop, labelled `site.palette.stop-<n>`; a Color node's key
+always ends in its param). It is
 plain TS, reusable editor-side, and must never be imported by the player
 (`verify:embed:bundle` forbids its marker).
 
-The reference scene is **`public/shared/site-base.sombra`** (editable graph) +
-**`public/shared/site-base.ombra`** (published): Value-FBM field → Pixelate 64
+The reference scene (built in code and no longer stored or hosted on the Sombra side:
+neither a `.sombra` nor an `.ombra` of it is committed): Value-FBM field → Pixelate 64
 (block UV) → Dither 8 (Bayer, Square) → Color Ramp (Constant, 4 RGBA stops
 `#160709` off, three "on" colours) → Fragment Output (Render Quality High).
 Author labels: `site.clock`, `site.seed`, `site.balance`, `site.dots`,
 `site.palette`, so the manifest carries `site-clock-speed`, `site-seed-value`,
 `site-balance-value`, `site-dots-pixel-size`, `site-dots-dither`,
 `site-palette-stop-0..3`, `fragment-output-alpha`, plus the unlabelled nodes'
-knobs. The graph is built in code (`scripts/lib/site-base-fixture.ts`);
-regenerate both files with `npx tsx scripts/verify-embed-site.ts --write`.
+knobs. The graph is built in code (`scripts/lib/site-base-fixture.ts`) at test time.
 Dither has no `mask` output yet (SR-6), so the fixture takes the mask from
 Dither·Result → Remap(0..0.5 → 0..1); the keys are the same.
 
 `verify:embed:site` (offline) checks the fixture's shape, runs C1..C8 on a fresh
-publish (with WGSL, as a WebGPU browser publishes) and on the committed files,
+publish (with WGSL, as a WebGPU browser publishes),
 pins the full key list, proves each check can fail, and holds the pre-ramp
 "compat" recipe (four Color + three Mix, Dither·Result → Remap → final Mix factor)
-to the exact shader and manifest 5752aa9 published for it
-(`scripts/baselines/site-compat-5752aa9.ombra`).
+to the manifest 5752aa9 published for it
+(`scripts/baselines/site-compat-5752aa9.ombra`, kept as the historical reference).
+Since 2026-11-11 the only difference allowed is the standard Rotate knob each
+Noise/FBM/Warp node gained (`noise-rotate`, `fbm-rotate` here — rule in
+`scripts/lib/added-rotate-knobs.ts`); the shader TEXT is no longer compared, because
+that Rotate necessarily adds a uniform and the rotate op. The compat guarantee is
+the pixel identity `verify:embed:site:gpu` checks against the same artifact.
+The site-base fixture itself gained `fbm-rotate` and `noise-rotate` the same day
+(additive; existing keys unchanged).
 
 `verify:embed:site:gpu` mounts the fixture with the real player over a solid page
 background and reads pixels back on WebGL2 and WebGPU: R1 mount (ok, `load`, no
@@ -583,50 +685,10 @@ background and reads pixels back on WebGL2 and WebGPU: R1 mount (ok, `load`, no
 colours, R3 per-stop alpha 0 clears exactly that band and the page shows through
 exactly, R4 balance ±1.5 → all off / all on, R5 five seeds → five frames, R6
 pause/resume continuity, R7 reduced motion, R8 60 `set()`/s → ≥ 50 frames, R9 20×
-mount/destroy leaves no live context or device. It also checks the committed
-`.ombra` (fetched via `src`) and the compat recipe render pixel-identically to a
-fresh publish and to 5752aa9's artifact. R1's "no console output" is a WARN today:
+mount/destroy leaves no live context or device. It also checks that the compat
+recipe renders pixel-identically to 5752aa9's artifact (exact on WebGPU; on WebGL2
+the stored artifact predates the Pixelate uv orientation fix, so it is not compared). R1's "no console output" is a WARN today:
 the player logs `[Sombra] Renderer backend: …` on every mount (SR-8 removes it);
 `SITE_STRICT=1` makes it fail. `--dpr <dir>` measures the Pixelate/Dither grids
 at DPR 1, 1.5, 2, 3 and writes a PNG per DPR (a report, not a gate).
 
-**Bundle rule (enforced):** the player import graph
-(`src/embed/index.ts` + its imports) may import only `src/renderer/*`,
-`src/embed/*`, and `pako`. It must **not** import React, `@xyflow/react`,
-`src/compiler/*`, `src/nodes/*`, or `src/utils/sombra-file.ts`. Editor‑side
-modules (`manifest.ts`, `publish.ts`, `EmbedModal.tsx`) may import compiler/nodes
-because they run in the editor, never in the shipped player. `import type` is
-erased at build, so type‑only imports of compiler types are fine everywhere.
-
----
-
-## 9. Scope & fast‑follows
-
-**v1 (this release):** frozen scenes, knobs‑only. The published artifact is the
-compiled shader plus a manifest of unwired `uniform`‑mode params, shippable inline
-or as a hosted `.ombra` file. The Embed modal shows a file‑size badge and warns
-when baked images make the artifact large.
-
-**Doors left open:**
-- `SceneArtifact.kind` reserves `'frozen'` today with `'live'` planned — a future
-  artifact could ship the graph and recompile on the host for live editing.
-- The `configure({ resolve })` seam + `data-sombra-id` are the hook for a future
-  **short-code / CDN service**: it only needs to map an id → a `.ombra` URL, with
-  zero changes to already-embedded pages.
-
-**Fast‑follows (not in v1):**
-
-- **Pointer / `u_mouse`** — forward host pointer events into the shader's mouse
-  uniform so embeds react to cursor position.
-- **Self‑hosted player file** — let the host serve the UMD bundle from its own
-  origin instead of the Sombra CDN (offline/CSP‑restricted sites).
-- **Per‑knob rename** — let the publisher choose friendly knob keys/labels at
-  publish time rather than auto‑slugging param labels.
-- **Shared rendering context** — one GPU device/context shared across multiple
-  embeds on a page (today each embed creates its own renderer).
-- **Minification** — minify the player bundle (currently unminified) to shrink
-  the gzip payload.
-- **Image WebP downscale** — at publish, re‑encode baked images to WebP with a
-  max‑dimension cap (`reencodeImages(images, maxDim)` via an offscreen canvas
-  `toDataURL('image/webp')`), wired to a toggle that re‑runs `publishScene`.
-  v1 ships only the size badge + warning; this is the actual re‑encode.
