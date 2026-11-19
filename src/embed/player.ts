@@ -8,6 +8,7 @@ import { resolveRef } from './config'
 import { PerfHarness } from './perf-harness'
 import { showFallback } from './fallback'
 import { registerHandle, unregisterHandle } from './registry'
+import { isSafeImageDataUrl } from './image-guard'
 
 /** Composite index key for (nodeId, param) lookups (param ids never contain a space). */
 const nodeKey = (nodeId: string, param: string) => `${nodeId} ${param}`
@@ -289,6 +290,9 @@ export async function mount(el: HTMLElement, opts: MountOptions): Promise<SceneH
   // Baked image textures decode async — re-render as each lands.
   const images = new Map<string, HTMLImageElement>()
   for (const asset of artifact.images) {
+    // Only real, sanely-sized image data URLs: an artifact must not make the visitor's
+    // browser fetch an arbitrary URL, or decode a header-declared giant image.
+    if (!isSafeImageDataUrl(asset?.dataUrl)) continue
     const img = new Image()
     img.onload = () => {
       images.set(asset.sampler, img)
