@@ -12,7 +12,10 @@
  * Needs a built dist/ (`npm run build`). Check mode fails when:
  *   - the current EMBED_VERSION has no registry entry,
  *   - any registered version's file is missing from dist/embed/ or its bytes differ,
- *   - dist/embed/ serves a player file the registry does not know.
+ *   - dist/embed/ serves a player file the registry does not know,
+ *   - a MUTABLE ALIAS (sombra-player.latest.umd.js, sombra-player.<major>.umd.js) is missing,
+ *     differs from the newest registered release of its line, or names a major with no release.
+ *     Aliases are deliberately not registered (they change on each release, so they carry no SRI).
  */
 import { createHash } from 'crypto'
 import { readFileSync, readdirSync, writeFileSync, existsSync } from 'fs'
@@ -53,8 +56,22 @@ for (const [v, want] of Object.entries(PLAYER_INTEGRITY)) {
   const got = sri(readFileSync(p))
   check(`${fileFor(v)} bytes match the registered hash`, got === want, got === want ? '' : 'player bytes changed under a released version: bump EMBED_VERSION and run `npm run embed:integrity -- --write`')
 }
-const served = readdirSync(DIR).filter((f) => /^sombra-player\..+\.umd\.js$/.test(f))
+const ALIAS_RE = /^sombra-player\.(latest|\d+)\.umd\.js$/
+const served = readdirSync(DIR).filter((f) => /^sombra-player\..+\.umd\.js$/.test(f) && !ALIAS_RE.test(f))
 const registered = new Set(Object.keys(PLAYER_INTEGRITY).map(fileFor))
 for (const f of served) check(`${f} is registered`, registered.has(f), 'a served player file with no registry entry cannot be integrity-checked')
+
+// Mutable aliases: each must equal the newest registered release of its line.
+const cmp = (a: string, b: string) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] - y[i]; return 0 }
+const versions = Object.keys(PLAYER_INTEGRITY).sort(cmp)
+const newestOf = (pred: (v: string) => boolean) => versions.filter(pred).pop()
+const aliasWant = new Map<string, string>([['sombra-player.latest.umd.js', newestOf(() => true)!]])
+for (const major of new Set(versions.map((v) => v.split('.')[0]))) aliasWant.set(`sombra-player.${major}.umd.js`, newestOf((v) => v.split('.')[0] === major)!)
+for (const [alias, v] of aliasWant) {
+  const a = `${DIR}/${alias}`, r = `${DIR}/${fileFor(v)}`
+  if (!existsSync(a)) { check(`alias ${alias} is served`, false, `missing from dist/embed/ (freeze it into public/embed/ when its major is superseded)`); continue }
+  check(`alias ${alias} equals the newest release of its line (${v})`, existsSync(r) && readFileSync(a).equals(readFileSync(r)))
+}
+for (const f of readdirSync(DIR).filter((f) => ALIAS_RE.test(f))) check(`${f} names a line that has a release`, aliasWant.has(f), 'an alias for a version line with no registered release')
 console.log(bad ? `\n${bad} FAILED` : '\nAll embed integrity checks passed')
 process.exit(bad ? 1 : 0)

@@ -519,6 +519,33 @@ bytes it was generated with (the browser refuses anything else; the loader then 
 - Not covered: hosted scene files (`data-sombra-src`) are fetched with `fetch()` and are
   not integrity-pinned.
 
+### Mutable aliases: `latest` and `<major>` (opt-in convenience)
+
+For a quick start with no version to maintain, two ALIAS files are served next to the
+releases, in the style of `unpkg.com/<pkg>@latest`:
+
+- `https://sombra.sh/embed/sombra-player.latest.umd.js` is always the newest release;
+- `https://sombra.sh/embed/sombra-player.0.umd.js` is the newest release of major version 0.
+
+```html
+<script src="https://sombra.sh/embed/sombra-player.latest.umd.js"></script>
+```
+
+**Trust model.** A script tag runs with the full privileges of the page that includes it,
+so with an alias the embedder trusts Sombra to ship good code on every release instead of
+trusting one reviewed file. No Subresource Integrity is possible (the bytes change by
+design): production embeds should use the pinned, integrity-checked snippet from the Embed
+dialog. Aliases are copies (GitHub Pages is static), so a release reaches them within the
+host's cache lifetime (`max-age=600`, about ten minutes).
+
+**Rules.** Aliases are never registered in `src/embed/integrity.ts`; the released
+versioned files stay immutable and untouched. The build writes the aliases for the current
+version and major (`vite.embed.config.ts`); `npm run verify:embed-integrity` fails if an
+alias is missing, differs from the newest release of its line, or names a major with no
+release. When a major is superseded (a 1.0.0 release), freeze that major's alias
+(`sombra-player.0.umd.js`) into `public/embed/` so it keeps serving the last 0.x. Within a
+major, the documented player API is not broken: from 0.2.0 on, changes are additive.
+
 - The player ships to Pages via `npm run build` (which chains
   `npm run build:embed`) into `dist/embed/`.
 
