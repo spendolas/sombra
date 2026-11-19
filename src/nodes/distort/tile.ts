@@ -53,44 +53,37 @@ export const tileNode: NodeDefinition = {
     const mirrorX = mirror === 'x' || mirror === 'xy'
     const mirrorY = mirror === 'y' || mirror === 'xy'
 
-    if (!mirrorX && !mirrorY) {
-      const lines = [
-        `vec2 ${outputs.uv} = fract(${inputs.coords} * vec2(${inputs.countX}, ${inputs.countY}));`,
-      ]
-      const samplerName = ctx.textureSamplers?.source
-      if (samplerName) {
-        // Full RGBA sample — alpha rides with the pixel (see rgba-node-audit.md).
-        lines.push(`vec4 ${outputs.color} = texture(${samplerName}, ${outputs.uv});`)
-      } else {
-        lines.push(`vec4 ${outputs.color} = vec4(${outputs.uv}, 0.5, 1.0);`)
+    // The exported `uv` is a coordinate, so it is tiled from y-down coords. In texture mode
+    // `coords` is the NATIVE screen UV (the sample base): the export then comes from
+    // ctx.coordsYDown and the texture is still sampled at the native-derived `sampleUv`.
+    const tileLines = (c: string, out: string, tag: string): string[] => {
+      if (!mirrorX && !mirrorY) {
+        return [`vec2 ${out} = fract(${c} * vec2(${inputs.countX}, ${inputs.countY}));`]
       }
-      return lines.join('\n  ')
+      const lines = [`vec2 tile_sc${tag}_${id} = ${c} * vec2(${inputs.countX}, ${inputs.countY});`]
+      if (mirrorX) {
+        lines.push(`float tile_mx${tag}_${id} = mod(tile_sc${tag}_${id}.x, 2.0);`)
+        lines.push(`float tile_tx${tag}_${id} = tile_mx${tag}_${id} < 1.0 ? tile_mx${tag}_${id} : 2.0 - tile_mx${tag}_${id};`)
+      } else {
+        lines.push(`float tile_tx${tag}_${id} = fract(tile_sc${tag}_${id}.x);`)
+      }
+      if (mirrorY) {
+        lines.push(`float tile_my${tag}_${id} = mod(tile_sc${tag}_${id}.y, 2.0);`)
+        lines.push(`float tile_ty${tag}_${id} = tile_my${tag}_${id} < 1.0 ? tile_my${tag}_${id} : 2.0 - tile_my${tag}_${id};`)
+      } else {
+        lines.push(`float tile_ty${tag}_${id} = fract(tile_sc${tag}_${id}.y);`)
+      }
+      lines.push(`vec2 ${out} = vec2(tile_tx${tag}_${id}, tile_ty${tag}_${id});`)
+      return lines
     }
-
-    const lines = [
-      `vec2 tile_sc_${id} = ${inputs.coords} * vec2(${inputs.countX}, ${inputs.countY});`,
-    ]
-
-    if (mirrorX) {
-      lines.push(`float tile_mx_${id} = mod(tile_sc_${id}.x, 2.0);`)
-      lines.push(`float tile_tx_${id} = tile_mx_${id} < 1.0 ? tile_mx_${id} : 2.0 - tile_mx_${id};`)
-    } else {
-      lines.push(`float tile_tx_${id} = fract(tile_sc_${id}.x);`)
-    }
-
-    if (mirrorY) {
-      lines.push(`float tile_my_${id} = mod(tile_sc_${id}.y, 2.0);`)
-      lines.push(`float tile_ty_${id} = tile_my_${id} < 1.0 ? tile_my_${id} : 2.0 - tile_my_${id};`)
-    } else {
-      lines.push(`float tile_ty_${id} = fract(tile_sc_${id}.y);`)
-    }
-
-    lines.push(`vec2 ${outputs.uv} = vec2(tile_tx_${id}, tile_ty_${id});`)
+    const lines = tileLines(ctx.coordsYDown ?? inputs.coords, outputs.uv, '')
+    const sampleUv = ctx.coordsYDown ? `tile_samp_${id}` : outputs.uv
+    if (ctx.coordsYDown) lines.push(...tileLines(inputs.coords, sampleUv, '_s'))
 
     const samplerName = ctx.textureSamplers?.source
     if (samplerName) {
       // Full RGBA sample — alpha rides with the pixel (see rgba-node-audit.md).
-      lines.push(`vec4 ${outputs.color} = texture(${samplerName}, ${outputs.uv});`)
+      lines.push(`vec4 ${outputs.color} = texture(${samplerName}, ${sampleUv});`)
     } else {
       lines.push(`vec4 ${outputs.color} = vec4(${outputs.uv}, 0.5, 1.0);`)
     }
@@ -107,66 +100,61 @@ export const tileNode: NodeDefinition = {
 
     const stmts: IRStmt[] = []
 
-    if (!mirrorX && !mirrorY) {
-      // Simple fract tiling
-      stmts.push(
-        declare(ctx.outputs.uv, 'vec2',
-          call('fract', [
-            binary('*',
-              variable(ctx.inputs.coords),
-              construct('vec2', [variable(ctx.inputs.countX), variable(ctx.inputs.countY)]),
-              'vec2',
-            ),
-          ], 'vec2'),
-        ),
-      )
-    } else {
+    // Same split as glsl(): export from ctx.coordsYDown, sample from native `coords`.
+    const tileStmts = (c: string, out: string, tag: string): IRStmt[] => {
+      if (!mirrorX && !mirrorY) {
+        // Simple fract tiling
+        return [
+          declare(out, 'vec2',
+            call('fract', [
+              binary('*',
+                variable(c),
+                construct('vec2', [variable(ctx.inputs.countX), variable(ctx.inputs.countY)]),
+                'vec2',
+              ),
+            ], 'vec2'),
+          ),
+        ]
+      }
       // Mirror tiling: scale, then mirror per-axis
-      const sc = `tile_sc_${id}`
-      stmts.push(
+      const sc = `tile_sc${tag}_${id}`
+      const out2: IRStmt[] = [
         declare(sc, 'vec2',
           binary('*',
-            variable(ctx.inputs.coords),
+            variable(c),
             construct('vec2', [variable(ctx.inputs.countX), variable(ctx.inputs.countY)]),
             'vec2',
           ),
         ),
-      )
-
+      ]
       if (mirrorX) {
-        stmts.push(
-          raw(`float tile_mx_${id} = mod(${sc}.x, 2.0);`),
-          raw(`float tile_tx_${id} = tile_mx_${id} < 1.0 ? tile_mx_${id} : 2.0 - tile_mx_${id};`),
+        out2.push(
+          raw(`float tile_mx${tag}_${id} = mod(${sc}.x, 2.0);`),
+          raw(`float tile_tx${tag}_${id} = tile_mx${tag}_${id} < 1.0 ? tile_mx${tag}_${id} : 2.0 - tile_mx${tag}_${id};`),
         )
       } else {
-        stmts.push(
-          raw(`float tile_tx_${id} = fract(${sc}.x);`),
-        )
+        out2.push(raw(`float tile_tx${tag}_${id} = fract(${sc}.x);`))
       }
-
       if (mirrorY) {
-        stmts.push(
-          raw(`float tile_my_${id} = mod(${sc}.y, 2.0);`),
-          raw(`float tile_ty_${id} = tile_my_${id} < 1.0 ? tile_my_${id} : 2.0 - tile_my_${id};`),
+        out2.push(
+          raw(`float tile_my${tag}_${id} = mod(${sc}.y, 2.0);`),
+          raw(`float tile_ty${tag}_${id} = tile_my${tag}_${id} < 1.0 ? tile_my${tag}_${id} : 2.0 - tile_my${tag}_${id};`),
         )
       } else {
-        stmts.push(
-          raw(`float tile_ty_${id} = fract(${sc}.y);`),
-        )
+        out2.push(raw(`float tile_ty${tag}_${id} = fract(${sc}.y);`))
       }
-
-      stmts.push(
-        declare(ctx.outputs.uv, 'vec2',
-          construct('vec2', [variable(`tile_tx_${id}`), variable(`tile_ty_${id}`)]),
-        ),
-      )
+      out2.push(declare(out, 'vec2', construct('vec2', [variable(`tile_tx${tag}_${id}`), variable(`tile_ty${tag}_${id}`)])))
+      return out2
     }
+    stmts.push(...tileStmts(ctx.coordsYDown ?? ctx.inputs.coords, ctx.outputs.uv, ''))
+    const sampleUv = ctx.coordsYDown ? `tile_samp_${id}` : ctx.outputs.uv
+    if (ctx.coordsYDown) stmts.push(...tileStmts(ctx.inputs.coords, sampleUv, '_s'))
 
     // Color output — full RGBA sample, alpha rides with the pixel (see rgba-node-audit.md).
     if (samplerName) {
       stmts.push(
         declare(ctx.outputs.color, 'vec4',
-          textureSample(samplerName, variable(ctx.outputs.uv)),
+          textureSample(samplerName, variable(sampleUv)),
         ),
       )
     } else {

@@ -20,7 +20,7 @@
 import { test, run, assert } from './blur-bakeoff/lib/test-util'
 import { createRig } from './blur-bakeoff/lib/gpu-rig'
 import {
-  ifStmt, forLoop, declare, assign, binary, variable, literal, call, fragCoord, framebufferY, nativeToYDown,
+  ifStmt, forLoop, declare, assign, binary, variable, literal, call, fragCoord, framebufferY, nativeToYDown, nativeUvToYDown,
 } from '../src/compiler/ir/types'
 import type { IRStmt } from '../src/compiler/ir/types'
 import { lowerStmtToGLSL } from '../src/compiler/ir/glsl-backend'
@@ -131,6 +131,12 @@ test('nativeToYDown mirrors a native POSITION on GLSL only, the same flip as fra
   assert(viaFc.includes('u_resolution.y - (gl_FragCoord.xy).y'), `GLSL: ${viaFc}`)
   assert(wgsl(declare('a', 'vec2', nativeToYDown(fragCoord('native')))) === wgsl(declare('a', 'vec2', fragCoord('yDown'))),
     'WGSL nativeToYDown(fragCoord(native)) must equal fragCoord(yDown)')
+})
+
+test('nativeUvToYDown flips a native screen UV (1 - v) on GLSL only, needing no uniform', () => {
+  const s = declare('p', 'vec2', nativeUvToYDown(variable('q')))
+  assert(glsl(s).includes('1.0 - (q).y') && !glsl(s).includes('u_resolution'), `GLSL must flip v with no uniform: ${glsl(s)}`)
+  assert(!wgsl(s).includes('-') && wgsl(s).includes('= q;'), `WGSL is already y-down and must pass through: ${wgsl(s)}`)
 })
 
 // ---------------------------------------------------------------------------

@@ -110,6 +110,10 @@ export interface GLSLContext {
    * for sampling) it is a separately-computed SRT'd auto_uv. Set by the compiler.
    */
   spatialCoords?: string
+  /** Set only when `coords` was defaulted to the NATIVE screen UV (texture mode, unwired)
+   *  and the node has a vec2 output: that same position in y-down pattern space. A node
+   *  exporting a coordinate derives it from this and keeps sampling from native `coords`. */
+  coordsYDown?: string
   /** True when compiling for a node mini-preview thumbnail (fixed 80×80, centre
    *  anchor). Nodes may render a canonical, placement-independent view — e.g. the
    *  gradient shows itself centred + fitted rather than at its pinned position. */

@@ -468,6 +468,7 @@ export function generateNodeGlsl(
 
   // Texture mode: node has at least one wired textureInput
   const isTextureMode = boundariesForNode.length > 0
+  let coordsYDown: string | undefined // y-down view of a native-defaulted `coords` (see IRContext.coordsYDown)
 
   // Resolve inputs
   const resolvedInputs = definition.dynamicInputs
@@ -520,6 +521,11 @@ export function generateNodeGlsl(
         uniforms.add('u_viewport')
         preambleLines.push(`vec2 ${screenUvVar} = gl_FragCoord.xy / u_viewport;`)
         inputs[inputPort.id] = screenUvVar
+        // Same as ir-compiler: the y-down view of the native screen UV, for exported coordinates.
+        if (inputPort.id === 'coords' && definition.outputs.some((o) => o.type === 'vec2')) {
+          coordsYDown = `${screenUvVar}_ydown`
+          preambleLines.push(`vec2 ${coordsYDown} = vec2(${screenUvVar}.x, 1.0 - ${screenUvVar}.y);`)
+        }
       } else if (!resolveInputDefault(inputPort, sanitizedNodeId, preambleLines, inputs, uniforms)) {
         errors.push({
           message: `Input "${inputPort.label}" on ${definition.label} has no connection and no default`,
@@ -639,6 +645,7 @@ export function generateNodeGlsl(
     textureSamplers: Object.keys(textureSamplers).length > 0 ? textureSamplers : undefined,
     imageSamplers,
     spatialCoords,
+    coordsYDown,
     isPreview,
   }
 

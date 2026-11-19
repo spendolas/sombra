@@ -97,7 +97,7 @@ export type IRExpr =
   | IRSwizzle
   | IRConstruct
   | IRTernary
-  | IRTextureSample | IRFragCoord | IRFramebufferY | IRNativeToYDown
+  | IRTextureSample | IRFragCoord | IRFramebufferY | IRNativeToYDown | IRNativeUvToYDown
 
 // ---------------------------------------------------------------------------
 // Statements
@@ -185,6 +185,17 @@ export interface IRFramebufferY {
  */
 export interface IRNativeToYDown {
   readonly kind: 'nativeToYDown'
+  readonly expr: IRExpr
+}
+
+/**
+ * The UV sibling of `nativeToYDown`: re-express a screen UV in 0..1 (native framebuffer
+ * orientation, e.g. `fragCoord('native') / u_viewport`) in Sombra's y-down pattern space.
+ * GLSL's native v runs bottom-up, so it is `1.0 - v`; WGSL is already y-down: identity.
+ * Needs no uniform — a UV has no pixel extent to mirror against.
+ */
+export interface IRNativeUvToYDown {
+  readonly kind: 'nativeUvToYDown'
   readonly expr: IRExpr
 }
 
@@ -398,6 +409,15 @@ export interface IRContext {
    * for sampling) it is a separately-computed SRT'd auto_uv. Mirrors GLSLContext.
    */
   readonly spatialCoords?: string
+  /**
+   * Present ONLY when the compiler defaulted this node's `coords` to the NATIVE screen UV
+   * (texture mode, nothing wired — the texture sample base), and the node has a vec2
+   * output: the same position in y-down pattern space. A node whose vec2 output is a
+   * coordinate exports from THIS and keeps sampling its texture from the native `coords`.
+   * Absent when `coords` is wired or is auto_uv — those are already y-down. Mirrors
+   * GLSLContext.
+   */
+  readonly coordsYDown?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -469,6 +489,10 @@ export function framebufferY(expr: IRExpr, from: 'yUp' | 'yDown'): IRFramebuffer
 
 export function nativeToYDown(expr: IRExpr): IRNativeToYDown {
   return { kind: 'nativeToYDown', expr }
+}
+
+export function nativeUvToYDown(expr: IRExpr): IRNativeUvToYDown {
+  return { kind: 'nativeUvToYDown', expr }
 }
 
 export function textureSample(

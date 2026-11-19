@@ -50,32 +50,33 @@ export const polarCoordsNode: NodeDefinition = {
     const mode = (params.mode as string) || 'forward'
     const id = ctx.nodeId.replace(/-/g, '_')
 
-    if (mode === 'inverse') {
-      const lines = [
-        `float pc_angle_${id} = (${inputs.coords}.y - 0.5) * 6.28318530718;`,
-        `vec2 ${outputs.polar} = vec2(${inputs.centerX}, ${inputs.centerY}) + vec2(cos(pc_angle_${id}), sin(pc_angle_${id})) * ${inputs.coords}.x;`,
-      ]
-      const samplerName = ctx.textureSamplers?.source
-      if (samplerName) {
-        // Full RGBA sample — alpha rides with the pixel (see rgba-node-audit.md).
-        lines.push(`vec4 ${outputs.color} = texture(${samplerName}, ${outputs.polar});`)
-      } else {
-        lines.push(`vec4 ${outputs.color} = ${inputs.source};`)
+    // The exported `polar` is a coordinate, so it is derived from y-down coords. In texture
+    // mode `coords` is the NATIVE screen UV (the sample base): the export then comes from
+    // ctx.coordsYDown and the texture is still sampled at the native-derived `samplePolar`.
+    const split = !!ctx.coordsYDown
+    const polarLines = (c: string, out: string, tag: string): string[] => {
+      if (mode === 'inverse') {
+        return [
+          `float pc_angle${tag}_${id} = (${c}.y - 0.5) * 6.28318530718;`,
+          `vec2 ${out} = vec2(${inputs.centerX}, ${inputs.centerY}) + vec2(cos(pc_angle${tag}_${id}), sin(pc_angle${tag}_${id})) * ${c}.x;`,
+        ]
       }
-      return lines.join('\n  ')
+      // forward: cartesian → polar
+      return [
+        `vec2 pc_off${tag}_${id} = ${c} - vec2(${inputs.centerX}, ${inputs.centerY});`,
+        `float pc_r${tag}_${id} = length(pc_off${tag}_${id});`,
+        `float pc_theta${tag}_${id} = atan(pc_off${tag}_${id}.y, pc_off${tag}_${id}.x) / 6.28318530718 + 0.5;`,
+        `vec2 ${out} = vec2(pc_r${tag}_${id}, pc_theta${tag}_${id});`,
+      ]
     }
+    const lines = polarLines(ctx.coordsYDown ?? inputs.coords, outputs.polar, '')
+    const samplePolar = split ? `pc_samp_${id}` : outputs.polar
+    if (split) lines.push(...polarLines(inputs.coords, samplePolar, '_s'))
 
-    // forward: cartesian → polar
-    const lines = [
-      `vec2 pc_off_${id} = ${inputs.coords} - vec2(${inputs.centerX}, ${inputs.centerY});`,
-      `float pc_r_${id} = length(pc_off_${id});`,
-      `float pc_theta_${id} = atan(pc_off_${id}.y, pc_off_${id}.x) / 6.28318530718 + 0.5;`,
-      `vec2 ${outputs.polar} = vec2(pc_r_${id}, pc_theta_${id});`,
-    ]
     const samplerName = ctx.textureSamplers?.source
     if (samplerName) {
       // Full RGBA sample — alpha rides with the pixel (see rgba-node-audit.md).
-      lines.push(`vec4 ${outputs.color} = texture(${samplerName}, ${outputs.polar});`)
+      lines.push(`vec4 ${outputs.color} = texture(${samplerName}, ${samplePolar});`)
     } else {
       lines.push(`vec4 ${outputs.color} = ${inputs.source};`)
     }
@@ -89,43 +90,45 @@ export const polarCoordsNode: NodeDefinition = {
 
     const stmts: IRStmt[] = []
 
-    if (mode === 'inverse') {
-      // Inverse: (r, theta) → (x, y)
-      const angle = `pc_angle_${id}`
-      stmts.push(
-        declare(angle, 'float',
-          binary('*',
-            binary('-', swizzle(variable(ctx.inputs.coords), 'y', 'float'), literal('float', 0.5), 'float'),
-            literal('float', 6.28318530718),
-            'float',
-          ),
-        ),
-      )
-      stmts.push(
-        declare(ctx.outputs.polar, 'vec2',
-          binary('+',
-            construct('vec2', [variable(ctx.inputs.centerX), variable(ctx.inputs.centerY)]),
+    // The exported `polar` is a coordinate, so it is derived from y-down coords. In texture
+    // mode `coords` is the NATIVE screen UV (the sample base): the export then comes from
+    // ctx.coordsYDown and the texture is still sampled at the native-derived `samplePolar`.
+    const polarStmts = (c: string, out: string, tag: string): IRStmt[] => {
+      if (mode === 'inverse') {
+        // Inverse: (r, theta) → (x, y)
+        const angle = `pc_angle${tag}_${id}`
+        return [
+          declare(angle, 'float',
             binary('*',
-              construct('vec2', [
-                call('cos', [variable(angle)], 'float'),
-                call('sin', [variable(angle)], 'float'),
-              ]),
-              swizzle(variable(ctx.inputs.coords), 'x', 'float'),
+              binary('-', swizzle(variable(c), 'y', 'float'), literal('float', 0.5), 'float'),
+              literal('float', 6.28318530718),
+              'float',
+            ),
+          ),
+          declare(out, 'vec2',
+            binary('+',
+              construct('vec2', [variable(ctx.inputs.centerX), variable(ctx.inputs.centerY)]),
+              binary('*',
+                construct('vec2', [
+                  call('cos', [variable(angle)], 'float'),
+                  call('sin', [variable(angle)], 'float'),
+                ]),
+                swizzle(variable(c), 'x', 'float'),
+                'vec2',
+              ),
               'vec2',
             ),
-            'vec2',
           ),
-        ),
-      )
-    } else {
+        ]
+      }
       // Forward: cartesian → polar
-      const off = `pc_off_${id}`
-      const r = `pc_r_${id}`
-      const theta = `pc_theta_${id}`
-      stmts.push(
+      const off = `pc_off${tag}_${id}`
+      const r = `pc_r${tag}_${id}`
+      const theta = `pc_theta${tag}_${id}`
+      return [
         declare(off, 'vec2',
           binary('-',
-            variable(ctx.inputs.coords),
+            variable(c),
             construct('vec2', [variable(ctx.inputs.centerX), variable(ctx.inputs.centerY)]),
             'vec2',
           ),
@@ -147,17 +150,20 @@ export const polarCoordsNode: NodeDefinition = {
             'float',
           ),
         ),
-        declare(ctx.outputs.polar, 'vec2',
+        declare(out, 'vec2',
           construct('vec2', [variable(r), variable(theta)]),
         ),
-      )
+      ]
     }
+    stmts.push(...polarStmts(ctx.coordsYDown ?? ctx.inputs.coords, ctx.outputs.polar, ''))
+    const samplePolar = ctx.coordsYDown ? `pc_samp_${id}` : ctx.outputs.polar
+    if (ctx.coordsYDown) stmts.push(...polarStmts(ctx.inputs.coords, samplePolar, '_s'))
 
     // Color output — full RGBA sample, alpha rides with the pixel (see rgba-node-audit.md).
     if (samplerName) {
       stmts.push(
         declare(ctx.outputs.color, 'vec4',
-          textureSample(samplerName, variable(ctx.outputs.polar)),
+          textureSample(samplerName, variable(samplePolar)),
         ),
       )
     } else {

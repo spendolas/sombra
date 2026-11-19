@@ -421,6 +421,10 @@ export function lowerExprToWGSL(expr: IRExpr): string {
       return expr.from === 'yUp' ? `vec2f((${e}).x, -(${e}).y)` : e
     }
 
+    case 'nativeUvToYDown':
+      // in.position is already y-down, so a native screen UV is a y-down UV: identity.
+      return lowerExprToWGSL(expr.expr)
+
     case 'nativeToYDown':
       // in.position is ALREADY y-down, so a native position is a y-down position: identity.
       // The asymmetry lives entirely on the GLSL side — see glsl-backend.ts.

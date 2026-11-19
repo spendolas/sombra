@@ -128,6 +128,12 @@ export function lowerExprToGLSL(expr: IRExpr, parentPrec = 0, isRightOfParent = 
       return expr.from === 'yDown' ? `vec2((${e}).x, -(${e}).y)` : e
     }
 
+    case 'nativeUvToYDown': {
+      // A native screen UV runs bottom-up on GLSL: flip v. (A position uses u_resolution; a UV needs none.)
+      const e = lowerExprToGLSL(expr.expr)
+      return `vec2((${e}).x, 1.0 - (${e}).y)`
+    }
+
     case 'nativeToYDown': {
       // GLSL's framebuffer is y-UP, so a native position is mirrored against the frame
       // height — the same flip fragCoord('yDown') applies. Requires u_resolution.

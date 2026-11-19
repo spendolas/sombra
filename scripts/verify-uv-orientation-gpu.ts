@@ -25,7 +25,8 @@
  *   - the frame is NOT its own vertical mirror, so a mirrored backend could not
  *     pass by accident (a flip-symmetric scene is reported as vacuous).
  *
- * Revert the pixelate fix (either codegen path) and this goes red.
+ * Revert the pixelate fix, or the texture-mode coordinate fix in warp / polar_coords / tile
+ * (either codegen path), and this goes red.
  *
  * Run: npm run verify:uv-orientation:gpu
  */
@@ -40,11 +41,6 @@ const S = 128 // square canvas, dpr 1: auto_uv spans 0.375..0.625, about one gre
 
 interface Scene {
   label: string; params?: Record<string, unknown>; texture?: boolean
-  /**
-   * A divergence that is KNOWN and not fixed here, with the reason. The scene must still
-   * diverge — once it agrees, the entry is stale and the gate fails until it is removed.
-   */
-  knownDivergent?: string
 }
 type Entry =
   | { coordinate: true; scenes: Scene[] }
@@ -56,25 +52,23 @@ type Entry =
  * the compiler's `coords` default from auto_uv to the native screen UV (the texture
  * sample base) — the second way a native coordinate can reach an output.
  */
-const TEXTURE_MODE_SAMPLE_BASE = 'texture mode feeds `coords` the NATIVE screen UV (ir-compiler.ts / glsl-generator.ts ' +
-  'texture-mode default), which is also the texture sample base; the output passes it through. ' +
-  'Fixing it means converting every pass-texture sample in tile/polar/warp, which changes WebGL2 colour output — a separate change.'
-
 const AUDIT: Record<string, Entry> = {
   'uv_transform.uv': { coordinate: true, scenes: [{ label: 'default' }, { label: 'rotated', params: { srt_rotate: 30 } }] },
-  'warp.warped': { coordinate: true, scenes: [{ label: 'no source' }, { label: 'texture mode', texture: true, knownDivergent: TEXTURE_MODE_SAMPLE_BASE }] },
+  'warp.warped': { coordinate: true, scenes: [{ label: 'no source' }, { label: 'texture mode', texture: true }] },
   'polar_coords.polar': {
     coordinate: true, scenes: [
       { label: 'forward', params: { centerX: 0.45, centerY: 0.4 } },
       { label: 'inverse', params: { mode: 'inverse' } },
-      { label: 'forward, texture mode', params: { centerX: 0.45, centerY: 0.4 }, texture: true, knownDivergent: TEXTURE_MODE_SAMPLE_BASE },
+      { label: 'forward, texture mode', params: { centerX: 0.45, centerY: 0.4 }, texture: true },
+      { label: 'inverse, texture mode', params: { mode: 'inverse' }, texture: true },
     ],
   },
   'tile.uv': {
     coordinate: true, scenes: [
       { label: 'plain', params: { countX: 3, countY: 3 } },
       { label: 'mirror xy', params: { countX: 3, countY: 3, mirror: 'xy' } },
-      { label: 'plain, texture mode', params: { countX: 3, countY: 3 }, texture: true, knownDivergent: TEXTURE_MODE_SAMPLE_BASE },
+      { label: 'plain, texture mode', params: { countX: 3, countY: 3 }, texture: true },
+      { label: 'mirror xy, texture mode', params: { countX: 3, countY: 3, mirror: 'xy' }, texture: true },
     ],
   },
   'pixelate.uv': {
@@ -92,12 +86,12 @@ const AUDIT: Record<string, Entry> = {
 /** Every vec2 output in the registry, as `<type>.<port>`. */
 const VEC2_OUTPUTS = ALL_NODES.flatMap((n) => n.outputs.filter((o) => o.type === 'vec2').map((o) => `${n.type}.${o.id}`))
 
-interface Case { name: string; type: string; port: string; params: Record<string, unknown>; texture: boolean; via: 'direct' | 'noise'; knownDivergent?: string }
+interface Case { name: string; type: string; port: string; params: Record<string, unknown>; texture: boolean; via: 'direct' | 'noise' }
 const CASES: Case[] = Object.entries(AUDIT).flatMap(([key, e]) => {
   if (!e.coordinate) return []
   const [type, port] = key.split('.')
   return e.scenes.flatMap((s) => (['direct', 'noise'] as const).map((via): Case =>
-    ({ name: `${key} ${s.label} (${via})`, type, port, params: s.params ?? {}, texture: !!s.texture, via, knownDivergent: s.knownDivergent })))
+    ({ name: `${key} ${s.label} (${via})`, type, port, params: s.params ?? {}, texture: !!s.texture, via })))
 })
 
 function graph(c: Case) {
@@ -149,7 +143,6 @@ function greenBands(px: number[]): { top: number; bottom: number } {
 }
 
 async function main() {
-  console.log(`  known divergent (not fixed here): ${CASES.filter((c) => c.knownDivergent).map((c) => c.name).join('; ')}`)
   // The audit must cover the registry exactly.
   test('every vec2 output in the registry is audited, and every audit entry still exists', () => {
     const missing = VEC2_OUTPUTS.filter((k) => !(k in AUDIT))
@@ -257,16 +250,7 @@ async function main() {
     const worst = { agree: -1, agreeName: '', flip: 2, flipName: '' }
 
     if (backends.length === 2) {
-      for (const c of CASES.filter((k) => k.knownDivergent)) {
-        test(`${c.name} — KNOWN divergence still present (remove the entry once fixed)`, async () => {
-          const gpu = await frame('webgpu', c)
-          const gl = await frame('webgl2', c)
-          assert(!!gpu.shaderHas && !!gl.shaderHas, `node_rn_${c.port} is missing from a compiled shader`)
-          const whole = diff(gpu.px!, gl.px!)
-          assert(whole.frac > 0.05, `the backends now agree (${pct(whole.frac)} of pixels differ) — this divergence is fixed; drop knownDivergent from the scene`)
-        })
-      }
-      for (const c of CASES.filter((k) => !k.knownDivergent)) {
+      for (const c of CASES) {
         test(`${c.name} — WebGL2 and WebGPU agree on orientation`, async () => {
           const gpu = await frame('webgpu', c)
           const gl = await frame('webgl2', c)

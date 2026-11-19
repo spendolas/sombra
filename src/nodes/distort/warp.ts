@@ -93,8 +93,15 @@ export const warpNode: NodeDefinition = {
       )
     }
 
+    // The exported coordinate is y-down on both backends. In texture mode `coords` is the
+    // NATIVE screen UV (the sample base), so the export starts from ctx.coordsYDown and the
+    // texture is still sampled at the native position `dw_pos`. The noise offset is
+    // already y-down in both.
+    const warpOffset = `vec2(${prefix}_x, ${prefix}_y) * ${inputs.strength}`
+    const samplePos = ctx.coordsYDown ? `dw_pos_${id}` : outputs.warped
+    if (ctx.coordsYDown) lines.push(`vec2 ${samplePos} = ${inputs.coords} + ${warpOffset};`)
     lines.push(
-      `vec2 ${outputs.warped} = ${inputs.coords} + vec2(${prefix}_x, ${prefix}_y) * ${inputs.strength};`,
+      `vec2 ${outputs.warped} = ${ctx.coordsYDown ?? inputs.coords} + ${warpOffset};`,
       warpDepth === '3'
         ? `float ${outputs.warpedPhase} = ${inputs.phase} + ${prefix}_z * ${inputs.strength};`
         : `float ${outputs.warpedPhase} = ${inputs.phase};`,
@@ -106,14 +113,14 @@ export const warpNode: NodeDefinition = {
       // Apply edge wrapping before texture sampling
       const edgeUV = `dw_edge_${id}`
       if (edge === 'repeat') {
-        lines.push(`vec2 ${edgeUV} = fract(${outputs.warped});`)
+        lines.push(`vec2 ${edgeUV} = fract(${samplePos});`)
       } else if (edge === 'mirror') {
         lines.push(`vec2 ${edgeUV} = vec2(`)
-        lines.push(`  mod(${outputs.warped}.x, 2.0) < 1.0 ? fract(${outputs.warped}.x) : 1.0 - fract(${outputs.warped}.x),`)
-        lines.push(`  mod(${outputs.warped}.y, 2.0) < 1.0 ? fract(${outputs.warped}.y) : 1.0 - fract(${outputs.warped}.y)`)
+        lines.push(`  mod(${samplePos}.x, 2.0) < 1.0 ? fract(${samplePos}.x) : 1.0 - fract(${samplePos}.x),`)
+        lines.push(`  mod(${samplePos}.y, 2.0) < 1.0 ? fract(${samplePos}.y) : 1.0 - fract(${samplePos}.y)`)
         lines.push(`);`)
       } else {
-        lines.push(`vec2 ${edgeUV} = clamp(${outputs.warped}, 0.0, 1.0);`)
+        lines.push(`vec2 ${edgeUV} = clamp(${samplePos}, 0.0, 1.0);`)
       }
       // Full RGBA sample — alpha rides with the pixel (see rgba-node-audit.md).
       lines.push(`vec4 ${outputs.color} = texture(${samplerName}, ${edgeUV});`)
@@ -223,18 +230,21 @@ export const warpNode: NodeDefinition = {
       )
     }
 
-    // Warped coords output
+    // Warped coords output — y-down on both backends. In texture mode `coords` is the NATIVE
+    // screen UV (the sample base), so the export starts from ctx.coordsYDown and the texture
+    // is still sampled at the native position `dw_pos`. The noise offset is y-down in both.
+    const warpOffset = () => binary('*',
+      construct('vec2', [variable(`${prefix}_x`), variable(`${prefix}_y`)]),
+      variable(ctx.inputs.strength),
+      'vec2',
+    )
+    const samplePos = ctx.coordsYDown ? `dw_pos_${id}` : ctx.outputs.warped
+    if (ctx.coordsYDown) {
+      stmts.push(declare(samplePos, 'vec2', binary('+', variable(ctx.inputs.coords), warpOffset(), 'vec2')))
+    }
     stmts.push(
       declare(ctx.outputs.warped, 'vec2',
-        binary('+',
-          variable(ctx.inputs.coords),
-          binary('*',
-            construct('vec2', [variable(`${prefix}_x`), variable(`${prefix}_y`)]),
-            variable(ctx.inputs.strength),
-            'vec2',
-          ),
-          'vec2',
-        ),
+        binary('+', variable(ctx.coordsYDown ?? ctx.inputs.coords), warpOffset(), 'vec2'),
       ),
     )
 
@@ -260,16 +270,16 @@ export const warpNode: NodeDefinition = {
       // Texture mode: apply edge wrapping then sample FBO texture
       const edgeUV = `dw_edge_${id}`
       if (edge === 'repeat') {
-        stmts.push(declare(edgeUV, 'vec2', call('fract', [variable(ctx.outputs.warped)], 'vec2')))
+        stmts.push(declare(edgeUV, 'vec2', call('fract', [variable(samplePos)], 'vec2')))
       } else if (edge === 'mirror') {
         stmts.push(raw(`vec2 ${edgeUV} = vec2(
-    mod(${ctx.outputs.warped}.x, 2.0) < 1.0 ? fract(${ctx.outputs.warped}.x) : 1.0 - fract(${ctx.outputs.warped}.x),
-    mod(${ctx.outputs.warped}.y, 2.0) < 1.0 ? fract(${ctx.outputs.warped}.y) : 1.0 - fract(${ctx.outputs.warped}.y)
+    mod(${samplePos}.x, 2.0) < 1.0 ? fract(${samplePos}.x) : 1.0 - fract(${samplePos}.x),
+    mod(${samplePos}.y, 2.0) < 1.0 ? fract(${samplePos}.y) : 1.0 - fract(${samplePos}.y)
   );`))
       } else {
         // clamp — WGSL requires matching types: vec2f args for vec2f result
         stmts.push(declare(edgeUV, 'vec2',
-          call('clamp', [variable(ctx.outputs.warped), construct('vec2', [literal('float', 0.0)]), construct('vec2', [literal('float', 1.0)])], 'vec2'),
+          call('clamp', [variable(samplePos), construct('vec2', [literal('float', 0.0)]), construct('vec2', [literal('float', 1.0)])], 'vec2'),
         ))
       }
       // Full RGBA sample — alpha rides with the pixel (see rgba-node-audit.md).

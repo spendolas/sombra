@@ -1579,6 +1579,62 @@ function verify(
   }
 }
 
+// 39a2. Texture mode: a node's exported coordinate is y-down on both GLSL paths.
+// In texture mode `coords` is the NATIVE screen UV (the texture sample base); the compiler
+// also hands the node ctx.coordsYDown. The export must be built from that, while the texture
+// is still sampled at the native-derived position (a different variable). The GPU gate
+// (verify:uv-orientation:gpu) renders glsl() on WebGL2 and ir() on WebGPU only, so this text
+// check is what catches a revert of the OTHER path. Each node is checked on its own.
+{
+  const lineOf = (src: string, v: string) => src.split('\n').map((l) => l.trim()).find((l) => new RegExp(`${v}\\s*(:\\s*vec[24]f)?\\s*=`).test(l)) ?? ''
+  const cases: Array<{ name: string; def: NodeDef; id: string; out: string; params: Record<string, unknown>; inputs: Record<string, string> }> = [
+    { name: 'Warp', def: warpNode, id: 'warp-yd1', out: 'warped', params: { warpDepth: '2', edge: 'clamp' },
+      inputs: { source: 'u_pass0_tex', coords: 'screen_uv_n', seed: 'u_s', phase: 'u_p', strength: 'u_k' } },
+    { name: 'Polar (forward)', def: polarCoordsNode, id: 'pc-yd1', out: 'polar', params: { mode: 'forward' },
+      inputs: { source: 'u_pass0_tex', coords: 'screen_uv_n', centerX: 'u_cx', centerY: 'u_cy' } },
+    { name: 'Polar (inverse)', def: polarCoordsNode, id: 'pc-yd2', out: 'polar', params: { mode: 'inverse' },
+      inputs: { source: 'u_pass0_tex', coords: 'screen_uv_n', centerX: 'u_cx', centerY: 'u_cy' } },
+    { name: 'Tile (plain)', def: tileNode, id: 'tile-yd1', out: 'uv', params: { mirror: 'none' },
+      inputs: { source: 'u_pass0_tex', coords: 'screen_uv_n', countX: 'u_nx', countY: 'u_ny' } },
+    { name: 'Tile (mirror xy)', def: tileNode, id: 'tile-yd2', out: 'uv', params: { mirror: 'xy' },
+      inputs: { source: 'u_pass0_tex', coords: 'screen_uv_n', countX: 'u_nx', countY: 'u_ny' } },
+  ]
+  for (const c of cases) {
+    testNum++
+    console.log(`\n  ${testNum}. ${c.name} — texture mode: exported coordinate is y-down on both GLSL paths`)
+    const san = c.id.replace(/-/g, '_')
+    const outVar = `node_${san}_${c.out}`
+    const spec = {
+      nodeId: c.id, inputs: c.inputs, params: c.params, textureSamplers: { source: 'u_pass0_tex' },
+      outputs: { [c.out]: outVar, color: `node_${san}_color` },
+      spatialCoords: 'own_uv_n', coordsYDown: 'screen_uv_ydown',
+    } as unknown as IRContext
+    const [g, i] = ctx(spec)
+    const extra = { spatialCoords: 'own_uv_n', coordsYDown: 'screen_uv_ydown' }
+    const refGLSL = c.def.glsl(Object.assign(g, extra))
+    const irOut = c.def.ir!(Object.assign(i, extra))
+    const irGLSL = lowerNodeOutputToGLSL(irOut).join('\n')
+    const irWGSL = lowerNodeOutputToWGSL(irOut).join('\n')
+    const refLine = lineOf(refGLSL, outVar), irLine = lineOf(irGLSL, outVar), wgslLine = lineOf(irWGSL, outVar)
+    const texLine = (src: string) => lineOf(src, `node_${san}_color`)
+    const sampledVar = (src: string) => /texture(?:Sample)?\(.*?,\s*(?:u_pass0_tex_samp,\s*)?(\w+)\)/.exec(texLine(src))?.[1] ?? ''
+    // The y-down view must reach the exported coordinate on all three paths (it is referenced
+    // only by the export chain), and the texture must be sampled at a variable that is NOT the
+    // export (the native-derived one) — so the texture colour is unchanged by this fix.
+    const uses = (src: string) => src.includes('screen_uv_ydown')
+    const ok = uses(refGLSL) && uses(irGLSL) && uses(irWGSL)
+      && sampledVar(refGLSL).length > 0 && sampledVar(refGLSL) !== outVar
+      && sampledVar(irGLSL) === sampledVar(refGLSL) && sampledVar(irWGSL) === sampledVar(refGLSL)
+    if (ok) {
+      console.log('  [PASS] export built from ctx.coordsYDown on glsl(), ir→GLSL, ir→WGSL; texture sampled at a separate native-derived variable')
+      passed++
+    } else {
+      console.log(`  [FAIL] ${c.name} y-down export\n    glsl():  ${refLine}\n    ir→GLSL: ${irLine}\n    ir→WGSL: ${wgslLine}\n    sampled: glsl ${sampledVar(refGLSL)} / irGLSL ${sampledVar(irGLSL)} / irWGSL ${sampledVar(irWGSL)}`)
+      failed++
+    }
+  }
+}
+
 // 39b. Pixelate (texture mode) — RGBA sample assertion
 {
   const [g, i] = ctx({

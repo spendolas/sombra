@@ -11,7 +11,7 @@
 import type { Node, Edge } from '@xyflow/react'
 import type { NodeData, EdgeData, UniformSpec, PortType, NodeParameter } from '../nodes/types'
 import type { IRNodeOutput, IRContext, IRSpatialTransform } from './ir/types'
-import { raw, declare, binary, variable, fragCoord } from './ir/types'
+import { raw, declare, binary, variable, fragCoord, nativeUvToYDown } from './ir/types'
 import { emitSRT } from './ir/srt'
 import { nodeRegistry } from '../nodes/registry'
 import { resolveParams } from '../nodes/resolve-dynamic'
@@ -151,6 +151,7 @@ export function generateNodeIR(
 
   // Texture mode: node has at least one wired textureInput
   const isTextureMode = boundariesForNode.length > 0
+  let coordsYDown: string | undefined // y-down view of a native-defaulted `coords` (see IRContext.coordsYDown)
 
   // Resolve inputs
   const resolvedInputs = definition.dynamicInputs
@@ -200,6 +201,12 @@ export function generateNodeIR(
         )
         collectedStandardUniforms.add('u_viewport')
         inputs[inputPort.id] = screenUvVar
+        // A node that exports a vec2 coordinate must export it y-down (native is y-up on
+        // GLSL); give it that view of the same spot, and let it keep sampling from native.
+        if (inputPort.id === 'coords' && definition.outputs.some((o) => o.type === 'vec2')) {
+          coordsYDown = `${screenUvVar}_ydown`
+          preambleStatements.push(declare(coordsYDown, 'vec2', nativeUvToYDown(variable(screenUvVar))))
+        }
       } else if (!resolveInputDefaultIR(inputPort, sanitizedNodeId, preambleStatements, inputs, collectedStandardUniforms)) {
         errors.push({
           message: `Input "${inputPort.label}" on ${definition.label} has no connection and no default`,
@@ -326,6 +333,7 @@ export function generateNodeIR(
     // `size > 0` made registration impossible (first image node saw undefined).
     imageSamplers,
     spatialCoords,
+    coordsYDown,
   }
 
   // Call ir() function
