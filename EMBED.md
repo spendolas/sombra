@@ -560,6 +560,14 @@ knobs). No third party had adopted a hash yet, so both versions were corrected o
 - **0.2.0** keeps everything newer (clock/time API, error events, labelled and ramp knobs) plus the feedback behaviour.
 - From 2026-11-19 on the rule above is absolute. `--force` after that date is a bug.
 
+**Support policy (owner decision, 2026-11-19).** Released, versioned player files
+(`sombra-player.<version>.umd.js`) are never modified after release and stay served. A version
+is retired only with at least **12 months' notice** given in this document, or **immediately**
+if a serious security flaw makes serving it harmful. The mutable aliases (`latest`, `<major>`)
+are not covered: they move by design. Hosting is GitHub Pages, so availability is the host's
+own; there is no separate uptime guarantee. Embedders who need independence from the host should
+keep a vendored copy pinned by content hash.
+
 ### Mutable aliases: `latest` and `<major>` (opt-in convenience)
 
 For a quick start with no version to maintain, two ALIAS files are served next to the
