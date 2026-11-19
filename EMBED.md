@@ -390,6 +390,34 @@ animation frame — so a host can tween knobs on a frozen scene.
 
 ---
 
+### When the player is asked for something it can't do
+
+The handle never throws from a setter (hosts call `set()` inside their own animation loops, and one
+exception would kill that loop). Instead:
+
+- **`set()` returns a boolean**: `true` when the value was applied, `false` when not (unknown knob, wrong
+  value type). `get()` returns `undefined` for an unknown knob.
+- **Each distinct problem is reported once** (`console.warn`, plus an `on('warning')` event), so a slider driving
+  `set()` at 60 Hz can't flood the console. Warnings carry a stable `code`, a `key`, a message and, where possible, a
+  hint such as `Did you mean "noise-scale"?`:
+
+  | code | meaning |
+  |---|---|
+  | `UNKNOWN_KNOB` | no knob with that key (or node id + param); a close match is suggested |
+  | `BAD_VALUE` | wrong type or shape (a string for a float, 2 numbers for a vec3, `NaN`), a bad `setTime`/`setTimeScale`, a non-function callback, a non-string key |
+  | `OUT_OF_RANGE` | outside the editor's slider range; **still applied**, flagged only |
+  | `UNKNOWN_EVENT` | `on('x')` for an event the player doesn't emit |
+
+  ```js
+  shader.on('warning', function (w) { /* w.code, w.key, w.message, w.hint */ })
+  if (!shader.set('noise-scal', 3)) { /* returned false; the console says: Did you mean "noise-scale"? */ }
+  ```
+- **Feature-detect instead of version-sniffing.** `handle.capabilities` (and `Sombra.capabilities` / `Sombra.supports('clock.play')`)
+  list what this player build can do, so a page can check before calling instead of hitting "x is not a function".
+  Names only ever get added. Current names: `knobs`, `knobs.byNode`, `clock.play`, `clock.time`, `clock.timeScale`,
+  `events.load`, `events.error`, `events.contextlost`, `events.warning`, `set.returnsBoolean`, `capabilities`.
+- A handle from a **failed mount** is a safe no-op: `set()` returns `false`, and `ok`/`error` say why.
+
 ## 4. `data-sombra-*` attributes
 
 `init()` (and the auto‑init on load) scans for `[data-sombra-scene]`,
