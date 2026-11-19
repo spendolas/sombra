@@ -44,7 +44,7 @@ export const REQUIRED_SITE_KEYS = [
   'fragment-output-alpha',
 ] as const
 
-/** Builder that validates every wire like the canvas does (also used by site-worley-ridged-fixture.ts). */
+/** Builder that validates every wire like the canvas does. */
 export function graphBuilder() {
   const nodes: Node<NodeData>[] = []
   const edges: Edge<EdgeData>[] = []

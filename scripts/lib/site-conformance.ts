@@ -15,7 +15,7 @@
  *                   Color Ramp labelled `site.palette`) or
  *                   `site-palette-stop-<n>-color` (a Color node labelled
  *                   `site.palette.stop-<n>` — a scene that blends its stops
- *                   itself, e.g. site-worley-ridged, needs one node per stop,
+ *                   itself needs one node per stop,
  *                   and a Color node's key always ends in its param, `-color`)
  *   C3 Field alpha  `fragment-output-alpha` exists, type 'float'
  *   C4 Balance      `site-balance-value` exists (warn if missing)
