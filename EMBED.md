@@ -412,6 +412,10 @@ exception would kill that loop). Instead:
   shader.on('warning', function (w) { /* w.code, w.key, w.message, w.hint */ })
   if (!shader.set('noise-scal', 3)) { /* returned false; the console says: Did you mean "noise-scale"? */ }
   ```
+- **Range contract (stable for all of 0.x).** The editor's slider range is advisory. A value outside it is **applied
+  exactly as given, never clamped, rounded or ignored**; `OUT_OF_RANGE` only flags it. Hosts may rely on this (a
+  scroll offset or warp scale driven past the range keeps working). Clamping would be a breaking change, so it can only
+  arrive in a new major version, with the notice the support policy in section 7 requires.
 - **Feature-detect instead of version-sniffing.** `handle.capabilities` (and `Sombra.capabilities` / `Sombra.supports('clock.play')`)
   list what this player build can do, so a page can check before calling instead of hitting "x is not a function".
   Names only ever get added. Current names: `knobs`, `knobs.byNode`, `clock.play`, `clock.time`, `clock.timeScale`,
