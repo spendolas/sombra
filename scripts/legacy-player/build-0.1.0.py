@@ -4,7 +4,7 @@ Rebuild the "original" embed player 0.1.0 (pre-adoption correction, see EMBED.md
 
 0.1.0 is defined as: the player's control API as it was BEFORE the 10 Nov 2026 work (SR-3 pausable
 clock/time API, SR-4 mount-failure events, labelled-node knob keys, ramp-stop knobs), i.e. the
-player-side files at commit 1d0b54e, running on TODAY's renderer (which scenes from the current
+player-side files at commit f631124, running on TODAY's renderer (which scenes from the current
 editor need), PLUS the security fixes (bounded inflate, image data-URL guard, artifact shape check)
 and the player-feedback behaviour (set() returns boolean, warn-once reports, capabilities).
 
@@ -15,7 +15,7 @@ rebuilds the current player. Run from the repo root:  python3 scripts/legacy-pla
 """
 import re, shutil, subprocess, sys, os
 
-BASE = '1d0b54e'
+BASE = 'f631124'
 FILES = ['src/embed/player.ts', 'src/embed/perf-harness.ts', 'src/embed/index.ts', 'src/embed/feedback.ts', 'src/embed/version.ts']
 OUT = 'public/embed/sombra-player.0.1.0.umd.js'
 LEGACY_CAPS = ["knobs", "knobs.byNode", "clock.play", "events.load", "events.contextlost", "events.warning", "set.returnsBoolean", "capabilities"]

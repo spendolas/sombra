@@ -555,7 +555,7 @@ knobs). No third party had adopted a hash yet, so both versions were corrected o
 - **0.1.0 is now the ORIGINAL control surface**: `set`, `get`, `variables`, `nodes`, `play`, `pause`, `resize`,
   `destroy`, events `load` / `contextlost`, and no clock queries. It runs on today's renderer (scenes from the current
   editor need it) and carries the security fixes and the player-feedback behaviour. It is rebuilt reproducibly by
-  `python3 scripts/legacy-player/build-0.1.0.py` from the player files at commit `1d0b54e` (the last before the 10 Nov work).
+  `python3 scripts/legacy-player/build-0.1.0.py` from the player files at commit `f631124` (the last before the 10 Nov work).
   Its `capabilities` list shows exactly what it can do.
 - **0.2.0** keeps everything newer (clock/time API, error events, labelled and ramp knobs) plus the feedback behaviour.
 - From 2026-11-19 on the rule above is absolute. `--force` after that date is a bug.
