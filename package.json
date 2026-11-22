@@ -51,6 +51,7 @@
     "verify:wired-param-row-ui": "tsx scripts/verify-wired-param-row-ui.ts",
     "verify:node-title-ui": "tsx scripts/verify-node-title-ui.ts",
     "verify:node-sections-ui": "tsx scripts/verify-node-sections-ui.ts",
+    "verify:wired-row-editor-ui": "tsx scripts/verify-wired-row-editor-ui.ts",
     "verify:knob-table-ui": "tsx scripts/verify-knob-table-ui.ts",
     "verify:embed-knob-table-ui": "tsx scripts/verify-embed-knob-table-ui.ts",
     "verify:dropdown-preview:gpu": "tsx scripts/verify-dropdown-preview-gpu.ts",

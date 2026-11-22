@@ -24,6 +24,8 @@ import { BaseHandle } from '@/components/base-handle'
 import { IconButton } from '@/components/IconButton'
 import { RgbaColorPicker, type Rgba } from '@/components/RgbaColorPicker'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { WiredParamRow, type WiredValue } from '@/components/WiredParamRow'
+import { resolveConstantSource, formatterForStep } from '../utils/wired-source'
 import { NODE_BODIES } from '@/components/node-bodies'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
@@ -67,17 +69,6 @@ NodePreview.displayName = 'NodePreview'
 function isParamVisible(param: NodeParameter, currentValues: Record<string, unknown>, allParams: NodeParameter[]): boolean {
   if (param.hidden) return false
   return matchesShowWhen(param.showWhen, currentValues, allParams)
-}
-
-/**
- * Try to resolve a static float value from a source node's output.
- * Returns the value for constant sources, null for dynamic/computed sources.
- */
-function resolveSourceFloat(sourceType: string, sourceParams: Record<string, unknown>): number | null {
-  if (sourceType === 'float_constant') {
-    return (sourceParams.value as number) ?? 1.0
-  }
-  return null
 }
 
 export const ShaderNode = memo(({ id, data }: NodeProps) => {
@@ -306,6 +297,40 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
     edges.filter((e) => e.source === id).map((e) => e.sourceHandle)
   )
 
+  /** The wire into `param`: who drives it, and the value when that is a plain constant. */
+  const wiredInfo = (param: NodeParameter) => {
+    const edge = edges.find((e) => e.target === id && e.targetHandle === param.id)
+    const sourceNode = edge ? allNodes.find((n) => n.id === edge.source) : undefined
+    if (!edge || !sourceNode) return null
+    const label = nodeRegistry.get(sourceNode.data.type)?.label || sourceNode.data.type
+    const sourceWired = new Set(
+      edges.filter((e) => e.target === sourceNode.id).map((e) => e.targetHandle ?? ''),
+    )
+    const constant = resolveConstantSource(sourceNode, sourceWired)
+    const matches = constant && ((param.type === 'color') === (constant.kind === 'color'))
+    return { label, output: edge.sourceHandle ?? '', constant: matches ? constant : null }
+  }
+
+  /** The Wired Param Row for a wired param with a constant source; null when we cannot say. */
+  const wiredRow = (param: NodeParameter, handle: React.ReactNode) => {
+    const info = wiredInfo(param)
+    if (!info?.constant) return null
+    const value: WiredValue = { mode: 'constant', value: info.constant.value }
+    return (
+      <WiredParamRow
+        key={param.id}
+        label={param.label}
+        kind={param.type === 'color' ? 'color' : 'float'}
+        source={{ node: info.label, output: info.output }}
+        value={value}
+        range={[param.min ?? 0, param.max ?? 1]}
+        formatValue={formatterForStep(param.step)}
+        handle={handle}
+        className="nodrag nowheel"
+      />
+    )
+  }
+
   // Resolve inputs: use dynamicInputs when available
   const resolvedInputs = definition.dynamicInputs
     ? definition.dynamicInputs(currentValues)
@@ -507,27 +532,24 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
               const connectable = !!param.connectable
               const isConnected = connectable && connectedInputs.has(param.id)
 
-              let displayValue = (currentValues[param.id] as number) ?? (param.default as number)
-              let sourceLabel = ''
-              let hasResolvedValue = false
+              const displayValue = (currentValues[param.id] as number) ?? (param.default as number)
+              const sourceLabel = isConnected ? (wiredInfo(param)?.label ?? '') : ''
+
               if (isConnected) {
-                const edge = edges.find((e) => e.target === id && e.targetHandle === param.id)
-                if (edge) {
-                  const sourceNode = allNodes.find((n) => n.id === edge.source)
-                  if (sourceNode) {
-                    const sourceDef = nodeRegistry.get(sourceNode.data.type)
-                    sourceLabel = sourceDef?.label || sourceNode.data.type
-                    const resolved = resolveSourceFloat(sourceNode.data.type, sourceNode.data.params || {})
-                    if (resolved !== null) {
-                      displayValue = resolved
-                      hasResolvedValue = true
-                    }
-                  }
-                }
+                const row = wiredRow(param, (
+                  <BaseHandle
+                    type="target"
+                    position={Position.Left}
+                    id={param.id}
+                    handleColor={getPortColor(param.type)}
+                    connected
+                  />
+                ))
+                if (row) return row
               }
 
               let control
-              if (isConnected && !hasResolvedValue) {
+              if (isConnected) {
                 control = (
                   <div className={cn(ds.nodeParameters.connectedHeader, "py-2xs")}>
                     <span className={ds.shaderNode.connectedLabel}>{param.label}</span>
@@ -610,6 +632,18 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
               // (enum dropdown) get the auto-height frame; the fixed-height
               // innerFrame is tuned for sliders and clips a dropdown.
               const isSlider = param.type !== 'enum' && param.type !== 'bool'
+              if (isConnected) {
+                const row = wiredRow(param, (
+                  <BaseHandle
+                    type="target"
+                    position={Position.Left}
+                    id={param.id}
+                    handleColor={getPortColor(param.type)}
+                    connected
+                  />
+                ))
+                if (row) return row
+              }
               let control
               if (param.type === 'enum' && param.options) {
                 control = param.control === 'segmented' ? (

@@ -13,7 +13,7 @@
 | DS Key | `wiredParamRow` |
 | Sandbox | `sandbox.html?c=wired-param-row` |
 | Gate | `npm run verify:wired-param-row-ui` (headless Chrome, no GPU) |
-| Status | Component + sandbox only. **Not wired into the editor yet** — see the plug-in plan below |
+| Status | Component + sandbox, and **wired into the editor for direct constant sources (step one, on branch `feat/wire-param-row-step1`, not yet deployed)**: Number, Color and Random (min/max/decimals unwired) → body and Transform rows. Chains, Time and per-pixel sources keep the plain `← Source` header; Stack opacity/mask not yet. Gate: `npm run verify:wired-row-editor-ui`. Body rows grow 26 → 36px when wired (open owner call, pinned by the gate) |
 
 What a connectable parameter's row shows while a wire drives it. Today the row
 either shows the stale slider value greyed out, or just the source name. Option D
