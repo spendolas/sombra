@@ -1389,8 +1389,14 @@
         "label": {
           "figmaNodeId": "106:112",
           "textStyle": "text-handle",
-          "textColor": "fg",
+          "textColor": "fg-dim",
           "extra": "px-handle-offset flex-1"
+        },
+        "labelOutput": {
+          "figmaNodeId": "106:192",
+          "textStyle": "text-handle",
+          "textColor": "fg",
+          "extra": "px-handle-offset flex-1 text-right"
         }
       }
     },
@@ -1418,8 +1424,8 @@
         },
         "label": {
           "figmaNodeId": "106:278",
-          "textStyle": "text-param",
-          "textColor": "fg-subtle"
+          "textStyle": "text-handle",
+          "textColor": "fg-dim"
         },
         "value": {
           "figmaNodeId": "106:280",
@@ -1449,8 +1455,8 @@
         },
         "label": {
           "figmaNodeId": "106:284",
-          "textStyle": "text-param",
-          "textColor": "fg-subtle"
+          "textStyle": "text-handle",
+          "textColor": "fg-dim"
         },
         "trigger": {
           "figmaNodeId": "354:6",
@@ -1501,8 +1507,8 @@
         },
         "label": {
           "figmaNodeId": "106:290",
-          "textStyle": "text-param",
-          "textColor": "fg-subtle"
+          "textStyle": "text-handle",
+          "textColor": "fg-dim"
         }
       }
     },
@@ -1845,8 +1851,8 @@
         },
         "connectedLabel": {
           "figmaNodeId": null,
-          "textStyle": "text-param",
-          "textColor": "fg-subtle"
+          "textStyle": "text-handle",
+          "textColor": "fg-dim"
         },
         "connectedSource": {
           "figmaNodeId": null,
@@ -1881,8 +1887,8 @@
         },
         "label": {
           "figmaNodeId": "717:16",
-          "textStyle": "text-param",
-          "textColor": "fg-subtle"
+          "textStyle": "text-handle",
+          "textColor": "fg-dim"
         },
         "grid": {
           "figmaNodeId": "717:17",
@@ -1995,8 +2001,8 @@
         },
         "label": {
           "figmaNodeId": null,
-          "textStyle": "text-param",
-          "textColor": "fg-subtle"
+          "textStyle": "text-handle",
+          "textColor": "fg-dim"
         }
       }
     },
@@ -2413,8 +2419,8 @@
         },
         "label": {
           "figmaNodeId": null,
-          "textStyle": "text-param",
-          "textColor": "fg-subtle"
+          "textStyle": "text-handle",
+          "textColor": "fg-dim"
         },
         "group": {
           "figmaNodeId": null,
@@ -3507,8 +3513,8 @@
         },
         "label": {
           "figmaNodeId": "998:6039",
-          "textStyle": "text-param",
-          "textColor": "fg-subtle",
+          "textStyle": "text-handle",
+          "textColor": "fg-dim",
           "extra": "shrink-0 whitespace-nowrap"
         },
         "source": {
@@ -3714,7 +3720,7 @@
         "maskLabel": {
           "figmaNodeId": "998:6109",
           "textStyle": "text-handle",
-          "textColor": "fg",
+          "textColor": "fg-dim",
           "extra": "shrink-0 whitespace-nowrap"
         },
         "maskRange": {

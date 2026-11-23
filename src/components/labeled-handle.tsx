@@ -48,7 +48,7 @@ export function LabeledHandle({
         connected={connected}
         {...handleProps}
       />
-      <label className={cn(ds.labeledHandle.label, position === "right" && "text-right", labelClassName)}>
+      <label className={cn(position === "right" ? ds.labeledHandle.labelOutput : ds.labeledHandle.label, labelClassName)}>
         {title}
       </label>
     </div>
