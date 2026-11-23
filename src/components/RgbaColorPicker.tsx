@@ -387,7 +387,7 @@ export function RgbaColorPicker({ value, onChange, mode = 'popover', showAlpha =
 
   return (
     <div ref={rootRef} className={cn('relative nodrag nowheel', inline ? 'w-full' : 'w-fit', className)}>
-      {label && <label className="text-param text-fg-subtle">{label}</label>}
+      {label && <label className="text-handle text-fg-dim">{label}</label>}
 
       {inline ? (
         <div className={cn(ds.colorPicker.body, 'w-full')}>{panelInner}</div>

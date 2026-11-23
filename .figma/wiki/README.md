@@ -164,6 +164,8 @@ The component mappings below are documented for reference but not activated in F
 
 **Total:** 12 text styles
 
+**Input-label rule (decided 2026-11-23, Figma board "Label sizes — one rule", option D):** every input label — a port with no slider (Coords, Mask) or a parameter with a control (Seed, Opacity, Color A), wired or not — is `body/handle` 13px in `fg/dim`. Outputs stay `body/handle` in `fg`; node titles, layer names, values (`mono/value`) and the `← Source` text (`label/param`) keep their styles. `label/param` is no longer used for input labels.
+
 ---
 
 ## Component Hierarchy

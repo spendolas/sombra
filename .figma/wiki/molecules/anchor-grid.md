@@ -50,7 +50,7 @@ indigo square with a bright dot, inactive cells show muted dots.
 | Grid radius | 4px | radius/sm (`106:34`) | `rounded-sm` | ✅ |
 | Root gap (label↔grid) | 6px | spacing/sm (`106:28`) | `gap-sm` | ✅ |
 | Dot size | 6×6 | — (raw, via `extra`) | `size-1.5` | ✅ |
-| Label text style | 10px/1.5 | label/param style | `text-param` | ✅ |
+| Label text style | 13px/1.5, fg/dim | body/handle style | `text-handle` | ✅ |
 
 ## Structural notes
 
