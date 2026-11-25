@@ -16,6 +16,7 @@ import type { PreviewRenderer, UniformUpload } from './types'
 import type { WebGPUPreviewRenderer, WGSLPreviewPass } from '../webgpu/preview-renderer'
 import type { UniformBufferLayout, TextureBinding } from '../compiler/ir/wgsl-assembler'
 import { usePreviewStore } from '../stores/previewStore'
+import { isPreviewVisible } from './preview-visibility'
 import CompilerWorker from '../compiler/compiler.worker?worker'
 
 // ---------------------------------------------------------------------------
@@ -405,6 +406,8 @@ export class PreviewScheduler {
       for (const nodeId of this.timeLiveNodes) {
         const cached = this.shaderCache.get(nodeId)
         if (!cached || cached.depthExceeded) continue
+        // Off-screen thumbnails keep their last bitmap; skip the render.
+        if (!isPreviewVisible(nodeId)) continue
         const bitmap = await this.renderCached(nodeId, cached)
         if (bitmap) {
           batch.set(nodeId, bitmap)
@@ -439,6 +442,8 @@ export class PreviewScheduler {
     for (const nodeId of [...this.staleNodes]) {
       if (performance.now() - frameStart > FRAME_BUDGET_MS) break
       if (this.pendingCompile.has(nodeId)) continue
+      // Off-screen nodes stay stale and compile once they scroll into view.
+      if (!isPreviewVisible(nodeId)) continue
 
       // Request compilation from Worker
       this.pendingCompile.set(nodeId, performance.now())

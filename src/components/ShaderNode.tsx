@@ -12,6 +12,7 @@ import { worldOffsetToNode, nodeOffsetToWorld } from '../compiler/ir/srt'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useGraphStore } from '../stores/graphStore'
 import { usePreviewStore } from '../stores/previewStore'
+import { setPreviewVisible } from '../renderer/preview-visibility'
 import { useParamPreview } from '../stores/paramPreviewStore'
 import { useCompilerStore } from '../stores/compilerStore'
 import { BaseNode, BaseNodeHeader, BaseNodeContent } from '@/components/base-node'
@@ -50,6 +51,27 @@ const NodePreview = memo(({ nodeId }: { nodeId: string }) => {
     ctx.clearRect(0, 0, PREVIEW_SIZE, PREVIEW_SIZE)
     if (bitmap) ctx.drawImage(bitmap, 0, 0)
   }, [bitmap])
+
+  // Report on-screen state so the scheduler can skip off-screen thumbnails.
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || typeof IntersectionObserver === 'undefined') {
+      setPreviewVisible(nodeId, true)
+      return () => setPreviewVisible(nodeId, false)
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        const last = entries[entries.length - 1]
+        if (last) setPreviewVisible(nodeId, last.isIntersecting)
+      },
+      { rootMargin: '100px' },
+    )
+    io.observe(canvas)
+    return () => {
+      io.disconnect()
+      setPreviewVisible(nodeId, false)
+    }
+  }, [nodeId])
 
   return (
     <canvas
