@@ -6,6 +6,7 @@
 
 import type { PreviewRenderer as IPreviewRenderer } from '../renderer/types'
 import { passTargetSize } from '../renderer/pass-size'
+import { PREVIEW_DPR, PREVIEW_SIZE } from '../renderer/constants'
 
 const VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -19,7 +20,6 @@ void main() {
 }
 `
 
-const PREVIEW_SIZE = 80
 
 /** Frozen reference size — must match the main renderer's REFERENCE_SIZE. */
 const REFERENCE_SIZE = 512
@@ -211,10 +211,10 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
     if (uMouse) gl.uniform2f(uMouse, 0, 0)
 
     const uDpr = gl.getUniformLocation(program, 'u_dpr')
-    if (uDpr) gl.uniform1f(uDpr, 1.0)
+    if (uDpr) gl.uniform1f(uDpr, PREVIEW_DPR)
 
     const uFrameScale = gl.getUniformLocation(program, 'u_frame_scale')
-    if (uFrameScale) gl.uniform1f(uFrameScale, 1.0)
+    if (uFrameScale) gl.uniform1f(uFrameScale, PREVIEW_DPR)
 
     const uVp = gl.getUniformLocation(program, 'u_viewport')
     if (uVp) gl.uniform2f(uVp, PREVIEW_SIZE, PREVIEW_SIZE)
@@ -330,7 +330,7 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
     // intermediate carries no usable signal at thumbnail scale, and previews are
     // advisory. Deliberate divergence from the main renderers.
     const sizes = passes.map((p) =>
-      passTargetSize(p.resolution, PREVIEW_SIZE, PREVIEW_SIZE, 1, PREVIEW_SIZE * 4, 4))
+      passTargetSize(p.resolution, PREVIEW_SIZE, PREVIEW_SIZE, PREVIEW_DPR, PREVIEW_SIZE * 4, 4))
     // One FBO per intermediate pass (lazy, grows and is reused across calls),
     // each at its own pass's target size.
     this.ensurePassFBOs(sizes.slice(0, passes.length - 1))
@@ -366,14 +366,14 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
       if (this.hasMissingImageTexture(pass.fragmentShader)) return null
 
       // Bind target: last pass → main FBO, intermediate → its own pass FBO
-      let tw = PREVIEW_SIZE, th = PREVIEW_SIZE, tdpr = 1
+      let tw = PREVIEW_SIZE, th = PREVIEW_SIZE, tdpr = PREVIEW_DPR
       if (isLast) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo)
       } else {
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.passFBOs[i].framebuffer)
         tw = this.passFBOs[i].width
         th = this.passFBOs[i].height
-        tdpr = sizes[i]?.dpr ?? 1
+        tdpr = sizes[i]?.dpr ?? PREVIEW_DPR
       }
 
       gl.viewport(0, 0, tw, th)

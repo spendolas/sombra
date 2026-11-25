@@ -31,13 +31,13 @@ import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
 
 import { getPortColor } from '../utils/port-colors'
+import { PREVIEW_SIZE } from '../renderer/constants'
 
 /**
  * Isolated preview thumbnail — subscribes to preview store independently
  * so that ImageBitmap updates don't trigger ShaderNode re-renders.
  * Draws ImageBitmap to a canvas element (zero-copy, no PNG encoding).
  */
-const PREVIEW_SIZE = 80
 const NodePreview = memo(({ nodeId }: { nodeId: string }) => {
   const bitmap = usePreviewStore((s) => s.previews[nodeId])
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -57,7 +57,6 @@ const NodePreview = memo(({ nodeId }: { nodeId: string }) => {
       width={PREVIEW_SIZE}
       height={PREVIEW_SIZE}
       className={ds.nodePreview.root}
-      style={{ imageRendering: 'pixelated' }}
     />
   )
 })
