@@ -31,8 +31,8 @@ import { NODE_BODIES } from '@/components/node-bodies'
 import { cn } from '@/lib/utils'
 import { ds } from '@/generated/ds'
 
+import { getPreviewSize } from '../renderer/preview-size'
 import { getPortColor } from '../utils/port-colors'
-import { PREVIEW_SIZE } from '../renderer/constants'
 
 /**
  * Isolated preview thumbnail — subscribes to preview store independently
@@ -48,7 +48,13 @@ const NodePreview = memo(({ nodeId }: { nodeId: string }) => {
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    ctx.clearRect(0, 0, PREVIEW_SIZE, PREVIEW_SIZE)
+    // The raster follows the screen DPR, so size the canvas to the bitmap
+    // (resizing also clears it).
+    if (bitmap && (canvas.width !== bitmap.width || canvas.height !== bitmap.height)) {
+      canvas.width = bitmap.width
+      canvas.height = bitmap.height
+    }
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
     if (bitmap) ctx.drawImage(bitmap, 0, 0)
   }, [bitmap])
 
@@ -76,8 +82,8 @@ const NodePreview = memo(({ nodeId }: { nodeId: string }) => {
   return (
     <canvas
       ref={canvasRef}
-      width={PREVIEW_SIZE}
-      height={PREVIEW_SIZE}
+      width={getPreviewSize()}
+      height={getPreviewSize()}
       className={ds.nodePreview.root}
     />
   )

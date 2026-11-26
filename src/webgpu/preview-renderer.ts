@@ -13,14 +13,14 @@ import type { PreviewRenderer as IPreviewRenderer, UniformUpload } from '../rend
 import type { UniformBufferLayout, TextureBinding } from '../compiler/ir/wgsl-assembler'
 import { passTargetSize, type PassTargetSize } from '../renderer/pass-size'
 import { declaresUniformBinding } from '../renderer/uniform-binding'
-import { PREVIEW_DPR, PREVIEW_SIZE } from '../renderer/constants'
+import { getPreviewSize, previewDprFor } from '../renderer/preview-size'
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const BYTES_PER_ROW = Math.ceil(PREVIEW_SIZE * 4 / 256) * 256  // 512
-const STAGING_SIZE = BYTES_PER_ROW * PREVIEW_SIZE               // 40960
+/** Row pitch for a readback of `size` px: 4 bytes/px, padded to 256 (WebGPU copy rule). */
+const bytesPerRowFor = (size: number) => Math.ceil(size * 4 / 256) * 256
 
 /** Frozen reference size — must match the main renderer's REFERENCE_SIZE. */
 const REFERENCE_SIZE = 512
@@ -38,7 +38,7 @@ export interface WGSLPreviewPass {
   inputTextures: Array<{ passIndex: number; samplerName: string }>
   userUniforms: UniformUpload[]
   /**
-   * Target scale for this pass, relative to PREVIEW_SIZE. Mirrors
+   * Target scale for this pass, relative to the preview raster size. Mirrors
    * RenderPass.resolution so a thumbnail matches what the main canvas shows.
    */
   resolution?: number
@@ -108,6 +108,10 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
   private device: GPUDevice
   private quadBuffer!: GPUBuffer
   private vertexShaderModule!: GPUShaderModule
+  /** Current raster edge (device px); follows the screen DPR via syncSize(). */
+  private size = getPreviewSize()
+  private get dpr() { return previewDprFor(this.size) }
+  private get bytesPerRow() { return bytesPerRowFor(this.size) }
   private renderTexture!: GPUTexture
   private stagingBuffer!: GPUBuffer
   private pipelineCache = new Map<string, PipelineCacheEntry>()
@@ -146,25 +150,40 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
     // Shared vertex shader module
     this.vertexShaderModule = this.device.createShaderModule({ code: VERTEX_SHADER })
 
-    // Render target texture (80×80)
+    this.allocateTargets()
+  }
+
+  /** Render target + CPU-readback staging buffer for the current raster edge. */
+  private allocateTargets(): void {
+    this.renderTexture?.destroy()
+    this.stagingBuffer?.destroy()
     this.renderTexture = this.device.createTexture({
-      size: [PREVIEW_SIZE, PREVIEW_SIZE],
+      size: [this.size, this.size],
       format: 'rgba8unorm',
       usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
     })
-
-    // Staging buffer for CPU readback
     this.stagingBuffer = this.device.createBuffer({
-      size: STAGING_SIZE,
+      size: this.bytesPerRow * this.size,
       usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
     })
   }
 
   /**
-   * No-op for WebGPU — preview uses fixed PREVIEW_SIZE and REFERENCE_SIZE.
+   * Follow the screen's DPR. Called under the render lock, so no render is
+   * mid-flight on the buffers being replaced.
+   */
+  private syncSize(): void {
+    const want = getPreviewSize()
+    if (want === this.size) return
+    this.size = want
+    this.allocateTargets()
+  }
+
+  /**
+   * No-op for WebGPU — preview uses DPR-derived size and REFERENCE_SIZE.
    */
   setMainResolution(): void {
-    // No-op — preview uses fixed PREVIEW_SIZE and REFERENCE_SIZE
+    // No-op — preview uses DPR-derived size and REFERENCE_SIZE
   }
 
   // -----------------------------------------------------------------------
@@ -207,6 +226,7 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
 
     try {
       await prevLock
+      this.syncSize()
       if (passes.length === 1) {
         return await this.renderSinglePassWGSL(passes[0])
       }
@@ -301,9 +321,9 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
     // intermediate carries no usable signal at thumbnail scale, and previews are
     // advisory. Deliberate divergence from the main renderers. The last pass's
     // entry here is computed but never used — it always keeps the full
-    // PREVIEW_SIZE readback target below.
+    // preview readback target below.
     const sizes = passes.map((p) =>
-      passTargetSize(p.resolution, PREVIEW_SIZE, PREVIEW_SIZE, PREVIEW_DPR, PREVIEW_SIZE * 4, 4))
+      passTargetSize(p.resolution, this.size, this.size, this.dpr, this.size * 4, 4))
 
     // Allocate one intermediate texture per non-final pass (no ping-pong —
     // relay passes can read from non-adjacent passes, causing read-write
@@ -339,7 +359,7 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
       const uniformBuffer = this.createPassUniformBuffer(pass.uniformLayout)
       const uniformData = new ArrayBuffer(pass.uniformLayout.totalSize)
       const uniformFloat32 = new Float32Array(uniformData)
-      // Last pass is pinned to the full PREVIEW_SIZE readback target (dpr PREVIEW_DPR) —
+      // Last pass is pinned to the full preview readback target —
       // it's the texture that gets read back, and a multiPass node's last
       // sub-pass can share this RenderPass, so its own declared scale must
       // not be allowed to shrink it.
@@ -477,9 +497,9 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
     target?: PassTargetSize,
   ): void {
     const t = time ?? (Date.now() - this.startTime) / 1000
-    const tw = target?.width ?? PREVIEW_SIZE
-    const th = target?.height ?? PREVIEW_SIZE
-    const tdpr = target?.dpr ?? PREVIEW_DPR
+    const tw = target?.width ?? this.size
+    const th = target?.height ?? this.size
+    const tdpr = target?.dpr ?? this.dpr
 
     const set = (name: string, ...values: number[]) => {
       const offset = layout.offsets.get(name)
@@ -526,8 +546,8 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
   private async readbackTexture(encoder: GPUCommandEncoder): Promise<ImageBitmap | null> {
     encoder.copyTextureToBuffer(
       { texture: this.renderTexture },
-      { buffer: this.stagingBuffer, bytesPerRow: BYTES_PER_ROW },
-      [PREVIEW_SIZE, PREVIEW_SIZE],
+      { buffer: this.stagingBuffer, bytesPerRow: this.bytesPerRow },
+      [this.size, this.size],
     )
 
     this.device.queue.submit([encoder.finish()])
@@ -535,19 +555,19 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
     await this.stagingBuffer.mapAsync(GPUMapMode.READ)
     const mapped = new Uint8Array(this.stagingBuffer.getMappedRange())
 
-    // Strip row padding: copy PREVIEW_SIZE*4 bytes from each BYTES_PER_ROW-byte row
+    // Strip row padding: copy this.size*4 bytes from each this.bytesPerRow-byte row
     // WebGPU Y=0 is top → no flip needed (unlike WebGL2)
-    const pixels = new Uint8ClampedArray(PREVIEW_SIZE * PREVIEW_SIZE * 4)
-    for (let y = 0; y < PREVIEW_SIZE; y++) {
+    const pixels = new Uint8ClampedArray(this.size * this.size * 4)
+    for (let y = 0; y < this.size; y++) {
       pixels.set(
-        mapped.subarray(y * BYTES_PER_ROW, y * BYTES_PER_ROW + PREVIEW_SIZE * 4),
-        y * PREVIEW_SIZE * 4,
+        mapped.subarray(y * this.bytesPerRow, y * this.bytesPerRow + this.size * 4),
+        y * this.size * 4,
       )
     }
 
     this.stagingBuffer.unmap()
 
-    const imageData = new ImageData(pixels, PREVIEW_SIZE, PREVIEW_SIZE)
+    const imageData = new ImageData(pixels, this.size, this.size)
     return createImageBitmap(imageData)
   }
 

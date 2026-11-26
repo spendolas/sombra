@@ -10,12 +10,3 @@
  * uses it to place px-space handles at the same origin the shader uses.
  */
 export const REFERENCE_SIZE = 512
-
-/**
- * Node mini-preview raster. Previews are 80 CSS px thumbnails rendered at a
- * device-pixel ratio of 2 (160x160 px) so they stay crisp on retina screens
- * and on wide nodes. `u_frame_scale`/`u_dpr` carry PREVIEW_DPR, so scene-locked
- * features keep the size they had at 80 px (see `u_frame_scale` in CLAUDE.md).
- */
-export const PREVIEW_DPR = 2
-export const PREVIEW_SIZE = 80 * PREVIEW_DPR
