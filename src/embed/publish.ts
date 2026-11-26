@@ -4,7 +4,7 @@ import { compileGraph } from '../compiler/glsl-generator'
 import { compileGraphIR, toPlanWgsl } from '../compiler/ir-compiler'
 import { topologicalSort } from '../compiler/topological-sort'
 import { anchorToVec2 } from '../nodes/output/fragment-output'
-import { buildManifestWithClashes, type KnobNameClash } from './manifest'
+import { buildManifestWithClashes, type KnobEntry, type KnobNameClash } from './manifest'
 import { stripPlan, encodeArtifact, encodeArtifactBytes, type SceneArtifact, type ImageAsset, type KnobDescriptor } from './artifact'
 import { PLAYER_FILENAME, EMBED_VERSION } from './version'
 import { PLAYER_INTEGRITY } from './integrity'
@@ -15,6 +15,8 @@ export interface PublishResult {
   manifest: KnobDescriptor[]
   /** Labelled nodes whose keys were numbered by a name clash. Editor-only: NOT in the artifact. */
   clashes: KnobNameClash[]
+  /** Every knob incl. hidden ones, with its editor address (the knob table). Editor-only: NOT in the artifact. */
+  knobs: KnobEntry[]
   sizeBytes: number         // inline base64 length (what a data-attribute costs)
   fileBytes: number         // hosted .ombra file size (~25-33% smaller — no base64)
   snippets: ReturnType<typeof buildSnippets>
@@ -67,7 +69,7 @@ export function publishScene(
     .filter((u) => u.paramId === 'seed' && randomIds.has(u.nodeId))
     .map((u) => u.name)
 
-  const { manifest, clashes } = buildManifestWithClashes(plan.userUniforms, nodes)
+  const { manifest, clashes, entries } = buildManifestWithClashes(plan.userUniforms, nodes)
   const outputNode = nodes.find((n) => n.data.type === 'fragment_output')
   const timeNode = nodes.find((n) => n.data.type === 'time')
   const artifact: SceneArtifact = {
@@ -90,6 +92,7 @@ export function publishScene(
     sceneBytes,
     manifest: artifact.manifest,
     clashes,
+    knobs: entries,
     sizeBytes: sceneB64.length,
     fileBytes: sceneBytes.length,
     snippets: buildSnippets(sceneB64, viewerHash),
