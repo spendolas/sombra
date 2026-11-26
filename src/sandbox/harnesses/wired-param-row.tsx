@@ -119,7 +119,7 @@ const P = (id: string, label: string, def: number, min: number, max: number, ste
 function UnwiredRow({ label, value, min, max, step, refRow }: { label: string; value: number; min: number; max: number; step: number; refRow?: string }) {
   const [v, setV] = useState(value)
   return (
-    <div className={ds.connectableParamRow.root} data-ref-row={refRow}>
+    <div className={ds.connectableParamRow.sliderRow} data-ref-row={refRow}>
       <HandleSlot color={getPortColor('float')} connected={false} />
       <div className={ds.connectableParamRow.innerFrame}>
         <FloatSlider param={P(label, label, value, min, max, step)} value={v} onChange={(x) => setV(x as number)} />
