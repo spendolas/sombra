@@ -730,7 +730,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                       id={param.id}
                       handleColor={getPortColor(param.type)}
                       connected={isConnected}
-                      className={isConnected ? "top-1/2!" : isSlider ? "top-[15px]!" : undefined}
+                      className={isSlider ? "top-[15px]!" : undefined}
                     />
                   )}
                   <div className={isSlider ? ds.connectableParamRow.innerFrame : "flex flex-col pl-handle-offset pr-xs gap-xs flex-1 min-w-0"}>
