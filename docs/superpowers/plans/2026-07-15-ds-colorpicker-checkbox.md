@@ -5,7 +5,7 @@
 **Goal:** Make the RGBA picker and the bool checkbox first-class DS components (Figma-first per CLAUDE.md's golden rule — the V2 code-first guide is obsolete), built from EXISTING tokens (no new tokens). Consolidate to a SINGLE color picker (kill the native `<input type=color>`). Redesign the Color node so its body IS an inline picker; the Properties panel is also inline; color-ramp stops and the preview-background solid color use a compact swatch → popover.
 
 **Authoring brief (read first):** `.superpowers/sdd/figma-ds-authoring-brief.md`
-- grip: `set_active_file` (file `gq5i0l617YkXy0GzAZPtqz`) FIRST (4 files open → ambiguous otherwise).
+- grip: `set_active_file` (file `rkjKvEFljv5OkNzmAIHKVa`) FIRST (4 files open → ambiguous otherwise).
 - Components page `106:48`; Molecules frame `136:204`; Atoms frame `136:199`; new category = trailing `Row N` (HORIZONTAL, itemSpacing 24, AUTO×AUTO).
 - States = sibling COMPONENTs in a COMPONENT_SET, `Axis=value` layer names (see Anchor Cell `717:14`). Bind fills/strokes via `bind_paint_to_variable` (`UI Colors` = `VariableCollectionId:106:2`). Text color separate from Text Style. Bind sizes only where an exact token exists (else raw literal, like Color Swatch 24px).
 

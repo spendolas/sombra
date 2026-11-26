@@ -7,7 +7,7 @@
 > **Figma ID drift:** the `Figma ID` column below is stale for the pre-2026-07 rows (e.g. HSV to RGB / Brightness are `123:1832` / `123:1833` here but `123:1822` / `123:1823` in `tokens/sombra.ds.json` + live Figma). The DB (`nodeTemplates`) is the authoritative map. Newly added rows (Hue Shift, `802:1951`) use the real live IDs. Re-audit this table against the DB when convenient.
 
 **Figma Page:** Templates
-**Figma URL:** [Open Templates page](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=44:3164)
+**Figma URL:** [Open Templates page](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=44:3164)
 
 ## Template Inventory
 

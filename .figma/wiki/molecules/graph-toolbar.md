@@ -10,7 +10,7 @@
 | Variants | none |
 | React File | `src/components/GraphToolbar.tsx` |
 | React Component | `<GraphToolbar />` |
-| Figma URL | [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=268:1427) |
+| Figma URL | [Open in Figma](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=268:1427) |
 
 ## Figma Screenshot
 

@@ -11,7 +11,7 @@
 | React File | `src/components/ui/sombra-slider.tsx` |
 | React Component | `<SombraSlider />` |
 | Wrapper | `<FloatSlider />` in `src/components/NodeParameters.tsx` |
-| Figma URL | [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=106:282) |
+| Figma URL | [Open in Figma](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=106:282) |
 
 ## Structure
 

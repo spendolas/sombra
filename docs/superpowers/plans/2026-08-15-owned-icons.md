@@ -787,7 +787,7 @@ and record the `stroke/icon` variable in the DB.
 - [ ] **Step 1: Load the skill and pin the file**
 
 Invoke `figma-ds-conformance`. `mcp__grip__set_active_file` → `Sombra`
-(`gq5i0l617YkXy0GzAZPtqz`). Re-read `306:236` before mutating (ids change between sessions).
+(`rkjKvEFljv5OkNzmAIHKVa`). Re-read `306:236` before mutating (ids change between sessions).
 
 - [ ] **Step 2: Create the stroke variable**
 

@@ -10,7 +10,7 @@
 | Variants | none |
 | React File | `src/components/FloatingPreview.tsx` |
 | React Component | `<FloatingPreview />` |
-| Figma URL | [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=86:261) |
+| Figma URL | [Open in Figma](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=86:261) |
 
 ## Figma Screenshot
 

@@ -10,7 +10,7 @@
 | Variants | 12: Icon (plus/minus/shuffle/download/folder-open/rows/columns/pip/scan) x State (enabled/disabled) x Style (solid/ghost) |
 | React File | `src/components/ShaderNode.tsx` |
 | React Component | (inline `<button>`) |
-| Figma URL | [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=17:258) |
+| Figma URL | [Open in Figma](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=17:258) |
 
 ## Figma Screenshot
 

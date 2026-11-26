@@ -11,7 +11,7 @@
 | React File | `src/components/ActionButton.tsx` |
 | React Component | `<ActionButton />` |
 | DB key | `actionButton` |
-| Figma URL | [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=901:2134) |
+| Figma URL | [Open in Figma](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=901:2134) |
 
 ## Purpose
 

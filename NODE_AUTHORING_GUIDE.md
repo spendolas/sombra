@@ -580,7 +580,7 @@ touch alpha, gated behind `preserveAlpha`; that's a different case.)
 
 ## 6. Figma DS Checklist
 
-When a new node is added to the code, a matching template should be created in the Figma design system file (`gq5i0l617YkXy0GzAZPtqz`).
+When a new node is added to the code, a matching template should be created in the Figma design system file (`rkjKvEFljv5OkNzmAIHKVa`).
 
 ### Steps
 

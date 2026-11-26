@@ -11,7 +11,7 @@
 | React File | `src/components/NodeParameters.tsx` |
 | React Component | `AnchorGrid` (not exported, used internally) |
 | DS key | `ds.anchorGrid` (`tokens/sombra.ds.json` → `717:15`) |
-| Figma URL | [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=717:15) |
+| Figma URL | [Open in Figma](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=717:15) |
 
 ## Purpose
 

@@ -10,7 +10,7 @@
 | Variants | 2: state (unwired / wired) |
 | React File | `src/components/ShaderNode.tsx` |
 | React Component | (inline `<div>` in ShaderNode) |
-| Figma URL | [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=37:200) |
+| Figma URL | [Open in Figma](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=37:200) |
 
 ## Figma Screenshot
 

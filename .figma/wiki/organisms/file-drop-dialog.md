@@ -11,7 +11,7 @@
 | React File | `src/components/FileDropOverlay.tsx` |
 | React Component | `<FileDropDialog />` |
 | DB key | `fileDropDialog` |
-| Figma URL | [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=901:2118) |
+| Figma URL | [Open in Figma](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=901:2118) |
 
 ## Purpose
 
