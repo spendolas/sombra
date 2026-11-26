@@ -183,7 +183,7 @@ export const ds = {
     label: "text-handle text-fg-dim",
   },
   nodePreview: {
-    root: "overflow-hidden w-1/2 mx-auto aspect-square nowheel",
+    root: "overflow-hidden relative w-full aspect-square nowheel",
   },
   imageViewportOverlay: {
     root: "overflow-hidden relative rounded-sm",

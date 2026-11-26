@@ -2033,7 +2033,7 @@
       "parts": {
         "root": {
           "figmaNodeId": "619:1950",
-          "extra": "w-1/2 mx-auto aspect-square nowheel",
+          "extra": "relative w-full aspect-square nowheel",
           "auditIgnore": [
             "fill",
             "width.mode",

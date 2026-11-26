@@ -80,12 +80,17 @@ const NodePreview = memo(({ nodeId }: { nodeId: string }) => {
   }, [nodeId])
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={getPreviewSize()}
-      height={getPreviewSize()}
-      className={ds.nodePreview.root}
-    />
+    // The canvas is absolutely positioned inside a half-width square box so its
+    // raster size (width/height attrs) never feeds the node's intrinsic width —
+    // otherwise every node grows to the raster edge.
+    <div className={ds.nodePreview.root}>
+      <canvas
+        ref={canvasRef}
+        width={getPreviewSize()}
+        height={getPreviewSize()}
+        className="absolute inset-0 w-full h-full"
+      />
+    </div>
   )
 })
 NodePreview.displayName = 'NodePreview'
@@ -625,6 +630,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                       id={param.id}
                       handleColor={getPortColor(param.type)}
                       connected={isConnected}
+                      className={sliderRow && !warning ? "top-[15px]!" : "top-[10px]!"}
                     />
                   )}
                   {/* auto-height frame: holds any control (dropdown, anchor grid, colour)
@@ -632,9 +638,11 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                   <div className="flex flex-col pl-handle-offset pr-xs gap-xs flex-1 min-w-0">
                     {control}
                     {/* Warning stacks BELOW the control. As a flex-row sibling of the
-                        slider it stole horizontal space and squished it below full width. */}
+                        slider it stole horizontal space and squished it below full width.
+                        w-0 min-w-full: the hint wraps at the node's width instead of setting it
+                        (a long line widened the node, and only while the warning showed). */}
                     {warning && (
-                      <span className={cn(ds.shaderNode.warnText, "pb-2xs")}>
+                      <span className={cn(ds.shaderNode.warnText, "pb-2xs w-0 min-w-full")}>
                         High value — may impact performance
                         {param.warnHint && (
                           <>
