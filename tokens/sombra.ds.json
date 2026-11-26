@@ -1435,6 +1435,18 @@
           "cursor": "text",
           "textAlign": "center"
         },
+        "trackArea": {
+          "figmaNodeId": "106:281",
+          "layout": "vertical",
+          "justify": "center",
+          "height": "[16px]",
+          "extra": "w-full shrink-0 cursor-ew-resize",
+          "auditIgnore": [
+            "layout",
+            "justify"
+          ],
+          "overflow": "hidden"
+        },
         "input": {
           "textStyle": "text-mono-value",
           "textColor": "fg",
@@ -1528,6 +1540,13 @@
             "overflow"
           ]
         },
+        "sliderRow": {
+          "figmaNodeId": "106:303",
+          "layout": "horizontal",
+          "align": "center",
+          "position": "relative",
+          "height": "[50px]"
+        },
         "innerFrame": {
           "figmaNodeId": "106:296",
           "padding": {
@@ -1537,8 +1556,7 @@
           "extra": "flex-1",
           "layout": "vertical",
           "overflow": "hidden",
-          "gap": "xs",
-          "height": "[36px]"
+          "gap": "xs"
         }
       }
     },
@@ -3478,7 +3496,8 @@
           "layout": "horizontal",
           "align": "center",
           "transition": "colors",
-          "extra": "outline-none focus-visible:outline-2 focus-visible:outline-indigo-hover motion-reduce:transition-none"
+          "extra": "outline-none focus-visible:outline-2 focus-visible:outline-indigo-hover motion-reduce:transition-none",
+          "height": "[50px]"
         },
         "rootHover": {
           "figmaNodeId": "999:7576",
@@ -3490,9 +3509,9 @@
           "transition": "colors",
           "extra": "outline-none focus-visible:outline-2 focus-visible:outline-indigo-hover motion-reduce:transition-none",
           "auditIgnore": [
-            "fill.opacity",
-            "height"
-          ]
+            "fill.opacity"
+          ],
+          "height": "[50px]"
         },
         "content": {
           "figmaNodeId": "998:6037",

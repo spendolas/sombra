@@ -9,8 +9,8 @@
  *  - Honesty controls: Time → Aspect (no single value) and a Random whose Min is wired
  *    into Gap Y (not constant) keep the plain "← Source" header — no row, no invented number.
  *  - Mechanism: changing the Number node's value changes the row's text. Heights are CSS px
- *    (divided by the canvas zoom): a Transform row keeps its height; a body row grows 27.5 → 36 —
- *    accepted by the owner, pinned here so a change to it is deliberate.
+ *    (divided by the canvas zoom): every slider row, wired or not, body or Transform, is Figma's
+ *    fixed 50 px Connectable Param Row (106:303), so wiring a param never moves the rows below.
  *
  * Run: npm run verify:wired-row-editor-ui   (needs Chrome)
  */
@@ -156,12 +156,13 @@ async function main() {
       assert(rnd2.hasHandle && !rnd2.isRow, `unexpected: ${JSON.stringify(rnd2)}`)
       assert(/← Random/.test(rnd2.text), `header missing: ${rnd2.text}`)
     })
-    test('heights (CSS px): Transform rows keep their height; body rows grow 27.5 → 36 (owner accepted the jump)', () => {
+    test('heights (CSS px): every slider row is 50, wired or not — wiring moves nothing', () => {
       const near = (a: number | null | undefined, b: number, m: string) => assert(a != null && Math.abs(a - b) <= 1, `${m}: ${a} vs ${b}`)
-      near(scale.height, before.srt_scale, 'Transform scale wired vs unwired')
-      near(before.gapX, 27.5, 'unwired body row (13 px label)')
-      near(gap.height, 36, 'wired body row')
-      near(soft.height, 36, 'wired body row (Softness)')
+      near(before.srt_scale, 50, 'unwired Transform row')
+      near(scale.height, 50, 'wired Transform row')
+      near(before.gapX, 50, 'unwired body row')
+      near(gap.height, 50, 'wired body row')
+      near(soft.height, 50, 'wired body row (Softness)')
     })
 
     // Mechanism: the row follows the source node's value.

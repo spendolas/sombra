@@ -222,7 +222,7 @@ export default function SectionHeaderHarness() {
             <div className={ds.nodeCard.header}><span className={ds.nodeCard.title}>Stripes</span></div>
             <div className={ds.nodeCard.content}>
               {['Width', 'Gap'].map((l) => (
-                <div key={l} className={ds.connectableParamRow.root}>
+                <div key={l} className={ds.connectableParamRow.sliderRow}>
                   <span className="absolute left-0 -translate-x-1/2"><Dot connected={false} /></span>
                   <div className={ds.connectableParamRow.innerFrame}>
                     <FloatSlider param={P(l, l, 40, 0, 100, 1)} value={40} onChange={() => {}} />
@@ -247,7 +247,7 @@ export default function SectionHeaderHarness() {
                 {open && (
                   <div id="sandbox-transform-body" className="flex flex-col gap-y-md pt-xs">
                     {params.map((p) => (
-                      <div key={p.id} className={ds.connectableParamRow.root}>
+                      <div key={p.id} className={ds.connectableParamRow.sliderRow}>
                         <span className="absolute left-0 -translate-x-1/2" data-row-dot={p.id}>
                           <Dot connected={!!wired[p.id]} />
                         </span>

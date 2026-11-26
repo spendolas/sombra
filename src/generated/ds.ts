@@ -99,6 +99,7 @@ export const ds = {
     labelRow: "flex flex-row items-center gap-xs cursor-ew-resize overflow-hidden",
     label: "text-handle text-fg-dim",
     value: "text-mono-value text-fg text-center cursor-text",
+    trackArea: "flex flex-col justify-center overflow-hidden h-[16px] w-full shrink-0 cursor-ew-resize",
     input: "text-mono-value text-fg bg-transparent text-right outline-none border-b border-indigo nodrag nowheel",
   },
   enumSelect: {
@@ -114,7 +115,8 @@ export const ds = {
   },
   connectableParamRow: {
     root: "flex flex-row items-center relative",
-    innerFrame: "flex flex-col pl-handle-offset pr-xs gap-xs overflow-hidden h-[36px] flex-1",
+    sliderRow: "flex flex-row items-center relative h-[50px]",
+    innerFrame: "flex flex-col pl-handle-offset pr-xs gap-xs overflow-hidden flex-1",
   },
   gradientEditor: {
     root: "flex flex-col gap-md",
@@ -346,8 +348,8 @@ export const ds = {
     text: "text-body text-fg-dim flex-1 min-w-0",
   },
   wiredParamRow: {
-    root: "flex flex-row items-center transition-colors relative outline-none focus-visible:outline-2 focus-visible:outline-indigo-hover motion-reduce:transition-none",
-    rootHover: "flex flex-row items-center bg-hover rounded-sm transition-colors relative outline-none focus-visible:outline-2 focus-visible:outline-indigo-hover motion-reduce:transition-none",
+    root: "flex flex-row items-center transition-colors relative h-[50px] outline-none focus-visible:outline-2 focus-visible:outline-indigo-hover motion-reduce:transition-none",
+    rootHover: "flex flex-row items-center bg-hover rounded-sm transition-colors relative h-[50px] outline-none focus-visible:outline-2 focus-visible:outline-indigo-hover motion-reduce:transition-none",
     content: "flex flex-col pl-handle-offset pr-xs gap-2xs flex-1 min-w-0",
     labelLine: "flex flex-row items-center gap-xs h-[18px] min-w-0",
     label: "text-handle text-fg-dim shrink-0 whitespace-nowrap",

@@ -275,7 +275,7 @@ function LayerCard({
       </div>
 
       {/* 3 · opacity — the same slider / "← source" pair every connectable parameter uses */}
-      <div className={ds.connectableParamRow.root}>
+      <div className={ds.connectableParamRow.sliderRow}>
         {handle('opacity', !!layer.opacitySource)}
         <div className={cn(ds.connectableParamRow.innerFrame, hidden && ds.stackLayer.dimmed)}>
           {layer.opacitySource ? (

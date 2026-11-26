@@ -617,8 +617,12 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                 )
               }
 
+              // Slider rows (and their "← source" form) take Figma's fixed 50 px
+              // Connectable Param Row; a warning under the slider may grow it.
+              const sliderRow = param.type !== 'color' && param.type !== 'enum' && param.type !== 'bool'
+              const warning = param.warnAbove != null && !isConnected && displayValue > param.warnAbove
               return (
-                <div key={param.id} className={ds.connectableParamRow.root}>
+                <div key={param.id} className={sliderRow ? cn(ds.connectableParamRow.sliderRow, warning && 'h-auto min-h-[50px]') : ds.connectableParamRow.root}>
                   {connectable && (
                     <BaseHandle
                       type="target"
@@ -629,18 +633,15 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                       className="top-[10px]!"
                     />
                   )}
-                  {/* top-[10px]: centre the handle on the label row rather
-                      than the middle of the whole block, which drifts for tall controls
-                      (slider + warning hint, colour picker). */}
-                  {/* auto-height frame (the DS innerFrame is fixed h-36, tuned for
-                      sliders — it clips taller controls like dropdowns / anchor grid) */}
+                  {/* auto-height frame: holds any control (dropdown, anchor grid, colour)
+                      plus the warning line under a slider */}
                   <div className="flex flex-col pl-handle-offset pr-xs gap-xs flex-1 min-w-0">
                     {control}
                     {/* Warning stacks BELOW the control. As a flex-row sibling of the
                         slider it stole horizontal space and squished it below full width.
                         w-0 min-w-full: the hint wraps at the node's width instead of setting it
                         (a long line widened the node, and only while the warning showed). */}
-                    {param.warnAbove != null && !isConnected && displayValue > param.warnAbove && (
+                    {warning && (
                       <span className={cn(ds.shaderNode.warnText, "pb-2xs w-0 min-w-full")}>
                         High value — may impact performance
                         {param.warnHint && (
@@ -719,7 +720,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                 )
               }
               return (
-                <div key={param.id} className={cn(ds.connectableParamRow.root, "nodrag nowheel")}>
+                <div key={param.id} className={cn(isSlider ? ds.connectableParamRow.sliderRow : ds.connectableParamRow.root, "nodrag nowheel")}>
                   {connectable && (
                     <BaseHandle
                       type="target"

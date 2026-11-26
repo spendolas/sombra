@@ -82,3 +82,5 @@ When `value` is `[number, number]`:
 ## Parity: ✅ Match
 
 Slider uses SombraSlider: track `bg-surface-raised` (#252538), fill `bg-indigo` (#6366f1), no visible thumb, label scrub with ew-resize cursor.
+
+Height 38 = label row 20 + gap 2 + **track area 16** (`floatSlider.trackArea`, Figma 106:281). The 6px track sits centred in the 16px area, and the area takes the press, so the hit target is 16px tall. In a node it sits in the fixed 50px `connectableParamRow.sliderRow` (Figma 106:303).
