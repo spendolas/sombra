@@ -13,7 +13,7 @@
 | DS Key | `wiredParamRow` |
 | Sandbox | `sandbox.html?c=wired-param-row` |
 | Gate | `npm run verify:wired-param-row-ui` (headless Chrome, no GPU) |
-| Status | Component + sandbox, and **wired into the editor for direct constant sources (step one, on branch `feat/wire-param-row-step1`, not yet deployed)**: Number, Color and Random (min/max/decimals unwired) → body and Transform rows. Chains, Time and per-pixel sources keep the plain `← Source` header; Stack opacity/mask not yet. Gate: `npm run verify:wired-row-editor-ui`. Body rows grow 27.5 → 36px when wired (owner accepted, pinned by the gate) |
+| Status | Component + sandbox, and **wired into the editor for direct constant sources (step one, on branch `feat/wire-param-row-step1`, not yet deployed)**: Number, Color and Random (min/max/decimals unwired) → body and Transform rows. Chains, Time and per-pixel sources keep the plain `← Source` header; Stack opacity/mask not yet. Gate: `npm run verify:wired-row-editor-ui`. Every slider row is 50px wired or not (pinned by the gate) |
 
 What a connectable parameter's row shows while a wire drives it. Today the row
 either shows the stale slider value greyed out, or just the source name. Option D
@@ -94,15 +94,13 @@ label, `text-mono-value` value), the slider-track token, the Labeled Handle row
 
 ## Geometry
 
-- Content = 18 (label line) + 2 + 16 (indicator) = **36px**, the height of the DS
-  unwired row (`connectableParamRow.innerFrame`, used by Transform rows and Stack
-  opacity). Mask = the Labeled Handle row (19.5px). Measured by the gate.
-- **Body param rows are not 36px today.** `ShaderNode.tsx` renders body params in
-  an auto-height frame (the slider alone, 26px), not `innerFrame`. A wired body row
-  is therefore 10px taller than an unwired body sibling. The board draws every row
-  at 50 (Figma's slider is 46, the code's 26/36 — pre-existing drift). Decision
-  for the wiring job: put body sliders in `innerFrame` too (every row 36, nothing
-  jumps when a wire lands), or accept the jump.
+- Content = 18 (label line) + 2 + 16 (indicator) = 36px, centred in a fixed
+  **50px** row (`wiredParamRow.root` `h-[50px]`) — the same 50px as the unwired
+  slider row (`connectableParamRow.sliderRow`, Figma 106:303), whose Float Slider
+  is 20 + 2 + 16 (track area 106:281) = 38px. Body rows, Transform rows and Stack
+  opacity all use it, so nothing moves when a wire lands (2026-11-27: code matched
+  to Figma; it had drawn the slider at 27.5 and the rows at 27.5 / 36).
+  Mask = the Labeled Handle row (19.5px). Measured by the gates.
 - Figma draws handles in-flow (12px column, then 10px pad → text at 22); code
   centres the handle on the content edge (`pl-handle-offset` → text 10px from the
   handle centre). Same convention as Stack Layer / Section Header.

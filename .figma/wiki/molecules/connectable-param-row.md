@@ -61,3 +61,7 @@ Two variants side by side:
 ## Parity: ✅ Match
 
 Both states match. Handle absolute positioning, slider dimming when connected, and padding values are all aligned between Figma and code.
+
+## Height (2026-11-27)
+
+Slider rows use `connectableParamRow.sliderRow` = Figma's State=unwired variant (106:303): fixed **50px**, slider (38) centred. The same row holds the "← source" form and Stack opacity, and the Wired Param Row is 50 too, so wiring never moves the rows below. A slider row showing a warning grows (`h-auto min-h-[50px]`). Other controls (dropdown, colour, anchor grid) keep `root`, which is as tall as its content. `innerFrame` now hugs its content (Figma frame 106:296 hugs at 38); it used to be fixed at 36.

@@ -383,11 +383,12 @@ function SombraSlider({
         )}
       </div>
 
-      {/* Track */}
+      {/* Track, inside Figma's 16 px slider area (106:281): the area takes the
+          press, so the hit target is 16 px tall while the track stays 6 px. */}
+      <div className={ds.floatSlider.trackArea} onPointerDown={handleTrackPointerDown}>
       <div
         ref={trackRef}
         className={cn(ds.sliderTrack.track, "cursor-ew-resize overflow-hidden")}
-        onPointerDown={handleTrackPointerDown}
       >
         {isRange ? (
           <div
@@ -403,6 +404,7 @@ function SombraSlider({
             style={{ width: `${valueToX(vals[0]) * 100}%` }}
           />
         )}
+      </div>
       </div>
     </div>
   )

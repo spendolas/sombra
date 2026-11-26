@@ -567,7 +567,7 @@ function MoleculesSection() {
       <SubSection title="connectableParamRow">
         <div className="flex flex-col gap-4 w-56">
           <Cell dsComponent="connectableParamRow" dsVariant="unwired" label="unwired (with slider)">
-            <div className={ds.connectableParamRow.root}>
+            <div className={ds.connectableParamRow.sliderRow}>
               <div
                 className={ds.handle.root}
                 style={{
@@ -584,7 +584,7 @@ function MoleculesSection() {
             </div>
           </Cell>
           <Cell dsComponent="connectableParamRow" dsVariant="wired" label="wired (with source label)">
-            <div className={ds.connectableParamRow.root}>
+            <div className={ds.connectableParamRow.sliderRow}>
               <div
                 className={ds.handle.root}
                 style={{
