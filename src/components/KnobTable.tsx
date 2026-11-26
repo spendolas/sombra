@@ -247,6 +247,7 @@ function KnobRow({ knob, copied, onCopy, onRename, onToggleHidden }: {
       {onToggleHidden && (
         <IconButton
           icon={knob.hidden ? 'eyeOff' : 'eye'}
+          className={ds.knobRow.visibility}
           onClick={onToggleHidden}
           aria-label={knob.hidden ? `Show ${knob.key} in the embed` : `Hide ${knob.key} from the embed`}
           aria-pressed={knob.hidden ? 'true' : 'false'}

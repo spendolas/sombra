@@ -3277,6 +3277,26 @@
           "width": "[72px]",
           "extra": "shrink-0 whitespace-nowrap"
         },
+        "visibility": {
+          "figmaNodeId": "1023:9262",
+          "textColor": "fg-subtle",
+          "cursor": "pointer",
+          "transition": "colors",
+          "hover": {
+            "fill": "hover",
+            "textColor": "fg"
+          },
+          "layout": "vertical",
+          "justify": "center",
+          "align": "center",
+          "radius": "sm",
+          "extra": "shrink-0",
+          "auditIgnore": [
+            "textColor"
+          ],
+          "width": "btn-md",
+          "height": "btn-md"
+        },
         "dimmed": {
           "figmaNodeId": "1023:9313",
           "opacity": 50,
