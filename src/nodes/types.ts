@@ -2,6 +2,8 @@
  * Core type definitions for the Sombra node system
  */
 
+import type { KnobOverrides } from './knob-overrides'
+
 /**
  * Port data types supported by the shader system
  */
@@ -500,6 +502,8 @@ export interface NodeData extends Record<string, unknown> {
   type: string                      // References NodeDefinition.type
   params: Record<string, unknown>   // Current parameter values
   label?: string                    // Optional custom label
+  /** Per-knob embed overrides (custom name, hidden), keyed by param id. See knob-overrides.ts. */
+  knobs?: KnobOverrides
   /** Editor-only view state (see NodeUiState). Never read by the compiler. */
   ui?: NodeUiState
 }

@@ -16,6 +16,7 @@ import { anchorToVec2 } from '../nodes/output/fragment-output'
 import { REFERENCE_SIZE } from '../renderer/constants'
 import { previewCanvasSize } from '../utils/preview-canvas-size'
 import { applyStackEdit, type StackEdit } from '../nodes/color/stack-edit'
+import { applyKnobOverride, normalizeKnobOverrides, type KnobOverridePatch } from '../nodes/knob-overrides'
 import { normalizeNodeLabel } from '../nodes/node-label'
 import { carryUiState, withSectionCollapsed } from '../nodes/node-ui'
 
@@ -107,6 +108,10 @@ interface GraphState {
    *  the normalised label is unchanged. Not part of any compile key, so a
    *  rename never recompiles. */
   renameNode: (nodeId: string, label: string | undefined) => void
+  /** Rename or hide one embed knob (`data.knobs[paramId]`, see knob-overrides.ts).
+   *  Same rules as renameNode: normalised, one history entry, never coalesced, a
+   *  no-op when nothing changes, and in no compile key (never recompiles). */
+  setKnobOverride: (nodeId: string, paramId: string, patch: KnobOverridePatch) => void
   /** Open / collapse a section of a node's body (`'transform'`). View state,
    *  stored on the node (`data.ui`) so it survives reloads and `.sombra` files,
    *  but NOT an edit: no history entry, and undo/redo carry it over unchanged.
@@ -369,6 +374,26 @@ export const useGraphStore = create<GraphState>()(
           _future: [],
           // Cleared like editStackLayers: a following slider drag on this node
           // must not coalesce into (and be undone together with) the rename.
+          _lastActionKey: null,
+          canUndo: true,
+          canRedo: false,
+        })
+      },
+
+      setKnobOverride: (nodeId, paramId, patch) => {
+        const state = get()
+        const node = state.nodes.find((n) => n.id === nodeId)
+        if (!node) return
+        const before = normalizeKnobOverrides(node.data.knobs)
+        const next = applyKnobOverride(node.data.knobs, paramId, patch)
+        if (JSON.stringify(before) === JSON.stringify(next) && (next !== undefined || !('knobs' in node.data))) return
+        // No overrides left removes the key, so the node serialises as if never edited.
+        const { knobs: _old, ...rest } = node.data
+        const data: NodeData = next === undefined ? rest : { ...rest, knobs: next }
+        set({
+          nodes: state.nodes.map((n) => (n.id === nodeId ? { ...n, data } : n)),
+          _past: pushHistory(state._past, snapshot(state)),
+          _future: [],
           _lastActionKey: null,
           canUndo: true,
           canRedo: false,

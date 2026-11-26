@@ -14,6 +14,7 @@ import { nodeRegistry } from '../nodes/registry'
 import { defaultParams, cloneParamDefault } from '../nodes/default-params'
 import { resolveParams, userInputs } from '../nodes/resolve-dynamic'
 import { normalizeNodeLabel } from '../nodes/node-label'
+import { normalizeKnobOverrides, type KnobOverrides } from '../nodes/knob-overrides'
 import { migrateOffsetSpace } from './srt-migration'
 import { SOMBRA_FILE_MIME_TYPE } from './file-type-constants'
 import type { ShaderThumbnail } from '../renderer/capture-thumbnail'
@@ -491,6 +492,7 @@ interface CompactNode {
   t: string                     // node type (e.g. 'noise')
   p?: Record<string, unknown>   // non-default params (omitted if empty)
   l?: string                    // custom node label (omitted when none) — embed knob keys derive from it
+  k?: KnobOverrides             // per-knob embed overrides: custom names, hidden (omitted when none)
 }
 
 interface CompactEdge {
@@ -551,6 +553,8 @@ export function encodeCompactHash(
     const cn: CompactNode = { i: node.id, t: node.data.type }
     const label = normalizeNodeLabel(node.data.label)
     if (label !== undefined) cn.l = label
+    const knobs = normalizeKnobOverrides(node.data.knobs)
+    if (knobs !== undefined) cn.k = knobs
     const params = node.data.params
     if (params && Object.keys(params).length > 0) {
       // Strip params that match definition defaults
@@ -620,11 +624,15 @@ export function decodeCompactHash(hash: string): {
 
     // Hashes from before labels existed carry no `l` and decode unchanged.
     const label = normalizeNodeLabel(cn.l)
+    const knobs = normalizeKnobOverrides(cn.k)
+    const data: NodeData = { type: cn.t, params }
+    if (label !== undefined) data.label = label
+    if (knobs !== undefined) data.knobs = knobs
     return {
       id: cn.i,
       type: 'shaderNode',
       position: { x: 0, y: 0 },
-      data: label === undefined ? { type: cn.t, params } : { type: cn.t, params, label },
+      data,
     }
   })
 

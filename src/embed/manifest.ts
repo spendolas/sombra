@@ -4,6 +4,7 @@ import { nodeRegistry } from '../nodes/registry'
 import type { KnobDescriptor } from './artifact'
 import { normalizeNodeLabel } from '../nodes/node-label'
 import { resolveParams } from '../nodes/resolve-dynamic'
+import { knobOverride } from '../nodes/knob-overrides'
 
 function slugify(s: string): string {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
@@ -108,14 +109,48 @@ export function buildManifest(
 }
 
 /**
- * buildManifest plus the name clashes its de-dupe pass resolved (for the Embed
- * modal's notice). The manifest is the very same array buildManifest returns —
- * the clash list rides beside it and never enters the artifact.
+ * One knob as the Embed modal's table shows it: published or hidden, with the
+ * address the author edits it by (node id + param id). Editor-only: never in the
+ * artifact.
+ */
+export interface KnobEntry {
+  /** The descriptor. Hidden knobs get one too (same key rules), so their key is stable. */
+  knob: KnobDescriptor
+  /** NodeParameter.id — the key of `NodeData.knobs` (setKnobOverride). */
+  paramId: string
+  /** The param's own label: what an empty name falls back to. */
+  defaultName: string
+  /** The author renamed this knob (`knob.label` is their name). */
+  renamed: boolean
+  /** Left out of the published manifest. */
+  hidden: boolean
+  /** A custom knob name whose slug another knob of the same node already holds, so its key was numbered. */
+  nameClash: boolean
+}
+
+export interface ManifestBuild {
+  /** The published knobs (hidden ones left out) — what goes into the artifact. */
+  manifest: KnobDescriptor[]
+  /** Labelled nodes numbered by a node-name clash (the modal's notice). */
+  clashes: KnobNameClash[]
+  /** Every knob, published and hidden, in manifest order (the modal's table). */
+  entries: KnobEntry[]
+}
+
+/**
+ * buildManifest plus what the Embed modal needs beside it: the name clashes its
+ * de-dupe pass resolved and every knob including hidden ones. The manifest is the
+ * very same array buildManifest returns — the rest never enters the artifact.
+ *
+ * Per-knob overrides (`NodeData.knobs`, knob-overrides.ts): a custom name
+ * replaces the param label in the key and the descriptor's `label`; a hidden
+ * knob is computed exactly like a published one (so its key does not move when
+ * it is shown again) and then left out of `manifest`.
  */
 export function buildManifestWithClashes(
   uniforms: UniformSpec[],
   nodes: Node<NodeData>[],
-): { manifest: KnobDescriptor[]; clashes: KnobNameClash[] } {
+): ManifestBuild {
   const nodeType = new Map(nodes.map((n) => [n.id, n.data.type]))
   const nodeById = new Map(nodes.map((n) => [n.id, n]))
 
@@ -129,8 +164,9 @@ export function buildManifestWithClashes(
 
   const usedKeys = new Map<string, number>()
   const usedParams = new Map<string, Map<string, number>>()  // nodeId → paramSlug → count
+  const renamedByNode = new Map<string, Set<string>>()        // nodeId → slugs a custom knob name holds
   const seenUniforms = new Set<string>()
-  const out: KnobDescriptor[] = []
+  const entries: KnobEntry[] = []
 
   for (const u of uniforms) {
     // A node's uniform appears once per pass it's used in (multi-pass graphs),
@@ -150,7 +186,9 @@ export function buildManifestWithClashes(
 
     const nodeName = nodeNames.get(u.nodeId) ?? 'node'
     const nodeSlug = slugify(nodeName) || 'node'
-    const paramSlug = slugify(param.label) || u.paramId
+    const override = knobOverride(nodeById.get(u.nodeId)?.data.knobs, u.paramId)
+    const label = override.name ?? param.label
+    const paramSlug = slugify(label) || u.paramId
 
     // Dedup the param WITHIN its node so (nodeId, param) is a unique address:
     // one node can expose two uniform params whose labels slugify identically
@@ -159,6 +197,12 @@ export function buildManifestWithClashes(
     const perNode = usedParams.get(u.nodeId) ?? new Map<string, number>()
     usedParams.set(u.nodeId, perNode)
     const pc = perNode.get(paramSlug) ?? 0
+    // A rename that collides with another knob of this node (either order) is
+    // flagged; two built-in labels that slug the same (aspect / aspectUV) are not.
+    const renamedSlugs = renamedByNode.get(u.nodeId) ?? new Set<string>()
+    renamedByNode.set(u.nodeId, renamedSlugs)
+    const nameClash = pc > 0 && (override.name !== undefined || renamedSlugs.has(paramSlug))
+    if (override.name !== undefined) renamedSlugs.add(paramSlug)
     perNode.set(paramSlug, pc + 1)
     const paramId = pc > 0 ? `${paramSlug}-${pc + 1}` : paramSlug
 
@@ -169,7 +213,7 @@ export function buildManifestWithClashes(
     usedKeys.set(key, n + 1)
     if (n > 0) key = `${key}-${n + 1}`
 
-    out.push({
+    const knob: KnobDescriptor = {
       key,
       uniform: u.name,
       nodeId: u.nodeId,
@@ -178,7 +222,7 @@ export function buildManifestWithClashes(
       // Friendly slug, unique within its node (matches the key's param suffix) —
       // NOT the raw param id ("scale", not "srt_scale"); "aspect-2" on collision.
       param: paramId,
-      label: param.label,
+      label,
       type: knobType(param.type),
       glslType: u.glslType,
       min: param.min,
@@ -189,7 +233,15 @@ export function buildManifestWithClashes(
       ...(named.has(u.nodeId) ? { named: true } : {}),
       // Ramp stops: group "stops", index, position. Absent for every other knob.
       ...(param.knobMeta ? { ...param.knobMeta } : {}),
+    }
+    entries.push({
+      knob,
+      paramId: u.paramId,
+      defaultName: param.label,
+      renamed: override.name !== undefined,
+      hidden: override.hidden === true,
+      nameClash,
     })
   }
-  return { manifest: out, clashes }
+  return { manifest: entries.filter((e) => !e.hidden).map((e) => e.knob), clashes, entries }
 }
