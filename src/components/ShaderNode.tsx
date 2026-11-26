@@ -575,6 +575,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                     id={param.id}
                     handleColor={getPortColor(param.type)}
                     connected
+                    className="top-[16px]!"
                   />
                 ))
                 if (row) return row
@@ -679,6 +680,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                     id={param.id}
                     handleColor={getPortColor(param.type)}
                     connected
+                    className="top-[16px]!"
                   />
                 ))
                 if (row) return row
