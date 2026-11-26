@@ -92,7 +92,7 @@ export const ds = {
   labeledHandle: {
     root: "flex flex-row items-center pr-lg gap-sm relative flex",
     label: "text-handle text-fg-dim px-handle-offset flex-1",
-    labelOutput: "text-handle text-fg px-handle-offset flex-1 text-right",
+    labelOutput: "text-handle text-fg text-right px-handle-offset flex-1",
   },
   floatSlider: {
     root: "flex flex-col gap-2xs select-none overflow-hidden nodrag nowheel nokey",

@@ -1396,7 +1396,8 @@
           "figmaNodeId": "106:192",
           "textStyle": "text-handle",
           "textColor": "fg",
-          "extra": "px-handle-offset flex-1 text-right"
+          "extra": "px-handle-offset flex-1",
+          "textAlign": "right"
         }
       }
     },
