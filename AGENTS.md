@@ -131,6 +131,7 @@ npm run verify:embed:site   # site-base fixture + static site checklist C1..C8 (
 npm run verify:embed:site:gpu # runtime site checklist R1..R9 on the fixture, both backends (own dev server + Chrome)
 npm run verify:embed-knob-table-ui # knob table in the real Embed modal: rows = manifest, clash notice, copy, placement (own dev server + Chrome)
 npm run verify:node-rename  # node labels (embed knob keys): one undo step, normalised, never in a compile key
+npm run verify:knob-overrides                 # knob rename + hide: key follows the name, hidden left out of the manifest, one undo step, no recompile
 npm run verify:node-sections    # section collapse state: no history, no compile key, saved; duplicate-name slug = manifest's
 npm run verify:node-sections-ui # Transform gathered wires, open-on-drag (mouse+touch), persistence, inline rename — live editor (Chrome)
 npm run verify:ramp-knobs   # ramp/gradient stops as embed knobs (offline)

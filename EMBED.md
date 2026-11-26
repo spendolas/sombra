@@ -180,6 +180,18 @@ Keys are **node-scoped** — `<node>-<param>` (e.g. `noise-scale`, `noise-2-scal
 nodes expose same-named params. The host discovers them at runtime via
 `shader.nodes()` / `shader.variables()`.
 
+**Renaming and hiding a knob (editor).** In the Embed modal's knob table each
+row has a Name field and an eye. The name replaces the param half of the key:
+renaming Balance's "Value" to "Amount" publishes `site-balance-amount` (and the
+descriptor's `label` becomes "Amount"). The eye hides a knob: it is left out of
+the published manifest, so `set()`, `get()`, `variables()` and `nodes()` no
+longer know it, and its uniform keeps the value it had in the editor. Both are
+stored per node as `node.data.knobs[paramId] = { name?, hidden? }` — one undo
+step, no recompile, kept in `.sombra` files and share links. A hidden knob keeps
+its key, so showing it again does not move it. A custom name that collides with
+another knob of the same node is numbered (`-2`) and marked in the table. The
+player is unchanged: hiding and renaming only change the manifest it is given.
+
 **Named knobs — the stable contract.** Give a node an author label (dev bridge
 `renameNode(id, label)`; the editor rename UI is still to be designed) and its
 knobs key off that label: a Number node labelled `site.balance` publishes

@@ -15,8 +15,9 @@
  *            opaque one's do not (the checker really shows through alpha).
  *   hover    the copy icon is absent (display:none) until the pointer is on
  *            the row, then sits after the key; the row takes the hover fill.
- *   copy     a click hands onCopy exactly the key (not the default it was
- *            clicked next to); "Copied" + check appear, are still there half way
+ *   copy     a click on the KEY hands onCopy exactly the key, and a click on
+ *            the default next to it copies nothing (since rename + hide, only
+ *            the key cell copies); "Copied" + check appear, are still there half way
  *            through the hold, and are gone after it. A refused copy shows no
  *            "Copied". The default path really reaches the system clipboard.
  *   scroll   60 rows: the body scrolls, the header does not, the header is not
@@ -27,6 +28,13 @@
  *            text on the raised surface, amber only on the icon), and only the
  *            numbered row carries the mark.
  *   empty    one calm line, no table.
+ *   rename   typing in a Name field updates the key beside it live; Enter
+ *            reports exactly (id, name) once and the key follows; Esc reports
+ *            nothing and restores the key; the focused field has the indigo
+ *            border.
+ *   hide     the eye reports (id, true), the row dims to half opacity, the
+ *            eye turns to eye-off (aria-pressed), and the footer counts
+ *            published / hidden; a fixture with no hidden knob has no footer.
  *
  * Run: npm run verify:knob-table-ui   (needs Chrome)
  */
@@ -52,6 +60,10 @@ let ctx: BrowserContext
 let page: Page
 let opens = 0
 let loads = 0
+
+declare global {
+  interface Window { __knobCopies?: string[]; __knobEdits?: string[] }
+}
 
 async function open(query: string) {
   opens++
@@ -119,7 +131,7 @@ async function main() {
     const body = await page.$$eval('[data-part="body"] > *', (els) =>
       els.map((e) => e.getAttribute('data-knob-key') ?? (e.getAttribute('data-part') === 'divider' ? '—divider—' : '?')))
     const keyColours = await page.$$eval('[data-knob-key] [data-part="key"]', (els) => els.map((e) => getComputedStyle(e).color))
-    const [fg, fgDim] = [await token('--fg'), await token('--fg-dim')]
+    const [fgDim, fgSubtle] = [await token('--fg-dim'), await token('--fg-subtle')]
 
     test('order: named knobs first, one divider, then the auto-named rest', () => {
       const expected = [...SITE_ORDER.slice(0, NAMED_COUNT), '—divider—', ...SITE_ORDER.slice(NAMED_COUNT)]
@@ -133,9 +145,10 @@ async function main() {
       assert(graphOrder[1] === 'pixelate-pixel-size', `graph order starts ${graphOrder.slice(0, 3)} — expected an auto knob at index 1`)
     })
     test('order: auto-named keys are a step dimmer than named ones', () => {
-      assert(fg !== fgDim, `tokens fg and fg-dim resolve the same (${fg})`)
-      keyColours.slice(0, NAMED_COUNT).forEach((c, i) => assert(c === fg, `${SITE_ORDER[i]} key is ${c}, expected fg ${fg}`))
-      keyColours.slice(NAMED_COUNT).forEach((c, i) => assert(c === fgDim, `${SITE_ORDER[NAMED_COUNT + i]} key is ${c}, expected fg-dim ${fgDim}`))
+      // Since rename + hide the Name column carries fg; keys sit one step below it.
+      assert(fgSubtle !== fgDim, `tokens fg-dim and fg-subtle resolve the same (${fgDim})`)
+      keyColours.slice(0, NAMED_COUNT).forEach((c, i) => assert(c === fgDim, `${SITE_ORDER[i]} key is ${c}, expected fg-dim ${fgDim}`))
+      keyColours.slice(NAMED_COUNT).forEach((c, i) => assert(c === fgSubtle, `${SITE_ORDER[NAMED_COUNT + i]} key is ${c}, expected fg-subtle ${fgSubtle}`))
     })
 
     // ── swatch ─────────────────────────────────────────────────────────────
@@ -174,7 +187,7 @@ async function main() {
     const keyBox = await page.locator(`${row('site-balance-value')} [data-part="key"]`).boundingBox()
     const otherIcon = await page.locator(`${row('site-seed-value')} [data-part="copy-icon"]`).boundingBox()
     const bgAfter = await page.$eval(row('site-balance-value'), (e) => getComputedStyle(e).backgroundColor)
-    const cursor = await page.$eval(row('site-balance-value'), (e) => getComputedStyle(e).cursor)
+    const cursor = await page.$eval(`${row('site-balance-value')} [data-part="key-cell"]`, (e) => getComputedStyle(e).cursor)
     const hoverFill = await page.evaluate(() => {
       const s = document.createElement('span'); s.style.backgroundColor = 'var(--hover)'; document.body.appendChild(s)
       const c = getComputedStyle(s).backgroundColor; s.remove(); return c
@@ -187,16 +200,21 @@ async function main() {
       assert(iconAfter!.x - (keyBox!.x + keyBox!.width) < 10, 'icon is not next to the key')
       assert(otherIcon === null, 'a row the pointer is not on shows its copy icon')
     })
-    test('hover: the row lifts with the hover fill and a pointer cursor', () => {
+    test('hover: the row lifts with the hover fill; the key has a pointer cursor', () => {
       assert(bgBefore !== bgAfter, `row background did not change on hover (${bgBefore})`)
       assert(bgAfter === hoverFill, `hovered row is ${bgAfter}, hover token is ${hoverFill}`)
       assert(cursor === 'pointer', `cursor is ${cursor}`)
     })
 
     // ── copy ───────────────────────────────────────────────────────────────
-    // Click the colour row in its DEFAULT cell: what is copied must still be the key.
+    // A click in the DEFAULT cell copies nothing (only the key cell copies)...
     const defaultCell = await center(`${row('site-palette-stop-2')} [data-part="swatch"]`)
-    await page.mouse.move(defaultCell.x, defaultCell.y)
+    await page.mouse.click(defaultCell.x, defaultCell.y)
+    await page.waitForTimeout(150)
+    const copiesFromDefault = await page.evaluate(() => window.__knobCopies ?? [])
+    // ...and a click on the key copies exactly the key.
+    const keyCell = await center(`${row('site-palette-stop-2')} [data-part="key"]`)
+    await page.mouse.move(keyCell.x, keyCell.y)
     // Time the "Copied" label in the page itself (performance.now on each DOM
     // change), so a slow test runner cannot fake or break the hold.
     await page.evaluate((sel) => {
@@ -209,7 +227,7 @@ async function main() {
         if (!last || last.on !== on) w.__copiedLog.push({ on, t: performance.now() })
       }).observe(document.body, { subtree: true, childList: true })
     }, `${row('site-palette-stop-2')} [data-part="copied"]`)
-    await page.mouse.click(defaultCell.x, defaultCell.y)
+    await page.mouse.click(keyCell.x, keyCell.y)
     await page.waitForSelector(`${row('site-palette-stop-2')} [data-part="copied"]`, { timeout: 300 }).catch(() => {})
     const copies = await page.evaluate(() => window.__knobCopies ?? [])
     const copiedNow = await page.locator(`${row('site-palette-stop-2')} [data-part="copied"]`).textContent().catch(() => null)
@@ -225,7 +243,8 @@ async function main() {
     })
     const iconBack = await page.locator(`${row('site-palette-stop-2')} [data-part="copy-icon"]`).boundingBox()
 
-    test('copy: a click hands onCopy exactly the key', () => {
+    test('copy: a click on the key hands onCopy exactly the key; a click on the default copies nothing', () => {
+      assert(copiesFromDefault.length === 0, `a default-cell click copied ${JSON.stringify(copiesFromDefault)}`)
       assert(JSON.stringify(copies) === JSON.stringify(['site-palette-stop-2']), `onCopy received ${JSON.stringify(copies)}`)
     })
     test('copy: check + "Copied" in green, on that row only', () => {
@@ -247,7 +266,7 @@ async function main() {
     })
 
     await open('fixture=site&copy=fail')
-    const failRow = await center(row('site-clock-speed'))
+    const failRow = await center(`${row('site-clock-speed')} [data-part="key"]`)
     await page.mouse.click(failRow.x, failRow.y)
     await page.waitForTimeout(200)
     const failCopied = await page.locator('[data-part="copied"]').count()
@@ -257,12 +276,82 @@ async function main() {
 
     await open('fixture=site&copy=clipboard')
     await page.evaluate(() => navigator.clipboard.writeText('sentinel'))
-    const clipRow = await center(row('fbm-octaves'))
+    const clipRow = await center(`${row('fbm-octaves')} [data-part="key"]`)
     await page.mouse.click(clipRow.x, clipRow.y)
     await page.waitForSelector(`${row('fbm-octaves')} [data-part="copied"]`, { timeout: 1000 }).catch(() => {})
     const clip = await page.evaluate(() => navigator.clipboard.readText())
     test('copy: the default path writes the key to the system clipboard', () => {
       assert(clip === 'fbm-octaves', `clipboard holds ${JSON.stringify(clip)}`)
+    })
+
+    // ── rename ─────────────────────────────────────────────────────────────
+    await open('fixture=site&copy=log')
+    const nameSel = `${row('site-balance-value')} [data-part="name"]`
+    await page.click(nameSel)
+    await page.waitForTimeout(250) // transition-colors
+    const focusBorder = await page.$eval(nameSel, (e) => getComputedStyle(e).borderColor)
+    const activeTok = await page.evaluate(() => {
+      const s = document.createElement('span'); s.style.color = 'var(--active)'; document.body.appendChild(s)
+      const c = getComputedStyle(s).color; s.remove(); return c
+    })
+    await page.keyboard.type('Amount')
+    const liveKey = await page.$eval(`${row('site-balance-value')} [data-part="key"]`, (e) => e.textContent)
+    const editsBeforeEnter = await page.evaluate(() => window.__knobEdits ?? [])
+    await page.keyboard.press('Enter')
+    await page.waitForSelector(row('site-balance-amount'), { timeout: 1000 }).catch(() => {})
+    const editsAfterEnter = await page.evaluate(() => window.__knobEdits ?? [])
+    const committedKey = await page.locator(row('site-balance-amount')).count()
+    // Esc: type into another field, cancel — nothing reported, key restored.
+    const seedSel = `${row('site-seed-value')} [data-part="name"]`
+    await page.click(seedSel)
+    await page.keyboard.type('Nope')
+    const seedLive = await page.$eval(`${row('site-seed-value')} [data-part="key"]`, (e) => e.textContent)
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(100)
+    const seedAfter = await page.$eval(`${row('site-seed-value')} [data-part="key"]`, (e) => e.textContent)
+    const seedValue = await page.$eval(seedSel, (e) => (e as HTMLInputElement).value)
+    const editsAfterEsc = await page.evaluate(() => window.__knobEdits ?? [])
+
+    test('rename: the focused Name field has the indigo border', () => {
+      assert(focusBorder === activeTok, `focused field border ${focusBorder}, active token ${activeTok}`)
+    })
+    test('rename: the key follows the draft live, and Enter commits exactly once', () => {
+      assert(liveKey === 'site-balance-amount', `live key while typing: ${liveKey}`)
+      assert(editsBeforeEnter.length === 0, `edits reported before Enter: ${JSON.stringify(editsBeforeEnter)}`)
+      assert(JSON.stringify(editsAfterEnter) === JSON.stringify(['rename site-balance-value → Amount']), `edits: ${JSON.stringify(editsAfterEnter)}`)
+      assert(committedKey === 1, 'the row did not take the new key')
+    })
+    test('rename: Esc reports nothing and restores the name and key', () => {
+      assert(seedLive === 'site-seed-nope', `live key ${seedLive} — the preview is not engaged, so this check would prove nothing`)
+      assert(seedAfter === 'site-seed-value' && seedValue === 'Value', `after Esc: key ${seedAfter}, name ${seedValue}`)
+      assert(editsAfterEsc.length === editsAfterEnter.length, `Esc reported an edit: ${JSON.stringify(editsAfterEsc)}`)
+    })
+
+    // ── hide ───────────────────────────────────────────────────────────────
+    const footerBefore = await page.locator('[data-part="footer"]').count()
+    await page.click(`${row('fbm-gain')} [data-part="visibility"]`)
+    await page.waitForSelector(`${row('fbm-gain')}[data-hidden="true"]`, { timeout: 1000 }).catch(() => {})
+    const hidden = await page.evaluate(() => {
+      const r = document.querySelector('[data-knob-key="fbm-gain"]') as HTMLElement
+      const key = r.querySelector('[data-part="key-cell"]') as HTMLElement
+      const eye = r.querySelector('[data-part="visibility"]') as HTMLElement
+      const other = document.querySelector('[data-knob-key="fbm-octaves"] [data-part="key-cell"]') as HTMLElement
+      return {
+        flag: r.getAttribute('data-hidden'), keyOpacity: getComputedStyle(key).opacity, eyeOpacity: getComputedStyle(eye).opacity,
+        otherOpacity: getComputedStyle(other).opacity, pressed: eye.getAttribute('aria-pressed'),
+        count: document.querySelector('[data-part="count"]')?.textContent ?? null,
+      }
+    })
+    const editsAfterHide = await page.evaluate(() => window.__knobEdits ?? [])
+    test('hide: the eye reports the knob once, the row dims, the eye stays full strength', () => {
+      assert(editsAfterHide[editsAfterHide.length - 1] === 'hide fbm-gain', `edits: ${JSON.stringify(editsAfterHide)}`)
+      assert(hidden.flag === 'true' && hidden.pressed === 'true', `row ${hidden.flag}, aria-pressed ${hidden.pressed}`)
+      assert(hidden.keyOpacity === '0.5', `hidden key cell opacity ${hidden.keyOpacity}`)
+      assert(hidden.eyeOpacity === '1' && hidden.otherOpacity === '1', `eye ${hidden.eyeOpacity}, a shown row ${hidden.otherOpacity}`)
+    })
+    test('hide: the footer appears only with a hidden knob and counts both', () => {
+      assert(footerBefore === 0, 'a footer showed with nothing hidden')
+      assert(hidden.count === '12 published · 1 hidden', `footer: ${hidden.count}`)
     })
 
     // ── scroll ─────────────────────────────────────────────────────────────
@@ -297,7 +386,7 @@ async function main() {
     test('scroll: 60 rows — the body scrolls, the header does not and is outside the scroll box', () => {
       assert(g0.rows === 60, `${g0.rows} rows rendered`)
       assert(g0.bodyScrollable, 'the body is not scrollable with 60 rows')
-      assert(g0.bodyClient >= 280 && g0.bodyClient <= 320, `body shows ${g0.bodyClient}px — expected about eleven 26px rows`)
+      assert(g0.bodyClient >= 330 && g0.bodyClient <= 370, `body shows ${g0.bodyClient}px — expected about eleven 32px rows`)
       assert(!g0.headerScrollable, 'the header is itself scrollable')
       assert(!g0.headerInsideBody, 'the header sits inside the scroll box, so it scrolls away')
     })
