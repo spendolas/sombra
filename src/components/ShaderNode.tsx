@@ -630,7 +630,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                       id={param.id}
                       handleColor={getPortColor(param.type)}
                       connected={isConnected}
-                      className="top-[10px]!"
+                      className={sliderRow && !warning ? "top-[15px]!" : "top-[10px]!"}
                     />
                   )}
                   {/* auto-height frame: holds any control (dropdown, anchor grid, colour)
