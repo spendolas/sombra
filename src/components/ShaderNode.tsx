@@ -628,9 +628,11 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                   <div className="flex flex-col pl-handle-offset pr-xs gap-xs flex-1 min-w-0">
                     {control}
                     {/* Warning stacks BELOW the control. As a flex-row sibling of the
-                        slider it stole horizontal space and squished it below full width. */}
+                        slider it stole horizontal space and squished it below full width.
+                        w-0 min-w-full: the hint wraps at the node's width instead of setting it
+                        (a long line widened the node, and only while the warning showed). */}
                     {param.warnAbove != null && !isConnected && displayValue > param.warnAbove && (
-                      <span className={cn(ds.shaderNode.warnText, "pb-2xs")}>
+                      <span className={cn(ds.shaderNode.warnText, "pb-2xs w-0 min-w-full")}>
                         High value — may impact performance
                         {param.warnHint && (
                           <>
