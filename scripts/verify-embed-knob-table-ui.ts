@@ -98,14 +98,13 @@ async function snapshot(page: Page): Promise<Snapshot> {
     // --- the modal -----------------------------------------------------------
     const table = document.querySelector('[data-part="knob-table"]')
     const rows: Row[] = [...document.querySelectorAll('[data-knob-key]')].map((el) => {
-      const cells = [...el.children] as HTMLElement[]
       const sw = el.querySelector('[data-part="swatch-color"]') as HTMLElement | null
       return {
         key: el.getAttribute('data-knob-key')!,
         named: el.getAttribute('data-named') === 'true',
-        type: cells[1]?.textContent ?? '',
-        def: cells[2]?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
-        range: cells[3]?.textContent ?? '',
+        type: el.querySelector('[data-part="type"]')?.textContent ?? '',
+        def: el.querySelector('[data-part="default"]')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+        range: el.querySelector('[data-part="range"]')?.textContent ?? '',
         swatch: sw ? getComputedStyle(sw).backgroundColor : null,
         clash: !!el.querySelector('[data-part="clash-icon"]'),
         clashHint: el.querySelector('[data-part="clash-hint"]')?.textContent ?? '',
@@ -125,7 +124,7 @@ async function snapshot(page: Page): Promise<Snapshot> {
       clashNodeKeys: manifest.filter((k) => clashIds.has(k.nodeId)).map((k) => k.key),
       rows,
       title: table?.querySelector('[data-part="title"]')?.textContent ?? '',
-      copyHint: !!table && [...table.querySelectorAll('span')].some((x) => x.textContent === 'Click a key to copy it'),
+      copyHint: !!table && [...table.querySelectorAll('span')].some((x) => x.textContent === 'Click a name to edit it · click a key to copy it'),
       divider: !!table?.querySelector('[data-part="divider"]'),
       notice: table?.querySelector('[data-part="notice"]')?.textContent ?? null,
       empty: table?.querySelector('[data-part="empty"]')?.textContent ?? null,
@@ -244,14 +243,18 @@ async function main() {
     const readClip = () => page.evaluate(() => navigator.clipboard.readText())
     await clip('sentinel')
     await page.locator('[data-knob-key="site-balance-value"]').scrollIntoViewIfNeeded()
-    await click('[data-knob-key="site-balance-value"]')
+    await click('[data-knob-key="site-balance-value"] [data-part="key"]')
     await page.waitForTimeout(150)
     const copiedNamed = await readClip()
     const copiedShown = await page.locator('[data-knob-key="site-balance-value"] [data-part="copied"]').count()
     await clip('sentinel')
-    // Click on the DEFAULT cell of an auto row: still only the key copies.
+    // Click on the DEFAULT cell of an auto row: nothing is copied (only the key cell copies)...
     await page.locator('[data-knob-key="fbm-octaves"]').scrollIntoViewIfNeeded()
-    await click('[data-knob-key="fbm-octaves"] > span:nth-child(3)')
+    await click('[data-knob-key="fbm-octaves"] [data-part="default"]')
+    await page.waitForTimeout(150)
+    const copiedFromDefault = await readClip()
+    // ...and a click on its key copies exactly the key.
+    await click('[data-knob-key="fbm-octaves"] [data-part="key"]')
     await page.waitForTimeout(150)
     const copiedAuto = await readClip()
     await clip('sentinel')
@@ -263,8 +266,54 @@ async function main() {
     test('site: a click copies exactly the key to the system clipboard, and shows "Copied"', () => {
       assert(copiedNamed === 'site-balance-value', `clipboard holds ${JSON.stringify(copiedNamed)} after clicking site-balance-value`)
       assert(copiedShown === 1, '"Copied" not shown on the clicked row')
-      assert(copiedAuto === 'fbm-octaves', `clipboard holds ${JSON.stringify(copiedAuto)} after clicking fbm-octaves' default cell`)
+      assert(copiedFromDefault === 'sentinel', `a click on fbm-octaves' default cell copied ${JSON.stringify(copiedFromDefault)}`)
+      assert(copiedAuto === 'fbm-octaves', `clipboard holds ${JSON.stringify(copiedAuto)} after clicking fbm-octaves' key`)
       assert(copiedSnippet === controlText, 'the control snippet button no longer copies its snippet (shared clipboard path)')
+    })
+
+    // Rename + hide through the real modal: the store takes the override, the
+    // modal re-publishes, and the oracle (publishScene on the store) agrees.
+    const nameSel = '[data-knob-key="site-balance-value"] [data-part="name"]'
+    await click(nameSel)
+    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+A' : 'Control+A')
+    await page.keyboard.type('Amount')
+    await page.keyboard.press('Enter')
+    await page.waitForSelector('[data-knob-key="site-balance-amount"]', { timeout: 5000 }).catch(() => {})
+    await click('[data-knob-key="site-seed-value"] [data-part="visibility"]')
+    await page.waitForSelector('[data-knob-key="site-seed-value"][data-hidden="true"]', { timeout: 5000 }).catch(() => {})
+    const edited = await page.evaluate(async () => {
+      const s = (window as Any).__sombra
+      const { publishScene } = await import(/* @vite-ignore */ String('/src/embed/publish.ts'))
+      const g = s.stores.graph.getState()
+      const r = publishScene(g.nodes, g.edges)
+      return {
+        overrides: g.nodes.filter((n: Any) => n.data.knobs).map((n: Any) => n.data.knobs),
+        past: g._past.length,
+        oracle: (r.manifest as Any[]).map((k) => k.key),
+        rows: [...document.querySelectorAll('[data-knob-key]')].map((e) => e.getAttribute('data-knob-key')),
+        hiddenRows: [...document.querySelectorAll('[data-knob-key][data-hidden="true"]')].map((e) => e.getAttribute('data-knob-key')),
+        footer: document.querySelector('[data-part="count"]')?.textContent ?? null,
+      }
+    })
+    await page.evaluate(() => { const g = (window as Any).__sombra.stores.graph.getState(); g.undo(); g.undo() })
+    await page.waitForSelector('[data-knob-key="site-balance-value"]', { timeout: 5000 }).catch(() => {})
+    const undone = await page.evaluate(() => ({
+      rows: [...document.querySelectorAll('[data-knob-key]')].map((e) => e.getAttribute('data-knob-key')),
+      footer: !!document.querySelector('[data-part="footer"]'),
+    }))
+    test('site: renaming a knob in the modal stores it and the published key follows', () => {
+      assert(edited.overrides.some((o: Any) => Object.values(o).some((v: Any) => v.name === 'Amount')), `store overrides: ${JSON.stringify(edited.overrides)}`)
+      assert(edited.oracle.includes('site-balance-amount') && !edited.oracle.includes('site-balance-value'), 'publishScene does not carry the renamed key')
+      assert(edited.rows.includes('site-balance-amount'), 'the modal row did not take the renamed key')
+    })
+    test('site: hiding a knob drops it from the published manifest, keeps the row, counts it', () => {
+      assert(!edited.oracle.includes('site-seed-value'), 'the hidden knob is still published')
+      assert(JSON.stringify(edited.hiddenRows) === '["site-seed-value"]', `hidden rows: ${JSON.stringify(edited.hiddenRows)}`)
+      assert(edited.footer === `${edited.oracle.length} published · 1 hidden`, `footer: ${edited.footer} (published ${edited.oracle.length})`)
+    })
+    test('site: each edit is one undo step, and undo restores the table', () => {
+      assert(undone.rows.includes('site-balance-value') && !undone.rows.includes('site-balance-amount'), 'undo did not restore the key')
+      assert(!undone.footer, 'undo left a hidden knob')
     })
 
     // Geometry at the real modal width.
@@ -281,7 +330,7 @@ async function main() {
         // a fixed column (type/default/range) must sit wholly inside the row; the key may truncate
         return i > 0 && (cr.right > r.getBoundingClientRect().right + 0.5 || cr.width < 1) ? `${r.dataset.knobKey}#${i}` : ''
       })).filter(Boolean)
-      const keyW = Math.min(...rows.map((r) => (r.children[0] as HTMLElement).getBoundingClientRect().width))
+      const keyW = Math.min(...rows.map((r) => (r.querySelector('[data-part="key-cell"]') as HTMLElement).getBoundingClientRect().width))
       return {
         modalW: modal!.clientWidth, tableW: tb.width,
         modalOverflowX: modal!.scrollWidth - modal!.clientWidth,

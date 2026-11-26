@@ -5,14 +5,23 @@ import { encodeCompactHash } from '@/utils/sombra-file'
 import { publishScene, type PublishResult } from '@/embed/publish'
 import { mount, type SceneHandle } from '@/embed/player'
 import type { KnobDescriptor } from '@/embed/artifact'
-import type { KnobNameClash } from '@/embed/manifest'
+import type { KnobEntry, KnobNameClash } from '@/embed/manifest'
 import { icons } from '@/components/icons'
 import { KnobTable, type KnobTableItem } from '@/components/KnobTable'
 
 /** The one clipboard write the modal uses — snippet buttons and knob keys alike. */
 const writeClipboard = (text: string) => navigator.clipboard.writeText(text)
 
-const KNOB_FOOTNOTE = 'Named nodes come first and keep their key in every scene. Double-click a node’s title to name it.'
+const KNOB_FOOTNOTE = 'Named nodes come first and keep their key in every scene. Double-click a node’s title to name it; rename a knob here.'
+
+/** Row id ↔ the knob's editor address. Node ids never contain a NUL. */
+const SEP = '\u0000'
+const rowIdOf = (nodeId: string, paramId: string) => `${nodeId}${SEP}${paramId}`
+const addressOf = (id: string) => { const i = id.indexOf(SEP); return { nodeId: id.slice(0, i), paramId: id.slice(i + 1) } }
+
+/** What a knob-table edit can change: names and hide flags (a cheap re-publish key). */
+const knobSignature = (nodes: { id: string; data: { knobs?: unknown } }[]) =>
+  JSON.stringify(nodes.filter((n) => n.data.knobs).map((n) => [n.id, n.data.knobs]))
 
 /**
  * Manifest → table rows, in manifest (graph) order; the table lists named rows
@@ -20,12 +29,18 @@ const KNOB_FOOTNOTE = 'Named nodes come first and keep their key in every scene.
  * is always public" — its key never depends on the rest of the graph). Keys of
  * a node numbered by a name clash carry the clash mark.
  */
-function knobRows(manifest: KnobDescriptor[], clashes: KnobNameClash[]): KnobTableItem[] {
+function knobRows(entries: KnobEntry[], clashes: KnobNameClash[]): KnobTableItem[] {
   const numbered = new Set(clashes.map((c) => c.nodeId))
-  return manifest.map((k) => ({
+  return entries.map(({ knob: k, paramId, defaultName, hidden, nameClash }) => ({
+    id: rowIdOf(k.nodeId, paramId),
     key: k.key, type: k.type, default: k.default, min: k.min, max: k.max,
     named: k.named === true || k.nodeType === 'fragment_output',
-    ...(numbered.has(k.nodeId) ? { clash: true } : {}),
+    name: k.label,
+    defaultName,
+    // The key minus its name part, for the live preview while typing.
+    ...(k.key.endsWith(k.param) ? { keyPrefix: k.key.slice(0, k.key.length - k.param.length) } : {}),
+    ...(hidden ? { hidden: true } : {}),
+    ...(numbered.has(k.nodeId) ? { clash: true } : nameClash ? { clash: true, clashNote: 'name taken, numbered' } : {}),
   }))
 }
 
@@ -63,6 +78,9 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
   const [copied, setCopied] = useState<string | null>(null)
   const previewRef = useRef<HTMLDivElement>(null)
   const handleRef = useRef<SceneHandle | null>(null)
+  // Knob names / hide flags change the manifest (keys, what is published), never the picture.
+  const knobSig = useGraphStore((s) => knobSignature(s.nodes))
+  const setKnobOverride = useGraphStore((s) => s.setKnobOverride)
 
   useEffect(() => {
     if (!open) return
@@ -75,23 +93,29 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
       setError(e instanceof Error ? e.message : String(e))
       setResult(null)
     }
-  }, [open])
+  }, [open, knobSig])
+
+  // The preview shows the same picture whatever the knob names are, so it is
+  // mounted once per opening (from the first result), not on every rename.
+  const [previewScene, setPreviewScene] = useState<string | null>(null)
+  useEffect(() => { if (!open) setPreviewScene(null) }, [open])
+  useEffect(() => { if (open && result && previewScene === null) setPreviewScene(result.sceneB64) }, [open, result, previewScene])
 
   // Live preview using the in-repo player (no built bundle needed in dev).
   useEffect(() => {
-    if (!open || !result || !previewRef.current) return
+    if (!open || !previewScene || !previewRef.current) return
     let disposed = false
     previewRef.current.innerHTML = ''
-    mount(previewRef.current, { scene: result.sceneB64 }).then((h) => {
+    mount(previewRef.current, { scene: previewScene }).then((h) => {
       if (disposed) h.destroy(); else handleRef.current = h
     })
     return () => { disposed = true; handleRef.current?.destroy(); handleRef.current = null }
-  }, [open, result])
+  }, [open, previewScene])
 
   const sizeKb = useMemo(() => result ? (result.sizeBytes / 1024).toFixed(1) : '0', [result])
   const fileKb = useMemo(() => result ? (result.fileBytes / 1024).toFixed(1) : '0', [result])
   const heavy = !!result && result.fileBytes > 200 * 1024
-  const knobs = useMemo(() => result ? knobRows(result.manifest, result.clashes) : [], [result])
+  const knobs = useMemo(() => result ? knobRows(result.knobs, result.clashes) : [], [result])
   const notice = useMemo(() => result ? clashNotice(result.manifest, result.clashes) : undefined, [result])
 
   if (!open) return null
@@ -166,7 +190,11 @@ export function EmbedModal({ open, onClose }: { open: boolean; onClose: () => vo
               List controllable params at runtime with <code className="font-mono">shader.nodes()</code>, then drive them via <code className="font-mono">shader.set(nodeId, param, value)</code>.
             </div>
             {/* The keys shader.set() takes, next to the code that uses them (Figma 993:3778). */}
-            <KnobTable knobs={knobs} notice={notice} footnote={KNOB_FOOTNOTE} onCopy={writeClipboard} />
+            <KnobTable
+              knobs={knobs} notice={notice} footnote={KNOB_FOOTNOTE} onCopy={writeClipboard}
+              onRename={(id, name) => { const a = addressOf(id); setKnobOverride(a.nodeId, a.paramId, { name }) }}
+              onToggleHidden={(id, hidden) => { const a = addressOf(id); setKnobOverride(a.nodeId, a.paramId, { hidden }) }}
+            />
           </div>
         )}
 

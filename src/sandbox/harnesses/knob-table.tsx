@@ -8,10 +8,16 @@
  * checkerboard), every knob type, a very long key, and 60 rows to prove the
  * scroll and the fixed header.
  *
+ * Rename + hide (board "Embed modal — knob rename + hide", 1023:7776): the site
+ * fixtures carry knob names, so each row has a Name field and an eye. The
+ * harness keeps the edits in local state and rebuilds keys the way the
+ * manifest does (prefix + slug of the name), so renaming and hiding can be
+ * reviewed without the editor.
+ *
  * URL parameters set the initial state so the browser gate can drive the same
  * harness a person reviews: ?fixture=<key>&copy=<clipboard|log|fail>&copiedMs=<n>
- * &notice=0|1&footnote=0|1&width=<px>. In "log" mode every copied key is pushed
- * onto window.__knobCopies.
+ * &notice=0|1&footnote=0|1&width=<px>&edit=0|1. In "log" mode every copied key is
+ * pushed onto window.__knobCopies; every rename / hide onto window.__knobEdits.
  */
 
 import { useState } from 'react'
@@ -30,7 +36,7 @@ const c = (key: string, h: string, a = 1, named = false): KnobTableItem =>
 // The site scene from the board (B · With knob table), in graph order. Named
 // knobs carry named: true; the component sorts them first. Graph order is
 // deliberately interleaved here so the sort has something to do.
-const SITE: KnobTableItem[] = [
+const SITE_FLAT: KnobTableItem[] = [
   f('site-clock-speed', 0.05, 0, 2, true),
   f('pixelate-pixel-size', 64, 2, 256),
   f('site-seed-value', 123, -10, 10, true),
@@ -46,6 +52,22 @@ const SITE: KnobTableItem[] = [
   f('fbm-gain', 0.5, 0.1, 0.9),
 ]
 
+/** Default knob names (the param labels) for the site scene, and the key prefix they sit after. */
+const NAMES: Record<string, [string, string]> = {
+  'site-clock-speed': ['site-clock-', 'Speed'], 'pixelate-pixel-size': ['pixelate-', 'Pixel Size'],
+  'site-seed-value': ['site-seed-', 'Value'], 'site-balance-value': ['site-balance-', 'Value'],
+  'fbm-octaves': ['fbm-', 'Octaves'], 'site-dots-pixel-size': ['site-dots-', 'Pixel Size'],
+  'site-palette-stop-0': ['site-palette-', 'Stop 0'], 'site-palette-stop-1': ['site-palette-', 'Stop 1'],
+  'site-palette-stop-2': ['site-palette-', 'Stop 2'], 'site-palette-stop-3': ['site-palette-', 'Stop 3'],
+  'fbm-lacunarity': ['fbm-', 'Lacunarity'], 'fragment-output-alpha': ['fragment-output-', 'Alpha'],
+  'fbm-gain': ['fbm-', 'Gain'], 'site-balance-value-2': ['site-balance-value-2-', 'Value'],
+}
+const named = (k: KnobTableItem): KnobTableItem => {
+  const n = NAMES[k.key]
+  return n ? { ...k, id: k.key, keyPrefix: n[0], name: n[1], defaultName: n[1] } : k
+}
+const SITE = SITE_FLAT.map(named)
+
 const CLASH_NOTICE =
   'Two nodes are named “site.balance”. The second one publishes as site-balance-value-2. ' +
   'Rename one of them so each key stays the one you meant.'
@@ -53,7 +75,7 @@ const CLASH_NOTICE =
 const withClash = (() => {
   const out = [...SITE]
   const i = out.findIndex((k) => k.key === 'site-balance-value')
-  out.splice(i + 1, 0, { ...f('site-balance-value-2', 0.25, -10, 10, true), clash: true })
+  out.splice(i + 1, 0, named({ ...f('site-balance-value-2', 0.25, -10, 10, true), clash: true }))
   return out
 })()
 
@@ -65,6 +87,10 @@ const SIXTY: KnobTableItem[] = Array.from({ length: 60 }, (_, i) =>
 
 const FIXTURES: Record<string, { label: string; knobs: KnobTableItem[]; notice?: string }> = {
   site: { label: 'Site scene (13)', knobs: SITE },
+  renamed: { label: 'Renamed + 2 hidden', knobs: SITE.map((k) =>
+    k.key === 'site-balance-value' ? { ...k, name: 'Amount', key: 'site-balance-amount' }
+    : k.key === 'fragment-output-alpha' || k.key === 'fbm-lacunarity' ? { ...k, hidden: true }
+    : k) },
   clash: { label: 'Name clash', knobs: withClash, notice: CLASH_NOTICE },
   empty: { label: 'No knobs', knobs: [] },
   translucent: { label: 'Translucent colours', knobs: [
@@ -87,6 +113,7 @@ const FIXTURES: Record<string, { label: string; knobs: KnobTableItem[]; notice?:
     f('polar-coordinates-2-radial-distortion-strength', 1.5, 0, 4),
   ] },
   allAuto: { label: 'Nothing named', knobs: SITE.map((k) => ({ ...k, named: false })) },
+  readOnly: { label: 'No names (older callers)', knobs: SITE_FLAT },
   sixty: { label: '60 rows', knobs: SIXTY },
 }
 
@@ -95,8 +122,11 @@ const WIDTHS = [680, 480, 360]
 type CopyMode = 'clipboard' | 'log' | 'fail'
 
 declare global {
-  interface Window { __knobCopies?: string[] }
+  interface Window { __knobCopies?: string[]; __knobEdits?: string[] }
 }
+
+const keySlug = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+type Edit = { name?: string; hidden?: boolean }
 
 const params = new URLSearchParams(location.search)
 const initialFixture = params.get('fixture') && FIXTURES[params.get('fixture')!] ? params.get('fixture')! : 'site'
@@ -110,9 +140,27 @@ export default function KnobTableHarness() {
   const [showFootnote, setShowFootnote] = useState(params.get('footnote') !== '0')
   const [width, setWidth] = useState(Number(params.get('width') ?? 680))
   const [log, setLog] = useState<string[]>([])
+  const [editable, setEditable] = useState(params.get('edit') !== '0')
+  const [edits, setEdits] = useState<Record<string, Edit>>({})
 
   const fx = FIXTURES[fixture]
+  // Apply the harness's own edits the way the manifest would.
+  const knobs = fx.knobs.map((k) => {
+    const e = edits[k.id ?? k.key]
+    if (!e) return k
+    let out = { ...k }
+    if (e.name !== undefined) {
+      const name = e.name === '' ? k.defaultName ?? '' : e.name
+      out = { ...out, name, key: (k.keyPrefix ?? '') + (keySlug(name) || 'value') }
+    }
+    if (e.hidden !== undefined) out = { ...out, hidden: e.hidden }
+    return out
+  })
+  const record = (line: string) => { (window.__knobEdits ??= []).push(line); setLog((l) => [line, ...l].slice(0, 6)) }
+  const onRename = (id: string, name: string) => { setEdits((m) => ({ ...m, [id]: { ...m[id], name } })); record(`rename ${id} → ${name || '(label)'}`) }
+  const onToggleHidden = (id: string, hidden: boolean) => { setEdits((m) => ({ ...m, [id]: { ...m[id], hidden } })); record(`${hidden ? 'hide' : 'show'} ${id}`) }
   const load = (key: string) => {
+    setEdits({})
     setFixture(key)
     setShowNotice(!!FIXTURES[key].notice)
     if (FIXTURES[key].notice) setNoticeText(FIXTURES[key].notice!)
@@ -134,7 +182,7 @@ export default function KnobTableHarness() {
       <div className="flex flex-col gap-sm">
         <h1 className="text-node-title">Knob Table</h1>
         <p className="text-param text-fg-subtle max-w-[46rem]">
-          The real component on the Embed modal&apos;s surface. Hover a row for the copy icon; click to copy its key.
+          The real component on the Embed modal&apos;s surface. Click a name to rename the knob (the key follows as you type); click a key to copy it; the eye hides a knob from the embed.
           Named knobs list first, then a divider, then the auto-named rest. Past about eleven rows the body scrolls under the header.
         </p>
         <div className="flex flex-wrap gap-sm" data-harness="fixtures">
@@ -170,6 +218,9 @@ export default function KnobTableHarness() {
             className="flex-1 min-w-[240px] bg-surface-raised border border-edge rounded-sm px-sm py-2xs text-fg"
           />
           <label className="flex items-center gap-xs cursor-pointer">
+            <input type="checkbox" checked={editable} onChange={(e) => setEditable(e.target.checked)} /> editable
+          </label>
+          <label className="flex items-center gap-xs cursor-pointer">
             <input type="checkbox" checked={showFootnote} onChange={(e) => setShowFootnote(e.target.checked)} /> footnote
           </label>
         </div>
@@ -181,8 +232,10 @@ export default function KnobTableHarness() {
           <div className="text-body text-fg-dim">Control it from JavaScript (optional — same embed)</div>
           <KnobTable
             key={fixture}
-            knobs={fx.knobs}
+            knobs={knobs}
             onCopy={onCopy}
+            onRename={editable ? onRename : undefined}
+            onToggleHidden={editable ? onToggleHidden : undefined}
             notice={showNotice ? noticeText : undefined}
             footnote={showFootnote ? FOOTNOTE : undefined}
             copiedMs={copiedMs}

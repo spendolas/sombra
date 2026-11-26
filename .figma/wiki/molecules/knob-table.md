@@ -6,7 +6,8 @@
 |---|---|
 | Figma board | [Embed modal — knob table `993:3778`](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=993-3778) |
 | Figma components | [Table Header `994:4033`](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=994-4033) (COMPONENT), [Knob Row `994:4106`](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=994-4106) (COMPONENT_SET) |
-| Variants | Knob Row: State = rest / hover / copied / clash (4); text props Key, Type, Default, Range; boolean Swatch |
+| Variants | Knob Row: State = rest / hover / copied / clash / editing / hidden (6); text props Name, Key, Type, Default, Range; boolean Swatch |
+| Rename + hide board | [Embed modal — knob rename + hide `1023:7776`](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=1023-7776) (footer `1023:8855`) |
 | Board frames used as parts | [Knobs `994:5134`](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=994-5134) (table, header, hint, divider), [Name clash notice `994:5360`](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=994-5360), [Empty state `994:5589`](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=994-5589) |
 | React File | `src/components/KnobTable.tsx` |
 | React Component | `KnobTable` |
@@ -28,24 +29,29 @@ node, so `tokens:audit` checks them.
 ## Anatomy
 
 1. **Header line** — "KNOBS · n" in the Category Header look (`ds.categoryHeader.root`),
-   "Click a key to copy it" on the right (hidden when there are no knobs).
+   "Click a name to edit it · click a key to copy it" on the right ("Click a key to
+   copy it" when rows carry no names; hidden when there are no knobs).
 2. **Notice** (optional) — a neutral raised box with an edge line: amber icon, grey text.
-3. **Table** — the Table Header (KEY, TYPE, DEFAULT, RANGE, then an empty 64px
-   column reserved for the later annotation / expose controls), then the body:
-   named knobs, a thin divider (the Separator atom), the auto-named rest.
+3. **Table** — the Table Header (NAME, KEY, TYPE, DEFAULT, RANGE, then a 24px
+   column over the eye), then the body: named knobs, a thin divider (the
+   Separator atom), the auto-named rest; then, only when a knob is hidden, a
+   footer: "11 published · 2 hidden" and a one-line note.
 4. **Footnote** (optional) — one line under the table.
 
-A row: key (+ copy icon on hover, or check + "Copied", + clash mark), type,
-default, range, reserved space.
+A row: Name field, key (+ copy icon on hover, or check + "Copied", + clash
+mark), type, default, range, eye (ghost icon Button, eye / eye-off).
 
 ## Rules the design settled
 
 | Rule | How |
 |---|---|
 | Named knobs first, then a divider, then the auto-named rest | `named === true` rows keep their given order; the rest keep theirs. Divider only when both groups exist |
-| Auto-named keys a step dimmer | `knobRow.keyAuto` (fg-dim) vs `knobRow.key` (fg) |
-| About eleven rows, then the body scrolls under a header that stays | The header sits **outside** the scroll box (`knobTable.body` = `max-h-[308px] overflow-y-auto`; 308 = Figma's 334 table − 26 header), so it cannot scroll away. Both header and body reserve the same scrollbar gutter, so the columns stay aligned on systems with classic scrollbars |
-| The key is the copy target | The whole row is a `<button>`; a click anywhere copies the **key** only (defaults and ranges are for reading) |
+| Name column in fg; keys one step below; auto-named keys a step dimmer again | `knobRow.name` (fg), `knobRow.key` (fg-dim), `knobRow.keyAuto` (fg-subtle) |
+| About eleven rows, then the body scrolls under a header that stays | The header sits **outside** the scroll box (`knobTable.body` = `max-h-[352px] overflow-y-auto`; 11 rows × 32), so it cannot scroll away. Both header and body reserve the same scrollbar gutter, so the columns stay aligned on systems with classic scrollbars |
+| The key is the copy target | The key cell is a `<button>`; clicking it copies the **key** only. The rest of the row no longer copies (it holds the Name field and the eye) |
+| Rename a knob | The Name field is borderless at rest, shows edge on row hover, `active` (indigo) while focused. Typing updates the key beside it live (`keyPrefix` + slug of the draft, brightened to fg); Enter / blur save, Esc cancels, an empty name (or the label itself) goes back to the param label. Saved as `node.data.knobs[paramId].name`; the published key becomes `<node>-<slug(name)>` |
+| Hide a knob | The eye toggles `node.data.knobs[paramId].hidden`; the row's cells dim to 50 % (`knobRow.dimmed`, as hidden Stack layers do) and the eye shows eye-off (`aria-pressed`). Hidden knobs keep their row and key but are left out of the published manifest; the uniform keeps the editor's value |
+| A rename that collides inside its node | Numbered like any duplicate param slug; the row shows the clash mark with "name taken, numbered" |
 | Copy feedback | Copy icon after the key on hover; after a click, green check + "Copied" for 1.5 s, the same icons, colour and timing as the snippet copy buttons. A refused copy shows nothing |
 | Colours | Swatch = knob default over a token checkerboard (fg-muted / fg-subtle) so alpha below 1 shows; then `#RRGGBB α 0.00` |
 | Numbers | Integers bare, fractions to ≤ 4 places, a real minus sign (−). Range `min – max`, or `—` |
@@ -56,10 +62,17 @@ default, range, reserved space.
 
 ```ts
 type KnobTableItem = Pick<KnobDescriptor, 'key' | 'type' | 'default' | 'min' | 'max' | 'named'> & {
+  id?: string          // row identity for the edit callbacks (default: key)
+  name?: string        // the Name field; absent → no Name column
+  defaultName?: string // what an emptied name goes back to (placeholder)
+  keyPrefix?: string   // key minus its name part, for the live preview
+  hidden?: boolean     // dimmed row, eye-off
   clash?: boolean      // this key was numbered because of a name clash
   clashNote?: string   // text beside the mark; default "name clash, numbered"
 }
-KnobTable({ knobs, onCopy?, notice?, footnote?, copiedMs? = 1500, className? })
+KnobTable({ knobs, onCopy?, notice?, footnote?, copiedMs? = 1500, onRename?, onToggleHidden?, className? })
+// onRename(id, name) — '' = back to the label; without it the field is read-only
+// onToggleHidden(id, hidden) — without it no eye column
 ```
 
 `onCopy` defaults to `navigator.clipboard.writeText` with a textarea +
@@ -72,7 +85,10 @@ KnobTable({ knobs, onCopy?, notice?, footnote?, copiedMs? = 1500, className? })
 | `tableHeader.root` | surface/raised, bottom edge/subtle | `bg-surface-raised border-b border-edge-subtle` |
 | column titles | heading/category, fg/subtle | `text-category text-fg-subtle uppercase` |
 | `knobRow.root` hover / `rootLifted` | interactive/hover | `hover:bg-hover` / `bg-hover` |
-| `knobRow.key` / `keyAuto` | mono/value, fg / fg-dim | `text-mono-value text-fg` / `text-fg-dim` |
+| `knobRow.nameField` / `name` | radius sm/4, btn/sm high, border on hover (edge) / focus (interactive/active) / body/default fg | `rounded-sm h-btn-sm` + hover/focus border / `text-body text-fg` |
+| `knobRow.key` / `keyAuto` | mono/value, fg/dim / (code-only) fg-subtle | `text-mono-value text-fg-dim` / `text-fg-subtle` |
+| `knobRow.dimmed` | hidden variant, layer opacity 50 % | `opacity-50` |
+| `knobTable.footer` / `footerCount` / `footerNote` | top edge/subtle / label/param fg/dim / label/param fg/muted, right | `border-t border-edge-subtle` / `text-param text-fg-dim` / `text-param text-fg-muted text-right` |
 | `knobRow.type` | port-row/type, fg/subtle | `text-port-type text-fg-subtle` |
 | `knobRow.defaultValue` / `range` | mono/value, fg/dim / fg/subtle | `text-mono-value text-fg-dim` / `text-fg-subtle` |
 | `knobRow.copyIcon` / `checkIcon` / `copied` | fg/subtle / color/success / label/param success | `text-fg-subtle` / `text-success` / `text-param text-success` |
@@ -104,13 +120,16 @@ gitignored and lives in the main checkout only):
 - `knobRow.swatchColor` (994:4049) → `fill`, `width`, `height`: the colour is the knob's
   runtime default; code layer is `absolute inset-0`.
 - `knobTable.table` (994:5151) → `height`: Figma frame is FIXED 334; code caps the
-  body at `max-h-[308px]` and shrinks to content when shorter.
+  body at `max-h-[352px]` and shrinks to content when shorter.
+- `knobRow.dimmed` (1023:9313) → `layout`, `gap`, `padding`, `width`, `height`, `radius`,
+  `overflow`, `align`: the part is anchored to the hidden variant's Name field only to
+  audit its 50 % opacity; code applies `opacity-50` to each dimmed cell.
 
 - `knobRow.keyAuto` is deliberately NOT anchored to Figma (`figmaNodeId: null`). It
   pointed at a layer inside a component instance (`I994:5288;994:4041`); looking that up
   needs a Figma server round-trip that times out and fails the whole `tokens:audit` run
-  (same fix as `inlineTextField.placeholder`, `82b32ef`). Its colour is `fg-dim` (the
-  dimmer variant of `knobRow.key`'s `fg`), recorded here instead.
+  (same fix as `inlineTextField.placeholder`, `82b32ef`). Its colour is `fg-subtle` (the
+  dimmer variant of `knobRow.key`'s `fg-dim`), recorded here instead.
 
 The checker squares (994:4045–4048) have no parts: the four rects are drawn in code
 by one `repeating-conic-gradient` in `knobRow.swatch`'s `extra`, using the same two
