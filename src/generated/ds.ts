@@ -320,6 +320,7 @@ export const ds = {
     swatchColor: "absolute inset-0",
     defaultValue: "text-mono-value text-fg-dim whitespace-nowrap",
     range: "text-mono-value text-fg-subtle w-[72px] shrink-0 whitespace-nowrap",
+    visibility: "flex flex-col items-center justify-center rounded-sm text-fg-subtle cursor-pointer transition-colors w-btn-md h-btn-md hover:bg-hover hover:text-fg shrink-0",
     dimmed: "opacity-50",
   },
   knobTable: {

@@ -88,6 +88,7 @@ KnobTable({ knobs, onCopy?, notice?, footnote?, copiedMs? = 1500, onRename?, onT
 | `knobRow.nameField` / `name` | radius sm/4, btn/sm high, border on hover (edge) / focus (interactive/active) / body/default fg | `rounded-sm h-btn-sm` + hover/focus border / `text-body text-fg` |
 | `knobRow.key` / `keyAuto` | mono/value, fg/dim / (code-only) fg-subtle | `text-mono-value text-fg-dim` / `text-fg-subtle` |
 | `knobRow.dimmed` | hidden variant, layer opacity 50 % | `opacity-50` |
+| `knobRow.visibility` | ghost icon Button, icon fg/subtle (one step quieter than the shared ghost's fg/dim); hover fill + fg | `text-fg-subtle hover:bg-hover hover:text-fg` |
 | `knobTable.footer` / `footerCount` / `footerNote` | top edge/subtle / label/param fg/dim / label/param fg/muted, right | `border-t border-edge-subtle` / `text-param text-fg-dim` / `text-param text-fg-muted text-right` |
 | `knobRow.type` | port-row/type, fg/subtle | `text-port-type text-fg-subtle` |
 | `knobRow.defaultValue` / `range` | mono/value, fg/dim / fg/subtle | `text-mono-value text-fg-dim` / `text-fg-subtle` |
