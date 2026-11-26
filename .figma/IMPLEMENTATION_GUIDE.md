@@ -24,7 +24,7 @@ This document is the complete reference for any Claude Code agent working with t
 - `figma.com/design/:fileKey/:fileName?node-id=:nodeId` → convert `-` to `:` in nodeId
 - `figma.com/design/:fileKey/branch/:branchKey/:fileName` → use branchKey as fileKey
 
-**Figma file key:** `gq5i0l617YkXy0GzAZPtqz`
+**Figma file key:** `rkjKvEFljv5OkNzmAIHKVa`
 
 **MCP tools for reading:**
 - `get_design_context` — primary tool, returns code hints + screenshot + design tokens

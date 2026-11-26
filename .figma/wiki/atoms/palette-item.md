@@ -10,7 +10,7 @@
 | Variants | 2: state (default / hover) |
 | React File | `src/components/NodePalette.tsx` |
 | React Component | (inline `<div>`) |
-| Figma URL | [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=17:248) |
+| Figma URL | [Open in Figma](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=17:248) |
 
 ## Figma Screenshot
 

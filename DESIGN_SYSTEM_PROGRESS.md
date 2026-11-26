@@ -46,7 +46,7 @@
 1. ~~Should the dual color system be unified?~~ → **Resolved: Yes** (Decision #1)
 2. ~~Dark-only or light+dark?~~ → **Resolved: Both modes** (Decision #2)
 3. ~~Port type colors: separate or main palette?~~ → **Resolved: Separate collection** (Decision #3)
-4. ~~Existing Figma file?~~ → **Resolved: Yes** — `gq5i0l617YkXy0GzAZPtqz` (empty, clean slate)
+4. ~~Existing Figma file?~~ → **Resolved: Yes** — `rkjKvEFljv5OkNzmAIHKVa` (empty, clean slate)
 5. Approve light mode palette proposal? (pending review)
 
 ## Decisions Made
@@ -60,8 +60,8 @@
 # Phase 2: Figma Variable Specification
 
 ## Figma File
-- **File key:** `gq5i0l617YkXy0GzAZPtqz`
-- **URL:** https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra
+- **File key:** `rkjKvEFljv5OkNzmAIHKVa`
+- **URL:** https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra
 
 ## Variable Collection 1: "UI Colors"
 **Modes:** Dark, Light
@@ -328,7 +328,7 @@ Light mode port colors use the **-600 Tailwind stop** of the same hue — darker
 - Audit summary written (see below)
 - Decisions made: unify color systems, light+dark modes, port colors as separate collection
 - Phase 2 started: wrote `.figma/design-system.md`, derived light mode palette, built variable spec
-- Figma file: `gq5i0l617YkXy0GzAZPtqz` (empty, ready for variable collections)
+- Figma file: `rkjKvEFljv5OkNzmAIHKVa` (empty, ready for variable collections)
 
 ---
 

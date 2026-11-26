@@ -5,7 +5,7 @@
 | Field | Value |
 |---|---|
 | Figma ID | `993:3749` (Inline Text Field, component set) · board "Node — inline rename" `993:3781` |
-| Figma links | [board](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=993-3781) · [Inline Text Field](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=993-3749) · [Icon=pencil](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=995-5755) |
+| Figma links | [board](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=993-3781) · [Inline Text Field](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=993-3749) · [Icon=pencil](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=995-5755) |
 | Figma Page | Components |
 | Type | COMPONENT_SET (field) + board rows (title states) |
 | Variants | Inline Text Field: State = editing (props Value, Selected, Caret; Counter hidden and unused) |

@@ -4,10 +4,10 @@
 
 | Field | Value |
 |---|---|
-| Figma board | [Embed modal — knob table `993:3778`](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=993-3778) |
-| Figma components | [Table Header `994:4033`](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=994-4033) (COMPONENT), [Knob Row `994:4106`](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=994-4106) (COMPONENT_SET) |
+| Figma board | [Embed modal — knob table `993:3778`](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=993-3778) |
+| Figma components | [Table Header `994:4033`](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=994-4033) (COMPONENT), [Knob Row `994:4106`](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=994-4106) (COMPONENT_SET) |
 | Variants | Knob Row: State = rest / hover / copied / clash (4); text props Key, Type, Default, Range; boolean Swatch |
-| Board frames used as parts | [Knobs `994:5134`](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=994-5134) (table, header, hint, divider), [Name clash notice `994:5360`](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=994-5360), [Empty state `994:5589`](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=994-5589) |
+| Board frames used as parts | [Knobs `994:5134`](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=994-5134) (table, header, hint, divider), [Name clash notice `994:5360`](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=994-5360), [Empty state `994:5589`](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=994-5589) |
 | React File | `src/components/KnobTable.tsx` |
 | React Component | `KnobTable` |
 | DS Keys | `tableHeader`, `knobRow`, `knobTable`, `knobNotice` |

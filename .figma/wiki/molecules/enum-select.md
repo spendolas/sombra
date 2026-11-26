@@ -10,7 +10,7 @@
 | Variants | none |
 | React File | `src/components/NodeParameters.tsx` |
 | React Component | `EnumSelect` (not exported, used internally) |
-| Figma URL | [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=17:235) |
+| Figma URL | [Open in Figma](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=17:235) |
 
 ## Figma Screenshot
 

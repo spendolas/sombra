@@ -11,7 +11,7 @@
 
 ### 1. Default Graph (`40:17910`)
 
-**Figma URL:** [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=40:17910)
+**Figma URL:** [Open in Figma](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=40:17910)
 
 Default test graph: Time → Noise → Color Ramp → Fragment Output. Demonstrates the basic node wiring pattern. Uses auto-layout via `layoutGraph()`.
 
@@ -25,7 +25,7 @@ Default test graph: Time → Noise → Color Ramp → Fragment Output. Demonstra
 
 ### 2. Sombra App — Docked Vertical (`40:19498`)
 
-**Figma URL:** [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=40:19498)
+**Figma URL:** [Open in Figma](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=40:19498)
 
 Primary app layout with vertical split (canvas top, preview bottom).
 
@@ -48,7 +48,7 @@ Primary app layout with vertical split (canvas top, preview bottom).
 
 ### 3. Sombra App — Docked Horizontal (`86:1214`)
 
-**Figma URL:** [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=86:1214)
+**Figma URL:** [Open in Figma](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=86:1214)
 
 Alternative docked layout with horizontal split (canvas left, preview right).
 
@@ -61,7 +61,7 @@ Alternative docked layout with horizontal split (canvas left, preview right).
 
 ### 4. Sombra App — Floating (`86:1527`)
 
-**Figma URL:** [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=86:1527)
+**Figma URL:** [Open in Figma](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=86:1527)
 
 Full canvas with floating preview window overlaid.
 
@@ -76,7 +76,7 @@ Full canvas with floating preview window overlaid.
 
 ### 5. Sombra App — Full Window (`86:1610`)
 
-**Figma URL:** [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=86:1610)
+**Figma URL:** [Open in Figma](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=86:1610)
 
 Full black overlay covering entire viewport.
 

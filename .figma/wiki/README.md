@@ -2,7 +2,7 @@
 
 Comprehensive documentation of every design system element, matched 1:1 between Figma and code.
 
-**Figma File:** [`gq5i0l617YkXy0GzAZPtqz`](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra)
+**Figma File:** [`rkjKvEFljv5OkNzmAIHKVa`](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra)
 **Approach:** Code-first — React components are the source of truth, Figma components built from code specs
 **Code Connect:** Skipped (GitHub org mismatch — Figma file linked to Fantasy-Interactive org, code lives in spendolas/sombra)
 

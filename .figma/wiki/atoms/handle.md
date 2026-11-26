@@ -10,7 +10,7 @@
 | Variants | 14: portType (7) x connected (true/false) |
 | React File | `src/components/base-handle.tsx` |
 | React Component | `<BaseHandle />` |
-| Figma URL | [Open in Figma](https://www.figma.com/design/gq5i0l617YkXy0GzAZPtqz/Sombra?node-id=17:161) |
+| Figma URL | [Open in Figma](https://www.figma.com/design/rkjKvEFljv5OkNzmAIHKVa/Sombra?node-id=17:161) |
 
 ## Figma Screenshot
 
