@@ -3,9 +3,9 @@
  *
  * A preview is shown at the node's width (CSS px), so it is rasterised at that
  * width x the screen's device-pixel ratio instead of a fixed 160 px that the
- * browser then stretched. The preview is shown at half the node width
- * (`nodePreview` = `w-1/2`), so on a 2x screen the raster maps ~1:1 to device
- * pixels and stays crisp. The edge is quantised to a multiple of 32 and capped:
+ * browser then stretched. The preview fills the node width
+ * (`nodePreview` = `w-full`), so the raster is ~1:1 with device pixels on a 1x
+ * screen and ~0.9:1 (capped) on a 2x screen. The edge is quantised to a multiple of 32 and capped:
  * a bigger raster costs quadratically in fill + readback for every visible
  * node, and past ~1.5x the displayed size the extra pixels are barely visible.
  *
@@ -22,7 +22,7 @@ export const PREVIEW_CSS_SIZE = 80
 export const PREVIEW_DISPLAY_CSS = 212
 
 const MIN_SIZE = 128
-const MAX_SIZE = 320
+const MAX_SIZE = 384
 const STEP = 32
 
 /** Raster edge (device px) for a given device-pixel ratio. */

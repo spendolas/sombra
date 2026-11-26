@@ -626,8 +626,12 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                       id={param.id}
                       handleColor={getPortColor(param.type)}
                       connected={isConnected}
+                      className="top-[10px]!"
                     />
                   )}
+                  {/* top-[10px]: centre the handle on the label row rather
+                      than the middle of the whole block, which drifts for tall controls
+                      (slider + warning hint, colour picker). */}
                   {/* auto-height frame (the DS innerFrame is fixed h-36, tuned for
                       sliders — it clips taller controls like dropdowns / anchor grid) */}
                   <div className="flex flex-col pl-handle-offset pr-xs gap-xs flex-1 min-w-0">
