@@ -80,12 +80,17 @@ const NodePreview = memo(({ nodeId }: { nodeId: string }) => {
   }, [nodeId])
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={getPreviewSize()}
-      height={getPreviewSize()}
-      className={ds.nodePreview.root}
-    />
+    // The canvas is absolutely positioned inside a half-width square box so its
+    // raster size (width/height attrs) never feeds the node's intrinsic width —
+    // otherwise every node grows to the raster edge.
+    <div className={ds.nodePreview.root}>
+      <canvas
+        ref={canvasRef}
+        width={getPreviewSize()}
+        height={getPreviewSize()}
+        className="absolute inset-0 w-full h-full"
+      />
+    </div>
   )
 })
 NodePreview.displayName = 'NodePreview'
