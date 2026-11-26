@@ -13,12 +13,12 @@ import type { PreviewRenderer as IPreviewRenderer, UniformUpload } from '../rend
 import type { UniformBufferLayout, TextureBinding } from '../compiler/ir/wgsl-assembler'
 import { passTargetSize, type PassTargetSize } from '../renderer/pass-size'
 import { declaresUniformBinding } from '../renderer/uniform-binding'
+import { PREVIEW_DPR, PREVIEW_SIZE } from '../renderer/constants'
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const PREVIEW_SIZE = 80
 const BYTES_PER_ROW = Math.ceil(PREVIEW_SIZE * 4 / 256) * 256  // 512
 const STAGING_SIZE = BYTES_PER_ROW * PREVIEW_SIZE               // 40960
 
@@ -303,7 +303,7 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
     // entry here is computed but never used — it always keeps the full
     // PREVIEW_SIZE readback target below.
     const sizes = passes.map((p) =>
-      passTargetSize(p.resolution, PREVIEW_SIZE, PREVIEW_SIZE, 1, PREVIEW_SIZE * 4, 4))
+      passTargetSize(p.resolution, PREVIEW_SIZE, PREVIEW_SIZE, PREVIEW_DPR, PREVIEW_SIZE * 4, 4))
 
     // Allocate one intermediate texture per non-final pass (no ping-pong —
     // relay passes can read from non-adjacent passes, causing read-write
@@ -339,7 +339,7 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
       const uniformBuffer = this.createPassUniformBuffer(pass.uniformLayout)
       const uniformData = new ArrayBuffer(pass.uniformLayout.totalSize)
       const uniformFloat32 = new Float32Array(uniformData)
-      // Last pass is pinned to the full PREVIEW_SIZE readback target (dpr 1) —
+      // Last pass is pinned to the full PREVIEW_SIZE readback target (dpr PREVIEW_DPR) —
       // it's the texture that gets read back, and a multiPass node's last
       // sub-pass can share this RenderPass, so its own declared scale must
       // not be allowed to shrink it.
@@ -479,7 +479,7 @@ export class WebGPUPreviewRenderer implements IPreviewRenderer {
     const t = time ?? (Date.now() - this.startTime) / 1000
     const tw = target?.width ?? PREVIEW_SIZE
     const th = target?.height ?? PREVIEW_SIZE
-    const tdpr = target?.dpr ?? 1.0
+    const tdpr = target?.dpr ?? PREVIEW_DPR
 
     const set = (name: string, ...values: number[]) => {
       const offset = layout.offsets.get(name)
