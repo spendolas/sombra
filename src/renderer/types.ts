@@ -141,7 +141,7 @@ export interface PreviewPassSource {
   uniforms: UniformUpload[]
   inputTextures: Record<string, number>
   /**
-   * Target scale for this pass, relative to PREVIEW_SIZE. Mirrors
+   * Target scale for this pass, relative to the preview raster size. Mirrors
    * RenderPass.resolution so a thumbnail matches what the main canvas shows.
    */
   resolution?: number

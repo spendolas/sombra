@@ -6,7 +6,7 @@
 
 import type { PreviewRenderer as IPreviewRenderer } from '../renderer/types'
 import { passTargetSize } from '../renderer/pass-size'
-import { PREVIEW_DPR, PREVIEW_SIZE } from '../renderer/constants'
+import { getPreviewSize, previewDprFor } from '../renderer/preview-size'
 
 const VERTEX_SHADER = `#version 300 es
 precision highp float;
@@ -40,15 +40,18 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
   private programCache = new Map<string, WebGLProgram>()
   private cacheOrder: string[] = []
   private readonly MAX_CACHE = 64
-  private readBuf = new Uint8Array(PREVIEW_SIZE * PREVIEW_SIZE * 4)
+  /** Current raster edge (device px); follows the screen DPR via syncSize(). */
+  private size = getPreviewSize()
+  private get dpr() { return previewDprFor(this.size) }
+  private readBuf = new Uint8Array(this.size * this.size * 4)
   private startTime = Date.now()
   /** Reusable OffscreenCanvas for zero-copy ImageBitmap conversion (separate from WebGL canvas) */
-  private canvas2d = new OffscreenCanvas(PREVIEW_SIZE, PREVIEW_SIZE)
+  private canvas2d = new OffscreenCanvas(this.size, this.size)
   private ctx2d = this.canvas2d.getContext('2d')!
 
   async init(): Promise<void> {
     // Offscreen WebGL canvas (never added to DOM)
-    const canvas = new OffscreenCanvas(PREVIEW_SIZE, PREVIEW_SIZE)
+    const canvas = new OffscreenCanvas(this.size, this.size)
     const gl = canvas.getContext('webgl2')
     if (!gl) throw new Error('WebGL2 not supported for preview renderer')
     this.gl = gl
@@ -73,7 +76,7 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
     // FBO + texture
     const tex = gl.createTexture()!
     gl.bindTexture(gl.TEXTURE_2D, tex)
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, PREVIEW_SIZE, PREVIEW_SIZE, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, this.size, this.size, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
     this.fboTexture = tex
@@ -86,11 +89,29 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
   }
 
   /**
+   * Follow the screen's DPR: when the raster edge changes, reallocate the
+   * readback buffer, the FBO texture and the bitmap canvas. Intermediate pass
+   * FBOs are resized by ensurePassFBOs against the per-pass sizes.
+   */
+  private syncSize(): void {
+    const want = getPreviewSize()
+    if (want === this.size) return
+    this.size = want
+    const gl = this.gl
+    this.readBuf = new Uint8Array(want * want * 4)
+    this.canvas2d.width = want
+    this.canvas2d.height = want
+    gl.bindTexture(gl.TEXTURE_2D, this.fboTexture)
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, want, want, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+    gl.bindTexture(gl.TEXTURE_2D, null)
+  }
+
+  /**
    * Update the main canvas resolution so pixel-based uniforms
    * (e.g. ribWidth) compute the same UV fractions as the full render.
    */
   setMainResolution(_width: number, _height: number) {
-    // No-op: preview now uses PREVIEW_SIZE for all uniforms
+    // No-op: preview now uses this.size for all uniforms
   }
 
   // Image-node textures. WebGL contexts can't share textures (unlike the
@@ -168,6 +189,7 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
    * Render a fragment shader and return an ImageBitmap, or null on compile error.
    */
   async renderPreview(fragmentShader: string, uniforms: UniformUpload[]): Promise<ImageBitmap | null> {
+    this.syncSize()
     const gl = this.gl
 
     // Get or compile program (LRU cache)
@@ -202,7 +224,7 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
     if (uTime) gl.uniform1f(uTime, (Date.now() - this.startTime) / 1000)
 
     const uRes = gl.getUniformLocation(program, 'u_resolution')
-    if (uRes) gl.uniform2f(uRes, PREVIEW_SIZE, PREVIEW_SIZE)
+    if (uRes) gl.uniform2f(uRes, this.size, this.size)
 
     const uRefSize = gl.getUniformLocation(program, 'u_ref_size')
     if (uRefSize) gl.uniform1f(uRefSize, REFERENCE_SIZE)
@@ -211,13 +233,13 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
     if (uMouse) gl.uniform2f(uMouse, 0, 0)
 
     const uDpr = gl.getUniformLocation(program, 'u_dpr')
-    if (uDpr) gl.uniform1f(uDpr, PREVIEW_DPR)
+    if (uDpr) gl.uniform1f(uDpr, this.dpr)
 
     const uFrameScale = gl.getUniformLocation(program, 'u_frame_scale')
-    if (uFrameScale) gl.uniform1f(uFrameScale, PREVIEW_DPR)
+    if (uFrameScale) gl.uniform1f(uFrameScale, this.dpr)
 
     const uVp = gl.getUniformLocation(program, 'u_viewport')
-    if (uVp) gl.uniform2f(uVp, PREVIEW_SIZE, PREVIEW_SIZE)
+    if (uVp) gl.uniform2f(uVp, this.size, this.size)
 
     const uAnchor = gl.getUniformLocation(program, 'u_anchor')
     if (uAnchor) gl.uniform2f(uAnchor, 0.5, 0.5)
@@ -242,21 +264,21 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
 
     // Render to FBO
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo)
-    gl.viewport(0, 0, PREVIEW_SIZE, PREVIEW_SIZE)
+    gl.viewport(0, 0, this.size, this.size)
     gl.bindVertexArray(this.vao)
     gl.drawArrays(gl.TRIANGLES, 0, 6)
 
     // Read pixels
-    gl.readPixels(0, 0, PREVIEW_SIZE, PREVIEW_SIZE, gl.RGBA, gl.UNSIGNED_BYTE, this.readBuf)
+    gl.readPixels(0, 0, this.size, this.size, gl.RGBA, gl.UNSIGNED_BYTE, this.readBuf)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
 
     // Convert to ImageBitmap via reusable OffscreenCanvas (zero PNG encoding)
     // WebGL reads bottom-up, so flip vertically
-    const imageData = new ImageData(PREVIEW_SIZE, PREVIEW_SIZE)
-    for (let y = 0; y < PREVIEW_SIZE; y++) {
-      const srcRow = (PREVIEW_SIZE - 1 - y) * PREVIEW_SIZE * 4
-      const dstRow = y * PREVIEW_SIZE * 4
-      imageData.data.set(this.readBuf.subarray(srcRow, srcRow + PREVIEW_SIZE * 4), dstRow)
+    const imageData = new ImageData(this.size, this.size)
+    for (let y = 0; y < this.size; y++) {
+      const srcRow = (this.size - 1 - y) * this.size * 4
+      const dstRow = y * this.size * 4
+      imageData.data.set(this.readBuf.subarray(srcRow, srcRow + this.size * 4), dstRow)
     }
     return this.renderToImageBitmap(imageData)
   }
@@ -326,11 +348,13 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
       return this.renderPreview(passes[0].fragmentShader, passes[0].uniforms)
     }
 
+    this.syncSize()
+
     // Preview floors at 4px rather than the main renderer's 1px: a 1x1
     // intermediate carries no usable signal at thumbnail scale, and previews are
     // advisory. Deliberate divergence from the main renderers.
     const sizes = passes.map((p) =>
-      passTargetSize(p.resolution, PREVIEW_SIZE, PREVIEW_SIZE, PREVIEW_DPR, PREVIEW_SIZE * 4, 4))
+      passTargetSize(p.resolution, this.size, this.size, this.dpr, this.size * 4, 4))
     // One FBO per intermediate pass (lazy, grows and is reused across calls),
     // each at its own pass's target size.
     this.ensurePassFBOs(sizes.slice(0, passes.length - 1))
@@ -366,14 +390,14 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
       if (this.hasMissingImageTexture(pass.fragmentShader)) return null
 
       // Bind target: last pass → main FBO, intermediate → its own pass FBO
-      let tw = PREVIEW_SIZE, th = PREVIEW_SIZE, tdpr = PREVIEW_DPR
+      let tw = this.size, th = this.size, tdpr = this.dpr
       if (isLast) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo)
       } else {
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.passFBOs[i].framebuffer)
         tw = this.passFBOs[i].width
         th = this.passFBOs[i].height
-        tdpr = sizes[i]?.dpr ?? PREVIEW_DPR
+        tdpr = sizes[i]?.dpr ?? this.dpr
       }
 
       gl.viewport(0, 0, tw, th)
@@ -431,14 +455,14 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
 
     // Read pixels from main FBO (last pass wrote here)
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo)
-    gl.readPixels(0, 0, PREVIEW_SIZE, PREVIEW_SIZE, gl.RGBA, gl.UNSIGNED_BYTE, this.readBuf)
+    gl.readPixels(0, 0, this.size, this.size, gl.RGBA, gl.UNSIGNED_BYTE, this.readBuf)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
 
-    const imageData = new ImageData(PREVIEW_SIZE, PREVIEW_SIZE)
-    for (let y = 0; y < PREVIEW_SIZE; y++) {
-      const srcRow = (PREVIEW_SIZE - 1 - y) * PREVIEW_SIZE * 4
-      const dstRow = y * PREVIEW_SIZE * 4
-      imageData.data.set(this.readBuf.subarray(srcRow, srcRow + PREVIEW_SIZE * 4), dstRow)
+    const imageData = new ImageData(this.size, this.size)
+    for (let y = 0; y < this.size; y++) {
+      const srcRow = (this.size - 1 - y) * this.size * 4
+      const dstRow = y * this.size * 4
+      imageData.data.set(this.readBuf.subarray(srcRow, srcRow + this.size * 4), dstRow)
     }
     return this.renderToImageBitmap(imageData)
   }
@@ -458,7 +482,7 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
     while (this.passFBOs.length < sizes.length) {
       const tex = gl.createTexture()!
       gl.bindTexture(gl.TEXTURE_2D, tex)
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, PREVIEW_SIZE, PREVIEW_SIZE, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, this.size, this.size, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
@@ -468,7 +492,7 @@ export class WebGL2PreviewRenderer implements IPreviewRenderer {
       const fb = gl.createFramebuffer()!
       gl.bindFramebuffer(gl.FRAMEBUFFER, fb)
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0)
-      this.passFBOs.push({ framebuffer: fb, texture: tex, width: PREVIEW_SIZE, height: PREVIEW_SIZE })
+      this.passFBOs.push({ framebuffer: fb, texture: tex, width: this.size, height: this.size })
     }
 
     for (let i = 0; i < sizes.length; i++) {
