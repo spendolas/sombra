@@ -62,6 +62,7 @@ export function NodeTitle({ title, customName, duplicate = false, onRename, clas
   // Set once an edit is saved or cancelled, so the blur that follows the
   // input's unmount (or an Enter followed by blur) can't save a second time.
   const settled = useRef(false)
+  const pressAt = useRef<[number, number] | null>(null)
 
   const name = customName || undefined
   const shown = name ?? title
@@ -184,10 +185,17 @@ export function NodeTitle({ title, customName, duplicate = false, onRename, clas
           aria-label="Rename node"
           className={cn(
             ds.nodeTitle.pencil,
-            'nodrag nopan transition opacity-0 group-hover/title:opacity-100 focus-visible:opacity-100',
+            'transition opacity-0 group-hover/title:opacity-100 focus-visible:opacity-100',
           )}
+          // No `nodrag`: a press-drag from the pencil drags the node like the
+          // rest of the header. It only renames on a real click (pointer
+          // moved < 4 px between press and release).
+          onPointerDown={(e) => { pressAt.current = [e.clientX, e.clientY] }}
           onClick={(e) => {
             e.stopPropagation()
+            const d = pressAt.current
+            pressAt.current = null
+            if (d && Math.hypot(e.clientX - d[0], e.clientY - d[1]) >= 4) return
             startEdit()
           }}
           onDoubleClick={(e) => e.stopPropagation()}
