@@ -466,7 +466,9 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
 
   return (
     <BaseNode className={cn('min-w-node', nodeErrors.length > 0 && 'ring-2 ring-error')}>
-      <BaseNodeHeader>
+      {/* A duplicate-name warning is the header's first item: its 24 px slot sits flush (pl-xs).
+          group/title: hovering anywhere on the header reveals the rename pencil. */}
+      <BaseNodeHeader className={cn('group/title', duplicateName && 'pl-xs!')}>
         <NodeTitle
           title={definition.label}
           customName={nodeData.label}

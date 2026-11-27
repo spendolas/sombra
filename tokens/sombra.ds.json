@@ -655,13 +655,14 @@
             "weight": 1
           },
           "padding": {
-            "x": "lg",
-            "y": "md"
+            "left": "lg",
+            "right": "xs",
+            "top": "xs",
+            "bottom": "xs"
           },
-          "gap": "md",
+          "justify": "between",
           "align": "center",
           "height": "[32px]",
-          "extra": "-mb-1",
           "overflow": "hidden",
           "radius": {
             "top": "md"
@@ -3010,7 +3011,7 @@
           "figmaNodeId": "993:3897",
           "layout": "horizontal",
           "align": "center",
-          "gap": "md",
+          "gap": "xs",
           "extra": "flex-1 min-w-0",
           "auditIgnore": [
             "padding",
@@ -3023,7 +3024,7 @@
           "textStyle": "text-node-title",
           "textColor": "fg",
           "userSelect": "none",
-          "extra": "flex-1 min-w-0 truncate"
+          "extra": "min-w-0 truncate"
         },
         "typeTag": {
           "figmaNodeId": "993:3899",
@@ -3034,8 +3035,12 @@
         },
         "warning": {
           "figmaNodeId": null,
+          "layout": "vertical",
+          "align": "center",
+          "justify": "center",
+          "radius": "sm",
           "textColor": "warning",
-          "extra": "shrink-0"
+          "extra": "shrink-0 size-btn-md"
         },
         "pencil": {
           "figmaNodeId": null,
@@ -3045,11 +3050,19 @@
           "radius": "sm",
           "textColor": "fg-subtle",
           "cursor": "pointer",
+          "extra": "shrink-0"
+        },
+        "help": {
+          "figmaNodeId": null,
+          "layout": "vertical",
+          "align": "center",
+          "justify": "center",
+          "radius": "sm",
+          "textColor": "fg-dim",
           "hover": {
-            "fill": "interactive/hover",
-            "textColor": "fg"
+            "fill": "interactive/hover"
           },
-          "extra": "shrink-0 -mx-xs"
+          "extra": "shrink-0 size-btn-md cursor-help"
         }
       }
     },
