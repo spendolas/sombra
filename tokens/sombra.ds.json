@@ -663,7 +663,6 @@
           "justify": "between",
           "align": "center",
           "height": "[32px]",
-          "extra": "-mb-1",
           "overflow": "hidden",
           "radius": {
             "top": "md"
