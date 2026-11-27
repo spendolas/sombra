@@ -4,7 +4,7 @@
 export const ds = {
   nodeCard: {
     root: "flex flex-col bg-surface-elevated rounded-md relative hover:ring-1 [.react-flow\_\_node.selected_&]:shadow-[0_0_8px_2px_rgba(99,102,241,0.4)]",
-    header: "flex flex-row items-center bg-surface-raised rounded-t-md border-b border-edge-subtle px-lg py-md gap-md overflow-hidden h-[32px] -mb-1",
+    header: "flex flex-row items-center justify-between bg-surface-raised rounded-t-md border-b border-edge-subtle pt-xs pb-xs pl-lg pr-xs overflow-hidden h-[32px] -mb-1",
     title: "text-node-title text-fg select-none flex-1",
     content: "flex flex-col p-lg gap-y-md",
     footer: "flex flex-col items-center border-t border-edge px-lg pt-md pb-lg gap-y-md overflow-hidden",
@@ -288,11 +288,12 @@ export const ds = {
     placeholder: "text-node-title text-fg-muted",
   },
   nodeTitle: {
-    root: "flex flex-row items-center gap-md flex-1 min-w-0",
-    name: "text-node-title text-fg select-none flex-1 min-w-0 truncate",
+    root: "flex flex-row items-center gap-xs flex-1 min-w-0",
+    name: "text-node-title text-fg select-none min-w-0 truncate",
     typeTag: "text-param text-fg-subtle select-none shrink-0",
-    warning: "text-warning shrink-0",
-    pencil: "flex flex-col items-center justify-center rounded-sm text-fg-subtle cursor-pointer hover:bg-hover hover:text-fg shrink-0 -mx-xs",
+    warning: "flex flex-col items-center justify-center rounded-sm text-warning shrink-0 size-btn-md",
+    pencil: "flex flex-col items-center justify-center rounded-sm text-fg-subtle cursor-pointer shrink-0",
+    help: "flex flex-col items-center justify-center rounded-sm text-fg-dim hover:bg-hover shrink-0 size-btn-md cursor-help",
   },
   tableHeader: {
     root: "flex flex-row items-center bg-surface-raised border-b border-edge-subtle px-lg py-sm gap-lg shrink-0 overflow-y-hidden [scrollbar-gutter:stable]",

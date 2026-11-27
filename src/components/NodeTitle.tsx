@@ -7,15 +7,20 @@
  * (993:3781), component set "Inline Text Field" (993:3749).
  *
  * - No custom name: shows the type label, exactly as before.
- * - Custom name: shows the name; the type label sits on the right as a small
- *   dim tag. A long name truncates with an ellipsis (full name in the tooltip);
- *   the tag never shrinks.
- * - Hovering the title fades in a pencil button at the right end.
+ * - Custom name: shows the name; a "?" at the header's far right reveals the
+ *   node's type label on hover (it replaces the old inline type tag). A long
+ *   name truncates with an ellipsis (full name in the tooltip).
+ * - The pencil button follows the title text (hover/focus reveals it; its
+ *   24 px slot is always laid out so nothing shifts).
  * - Pencil click OR double-click on the title → an inline field in the same
  *   place and size, whole text selected. Enter / click-away saves, Escape
  *   cancels, an empty field clears the custom name (onRename(undefined)).
- * - `duplicate`: a small amber warning beside the type tag, explained by its
- *   tooltip. No tint, no red.
+ * - `duplicate`: a small amber warning before the name, explained by its
+ *   tooltip. No tint, no red. (The caller drops the header's left padding to
+ *   xs so the 24 px warning slot sits flush.)
+ *
+ * Renders the title group AND the "?" slot, so it must be a direct child of
+ * the header (a flex row with justify-between).
  *
  * Pure: no store access. Editing state is internal; the caller owns the name.
  * There is no visible length limit — `maxLength` on the input is only a silent
@@ -83,8 +88,24 @@ export function NodeTitle({ title, customName, duplicate = false, onRename, clas
     if (next !== name) onRename(next)
   }
 
+  const Help = icons.questionMark
+  // Always laid out (24 px) so a rename never shifts the header; only shown for a
+  // renamed node, where it reveals the node's type on hover/focus.
+  const helpSlot = (
+    <span
+      data-slot="node-title-help"
+      {...(name
+        ? { role: 'img', 'aria-label': `Node type: ${title}`, title: `Node type: ${title}`, tabIndex: 0 }
+        : { 'aria-hidden': true })}
+      className={cn(ds.nodeTitle.help, !name && 'invisible pointer-events-none')}
+    >
+      <Help className="size-icon-sm" />
+    </span>
+  )
+
   if (editing) {
     return (
+      <>
       <div data-slot="node-title" className={cn(ds.nodeTitle.root, 'w-0', className)}>
         <input
           ref={inputRef}
@@ -113,14 +134,28 @@ export function NodeTitle({ title, customName, duplicate = false, onRename, clas
           onDoubleClick={(e) => e.stopPropagation()}
         />
       </div>
+      {helpSlot}
+      </>
     )
   }
 
   const Warning = icons.triangleAlert
   return (
-    // `w-0` + flex-1: the title never widens the node — a long name truncates
-    // inside whatever width the node already has.
+    <>
+    {/* `w-0` + flex-1: the title never widens the node — a long name truncates
+        inside whatever width the node already has. Order: [warning] name pencil. */}
     <div data-slot="node-title" className={cn(ds.nodeTitle.root, 'group/title w-0', className)}>
+      {duplicate && (
+        <span
+          data-slot="node-title-warning"
+          role="img"
+          aria-label={DUPLICATE_NAME_MESSAGE}
+          title={DUPLICATE_NAME_MESSAGE}
+          className={ds.nodeTitle.warning}
+        >
+          <Warning className="size-icon-sm" />
+        </span>
+      )}
       <h3
         data-slot="node-title-name"
         className={ds.nodeTitle.name}
@@ -132,23 +167,7 @@ export function NodeTitle({ title, customName, duplicate = false, onRename, clas
       >
         {shown}
       </h3>
-      {duplicate && (
-        <span
-          data-slot="node-title-warning"
-          role="img"
-          aria-label={DUPLICATE_NAME_MESSAGE}
-          title={DUPLICATE_NAME_MESSAGE}
-          className={cn(ds.nodeTitle.warning, 'flex')}
-        >
-          <Warning className="size-icon-sm" />
-        </span>
-      )}
-      {name && (
-        <span data-slot="node-title-type" className={ds.nodeTitle.typeTag}>
-          {title}
-        </span>
-      )}
-      {/* Always laid out, only shown on hover/focus — mounting it on hover would shift the tag. */}
+      {/* Always laid out, only shown on hover/focus — mounting it on hover would shift the header. */}
       <IconButton
         icon="pencil"
         data-slot="node-title-pencil"
@@ -165,5 +184,7 @@ export function NodeTitle({ title, customName, duplicate = false, onRename, clas
         onDoubleClick={(e) => e.stopPropagation()}
       />
     </div>
+    {helpSlot}
+    </>
   )
 }
