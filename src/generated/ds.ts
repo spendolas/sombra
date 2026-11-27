@@ -299,7 +299,6 @@ export const ds = {
   nodeTitle: {
     root: "flex flex-row items-center gap-xs flex-1 min-w-0",
     name: "text-node-title text-fg select-none min-w-0 truncate",
-    typeTag: "text-param text-fg-subtle select-none shrink-0",
     warning: "flex flex-col items-center justify-center rounded-sm text-warning shrink-0 size-btn-md",
     pencil: "flex flex-col items-center justify-center rounded-sm text-fg-subtle cursor-pointer shrink-0",
     help: "flex flex-col items-center justify-center rounded-sm text-fg-dim hover:bg-hover shrink-0 size-btn-md cursor-help",

@@ -3066,13 +3066,6 @@
           "userSelect": "none",
           "extra": "min-w-0 truncate"
         },
-        "typeTag": {
-          "figmaNodeId": "993:3899",
-          "textStyle": "text-param",
-          "textColor": "fg-subtle",
-          "userSelect": "none",
-          "extra": "shrink-0"
-        },
         "warning": {
           "figmaNodeId": null,
           "layout": "vertical",
