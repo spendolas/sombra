@@ -25,7 +25,7 @@ export function GizmoViewControl({ className }: { className?: string }) {
   const pick = (view: 'world' | 'node') => () => setGizmoView(gizmoView === view ? 'off' : view)
 
   return (
-    <div className={cn(ds.previewToolbar.root, 'nodrag nowheel', className)}>
+    <div className={cn(ds.previewToolbar.root, 'nodrag', className)}>
       <IconButton
         icon="globe"
         title="Gizmo: world coords (click again to hide)"

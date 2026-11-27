@@ -358,7 +358,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
         range={[param.min ?? 0, param.max ?? 1]}
         formatValue={formatterForStep(param.step)}
         handle={handle}
-        className="nodrag nowheel"
+        className="nodrag"
       />
     )
   }
@@ -511,7 +511,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
         {/* Ports drawn by the node's own body component, in place of the
             generic input rows — and above the parameter section below. */}
         {PortsBody && (
-          <div className="w-full nodrag nowheel">
+          <div className="w-full nodrag">
             <ErrorBoundary label={definition.type} fallback={<div className="text-fg-subtle text-xs px-2 py-1">⚠ display unavailable</div>}>
               <PortsBody nodeId={id} data={currentValues} />
             </ErrorBoundary>
@@ -558,10 +558,10 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
 
         {/* Body params in DECLARED ORDER. Connectable → left handle (all inputs
             wireable); control by type: color = swatch picker, enum = dropdown,
-            bool = checkbox, float/other = slider. nodrag/nowheel so React Flow
+            bool = checkbox, float/other = slider. nodrag so React Flow
             doesn't eat the first pointerdown on Radix triggers / pickers. */}
         {bodyParams.length > 0 && (
-          <div className={cn(ds.shaderNode.paramDivider, "mt-xs pt-md flex flex-col gap-md nodrag nowheel")}>
+          <div className={cn(ds.shaderNode.paramDivider, "mt-xs pt-md flex flex-col gap-md nodrag")}>
             {bodyParams.map((param) => {
               const connectable = !!param.connectable
               const isConnected = connectable && connectedInputs.has(param.id)
@@ -724,7 +724,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                 )
               }
               return (
-                <div key={param.id} className={cn(isSlider ? ds.connectableParamRow.sliderRow : ds.connectableParamRow.root, "nodrag nowheel")}>
+                <div key={param.id} className={cn(isSlider ? ds.connectableParamRow.sliderRow : ds.connectableParamRow.root, "nodrag")}>
                   {connectable && (
                     <BaseHandle
                       type="target"

@@ -274,13 +274,13 @@ export function SrtGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetRef }
       {r.has.translate && (
         <>
           <div
-            className="absolute nodrag nowheel pointer-events-auto touch-none rounded-full cursor-grab"
+            className="absolute nodrag pointer-events-auto touch-none rounded-full cursor-grab"
             style={{ left: tipX.x, top: tipX.y, width: 11, height: 11, background: AXIS_X_COLOR, transform: 'translate(-50%, -50%)' }}
             onPointerDown={startDrag('x')}
             title={`Offset along ${r.space} X`}
           />
           <div
-            className="absolute nodrag nowheel pointer-events-auto touch-none rounded-full cursor-grab"
+            className="absolute nodrag pointer-events-auto touch-none rounded-full cursor-grab"
             style={{ left: tipY.x, top: tipY.y, width: 11, height: 11, background: AXIS_Y_COLOR, transform: 'translate(-50%, -50%)' }}
             onPointerDown={startDrag('y')}
             title={`Offset along ${r.space} Y`}
@@ -291,7 +291,7 @@ export function SrtGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetRef }
       {/* Scale handle (square) */}
       {showScale && (
         <div
-          className={cn('absolute nodrag nowheel pointer-events-auto touch-none', ds.gizmo.handle, 'rounded-none')}
+          className={cn('absolute nodrag pointer-events-auto touch-none', ds.gizmo.handle, 'rounded-none')}
           style={{ left: scaleHandle.x, top: scaleHandle.y, transform: 'translate(-50%, -50%)' }}
           onPointerDown={startDrag('scale')}
           title="Scale"
@@ -301,7 +301,7 @@ export function SrtGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetRef }
       {/* Rotate handle (dot on the ring) */}
       {showRotate && (
         <div
-          className={cn('absolute nodrag nowheel pointer-events-auto touch-none', ds.gizmo.handle)}
+          className={cn('absolute nodrag pointer-events-auto touch-none', ds.gizmo.handle)}
           style={{ left: rotHandle.x, top: rotHandle.y, transform: 'translate(-50%, -50%)' }}
           onPointerDown={startDrag('rotate')}
           title="Rotate (Shift = 15° snap)"
@@ -311,7 +311,7 @@ export function SrtGizmoOverlay({ dockTargetRef, floatTargetRef, fullTargetRef }
       {/* Center — free translate */}
       {r.has.translate && (
         <div
-          className={cn('absolute nodrag nowheel pointer-events-auto touch-none', ds.gizmo.center)}
+          className={cn('absolute nodrag pointer-events-auto touch-none', ds.gizmo.center)}
           style={{ left: cx, top: cy, transform: 'translate(-50%, -50%)', cursor: moveCursor() }}
           onPointerDown={startDrag('free')}
           title="Offset (free)"

@@ -17,7 +17,7 @@ export function PixelatePreview({ data }: { nodeId: string; data: Record<string,
 
   return (
     <div
-      className="w-full aspect-square rounded-sm nodrag nowheel"
+      className="w-full aspect-square rounded-sm nodrag"
       style={{
         background: `repeating-conic-gradient(var(--surface-elevated) 0% 25%, var(--surface-raised) 0% 50%) 0 0 / ${cellSize}px ${cellSize}px`,
       }}

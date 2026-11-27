@@ -1413,7 +1413,7 @@
           "layout": "vertical",
           "gap": "2xs",
           "userSelect": "none",
-          "extra": "nodrag nowheel nokey",
+          "extra": "nodrag nokey",
           "overflow": "hidden"
         },
         "labelRow": {
@@ -1451,7 +1451,7 @@
         "input": {
           "textStyle": "text-mono-value",
           "textColor": "fg",
-          "extra": "bg-transparent text-right outline-none border-b border-indigo nodrag nowheel"
+          "extra": "bg-transparent text-right outline-none border-b border-indigo nodrag"
         }
       }
     },
@@ -1665,7 +1665,7 @@
           },
           "gap": "md",
           "align": "center",
-          "extra": "nodrag nowheel",
+          "extra": "nodrag",
           "overflow": "hidden",
           "auditIgnore": [
             "overflow"
@@ -2025,7 +2025,7 @@
           "align": "center",
           "gap": "sm",
           "cursor": "pointer",
-          "extra": "nodrag nowheel"
+          "extra": "nodrag"
         },
         "box": {
           "figmaNodeId": "765:3880",
@@ -2080,7 +2080,7 @@
       "parts": {
         "root": {
           "figmaNodeId": "619:1950",
-          "extra": "relative w-full aspect-square nowheel",
+          "extra": "relative w-full aspect-square",
           "auditIgnore": [
             "fill",
             "width.mode",

@@ -86,7 +86,7 @@ export function BackgroundModeControl({ className }: BackgroundModeControlProps)
 
   return (
     <div className={cn('flex items-center gap-md', className)}>
-      <div className={cn(ds.previewToolbar.root, 'nodrag nowheel')}>
+      <div className={cn(ds.previewToolbar.root, 'nodrag')}>
         <IconButton
           icon="chessKnight"
           title="Background: checker"

@@ -95,12 +95,12 @@ export const ds = {
     labelOutput: "text-handle text-fg text-right px-handle-offset flex-1",
   },
   floatSlider: {
-    root: "flex flex-col gap-2xs select-none overflow-hidden nodrag nowheel nokey",
+    root: "flex flex-col gap-2xs select-none overflow-hidden nodrag nokey",
     labelRow: "flex flex-row items-center gap-xs cursor-ew-resize overflow-hidden",
     label: "text-handle text-fg-dim",
     value: "text-mono-value text-fg text-center cursor-text",
     trackArea: "flex flex-col justify-center overflow-hidden h-[16px] w-full shrink-0 cursor-ew-resize",
-    input: "text-mono-value text-fg bg-transparent text-right outline-none border-b border-indigo nodrag nowheel",
+    input: "text-mono-value text-fg bg-transparent text-right outline-none border-b border-indigo nodrag",
   },
   enumSelect: {
     root: "flex flex-col gap-sm overflow-hidden",
@@ -128,7 +128,7 @@ export const ds = {
     positionText: "text-mono-value text-fg text-center",
   },
   randomDisplay: {
-    root: "flex flex-row items-center px-xs gap-md overflow-hidden nodrag nowheel",
+    root: "flex flex-row items-center px-xs gap-md overflow-hidden nodrag",
     value: "text-mono-value text-fg flex-1",
   },
   miniMap: {
@@ -185,14 +185,14 @@ export const ds = {
     dotActive: "bg-fg size-1.5 rounded-full",
   },
   boolCheckbox: {
-    root: "flex flex-row items-center gap-sm cursor-pointer nodrag nowheel",
+    root: "flex flex-row items-center gap-sm cursor-pointer nodrag",
     box: "bg-surface-raised rounded-xs border border-edge overflow-hidden w-icon-sm h-icon-sm",
     boxChecked: "flex flex-row items-center justify-center bg-indigo rounded-xs border border-edge overflow-hidden w-icon-sm h-icon-sm",
     indicator: "text-fg text-center text-[11px] leading-none",
     label: "text-handle text-fg-dim",
   },
   nodePreview: {
-    root: "overflow-hidden relative w-full aspect-square nowheel",
+    root: "overflow-hidden relative w-full aspect-square",
   },
   imageViewportOverlay: {
     root: "overflow-hidden relative rounded-sm",
