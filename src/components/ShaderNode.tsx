@@ -638,7 +638,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                   )}
                   {/* auto-height frame: holds any control (dropdown, anchor grid, colour)
                       plus the warning line under a slider */}
-                  <div className="flex flex-col pl-handle-offset pr-xs gap-xs flex-1 min-w-0">
+                  <div className="flex flex-col pl-handle-offset pr-handle-offset gap-xs flex-1 min-w-0">
                     {control}
                     {/* Warning stacks BELOW the control. As a flex-row sibling of the
                         slider it stole horizontal space and squished it below full width.
@@ -735,7 +735,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                       className={isSlider ? "top-[16px]!" : undefined}
                     />
                   )}
-                  <div className={isSlider ? ds.connectableParamRow.innerFrame : "flex flex-col pl-handle-offset pr-xs gap-xs flex-1 min-w-0"}>
+                  <div className={isSlider ? ds.connectableParamRow.innerFrame : "flex flex-col pl-handle-offset pr-handle-offset gap-xs flex-1 min-w-0"}>
                     {control}
                   </div>
                 </div>

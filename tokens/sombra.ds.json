@@ -1556,7 +1556,7 @@
           "figmaNodeId": "106:296",
           "padding": {
             "left": "handle-offset",
-            "right": "xs"
+            "right": "handle-offset"
           },
           "extra": "flex-1",
           "layout": "vertical",
@@ -2767,7 +2767,7 @@
           "justify": "between",
           "padding": {
             "left": "handle-offset",
-            "right": "xs"
+            "right": "handle-offset"
           }
         },
         "grip": {
@@ -3581,7 +3581,7 @@
           "layout": "vertical",
           "padding": {
             "left": "handle-offset",
-            "right": "xs"
+            "right": "handle-offset"
           },
           "gap": "2xs",
           "extra": "flex-1 min-w-0"
@@ -3792,7 +3792,7 @@
           "align": "center",
           "padding": {
             "left": "handle-offset",
-            "right": "xs"
+            "right": "handle-offset"
           },
           "gap": "sm",
           "extra": "flex-1 min-w-0",

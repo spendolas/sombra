@@ -116,7 +116,7 @@ export const ds = {
   connectableParamRow: {
     root: "flex flex-row items-center relative",
     sliderRow: "flex flex-row items-center relative h-[50px]",
-    innerFrame: "flex flex-col pl-handle-offset pr-xs gap-xs overflow-hidden flex-1",
+    innerFrame: "flex flex-col pl-handle-offset pr-handle-offset gap-xs overflow-hidden flex-1",
   },
   gradientEditor: {
     root: "flex flex-col gap-md",
@@ -261,7 +261,7 @@ export const ds = {
     blendDisabled: "opacity-40",
     dimmed: "opacity-50",
     lineContent: "flex flex-row items-center pl-handle-offset gap-sm",
-    header: "flex flex-row items-center justify-between pl-handle-offset pr-xs",
+    header: "flex flex-row items-center justify-between pl-handle-offset pr-handle-offset",
     grip: "text-fg-dim cursor-grab touch-none shrink-0",
   },
   stackEmpty: {
@@ -360,7 +360,7 @@ export const ds = {
   wiredParamRow: {
     root: "flex flex-row items-center transition-colors relative h-[50px] outline-none focus-visible:outline-2 focus-visible:outline-indigo-hover motion-reduce:transition-none",
     rootHover: "flex flex-row items-center bg-hover rounded-sm transition-colors relative h-[50px] outline-none focus-visible:outline-2 focus-visible:outline-indigo-hover motion-reduce:transition-none",
-    content: "flex flex-col pl-handle-offset pr-xs gap-2xs flex-1 min-w-0",
+    content: "flex flex-col pl-handle-offset pr-handle-offset gap-2xs flex-1 min-w-0",
     labelLine: "flex flex-row items-center gap-xs h-[18px] min-w-0",
     label: "text-handle text-fg-dim shrink-0 whitespace-nowrap",
     source: "text-param text-fg-muted truncate flex-1 min-w-0 w-0",
@@ -383,7 +383,7 @@ export const ds = {
     palette: "flex flex-row rounded-full absolute overflow-hidden h-slider-track inset-x-0 top-1/2 -translate-y-1/2",
     paletteSample: "h-slider-track flex-1",
     maskRoot: "flex flex-row items-center transition-colors relative outline-none focus-visible:outline-2 focus-visible:outline-indigo-hover motion-reduce:transition-none",
-    maskContent: "flex flex-row items-center pl-handle-offset pr-xs gap-sm flex-1 min-w-0",
+    maskContent: "flex flex-row items-center pl-handle-offset pr-handle-offset gap-sm flex-1 min-w-0",
     maskLabel: "text-handle text-fg-dim shrink-0 whitespace-nowrap",
     maskRange: "relative w-[36px] h-[6px] shrink-0",
     maskRangeTrack: "bg-surface-raised rounded-full absolute w-[36px] h-[4px] left-0 top-1/2 -translate-y-1/2",
