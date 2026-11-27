@@ -1870,11 +1870,13 @@
         },
         "connectedLabel": {
           "figmaNodeId": null,
+          "extra": "shrink-0 whitespace-nowrap",
           "textStyle": "text-handle",
           "textColor": "fg-dim"
         },
         "connectedSource": {
           "figmaNodeId": null,
+          "extra": "truncate min-w-0 w-0 flex-1 text-right",
           "textStyle": "text-param",
           "textColor": "fg-muted"
         },
@@ -2278,7 +2280,7 @@
           },
           "textStyle": "text-mono-value",
           "textCase": "upper",
-          "extra": "flex-1 min-w-0 h-8 focus:outline-none focus:border-indigo",
+          "extra": "flex-1 min-w-0 w-0 h-8 focus:outline-none focus:border-indigo",
           "auditIgnore": [
             "text.textTransform",
             "text.case",
@@ -3541,7 +3543,7 @@
           "figmaNodeId": "998:6040",
           "textStyle": "text-param",
           "textColor": "fg-muted",
-          "extra": "truncate flex-1 min-w-0"
+          "extra": "truncate flex-1 min-w-0 w-0"
         },
         "valueGroup": {
           "figmaNodeId": "998:6041",
