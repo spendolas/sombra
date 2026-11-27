@@ -514,7 +514,7 @@ export function ImageUploader({ nodeId, data }: {
   }, [nodeId, data, updateNodeData])
 
   return (
-    <div className="flex flex-col gap-y-md nodrag nowheel min-w-0 max-w-full overflow-hidden">
+    <div className="flex flex-col gap-y-md nodrag min-w-0 max-w-full overflow-hidden">
       <input ref={fileInputRef} type="file" accept={ACCEPTED_IMAGE_TYPES} onChange={handleFileChange} className="hidden" />
 
       {imageData ? (

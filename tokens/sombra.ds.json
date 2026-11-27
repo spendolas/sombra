@@ -655,13 +655,14 @@
             "weight": 1
           },
           "padding": {
-            "x": "lg",
-            "y": "md"
+            "left": "lg",
+            "right": "xs",
+            "top": "xs",
+            "bottom": "xs"
           },
-          "gap": "md",
+          "justify": "between",
           "align": "center",
           "height": "[32px]",
-          "extra": "-mb-1",
           "overflow": "hidden",
           "radius": {
             "top": "md"
@@ -1412,7 +1413,7 @@
           "layout": "vertical",
           "gap": "2xs",
           "userSelect": "none",
-          "extra": "nodrag nowheel nokey",
+          "extra": "nodrag nokey",
           "overflow": "hidden"
         },
         "labelRow": {
@@ -1450,7 +1451,7 @@
         "input": {
           "textStyle": "text-mono-value",
           "textColor": "fg",
-          "extra": "bg-transparent text-right outline-none border-b border-indigo nodrag nowheel"
+          "extra": "bg-transparent text-right outline-none border-b border-indigo nodrag"
         }
       }
     },
@@ -1537,7 +1538,8 @@
           "align": "center",
           "position": "relative",
           "auditIgnore": [
-            "overflow"
+            "overflow",
+            "padding.left"
           ]
         },
         "sliderRow": {
@@ -1545,13 +1547,16 @@
           "layout": "horizontal",
           "align": "center",
           "position": "relative",
-          "height": "[50px]"
+          "height": "[50px]",
+          "auditIgnore": [
+            "padding.left"
+          ]
         },
         "innerFrame": {
           "figmaNodeId": "106:296",
           "padding": {
             "left": "handle-offset",
-            "right": "xs"
+            "right": "handle-offset"
           },
           "extra": "flex-1",
           "layout": "vertical",
@@ -1660,7 +1665,7 @@
           },
           "gap": "md",
           "align": "center",
-          "extra": "nodrag nowheel",
+          "extra": "nodrag",
           "overflow": "hidden",
           "auditIgnore": [
             "overflow"
@@ -1833,6 +1838,46 @@
         }
       }
     },
+    "sn:tooltip": {
+      "name": "Tooltip",
+      "type": "molecule",
+      "dsKey": "tooltip",
+      "codeFile": "src/components/Tooltip.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": null,
+          "extra": "fixed z-50 pointer-events-none select-none"
+        },
+        "shape": {
+          "figmaNodeId": null,
+          "extra": "absolute left-0 top-0 overflow-visible fill-surface-elevated drop-shadow-[0_6px_8px_rgba(0,0,0,0.5)]"
+        },
+        "content": {
+          "figmaNodeId": null,
+          "extra": "relative flex flex-col px-md py-sm gap-2xs w-max max-w-[220px]"
+        },
+        "message": {
+          "figmaNodeId": null,
+          "textStyle": "text-body",
+          "textColor": "fg",
+          "extra": "break-words"
+        },
+        "hint": {
+          "figmaNodeId": null,
+          "textStyle": "text-param",
+          "textColor": "fg-subtle"
+        },
+        "warningRow": {
+          "figmaNodeId": null,
+          "extra": "flex flex-row items-start gap-sm"
+        },
+        "warningIcon": {
+          "figmaNodeId": null,
+          "textColor": "warning",
+          "extra": "shrink-0"
+        }
+      }
+    },
     "sn:1": {
       "name": "Shader Node",
       "type": "organism",
@@ -1870,11 +1915,13 @@
         },
         "connectedLabel": {
           "figmaNodeId": null,
+          "extra": "shrink-0 whitespace-nowrap",
           "textStyle": "text-handle",
           "textColor": "fg-dim"
         },
         "connectedSource": {
           "figmaNodeId": null,
+          "extra": "truncate min-w-0 w-0 flex-1 text-right",
           "textStyle": "text-param",
           "textColor": "fg-muted"
         },
@@ -1978,7 +2025,7 @@
           "align": "center",
           "gap": "sm",
           "cursor": "pointer",
-          "extra": "nodrag nowheel"
+          "extra": "nodrag"
         },
         "box": {
           "figmaNodeId": "765:3880",
@@ -2033,7 +2080,7 @@
       "parts": {
         "root": {
           "figmaNodeId": "619:1950",
-          "extra": "relative w-full aspect-square nowheel",
+          "extra": "relative w-full aspect-square",
           "auditIgnore": [
             "fill",
             "width.mode",
@@ -2278,7 +2325,7 @@
           },
           "textStyle": "text-mono-value",
           "textCase": "upper",
-          "extra": "flex-1 min-w-0 h-8 focus:outline-none focus:border-indigo",
+          "extra": "flex-1 min-w-0 w-0 h-8 focus:outline-none focus:border-indigo",
           "auditIgnore": [
             "text.textTransform",
             "text.case",
@@ -2659,7 +2706,7 @@
           "layout": "horizontal",
           "align": "center",
           "padding": {
-            "right": "xs"
+            "right": "handle-offset"
           }
         },
         "nameStack": {
@@ -2683,7 +2730,7 @@
           "layout": "horizontal",
           "align": "center",
           "padding": {
-            "right": "xs"
+            "right": "handle-offset"
           }
         },
         "blendDisabled": {
@@ -2720,7 +2767,7 @@
           "justify": "between",
           "padding": {
             "left": "handle-offset",
-            "right": "xs"
+            "right": "handle-offset"
           }
         },
         "grip": {
@@ -2807,7 +2854,7 @@
           "layout": "horizontal",
           "align": "center",
           "padding": {
-            "right": "xs"
+            "right": "handle-offset"
           },
           "transition": "colors",
           "extra": "motion-reduce:transition-none"
@@ -2818,7 +2865,7 @@
           "layout": "horizontal",
           "align": "center",
           "padding": {
-            "right": "xs"
+            "right": "handle-offset"
           },
           "fill": "interactive/highlight",
           "radius": "sm",
@@ -3004,7 +3051,7 @@
           "figmaNodeId": "993:3897",
           "layout": "horizontal",
           "align": "center",
-          "gap": "md",
+          "gap": "xs",
           "extra": "flex-1 min-w-0",
           "auditIgnore": [
             "padding",
@@ -3017,7 +3064,7 @@
           "textStyle": "text-node-title",
           "textColor": "fg",
           "userSelect": "none",
-          "extra": "flex-1 min-w-0 truncate"
+          "extra": "min-w-0 truncate"
         },
         "typeTag": {
           "figmaNodeId": "993:3899",
@@ -3028,8 +3075,12 @@
         },
         "warning": {
           "figmaNodeId": null,
+          "layout": "vertical",
+          "align": "center",
+          "justify": "center",
+          "radius": "sm",
           "textColor": "warning",
-          "extra": "shrink-0"
+          "extra": "shrink-0 size-btn-md"
         },
         "pencil": {
           "figmaNodeId": null,
@@ -3039,11 +3090,19 @@
           "radius": "sm",
           "textColor": "fg-subtle",
           "cursor": "pointer",
+          "extra": "shrink-0"
+        },
+        "help": {
+          "figmaNodeId": null,
+          "layout": "vertical",
+          "align": "center",
+          "justify": "center",
+          "radius": "sm",
+          "textColor": "fg-dim",
           "hover": {
-            "fill": "interactive/hover",
-            "textColor": "fg"
+            "fill": "interactive/hover"
           },
-          "extra": "shrink-0 -mx-xs"
+          "extra": "shrink-0 size-btn-md cursor-help"
         }
       }
     },
@@ -3497,7 +3556,10 @@
           "align": "center",
           "transition": "colors",
           "extra": "outline-none focus-visible:outline-2 focus-visible:outline-indigo-hover motion-reduce:transition-none",
-          "height": "[50px]"
+          "height": "[50px]",
+          "auditIgnore": [
+            "padding.left"
+          ]
         },
         "rootHover": {
           "figmaNodeId": "999:7576",
@@ -3509,7 +3571,8 @@
           "transition": "colors",
           "extra": "outline-none focus-visible:outline-2 focus-visible:outline-indigo-hover motion-reduce:transition-none",
           "auditIgnore": [
-            "fill.opacity"
+            "fill.opacity",
+            "padding.left"
           ],
           "height": "[50px]"
         },
@@ -3518,7 +3581,7 @@
           "layout": "vertical",
           "padding": {
             "left": "handle-offset",
-            "right": "xs"
+            "right": "handle-offset"
           },
           "gap": "2xs",
           "extra": "flex-1 min-w-0"
@@ -3541,7 +3604,7 @@
           "figmaNodeId": "998:6040",
           "textStyle": "text-param",
           "textColor": "fg-muted",
-          "extra": "truncate flex-1 min-w-0"
+          "extra": "truncate flex-1 min-w-0 w-0"
         },
         "valueGroup": {
           "figmaNodeId": "998:6041",
@@ -3729,7 +3792,7 @@
           "align": "center",
           "padding": {
             "left": "handle-offset",
-            "right": "xs"
+            "right": "handle-offset"
           },
           "gap": "sm",
           "extra": "flex-1 min-w-0",

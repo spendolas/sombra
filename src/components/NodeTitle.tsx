@@ -7,15 +7,20 @@
  * (993:3781), component set "Inline Text Field" (993:3749).
  *
  * - No custom name: shows the type label, exactly as before.
- * - Custom name: shows the name; the type label sits on the right as a small
- *   dim tag. A long name truncates with an ellipsis (full name in the tooltip);
- *   the tag never shrinks.
- * - Hovering the title fades in a pencil button at the right end.
+ * - Custom name: shows the name; a "?" at the header's far right reveals the
+ *   node's type label on hover (it replaces the old inline type tag). A long
+ *   name truncates with an ellipsis (full name in the tooltip).
+ * - The pencil button follows the title text (hover/focus reveals it; its
+ *   24 px slot is always laid out so nothing shifts).
  * - Pencil click OR double-click on the title → an inline field in the same
  *   place and size, whole text selected. Enter / click-away saves, Escape
  *   cancels, an empty field clears the custom name (onRename(undefined)).
- * - `duplicate`: a small amber warning beside the type tag, explained by its
- *   tooltip. No tint, no red.
+ * - `duplicate`: a small amber warning before the name, explained by its
+ *   tooltip. No tint, no red. (The caller drops the header's left padding to
+ *   xs so the 24 px warning slot sits flush.)
+ *
+ * Renders the title group AND the "?" slot, so it must be a direct child of
+ * the header (a flex row with justify-between).
  *
  * Pure: no store access. Editing state is internal; the caller owns the name.
  * There is no visible length limit — `maxLength` on the input is only a silent
@@ -25,6 +30,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { IconButton } from '@/components/IconButton'
 import { icons } from '@/components/icons'
+import { Tooltip } from '@/components/Tooltip'
 import { ds } from '@/generated/ds'
 import { cn } from '@/lib/utils'
 
@@ -56,6 +62,7 @@ export function NodeTitle({ title, customName, duplicate = false, onRename, clas
   // Set once an edit is saved or cancelled, so the blur that follows the
   // input's unmount (or an Enter followed by blur) can't save a second time.
   const settled = useRef(false)
+  const pressAt = useRef<[number, number] | null>(null)
 
   const name = customName || undefined
   const shown = name ?? title
@@ -83,8 +90,30 @@ export function NodeTitle({ title, customName, duplicate = false, onRename, clas
     if (next !== name) onRename(next)
   }
 
+  const Help = icons.questionMark
+  // Always laid out (24 px) so a rename never shifts the header; only shown for a
+  // renamed node, where it reveals the node's type on hover/focus.
+  const helpSlot = name ? (
+    <Tooltip content={{ message: title, hint: 'Node type' }} align="end">
+      <span
+        data-slot="node-title-help"
+        role="img"
+        aria-label={`Node type: ${title}`}
+        tabIndex={0}
+        className={ds.nodeTitle.help}
+      >
+        <Help className="size-icon-sm" />
+      </span>
+    </Tooltip>
+  ) : (
+    <span data-slot="node-title-help" aria-hidden className={cn(ds.nodeTitle.help, 'invisible pointer-events-none')}>
+      <Help className="size-icon-sm" />
+    </span>
+  )
+
   if (editing) {
     return (
+      <>
       <div data-slot="node-title" className={cn(ds.nodeTitle.root, 'w-0', className)}>
         <input
           ref={inputRef}
@@ -113,14 +142,30 @@ export function NodeTitle({ title, customName, duplicate = false, onRename, clas
           onDoubleClick={(e) => e.stopPropagation()}
         />
       </div>
+      {helpSlot}
+      </>
     )
   }
 
   const Warning = icons.triangleAlert
   return (
-    // `w-0` + flex-1: the title never widens the node — a long name truncates
-    // inside whatever width the node already has.
+    <>
+    {/* `w-0` + flex-1: the title never widens the node — a long name truncates
+        inside whatever width the node already has. Order: [warning] name pencil. */}
     <div data-slot="node-title" className={cn(ds.nodeTitle.root, 'group/title w-0', className)}>
+      {duplicate && (
+        <Tooltip content={{ message: 'Duplicate name', hint: DUPLICATE_NAME_MESSAGE, tone: 'warning' }} align="start">
+          <span
+            data-slot="node-title-warning"
+            role="img"
+            aria-label={DUPLICATE_NAME_MESSAGE}
+            tabIndex={0}
+            className={ds.nodeTitle.warning}
+          >
+            <Warning className="size-icon-sm" />
+          </span>
+        </Tooltip>
+      )}
       <h3
         data-slot="node-title-name"
         className={ds.nodeTitle.name}
@@ -132,38 +177,32 @@ export function NodeTitle({ title, customName, duplicate = false, onRename, clas
       >
         {shown}
       </h3>
-      {duplicate && (
-        <span
-          data-slot="node-title-warning"
-          role="img"
-          aria-label={DUPLICATE_NAME_MESSAGE}
-          title={DUPLICATE_NAME_MESSAGE}
-          className={cn(ds.nodeTitle.warning, 'flex')}
-        >
-          <Warning className="size-icon-sm" />
-        </span>
-      )}
-      {name && (
-        <span data-slot="node-title-type" className={ds.nodeTitle.typeTag}>
-          {title}
-        </span>
-      )}
-      {/* Always laid out, only shown on hover/focus — mounting it on hover would shift the tag. */}
-      <IconButton
-        icon="pencil"
-        data-slot="node-title-pencil"
-        aria-label="Rename node"
-        title="Rename"
-        className={cn(
-          ds.nodeTitle.pencil,
-          'nodrag nopan transition opacity-0 group-hover/title:opacity-100 focus-visible:opacity-100',
-        )}
-        onClick={(e) => {
-          e.stopPropagation()
-          startEdit()
-        }}
-        onDoubleClick={(e) => e.stopPropagation()}
-      />
+      {/* Always laid out, only shown on hover/focus — mounting it on hover would shift the header. */}
+      <Tooltip content={{ message: 'Rename' }}>
+        <IconButton
+          icon="pencil"
+          data-slot="node-title-pencil"
+          aria-label="Rename node"
+          className={cn(
+            ds.nodeTitle.pencil,
+            'transition opacity-0 group-hover/title:opacity-100 focus-visible:opacity-100',
+          )}
+          // No `nodrag`: a press-drag from the pencil drags the node like the
+          // rest of the header. It only renames on a real click (pointer
+          // moved < 4 px between press and release).
+          onPointerDown={(e) => { pressAt.current = [e.clientX, e.clientY] }}
+          onClick={(e) => {
+            e.stopPropagation()
+            const d = pressAt.current
+            pressAt.current = null
+            if (d && Math.hypot(e.clientX - d[0], e.clientY - d[1]) >= 4) return
+            startEdit()
+          }}
+          onDoubleClick={(e) => e.stopPropagation()}
+        />
+      </Tooltip>
     </div>
+    {helpSlot}
+    </>
   )
 }

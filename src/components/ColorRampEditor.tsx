@@ -313,7 +313,7 @@ export function ColorRampEditor({
   )
 
   return (
-    <div className={cn(ds.gradientEditor.root, "nodrag nowheel")}>
+    <div className={cn(ds.gradientEditor.root, "nodrag")}>
       {/* Gradient bar (checker behind so transparent stops read as transparent) */}
       <div
         ref={barRef}

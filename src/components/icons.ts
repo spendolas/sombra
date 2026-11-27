@@ -31,6 +31,7 @@ export const icons = {
   pip: createIcon('pip', nodes.pip),
   pipette: createIcon('pipette', nodes.pipette),
   plus: createIcon('plus', nodes.plus),
+  questionMark: createIcon('questionMark', nodes.questionMark),
   rows: createIcon('rows', nodes.rows),
   scan: createIcon('scan', nodes.scan),
   share: createIcon('share', nodes.share),

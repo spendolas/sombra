@@ -358,7 +358,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
         range={[param.min ?? 0, param.max ?? 1]}
         formatValue={formatterForStep(param.step)}
         handle={handle}
-        className="nodrag nowheel"
+        className="nodrag"
       />
     )
   }
@@ -466,7 +466,9 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
 
   return (
     <BaseNode className={cn('min-w-node', nodeErrors.length > 0 && 'ring-2 ring-error')}>
-      <BaseNodeHeader>
+      {/* A duplicate-name warning is the header's first item: its 24 px slot sits flush (pl-xs).
+          group/title: hovering anywhere on the header reveals the rename pencil. */}
+      <BaseNodeHeader className={cn('group/title', duplicateName && 'pl-xs!')}>
         <NodeTitle
           title={definition.label}
           customName={nodeData.label}
@@ -509,7 +511,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
         {/* Ports drawn by the node's own body component, in place of the
             generic input rows — and above the parameter section below. */}
         {PortsBody && (
-          <div className="w-full nodrag nowheel">
+          <div className="w-full nodrag">
             <ErrorBoundary label={definition.type} fallback={<div className="text-fg-subtle text-xs px-2 py-1">⚠ display unavailable</div>}>
               <PortsBody nodeId={id} data={currentValues} />
             </ErrorBoundary>
@@ -556,10 +558,10 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
 
         {/* Body params in DECLARED ORDER. Connectable → left handle (all inputs
             wireable); control by type: color = swatch picker, enum = dropdown,
-            bool = checkbox, float/other = slider. nodrag/nowheel so React Flow
+            bool = checkbox, float/other = slider. nodrag so React Flow
             doesn't eat the first pointerdown on Radix triggers / pickers. */}
         {bodyParams.length > 0 && (
-          <div className={cn(ds.shaderNode.paramDivider, "mt-xs pt-md flex flex-col gap-md nodrag nowheel")}>
+          <div className={cn(ds.shaderNode.paramDivider, "mt-xs pt-md flex flex-col gap-md nodrag")}>
             {bodyParams.map((param) => {
               const connectable = !!param.connectable
               const isConnected = connectable && connectedInputs.has(param.id)
@@ -636,7 +638,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                   )}
                   {/* auto-height frame: holds any control (dropdown, anchor grid, colour)
                       plus the warning line under a slider */}
-                  <div className="flex flex-col pl-handle-offset pr-xs gap-xs flex-1 min-w-0">
+                  <div className="flex flex-col pl-handle-offset pr-handle-offset gap-xs flex-1 min-w-0">
                     {control}
                     {/* Warning stacks BELOW the control. As a flex-row sibling of the
                         slider it stole horizontal space and squished it below full width.
@@ -722,7 +724,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                 )
               }
               return (
-                <div key={param.id} className={cn(isSlider ? ds.connectableParamRow.sliderRow : ds.connectableParamRow.root, "nodrag nowheel")}>
+                <div key={param.id} className={cn(isSlider ? ds.connectableParamRow.sliderRow : ds.connectableParamRow.root, "nodrag")}>
                   {connectable && (
                     <BaseHandle
                       type="target"
@@ -733,7 +735,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                       className={isSlider ? "top-[16px]!" : undefined}
                     />
                   )}
-                  <div className={isSlider ? ds.connectableParamRow.innerFrame : "flex flex-col pl-handle-offset pr-xs gap-xs flex-1 min-w-0"}>
+                  <div className={isSlider ? ds.connectableParamRow.innerFrame : "flex flex-col pl-handle-offset pr-handle-offset gap-xs flex-1 min-w-0"}>
                     {control}
                   </div>
                 </div>
