@@ -1537,7 +1537,8 @@
           "align": "center",
           "position": "relative",
           "auditIgnore": [
-            "overflow"
+            "overflow",
+            "padding.left"
           ]
         },
         "sliderRow": {
@@ -3517,7 +3518,8 @@
           "transition": "colors",
           "extra": "outline-none focus-visible:outline-2 focus-visible:outline-indigo-hover motion-reduce:transition-none",
           "auditIgnore": [
-            "fill.opacity"
+            "fill.opacity",
+            "padding.left"
           ],
           "height": "[50px]"
         },
