@@ -631,7 +631,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                       id={param.id}
                       handleColor={getPortColor(param.type)}
                       connected={isConnected}
-                      className={isConnected ? "top-1/2!" : sliderRow && !warning ? "top-[15px]!" : "top-[10px]!"}
+                      className={isConnected ? "top-1/2!" : sliderRow && !warning ? "top-[16px]!" : "top-[10px]!"}
                     />
                   )}
                   {/* auto-height frame: holds any control (dropdown, anchor grid, colour)
@@ -730,7 +730,7 @@ export const ShaderNode = memo(({ id, data }: NodeProps) => {
                       id={param.id}
                       handleColor={getPortColor(param.type)}
                       connected={isConnected}
-                      className={isSlider ? "top-[15px]!" : undefined}
+                      className={isSlider ? "top-[16px]!" : undefined}
                     />
                   )}
                   <div className={isSlider ? ds.connectableParamRow.innerFrame : "flex flex-col pl-handle-offset pr-xs gap-xs flex-1 min-w-0"}>

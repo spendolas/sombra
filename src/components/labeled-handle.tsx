@@ -37,6 +37,9 @@ export function LabeledHandle({
       className={cn(
         ds.labeledHandle.root,
         flexDirections[position],
+        // The row token's right padding is the far side on an input; on a flipped
+        // output row it would sit between the label and the circle, so mirror it.
+        position === "right" && "pr-0! pl-lg",
         className,
       )}
       ref={ref}
