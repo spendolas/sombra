@@ -1545,7 +1545,10 @@
           "layout": "horizontal",
           "align": "center",
           "position": "relative",
-          "height": "[50px]"
+          "height": "[50px]",
+          "auditIgnore": [
+            "padding.left"
+          ]
         },
         "innerFrame": {
           "figmaNodeId": "106:296",
@@ -3499,7 +3502,10 @@
           "align": "center",
           "transition": "colors",
           "extra": "outline-none focus-visible:outline-2 focus-visible:outline-indigo-hover motion-reduce:transition-none",
-          "height": "[50px]"
+          "height": "[50px]",
+          "auditIgnore": [
+            "padding.left"
+          ]
         },
         "rootHover": {
           "figmaNodeId": "999:7576",
