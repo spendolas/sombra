@@ -42,7 +42,7 @@ export interface TooltipProps {
   children: ReactElement<Record<string, unknown>>
 }
 
-const GAP = 2 // trigger → caret tip
+const GAP = 4 // trigger → caret tip
 const MARGIN = 8 // viewport edge
 
 const OPPOSITE: Record<TooltipPlacement, TooltipPlacement> = {
@@ -149,7 +149,12 @@ export function Tooltip({ content, placement = 'bottom', align = 'center', delay
     'aria-describedby': open ? id : childProps['aria-describedby'],
     onPointerEnter: chain('onPointerEnter', showSoon),
     onPointerLeave: chain('onPointerLeave', hide),
-    onFocus: chain('onFocus', showNow),
+    onFocus: (e: unknown) => {
+      childProps.onFocus?.(e)
+      // Keyboard focus only — a click that focuses the trigger must not reopen it.
+      const t = (e as { target?: Element }).target
+      if (t?.matches?.(':focus-visible')) showNow()
+    },
     onBlur: chain('onBlur', hide),
   })
 

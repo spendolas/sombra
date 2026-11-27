@@ -153,7 +153,7 @@ export function NodeTitle({ title, customName, duplicate = false, onRename, clas
         inside whatever width the node already has. Order: [warning] name pencil. */}
     <div data-slot="node-title" className={cn(ds.nodeTitle.root, 'group/title w-0', className)}>
       {duplicate && (
-        <Tooltip content={{ message: DUPLICATE_NAME_MESSAGE, tone: 'warning' }} align="start">
+        <Tooltip content={{ message: 'Duplicate name', hint: DUPLICATE_NAME_MESSAGE, tone: 'warning' }} align="start">
           <span
             data-slot="node-title-warning"
             role="img"
