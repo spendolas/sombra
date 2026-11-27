@@ -157,6 +157,15 @@ export const ds = {
     connectedRow: "flex flex-col gap-sm",
     connectedHeader: "flex flex-row items-center justify-between",
   },
+  tooltip: {
+    root: "fixed z-50 pointer-events-none select-none",
+    shape: "absolute left-0 top-0 overflow-visible fill-surface-elevated drop-shadow-[0_6px_8px_rgba(0,0,0,0.5)]",
+    content: "relative flex flex-col px-md py-sm gap-2xs w-max max-w-[220px]",
+    message: "text-body text-fg break-words",
+    hint: "text-param text-fg-subtle",
+    warningRow: "flex flex-row items-start gap-sm",
+    warningIcon: "text-warning shrink-0",
+  },
   shaderNode: {
     errorState: "bg-surface-raised rounded-sm border border-edge px-lg py-sm text-error",
     dynamicInputRow: "flex flex-row items-center justify-center py-xs gap-md",

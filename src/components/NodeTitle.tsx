@@ -30,6 +30,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { IconButton } from '@/components/IconButton'
 import { icons } from '@/components/icons'
+import { Tooltip } from '@/components/Tooltip'
 import { ds } from '@/generated/ds'
 import { cn } from '@/lib/utils'
 
@@ -91,14 +92,20 @@ export function NodeTitle({ title, customName, duplicate = false, onRename, clas
   const Help = icons.questionMark
   // Always laid out (24 px) so a rename never shifts the header; only shown for a
   // renamed node, where it reveals the node's type on hover/focus.
-  const helpSlot = (
-    <span
-      data-slot="node-title-help"
-      {...(name
-        ? { role: 'img', 'aria-label': `Node type: ${title}`, title: `Node type: ${title}`, tabIndex: 0 }
-        : { 'aria-hidden': true })}
-      className={cn(ds.nodeTitle.help, !name && 'invisible pointer-events-none')}
-    >
+  const helpSlot = name ? (
+    <Tooltip content={{ message: title, hint: 'Node type' }} align="end">
+      <span
+        data-slot="node-title-help"
+        role="img"
+        aria-label={`Node type: ${title}`}
+        tabIndex={0}
+        className={ds.nodeTitle.help}
+      >
+        <Help className="size-icon-sm" />
+      </span>
+    </Tooltip>
+  ) : (
+    <span data-slot="node-title-help" aria-hidden className={cn(ds.nodeTitle.help, 'invisible pointer-events-none')}>
       <Help className="size-icon-sm" />
     </span>
   )
@@ -146,15 +153,17 @@ export function NodeTitle({ title, customName, duplicate = false, onRename, clas
         inside whatever width the node already has. Order: [warning] name pencil. */}
     <div data-slot="node-title" className={cn(ds.nodeTitle.root, 'group/title w-0', className)}>
       {duplicate && (
-        <span
-          data-slot="node-title-warning"
-          role="img"
-          aria-label={DUPLICATE_NAME_MESSAGE}
-          title={DUPLICATE_NAME_MESSAGE}
-          className={ds.nodeTitle.warning}
-        >
-          <Warning className="size-icon-sm" />
-        </span>
+        <Tooltip content={{ message: DUPLICATE_NAME_MESSAGE, tone: 'warning' }} align="start">
+          <span
+            data-slot="node-title-warning"
+            role="img"
+            aria-label={DUPLICATE_NAME_MESSAGE}
+            tabIndex={0}
+            className={ds.nodeTitle.warning}
+          >
+            <Warning className="size-icon-sm" />
+          </span>
+        </Tooltip>
       )}
       <h3
         data-slot="node-title-name"
@@ -168,21 +177,22 @@ export function NodeTitle({ title, customName, duplicate = false, onRename, clas
         {shown}
       </h3>
       {/* Always laid out, only shown on hover/focus — mounting it on hover would shift the header. */}
-      <IconButton
-        icon="pencil"
-        data-slot="node-title-pencil"
-        aria-label="Rename node"
-        title="Rename"
-        className={cn(
-          ds.nodeTitle.pencil,
-          'nodrag nopan transition opacity-0 group-hover/title:opacity-100 focus-visible:opacity-100',
-        )}
-        onClick={(e) => {
-          e.stopPropagation()
-          startEdit()
-        }}
-        onDoubleClick={(e) => e.stopPropagation()}
-      />
+      <Tooltip content={{ message: 'Rename' }}>
+        <IconButton
+          icon="pencil"
+          data-slot="node-title-pencil"
+          aria-label="Rename node"
+          className={cn(
+            ds.nodeTitle.pencil,
+            'nodrag nopan transition opacity-0 group-hover/title:opacity-100 focus-visible:opacity-100',
+          )}
+          onClick={(e) => {
+            e.stopPropagation()
+            startEdit()
+          }}
+          onDoubleClick={(e) => e.stopPropagation()}
+        />
+      </Tooltip>
     </div>
     {helpSlot}
     </>

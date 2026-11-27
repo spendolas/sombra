@@ -1838,6 +1838,46 @@
         }
       }
     },
+    "sn:tooltip": {
+      "name": "Tooltip",
+      "type": "molecule",
+      "dsKey": "tooltip",
+      "codeFile": "src/components/Tooltip.tsx",
+      "parts": {
+        "root": {
+          "figmaNodeId": null,
+          "extra": "fixed z-50 pointer-events-none select-none"
+        },
+        "shape": {
+          "figmaNodeId": null,
+          "extra": "absolute left-0 top-0 overflow-visible fill-surface-elevated drop-shadow-[0_6px_8px_rgba(0,0,0,0.5)]"
+        },
+        "content": {
+          "figmaNodeId": null,
+          "extra": "relative flex flex-col px-md py-sm gap-2xs w-max max-w-[220px]"
+        },
+        "message": {
+          "figmaNodeId": null,
+          "textStyle": "text-body",
+          "textColor": "fg",
+          "extra": "break-words"
+        },
+        "hint": {
+          "figmaNodeId": null,
+          "textStyle": "text-param",
+          "textColor": "fg-subtle"
+        },
+        "warningRow": {
+          "figmaNodeId": null,
+          "extra": "flex flex-row items-start gap-sm"
+        },
+        "warningIcon": {
+          "figmaNodeId": null,
+          "textColor": "warning",
+          "extra": "shrink-0"
+        }
+      }
+    },
     "sn:1": {
       "name": "Shader Node",
       "type": "organism",
