@@ -2706,7 +2706,7 @@
           "layout": "horizontal",
           "align": "center",
           "padding": {
-            "right": "xs"
+            "right": "handle-offset"
           }
         },
         "nameStack": {
@@ -2730,7 +2730,7 @@
           "layout": "horizontal",
           "align": "center",
           "padding": {
-            "right": "xs"
+            "right": "handle-offset"
           }
         },
         "blendDisabled": {
@@ -2854,7 +2854,7 @@
           "layout": "horizontal",
           "align": "center",
           "padding": {
-            "right": "xs"
+            "right": "handle-offset"
           },
           "transition": "colors",
           "extra": "motion-reduce:transition-none"
@@ -2865,7 +2865,7 @@
           "layout": "horizontal",
           "align": "center",
           "padding": {
-            "right": "xs"
+            "right": "handle-offset"
           },
           "fill": "interactive/highlight",
           "radius": "sm",
