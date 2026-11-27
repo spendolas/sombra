@@ -78,7 +78,6 @@ Rules:
 | `inlineTextField.selection` | interactive/active @ 50% | applied as `selection:bg-active/50` on the field (was interactive/highlight @ 15%: a menu-hover tint, too faint to see selected text on the dark field; changed 2026-11-11 after owner review) |
 | `inlineTextField.placeholder` | fg/muted (instance override in board F) | applied as `placeholder:text-fg-muted` on the field |
 | `nodeTitle.name` | heading/node-title, fg/default, truncate ending | `text-node-title text-fg truncate` |
-| `nodeTitle.typeTag` | label/param, fg/subtle | `text-param text-fg-subtle` |
 | `nodeTitle.warning` | Icon=triangle-alert, color/warning strokes | `text-warning` |
 | `nodeTitle.pencil` | Icon=pencil, fg/subtle strokes | `text-fg-subtle`, hover plate `bg-hover` + `text-fg` (IconButton ghost convention) |
 
